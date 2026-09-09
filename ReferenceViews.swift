@@ -74,6 +74,10 @@ struct MoveDexView: View {
                 }
             }
             .padding(12)
+
+            MoveTableHeader()
+                .padding(.horizontal, 10)
+                .padding(.bottom, 6)
             Divider()
 
             ScrollView {

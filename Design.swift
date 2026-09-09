@@ -176,8 +176,13 @@ struct TypeIcon: View {
 }
 
 /// Physical / Special / Status, drawn rather than shipped as art.
+///
+/// Fixed width by default. Letting the pill size to its text made every column
+/// after it in a move table shift by the difference between "Status" and
+/// "Physical", so the numbers never lined up.
 struct CategoryBadge: View {
     let category: String
+    var width: CGFloat? = MoveColumn.category
 
     private var color: Color {
         switch category {
@@ -202,10 +207,52 @@ struct CategoryBadge: View {
                 .font(.system(size: 10, weight: .semibold))
         }
         .padding(.horizontal, 6)
-        .frame(height: 18)
+        .frame(width: width, height: 18)
         .background(color)
         .foregroundStyle(.white)
         .clipShape(Capsule())
+    }
+}
+
+/// Column widths for the move table, shared by the header and every row so the
+/// two cannot drift apart.
+enum MoveColumn {
+    static let type: CGFloat = 20
+    static let name: CGFloat = 150
+    static let category: CGFloat = 74
+    static let power: CGFloat = 34
+    static let accuracy: CGFloat = 34
+    static let priority: CGFloat = 32
+    static let flag: CGFloat = 16
+    static let flags: CGFloat = flag * 2 + 4
+    static let spacing: CGFloat = 8
+}
+
+/// Column labels for a move table.
+struct MoveTableHeader: View {
+    var body: some View {
+        HStack(spacing: MoveColumn.spacing) {
+            Color.clear.frame(width: MoveColumn.type, height: 1)
+            label("Move", width: MoveColumn.name, alignment: .leading)
+            label("Class", width: MoveColumn.category, alignment: .center)
+            label("Pow", width: MoveColumn.power, alignment: .trailing)
+            label("Acc", width: MoveColumn.accuracy, alignment: .trailing)
+            label("Pri", width: MoveColumn.priority, alignment: .center)
+            label("", width: MoveColumn.flags, alignment: .leading)
+            Spacer(minLength: 0)
+        }
+        .padding(.bottom, 2)
+    }
+
+    // SwiftUI.Alignment spelled out: `Alignment` here is the stat alignment
+    // (nature) type from Stats.swift, which shadows it.
+    private func label(_ text: String, width: CGFloat,
+                       alignment: SwiftUI.Alignment) -> some View {
+        Text(text.uppercased())
+            .font(.system(size: 9, weight: .semibold))
+            .kerning(0.4)
+            .foregroundStyle(.tertiary)
+            .frame(width: width, alignment: alignment)
     }
 }
 

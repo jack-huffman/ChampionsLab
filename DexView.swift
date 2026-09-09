@@ -362,6 +362,7 @@ struct FormDetail: View {
                         .frame(width: 130)
                         .controlSize(.small)
                 }
+                MoveTableHeader()
                 ForEach(moves) { move in
                     MoveRow(move: move)
                 }
@@ -376,42 +377,86 @@ struct MoveRow: View {
     let move: Move
 
     var body: some View {
-        HStack(spacing: 8) {
-            if let type = PokeType(loose: move.type) { TypeIcon(type: type, side: 20) }
+        HStack(spacing: MoveColumn.spacing) {
+            // Every column keeps its slot whether or not it has content —
+            // otherwise an absent type icon, a "Status" pill, or a move with no
+            // priority shifts everything to its right and the table stops
+            // reading as columns.
+            Color.clear
+                .frame(width: MoveColumn.type, height: MoveColumn.type)
+                .overlay {
+                    if let type = PokeType(loose: move.type) {
+                        TypeIcon(type: type, side: MoveColumn.type)
+                    }
+                }
+
             Text(move.name)
                 .font(.system(size: 12, weight: .medium))
-                .frame(width: 140, alignment: .leading)
                 .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(width: MoveColumn.name, alignment: .leading)
+
             CategoryBadge(category: move.category)
+
             Text(move.power > 0 ? "\(move.power)" : "—")
                 .font(.system(size: 11, design: .rounded)).monospacedDigit()
-                .frame(width: 30, alignment: .trailing)
+                .foregroundStyle(move.power > 0 ? Palette.normal : Palette.fainter)
+                .frame(width: MoveColumn.power, alignment: .trailing)
+
             Text(move.accuracyLabel)
                 .font(.system(size: 11, design: .rounded)).monospacedDigit()
-                .foregroundStyle(.secondary)
-                .frame(width: 30, alignment: .trailing)
-            if move.priority != 0 {
-                Text(move.priority > 0 ? "+\(move.priority)" : "\(move.priority)")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .padding(.horizontal, 4)
-                    .background(move.priority > 0 ? Palette.good.opacity(0.2) : Palette.bad.opacity(0.2))
-                    .clipShape(Capsule())
+                .foregroundStyle(Palette.dim)
+                .frame(width: MoveColumn.accuracy, alignment: .trailing)
+
+            priorityCell
+                .frame(width: MoveColumn.priority)
+
+            HStack(spacing: 4) {
+                flag("arrow.left.and.right", shown: move.isSpread,
+                     colour: Palette.warn, hint: move.target)
+                flag("hand.tap.fill", shown: move.makesContact,
+                     colour: Palette.fainter,
+                     hint: "Makes contact — taxed by Rocky Helmet and Aura Guard")
             }
-            if move.isSpread {
-                Image(systemName: "arrow.left.and.right")
-                    .font(.system(size: 9))
-                    .foregroundStyle(Palette.warn)
-                    .help(move.target)
-            }
-            if move.makesContact {
-                Image(systemName: "hand.tap.fill")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-                    .help("Makes contact — taxed by Rocky Helmet and Aura Guard")
-            }
+            .frame(width: MoveColumn.flags, alignment: .leading)
+
             Spacer(minLength: 0)
         }
         .padding(.vertical, 2)
         .help(move.effect)
+    }
+
+    @ViewBuilder private var priorityCell: some View {
+        if move.priority != 0 {
+            Text(move.priority > 0 ? "+\(move.priority)" : "\(move.priority)")
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .frame(width: MoveColumn.priority, height: 16)
+                .background(move.priority > 0
+                            ? Palette.good.opacity(0.20) : Palette.bad.opacity(0.20))
+                .foregroundStyle(move.priority > 0 ? Palette.good : Palette.bad)
+                .clipShape(Capsule())
+                .help("Speed priority \(move.priority > 0 ? "+" : "")\(move.priority)")
+        } else {
+            Color.clear.frame(height: 16)
+        }
+    }
+
+    /// One flag slot. Drawn as an overlay on a clear rectangle rather than a
+    /// conditional view: an empty `Group` collapses to an EmptyView, which
+    /// ignores `.frame` and lets the next flag slide into this slot — spread-only
+    /// and contact-only moves then showed their icon at the same x position.
+    private func flag(_ symbol: String, shown: Bool,
+                      colour: Color, hint: String) -> some View {
+        Color.clear
+            .frame(width: MoveColumn.flag, height: 12)
+            .overlay {
+                if shown {
+                    Image(systemName: symbol)
+                        .font(.system(size: 9))
+                        .foregroundStyle(colour)
+                        .help(hint)
+                }
+            }
     }
 }
