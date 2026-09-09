@@ -95,7 +95,7 @@ struct OverviewView: View {
 
     private func megaCard(_ form: Form) -> some View {
         let usage = store.data.usage.first { $0.name == form.formLabel }
-        return Card(padding: 14) {
+        return Card(padding: 14, height: 268) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
                     SpriteImage(form: form, side: 56)
@@ -123,7 +123,7 @@ struct OverviewView: View {
                         Text(ability.desc)
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .lineLimit(2)
                     }
                 }
 
@@ -150,6 +150,7 @@ struct OverviewView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                Spacer(minLength: 0)
             }
         }
     }
@@ -163,7 +164,7 @@ struct OverviewView: View {
                           subtitle: "Five of them are terrain pieces, which is the clearest signal about where M-C is going.")
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: 10)], spacing: 10) {
                 ForEach(items) { item in
-                    Card(padding: 12) {
+                    Card(padding: 12, height: 122) {
                         HStack(alignment: .top, spacing: 10) {
                             ItemIcon(name: item.name, side: 30)
                             VStack(alignment: .leading, spacing: 4) {
@@ -180,11 +181,13 @@ struct OverviewView: View {
                                     Text(note)
                                         .font(.system(size: 11))
                                         .foregroundStyle(Palette.accent)
-                                        .fixedSize(horizontal: false, vertical: true)
+                                        .lineLimit(3)
                                 }
+                                Spacer(minLength: 0)
                             }
                         }
                     }
+                    .help(item.effect + (item.note.map { "\n\n" + $0 } ?? ""))
                 }
             }
         }

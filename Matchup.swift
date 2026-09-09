@@ -111,8 +111,7 @@ struct Matchup {
                             ? (form.abilities.first?.name ?? "") : slot.ability,
                           item: slot.item,
                           sp: slot.sp,
-                          alignment: slot.alignment,
-                          teraType: slot.tera)
+                          alignment: slot.alignment)
         if slot.sp.allSatisfy({ $0 == 0 }) {
             let physical = form.attack >= form.spAttack
             var sp = Array(repeating: 0, count: 6)

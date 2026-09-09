@@ -71,6 +71,14 @@ struct TeamsView: View {
                 .help("New team (⌘N)")
             }
             .padding(12)
+            if let warning = store.teamWarning {
+                Label(warning, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.warn)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+            }
             Divider()
 
             ScrollView {
@@ -417,21 +425,7 @@ struct SlotEditor: View {
                 .onChange(of: slot.alignmentName) { _ in onChange() }
             }
 
-            labelled("Tera") {
-                Picker("", selection: $slot.teraType) {
-                    Text("None").tag("")
-                    ForEach(PokeType.allCases) { Text($0.rawValue).tag($0.rawValue) }
-                }
-                .labelsHidden().controlSize(.small)
-                .onChange(of: slot.teraType) { _ in onChange() }
-            }
 
-            if form.isMega && !slot.teraType.isEmpty {
-                Text("One gimmick per battle — a Mega cannot also Terastallize.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Palette.warn)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
         .frame(maxWidth: 250)
     }

@@ -21,8 +21,6 @@ struct CalculatorView: View {
         var item = ""
         var sp = Array(repeating: 0, count: 6)
         var alignmentName = "Serious"
-        var teraType = ""
-        var terastallized = false
         var boosts = Array(repeating: 0, count: 6)
         var moveID = ""
         var fallen = 0
@@ -36,9 +34,7 @@ struct CalculatorView: View {
     private func combatant(_ side: Side) -> Combatant? {
         guard let form = store.formsByID[side.formID] else { return nil }
         var c = Combatant(form: form, ability: side.ability, item: side.item,
-                          sp: side.sp, alignment: Alignment.named(side.alignmentName),
-                          teraType: PokeType(loose: side.teraType))
-        c.isTerastallized = side.terastallized && !side.teraType.isEmpty
+                          sp: side.sp, alignment: Alignment.named(side.alignmentName))
         c.boosts = side.boosts
         c.fallenAllies = side.fallen
         return c
@@ -214,17 +210,6 @@ private struct SideEditor: View {
                         }.labelsHidden().controlSize(.small)
                     }
 
-                    row("Tera") {
-                        HStack(spacing: 6) {
-                            Picker("", selection: $side.teraType) {
-                                Text("None").tag("")
-                                ForEach(PokeType.allCases) { Text($0.rawValue).tag($0.rawValue) }
-                            }.labelsHidden().controlSize(.small)
-                            Toggle("Active", isOn: $side.terastallized)
-                                .controlSize(.small)
-                                .disabled(side.teraType.isEmpty)
-                        }
-                    }
 
                     if isAttacker {
                         row("Move") {

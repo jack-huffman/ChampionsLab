@@ -68,7 +68,7 @@
     "sp_per_stat": 32,
     "species_clause": true,
     "item_clause": true,
-    "gimmick": "One per battle — Terastallize OR Mega Evolve, never both.",
+    "gimmick": "One Mega Evolution per battle. Champions has no Terastallization.",
     "timer": {
       "match_seconds": 1200,
       "player_seconds": 420,

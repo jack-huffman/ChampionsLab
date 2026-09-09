@@ -2,8 +2,8 @@
 //  The Gen 9 damage formula as Champions runs it.
 //
 //  Standard shape, with the Champions-specific parts wired in: stats come from
-//  Stat Points rather than EVs, Terastallization and Mega Evolution are mutually
-//  exclusive (one gimmick per battle), and spread moves take the doubles 0.75x.
+//  Stat Points rather than EVs, Mega Evolution is the only battle gimmick — there
+//  is no Terastallization in this game — and spread moves take the doubles 0.75x.
 
 import Foundation
 
@@ -38,8 +38,6 @@ struct Combatant {
     var item: String = ""
     var sp: [Int] = Array(repeating: 0, count: 6)
     var alignment: Alignment = .neutral
-    var teraType: PokeType? = nil
-    var isTerastallized = false
     var boosts: [Int] = Array(repeating: 0, count: 6)
     /// Fainted allies, for Supreme Overlord and Last Respects.
     var fallenAllies = 0
@@ -53,11 +51,7 @@ struct Combatant {
         ChampionsStats.staged(self.stat(stat), stage: boosts[stat.rawValue])
     }
 
-    /// Tera overrides the type line entirely while it is active.
-    var effectiveTypes: [PokeType] {
-        if isTerastallized, let teraType { return [teraType] }
-        return form.pokeTypes
-    }
+    var effectiveTypes: [PokeType] { form.pokeTypes }
 
     var maxHP: Int { stat(.hp) }
 }
@@ -233,21 +227,9 @@ enum DamageCalc {
 
         if field.critical { modifier *= 1.5 }
 
-        // STAB. Tera stacks with an original type for the 2.0x that makes
-        // Terastallizing into your own type worthwhile.
-        let originalTypes = attacker.form.pokeTypes
-        let teraType = attacker.isTerastallized ? attacker.teraType : nil
-        var stab = 1.0
-        if let teraType, teraType == moveType {
-            stab = originalTypes.contains(moveType) ? 2.0 : 1.5
-        } else if originalTypes.contains(moveType), teraType == nil {
-            stab = 1.5
-        } else if originalTypes.contains(moveType), teraType != nil {
-            stab = 1.5  // the base type still gives STAB after Terastallizing
-        }
-        if attacker.ability == "Adaptability", stab > 1 {
-            stab = stab == 2.0 ? 2.25 : 2.0
-        }
+        // STAB, doubled rather than 1.5x under Adaptability.
+        var stab = attacker.form.pokeTypes.contains(moveType) ? 1.5 : 1.0
+        if attacker.ability == "Adaptability", stab > 1 { stab = 2.0 }
         modifier *= stab
 
         // -- effectiveness ---------------------------------------------------

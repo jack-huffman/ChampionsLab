@@ -375,8 +375,18 @@ struct FormDetail: View {
 
 struct MoveRow: View {
     let move: Move
+    @State private var showingDetail = false
 
     var body: some View {
+        row
+            .contentShape(Rectangle())
+            .onTapGesture { showingDetail = true }
+            .popover(isPresented: $showingDetail, arrowEdge: .trailing) {
+                MoveDetail(move: move)
+            }
+    }
+
+    private var row: some View {
         HStack(spacing: MoveColumn.spacing) {
             // Every column keeps its slot whether or not it has content —
             // otherwise an absent type icon, a "Status" pill, or a move with no
@@ -423,7 +433,7 @@ struct MoveRow: View {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 2)
-        .help(move.effect)
+        .help("Click for full details")
     }
 
     @ViewBuilder private var priorityCell: some View {
@@ -458,5 +468,172 @@ struct MoveRow: View {
                         .help(hint)
                 }
             }
+    }
+}
+
+
+// MARK: - Move detail
+
+/// The full record for a move, shown when a row is clicked. The table columns
+/// only have room for power, accuracy and priority; everything that actually
+/// decides whether a move is usable — its target, its flags, its secondary
+/// effect — lives here.
+struct MoveDetail: View {
+    @EnvironmentObject private var store: Store
+    let move: Move
+
+    private var learners: [Form] {
+        store.data.forms.filter { $0.moves.contains(move.id) }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                header
+                numbers
+                if !move.effect.isEmpty { effectCard }
+                flagsCard
+                learnersCard
+            }
+            .padding(16)
+        }
+        .frame(width: 400, height: 520)
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(move.name)
+                .font(.system(size: 19, weight: .bold, design: .rounded))
+            HStack(spacing: 6) {
+                if let type = PokeType(loose: move.type) { TypeChip(type: type) }
+                CategoryBadge(category: move.category, width: nil)
+                if !move.learnable {
+                    Text("no legal user")
+                        .font(.system(size: 10, weight: .medium))
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Palette.warn.opacity(0.18))
+                        .foregroundStyle(Palette.warn)
+                        .clipShape(Capsule())
+                }
+            }
+        }
+    }
+
+    private var numbers: some View {
+        HStack(spacing: 0) {
+            stat("Power", move.power > 0 ? "\(move.power)" : "—")
+            stat("Accuracy", move.accuracyLabel)
+            stat("PP", move.pp > 0 ? "\(move.pp)" : "—")
+            stat("Priority", move.priority == 0 ? "0"
+                 : (move.priority > 0 ? "+\(move.priority)" : "\(move.priority)"))
+            stat("Crit", move.critRate > 0 ? String(format: "%.1f%%", move.critRate) : "—")
+        }
+        .padding(.vertical, 8)
+        .background(Palette.surfaceRaised)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func stat(_ label: String, _ value: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .semibold))
+                .kerning(0.4)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var effectCard: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            SectionHeader(title: "Effect")
+            Text(move.effect)
+                .font(.system(size: 12))
+                .fixedSize(horizontal: false, vertical: true)
+            if move.effectRate > 0 {
+                Text(String(format: "Triggers %.0f%% of the time.", move.effectRate))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var flagsCard: some View {
+        let on = move.flags.filter { $0.value }.keys.sorted()
+        return VStack(alignment: .leading, spacing: 6) {
+            SectionHeader(title: "Targeting and flags")
+            DetailRow(label: "Targets", value: move.target)
+            if move.isSpread {
+                Text(move.hitsAlly
+                     ? "Hits your partner too, and takes the 0.75× spread penalty."
+                     : "Hits both opponents, and takes the 0.75× spread penalty.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.warn)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if on.isEmpty {
+                Text("No flags").font(.system(size: 11)).foregroundStyle(.tertiary)
+            } else {
+                FlowRow(items: on.map(Self.flagLabel))
+            }
+            if move.makesContact {
+                Text("Contact: taxed by Rocky Helmet, halved by Aura Guard, boosted by Tough Claws.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private static func flagLabel(_ key: String) -> String {
+        [
+            "contact": "Contact", "sound": "Sound", "punch": "Punch",
+            "bite": "Biting", "slicing": "Slicing", "bullet": "Bullet",
+            "wind": "Wind", "powder": "Powder", "snatchable": "Snatchable",
+            "metronome": "Metronome", "gravity": "Gravity-affected",
+            "defrosts": "Defrosts", "reflectable": "Magic Bounce",
+            "protectable": "Blocked by Protect", "copyable": "Mirror Move",
+        ][key] ?? key.capitalized
+    }
+
+    private var learnersCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SectionHeader(title: "Learned by", subtitle: "\(learners.count) legal forms")
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 4)], spacing: 4) {
+                ForEach(learners.prefix(60)) { form in
+                    HStack(spacing: 5) {
+                        SpriteImage(form: form, side: 22)
+                        Text(form.formLabel)
+                            .font(.system(size: 10))
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+            if learners.count > 60 {
+                Text("+ \(learners.count - 60) more")
+                    .font(.system(size: 10)).foregroundStyle(.tertiary)
+            }
+        }
+    }
+}
+
+/// Wraps chips onto as many lines as they need.
+struct FlowRow: View {
+    let items: [String]
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 4)], spacing: 4) {
+            ForEach(items, id: \.self) { text in
+                Text(text)
+                    .font(.system(size: 10, weight: .medium))
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .frame(maxWidth: .infinity)
+                    .background(Palette.surfaceRaised)
+                    .clipShape(Capsule())
+            }
+        }
     }
 }

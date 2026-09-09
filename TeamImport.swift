@@ -130,12 +130,6 @@ enum TeamPaste {
             return
         }
 
-        if line.lowercased().hasPrefix("tera type:") {
-            let value = line.dropFirst("tera type:".count).trimmingCharacters(in: .whitespaces)
-            if let type = PokeType(loose: value) { slot.teraType = type.rawValue }
-            return
-        }
-
         // "Adamant Nature" — Champions calls these Stat Alignments.
         if line.lowercased().hasSuffix("nature") {
             let value = line.replacingOccurrences(of: "Nature", with: "",
@@ -163,8 +157,11 @@ enum TeamPaste {
             return
         }
 
-        // Champions has no IVs, so an IV line carries no information.
-        if line.lowercased().hasPrefix("ivs:") || line.lowercased().hasPrefix("level:")
+        // Lines Champions has no concept of. Tera Type appears in any paste
+        // written for Scarlet/Violet; this game has no Terastallization, and IVs
+        // do not exist either, so both are dropped without comment.
+        if line.lowercased().hasPrefix("tera type:")
+            || line.lowercased().hasPrefix("ivs:") || line.lowercased().hasPrefix("level:")
             || line.lowercased().hasPrefix("shiny:") || line.lowercased().hasPrefix("happiness:")
             || line.lowercased().hasPrefix("gigantamax:") || line.lowercased().hasPrefix("dynamax level:") {
             return
@@ -290,7 +287,6 @@ enum TeamPaste {
             block.append(head)
             if !slot.ability.isEmpty { block.append("Ability: \(slot.ability)") }
             block.append("Level: \(ChampionsStats.level)")
-            if !slot.teraType.isEmpty { block.append("Tera Type: \(slot.teraType)") }
 
             let spread = Stat.allCases.compactMap { stat -> String? in
                 let sp = slot.sp[stat.rawValue]

@@ -28,7 +28,7 @@ clean checkout builds without network access.
   Champions stats and abilities, all twelve new items, and a written read on what
   changed and how to attack it.
 - **Teams** — build, save, duplicate and import teams. Slot editor covers ability,
-  item, Stat Points, Stat Alignment, Tera type and four moves, and flags
+  item, Stat Points, Stat Alignment and four moves, and flags
   species-clause, item-clause and SP-cap violations as you go. Teams persist in
   `~/Library/Application Support/ChampionsLab/teams.json`.
 - **Analysis** — a 0–100 grade weighted by each threat's usage, a defensive matrix
@@ -79,8 +79,10 @@ other = floor((Base + 20 + SP) × alignment)
 wrong here, which is the main reason this app exists rather than reusing a
 standard VGC one.
 
-The other Champions-specific rule the app enforces: **one gimmick per battle**.
-Terastallize *or* Mega Evolve, never both.
+There is also **no Terastallization** in Champions, whatever some secondary
+sources say — Mega Evolution is the only battle gimmick, and a Mega must hold its
+stone. Pastes written for Scarlet/Violet keep their `Tera Type:` lines; the
+importer drops them.
 
 ## Where the data comes from
 
@@ -152,6 +154,13 @@ Only Mega Glalie has no dedicated render upstream and falls back to base Glalie.
 ability-driven immunities like Levitate), the doubles spread penalty, Grassy
 Terrain halving Earthquake, Tough Claws, Aura Guard, Tera STAB stacking, and the
 EV↔SP conversion both ways.
+
+Saved teams decode leniently, field by field: a default value on a property does
+*not* make a key optional to Swift's synthesised decoder, so adding one field to
+`Team` would otherwise make every previously saved team fail to load. It did
+exactly that once, and `try?` turned it into an empty team list with no message.
+Loading now salvages per element, keeps a `teams.backup.json` generation, and
+surfaces anything it had to skip.
 
 `matchup.sh` imports a real Showdown list, round-trips it back out, and runs the
 versus engine against a bundled archetype. It also checks that a team against

@@ -11,6 +11,8 @@ final class Store: ObservableObject {
     @Published private(set) var data: Dataset
     @Published var teams: [Team] = []
     @Published var loadError: String?
+    /// Set when saved teams could not be read — surfaced rather than swallowed.
+    @Published var teamWarning: String?
 
     private var spriteCache: [String: NSImage] = [:]
 
@@ -26,6 +28,7 @@ final class Store: ObservableObject {
             loadError = "\(error)"
         }
         teams = TeamStore.load()
+        teamWarning = TeamStore.loadWarning
     }
 
     private static func loadDataset() throws -> Dataset {

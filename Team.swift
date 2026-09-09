@@ -20,12 +20,32 @@ struct TeamSlot: Codable, Identifiable, Hashable {
     var moves: [String] = []
     var sp: [Int] = Array(repeating: 0, count: 6)
     var alignmentName: String = "Serious"
-    var teraType: String = ""
     var nickname: String = ""
 
     var alignment: Alignment { Alignment.named(alignmentName) }
-    var tera: PokeType? { PokeType(loose: teraType) }
     var spUsed: Int { sp.reduce(0, +) }
+
+    init(formID: String) { self.formID = formID }
+
+    /// Decoded field by field, every one optional.
+    ///
+    /// The synthesised initialiser requires every key to be present — a default
+    /// value on the property does *not* make it optional to decode. So adding
+    /// one field to this struct would make every previously saved team fail to
+    /// load. That is not hypothetical: it happened, and it silently emptied the
+    /// team list.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        formID = try c.decodeIfPresent(String.self, forKey: .formID) ?? ""
+        ability = try c.decodeIfPresent(String.self, forKey: .ability) ?? ""
+        item = try c.decodeIfPresent(String.self, forKey: .item) ?? ""
+        moves = try c.decodeIfPresent([String].self, forKey: .moves) ?? []
+        let saved = try c.decodeIfPresent([Int].self, forKey: .sp) ?? []
+        sp = (0..<6).map { saved.indices.contains($0) ? saved[$0] : 0 }
+        alignmentName = try c.decodeIfPresent(String.self, forKey: .alignmentName) ?? "Serious"
+        nickname = try c.decodeIfPresent(String.self, forKey: .nickname) ?? ""
+    }
 
     @MainActor func form(in store: Store) -> Form? { store.formsByID[formID] }
 
@@ -51,7 +71,7 @@ struct TeamSlot: Codable, Identifiable, Hashable {
         let form = mega ?? base
         return Combatant(form: form,
                          ability: mega?.abilities.first?.name ?? ability,
-                         item: item, sp: sp, alignment: alignment, teraType: tera)
+                         item: item, sp: sp, alignment: alignment)
     }
 }
 
@@ -68,6 +88,24 @@ struct Team: Codable, Identifiable, Hashable {
     var modified = Date()
 
     var isDoubles: Bool { format == "doubles" }
+
+    init(name: String = "New Team", format: String = "doubles") {
+        self.name = name
+        self.format = format
+    }
+
+    /// Lenient for the same reason as `TeamSlot` — see the note there.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Untitled"
+        format = try c.decodeIfPresent(String.self, forKey: .format) ?? "doubles"
+        slots = try c.decodeIfPresent([TeamSlot].self, forKey: .slots) ?? []
+        notes = try c.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        replicaCode = try c.decodeIfPresent(String.self, forKey: .replicaCode) ?? ""
+        created = try c.decodeIfPresent(Date.self, forKey: .created) ?? Date()
+        modified = try c.decodeIfPresent(Date.self, forKey: .modified) ?? Date()
+    }
 
     /// Champions requires distinct species and distinct items. Both are easy to
     /// break while iterating, so surface them rather than letting the ladder do it.
@@ -131,15 +169,53 @@ enum TeamStore {
 
     private static var file: URL { directory.appendingPathComponent("teams.json") }
 
+    /// Anything that went wrong reading the file, for the UI to show. Losing
+    /// saved teams silently is much worse than saying so.
+    private(set) static var loadWarning: String?
+
     static func load() -> [Team] {
-        guard let raw = try? Data(contentsOf: file) else { return [] }
-        return (try? JSONDecoder().decode([Team].self, from: raw)) ?? []
+        loadWarning = nil
+        guard FileManager.default.fileExists(atPath: file.path) else { return [] }
+        guard let raw = try? Data(contentsOf: file) else {
+            loadWarning = "Could not read \(file.path)"
+            return []
+        }
+        let decoder = JSONDecoder()
+        if let teams = try? decoder.decode([Team].self, from: raw) { return teams }
+
+        // One malformed entry must not cost every other team, so fall back to
+        // decoding element by element and keep whatever survives.
+        guard let elements = try? decoder.decode([AnyTeam].self, from: raw) else {
+            loadWarning = "teams.json is not readable; the file has been left untouched."
+            return []
+        }
+        let teams = elements.compactMap(\.team)
+        let lost = elements.count - teams.count
+        if lost > 0 {
+            loadWarning = "\(lost) saved team\(lost == 1 ? "" : "s") could not be read and \(lost == 1 ? "was" : "were") skipped."
+        }
+        return teams
+    }
+
+    /// Decodes each array element independently so one failure is contained.
+    private struct AnyTeam: Decodable {
+        let team: Team?
+        init(from decoder: Decoder) throws {
+            team = try? Team(from: decoder)
+        }
     }
 
     static func save(_ teams: [Team]) {
         do {
             try FileManager.default.createDirectory(at: directory,
                                                     withIntermediateDirectories: true)
+            // Keep one generation back. A save runs on nearly every edit, so a
+            // bad write would otherwise be unrecoverable.
+            if FileManager.default.fileExists(atPath: file.path) {
+                let backup = directory.appendingPathComponent("teams.backup.json")
+                try? FileManager.default.removeItem(at: backup)
+                try? FileManager.default.copyItem(at: file, to: backup)
+            }
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             try encoder.encode(teams).write(to: file, options: .atomic)

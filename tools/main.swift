@@ -138,20 +138,21 @@ report("Liquidation into Aura Guard", "\(vsGuard.minDamage)-\(vsGuard.maxDamage)
 report("Liquidation into plain", "\(vsPlain.minDamage)-\(vsPlain.maxDamage)")
 checkNear("Aura Guard halves contact", Int((Double(vsGuard.maxDamage) / Double(vsPlain.maxDamage) * 100).rounded()), 50)
 
-// STAB and Tera stacking: Tera into your own type should reach 2.0x.
+// STAB, and Adaptability doubling it. Champions has no Terastallization, so
+// there is no Tera-STAB case to check.
 let dragonClaw = movesByName["Dragon Claw"]!
-var teraDragon = salamence
-teraDragon.teraType = .dragon
-teraDragon.isTerastallized = true
-let stabOnly = DamageCalc.calculate(attacker: salamence, defender: tyranitar,
+var plainAttacker = salamence
+plainAttacker.ability = "Intimidate"
+var adaptive = salamence
+adaptive.ability = "Adaptability"
+let stabOnly = DamageCalc.calculate(attacker: plainAttacker, defender: tyranitar,
                                     move: dragonClaw, field: singles)
-let teraStab = DamageCalc.calculate(attacker: teraDragon, defender: tyranitar,
-                                    move: dragonClaw, field: singles)
+let adaptiveStab = DamageCalc.calculate(attacker: adaptive, defender: tyranitar,
+                                        move: dragonClaw, field: singles)
 report("Dragon Claw STAB", "\(stabOnly.maxDamage)")
-report("Dragon Claw Tera-Dragon STAB", "\(teraStab.maxDamage)")
-checkNear("Tera into own type is 2.0/1.5 of STAB",
-      Int((Double(teraStab.maxDamage) / Double(stabOnly.maxDamage) * 100).rounded()), 133)
+report("Dragon Claw Adaptability STAB", "\(adaptiveStab.maxDamage)")
+checkNear("Adaptability turns 1.5x STAB into 2.0x",
+          Int((Double(adaptiveStab.maxDamage) / Double(stabOnly.maxDamage) * 100).rounded()), 133)
 
 print("\n\(failures == 0 ? "ALL CHECKS PASSED" : "\(failures) CHECK(S) FAILED")")
 exit(failures == 0 ? 0 : 1)
-

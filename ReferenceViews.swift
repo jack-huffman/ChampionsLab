@@ -136,7 +136,7 @@ struct ItemDexView: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 330), spacing: 10)], spacing: 10) {
                     ForEach(items) { item in
-                        Card(padding: 12) {
+                        Card(padding: 12, height: 150) {
                             HStack(alignment: .top, spacing: 10) {
                                 ItemIcon(name: item.name, side: 28)
                                 VStack(alignment: .leading, spacing: 4) {
@@ -147,13 +147,14 @@ struct ItemDexView: View {
                                     Text(item.effect)
                                         .font(.system(size: 11))
                                         .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
+                                        .lineLimit(4)
                                     if let note = item.note, !note.isEmpty {
                                         Text(note)
                                             .font(.system(size: 11))
                                             .foregroundStyle(Palette.accent)
-                                            .fixedSize(horizontal: false, vertical: true)
+                                            .lineLimit(2)
                                     }
+                                    Spacer(minLength: 0)
                                     if item.fling > 0 {
                                         Text("Fling \(item.fling) BP")
                                             .font(.system(size: 10))
@@ -162,6 +163,7 @@ struct ItemDexView: View {
                                 }
                             }
                         }
+                        .help(item.effect)
                     }
                 }
                 .padding(14)

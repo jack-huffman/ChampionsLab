@@ -70,14 +70,20 @@ extension NSAppearance {
 // MARK: - Surfaces
 
 /// The standard bordered panel used throughout.
+///
+/// `height` pins the tile so a grid of them reads as a grid. LazyVGrid equalises
+/// cells within a row but not across rows, so without it a card with two lines of
+/// analysis is visibly shorter than one with four.
 struct Card<Content: View>: View {
     var padding: CGFloat = 16
+    var height: CGFloat? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
         content
             .padding(padding)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height,
+                   alignment: .topLeading)
             .background(Palette.surface)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(

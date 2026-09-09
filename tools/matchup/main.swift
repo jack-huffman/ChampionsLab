@@ -20,7 +20,6 @@ Careful Nature
 
 Charizard-Mega-Y @ Charizardite Y
 Ability: Drought
-Tera Type: Fire
 EVs: 4 HP / 252 SpA / 252 Spe
 Timid Nature
 - Heat Wave
@@ -88,7 +87,6 @@ Ability: Regenerator
 
     if let zard = result.team.slots.first(where: { $0.form(in: store)?.formLabel == "Mega Charizard Y" }) {
         check("Timid parsed", zard.alignmentName == "Timid", zard.alignmentName)
-        check("Tera parsed", zard.teraType == "Fire", zard.teraType)
         check("252 SpA -> 32 SP", zard.sp[Stat.spAttack.rawValue] == 32, "\(zard.sp)")
         check("4 moves", zard.moves.count == 4, "\(zard.moves.count)")
         check("SP within budget", zard.spUsed <= ChampionsStats.spTotal, "\(zard.spUsed)")
