@@ -102,6 +102,20 @@ struct Matchup {
     let store: Store
     var field: Field = Field()
 
+    /// Computed once at construction; every report below reads this array.
+    ///
+    /// A var rather than a let only because buildDuels() needs a fully
+    /// initialised self to run — it is never written again after init.
+    private(set) var duels: [Duel] = []
+
+    init(mine: Team, theirs: Team, store: Store, field: Field = Field()) {
+        self.mine = mine
+        self.theirs = theirs
+        self.store = store
+        self.field = field
+        self.duels = buildDuels()
+    }
+
     /// A representative build for a slot. Anything the paste or archetype left
     /// blank gets the obvious default rather than zero, so an unspecified team
     /// does not read as harmless.
@@ -147,7 +161,12 @@ struct Matchup {
 
     // MARK: - Grid
 
-    var duels: [Duel] {
+    /// The whole grid, computed once.
+    ///
+    /// This used to be a computed property, and `verdict`, `memberReports` and
+    /// `opposingReports` each re-ran it — so drawing the Versus screen worked the
+    /// grid five or six times over.
+    private func buildDuels() -> [Duel] {
         var out: [Duel] = []
         for (mySlot, myForm) in myPairs {
             let me = combatant(mySlot, form: myForm)

@@ -173,6 +173,7 @@ struct TeamEditor: View {
 
     @State private var tab: Tab = .build
     @State private var picking: Int?
+    @Environment(\.snapshotMode) private var snapshotMode
 
     enum Tab: String, CaseIterable, Identifiable {
         case build = "Build", analysis = "Analysis"
@@ -206,11 +207,28 @@ struct TeamEditor: View {
 
     private var toolbar: some View {
         HStack(spacing: 12) {
-            TextField("Team name", text: $team.name)
-                .textFieldStyle(.plain)
-                .font(.system(size: 16, weight: .semibold))
-                .frame(maxWidth: 260)
-                .onSubmit(onSave)
+            Button {
+                team.locked.toggle()
+                onSave()
+            } label: {
+                Image(systemName: team.locked ? "lock.fill" : "lock.open")
+                    .foregroundStyle(team.locked ? Palette.dim : Palette.accent)
+            }
+            .buttonStyle(.borderless)
+            .help(team.locked ? "Locked — click to edit" : "Editable — click to lock")
+
+            if team.locked {
+                Text(team.name.isEmpty ? "Untitled" : team.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(maxWidth: 260, alignment: .leading)
+                    .lineLimit(1)
+            } else {
+                TextField("Team name", text: $team.name)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(maxWidth: 260)
+                    .onSubmit(onSave)
+            }
 
             Picker("", selection: $team.format) {
                 ForEach(store.data.rules.formats) { format in
@@ -220,6 +238,7 @@ struct TeamEditor: View {
             .labelsHidden()
             .frame(width: 110)
             .controlSize(.small)
+            .disabled(team.locked)
 
             Spacer()
 
@@ -245,9 +264,12 @@ struct TeamEditor: View {
         .padding(12)
     }
 
-    private var buildTab: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+    @ViewBuilder private var buildTab: some View {
+        if snapshotMode { buildContent } else { ScrollView { buildContent } }
+    }
+
+    private var buildContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
                 let violations = team.violations(in: store)
                 if !violations.isEmpty {
                     Card(padding: 12) {
@@ -266,9 +288,10 @@ struct TeamEditor: View {
                 ForEach(0..<size, id: \.self) { index in
                     if index < team.slots.count {
                         SlotEditor(slot: $team.slots[index],
+                                   locked: team.locked,
                                    onRemove: { team.slots.remove(at: index); onSave() },
                                    onChange: onSave)
-                    } else {
+                    } else if !team.locked {
                         Button { picking = index } label: {
                             HStack {
                                 Image(systemName: "plus.circle.fill")
@@ -294,15 +317,24 @@ struct TeamEditor: View {
                 Card {
                     VStack(alignment: .leading, spacing: 6) {
                         SectionHeader(title: "Notes")
-                        TextEditor(text: $team.notes)
-                            .font(.system(size: 12))
-                            .frame(minHeight: 70)
-                            .scrollContentBackground(.hidden)
+                        if team.locked {
+                            Text(team.notes.isEmpty ? "No notes." : team.notes)
+                                .font(.system(size: 12))
+                                .foregroundStyle(team.notes.isEmpty ? Palette.fainter : Palette.normal)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            TextEditor(text: $team.notes)
+                                .font(.system(size: 12))
+                                .frame(minHeight: 70)
+                                .scrollContentBackground(.hidden)
+                        }
+                        if !team.replicaCode.isEmpty {
+                            DetailRow(label: "Replica code", value: team.replicaCode)
+                        }
                     }
                 }
-            }
-            .padding(16)
         }
+        .padding(16)
     }
 
     private func assign(_ form: Form, at index: Int) {
@@ -322,6 +354,7 @@ struct TeamEditor: View {
 struct SlotEditor: View {
     @EnvironmentObject private var store: Store
     @Binding var slot: TeamSlot
+    var locked: Bool = false
     let onRemove: () -> Void
     let onChange: () -> Void
 
@@ -336,11 +369,18 @@ struct SlotEditor: View {
                     header(form)
                     if expanded {
                         Divider()
-                        HStack(alignment: .top, spacing: 18) {
-                            loadout(form)
-                            statPlanner(form)
+                        if locked {
+                            HStack(alignment: .top, spacing: 18) {
+                                summary(form)
+                                statReadout(form)
+                            }
+                        } else {
+                            HStack(alignment: .top, spacing: 18) {
+                                loadout(form)
+                                statPlanner(form)
+                            }
+                            moves(form)
                         }
-                        moves(form)
                     }
                 }
             } else {
@@ -391,11 +431,76 @@ struct SlotEditor: View {
                 Image(systemName: expanded ? "chevron.up" : "chevron.down")
             }
             .buttonStyle(.borderless)
-            Button(action: onRemove) {
-                Image(systemName: "trash").foregroundStyle(Palette.bad)
+            if !locked {
+                Button(action: onRemove) {
+                    Image(systemName: "trash").foregroundStyle(Palette.bad)
+                }
+                .buttonStyle(.borderless)
             }
-            .buttonStyle(.borderless)
         }
+    }
+
+    /// Locked rendering: plain text, no controls. This is the fast path.
+    private func summary(_ form: Form) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            DetailRow(label: "Ability", value: slot.ability.isEmpty ? "—" : slot.ability)
+            HStack(alignment: .top, spacing: 8) {
+                Text("Item").font(.system(size: 11)).foregroundStyle(.secondary)
+                    .frame(width: 76, alignment: .leading)
+                HStack(spacing: 5) {
+                    if !slot.item.isEmpty { ItemIcon(name: slot.item, side: 16) }
+                    Text(slot.item.isEmpty ? "—" : slot.item).font(.system(size: 12))
+                }
+                Spacer(minLength: 0)
+            }
+            DetailRow(label: "Alignment", value: slot.alignment.label)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Moves").font(.system(size: 11)).foregroundStyle(.secondary)
+                ForEach(slot.moves, id: \.self) { id in
+                    if let move = store.move(id) { MoveRow(move: move) }
+                }
+                if slot.moves.isEmpty {
+                    Text("—").font(.system(size: 12)).foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .frame(maxWidth: 420, alignment: .leading)
+    }
+
+    /// Locked stat readout: the computed numbers, no sliders.
+    private func statReadout(_ form: Form) -> some View {
+        let battle = slot.battleForm(in: store) ?? form
+        let mega = slot.megaEvolution(in: store)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                // Say which form these numbers are for. In game you see the base
+                // Pokémon's stats; these are what it fights with after evolving.
+                Text(mega == nil ? "Stats" : "Stats as \(mega!.formLabel)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(slot.spUsed)/\(ChampionsStats.spTotal) SP")
+                    .font(.system(size: 10, design: .rounded)).foregroundStyle(.tertiary)
+            }
+            ForEach(Stat.allCases) { stat in
+                HStack(spacing: 8) {
+                    Text(stat.short)
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28, alignment: .leading)
+                    Text("\(ChampionsStats.value(base: battle.stats[stat.rawValue], sp: slot.sp[stat.rawValue], stat: stat, alignment: slot.alignment))")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .frame(width: 40, alignment: .trailing)
+                    Text(slot.sp[stat.rawValue] > 0 ? "+\(slot.sp[stat.rawValue])" : "")
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 28, alignment: .leading)
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func loadout(_ form: Form) -> some View {
@@ -409,12 +514,9 @@ struct SlotEditor: View {
             }
 
             labelled("Item") {
-                Picker("", selection: $slot.item) {
-                    Text("None").tag("")
-                    ForEach(store.data.items) { Text($0.name).tag($0.name) }
-                }
-                .labelsHidden().controlSize(.small)
-                .onChange(of: slot.item) { _ in onChange() }
+                LookupField(kind: .item, placeholder: "Item",
+                            options: store.itemOptions, selection: $slot.item)
+                    .onChange(of: slot.item) { _ in onChange() }
             }
 
             labelled("Alignment") {
@@ -520,12 +622,8 @@ struct MoveSlotPicker: View {
     var body: some View {
         let move = index < slot.moves.count ? store.move(slot.moves[index]) : nil
         VStack(spacing: 3) {
-            Picker("", selection: selection) {
-                Text("—").tag("")
-                ForEach(store.moves(for: form)) { Text($0.name).tag($0.id) }
-            }
-            .labelsHidden()
-            .controlSize(.small)
+            LookupField(kind: .move, placeholder: "Move",
+                        options: store.moveOptions(for: form), selection: selection)
 
             if let move {
                 HStack(spacing: 4) {
@@ -603,5 +701,14 @@ struct FormPicker: View {
             }
         }
         .frame(width: 460, height: 540)
+    }
+}
+
+
+/// Renders a team's build tab read-only, for tools/snapshot.sh.
+struct TeamEditorPreview: View {
+    @State var team: Team
+    var body: some View {
+        TeamEditor(team: $team, onSave: {})
     }
 }

@@ -27,7 +27,10 @@ clean checkout builds without network access.
 - **Overview** — the M-C briefing. All six new Mega Evolutions with their real
   Champions stats and abilities, all twelve new items, and a written read on what
   changed and how to attack it.
-- **Teams** — build, save, duplicate and import teams. Slot editor covers ability,
+- **Teams** — build, save, duplicate and import teams. A team opens **locked**:
+  read-only, and instant, because the editable form has to build several hundred
+  picker rows per slot and a locked one builds none. The padlock in the toolbar
+  toggles it. Slot editor covers ability,
   item, Stat Points, Stat Alignment and four moves, and flags
   species-clause, item-clause and SP-cap violations as you go. Teams persist in
   `~/Library/Application Support/ChampionsLab/teams.json`.
@@ -173,6 +176,16 @@ legal on the form it is attached to. That check exists because it caught real
 mistakes — an early draft listed Amoonguss, Pelipper and Ursaluna, none of which
 are in Champions' 205-species roster, and gave a Pokémon Spore, which no
 Champions learnset has.
+
+### Why the long lists are not Pickers
+
+macOS SwiftUI builds every row of a `Picker` into an NSMenu the moment the view
+appears, whichever row is selected. The slot editor had an item list of ~300 and
+four move lists of ~60, so opening a six-Pokémon team constructed roughly 3,400
+menu rows before it could draw — which is exactly what the delay was. Long lists
+now use `LookupField`, a button that opens a searchable popover and builds only
+the rows it shows. Locked: 0 rows. Unlocked: 144. The calculator went from 1,460
+to 42.
 
 `snapshot.sh` renders screens without launching the app, which is useful for
 checking both palettes at once. Two known limits of `ImageRenderer`: it produces

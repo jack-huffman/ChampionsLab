@@ -168,11 +168,9 @@ private struct SideEditor: View {
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(title: title)
 
-                Picker("", selection: $side.formID) {
-                    Text("Choose…").tag("")
-                    ForEach(store.data.forms) { Text($0.formLabel).tag($0.id) }
-                }
-                .labelsHidden()
+                LookupField(kind: .form, placeholder: "Choose a Pokémon",
+                            options: store.formOptions, selection: $side.formID,
+                            allowsNone: false)
                 .onChange(of: side.formID) { _ in
                     side.ability = store.formsByID[side.formID]?.abilities.first?.name ?? ""
                     side.moveID = ""
@@ -198,10 +196,8 @@ private struct SideEditor: View {
                     }
 
                     row("Item") {
-                        Picker("", selection: $side.item) {
-                            Text("None").tag("")
-                            ForEach(store.data.items) { Text($0.name).tag($0.name) }
-                        }.labelsHidden().controlSize(.small)
+                        LookupField(kind: .item, placeholder: "Item",
+                                    options: store.itemOptions, selection: $side.item)
                     }
 
                     row("Alignment") {
@@ -213,12 +209,9 @@ private struct SideEditor: View {
 
                     if isAttacker {
                         row("Move") {
-                            Picker("", selection: $side.moveID) {
-                                Text("Choose…").tag("")
-                                ForEach(store.moves(for: form).filter(\.isDamaging)) {
-                                    Text($0.name).tag($0.id)
-                                }
-                            }.labelsHidden().controlSize(.small)
+                            LookupField(kind: .move, placeholder: "Move",
+                                        options: store.moveOptions(for: form),
+                                        selection: $side.moveID, allowsNone: false)
                         }
                         if side.ability == "Supreme Overlord" {
                             row("Fallen") {

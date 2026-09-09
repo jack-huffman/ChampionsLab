@@ -445,3 +445,123 @@ extension EnvironmentValues {
         set { self[SnapshotModeKey.self] = newValue }
     }
 }
+
+// MARK: - Lookup field
+
+/// A replacement for `Picker` when the list is long.
+///
+/// SwiftUI's macOS Picker builds every row into an NSMenu the moment the view
+/// appears, whichever row is selected. The slot editor has an item list of ~300
+/// and four move lists of ~60, so opening a six-Pokémon team was constructing
+/// roughly 3,400 menu rows before it could draw anything. This shows the current
+/// value as a button and only builds rows — lazily, and filtered — once the
+/// popover is actually open.
+struct LookupField: View {
+    enum Kind { case item, move, form }
+
+    let kind: Kind
+    let placeholder: String
+    let options: [LookupOption]
+    @Binding var selection: String
+    var allowsNone = true
+
+    @State private var open = false
+    @State private var query = ""
+
+    private var current: LookupOption? { options.first { $0.id == selection } }
+
+    private var filtered: [LookupOption] {
+        guard !query.isEmpty else { return options }
+        let needle = query.lowercased()
+        return options.filter {
+            $0.name.lowercased().contains(needle)
+                || ($0.subtitle?.lowercased().contains(needle) ?? false)
+        }
+    }
+
+    var body: some View {
+        Button { open = true } label: {
+            HStack(spacing: 5) {
+                icon(for: current)
+                Text(current?.name ?? placeholder)
+                    .font(.system(size: 11))
+                    .foregroundStyle(current == nil ? Palette.fainter : Palette.normal)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 8))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 7)
+            .frame(height: 20)
+            .background(Palette.surfaceRaised)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Palette.hairline))
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            VStack(spacing: 0) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 10)).foregroundStyle(.tertiary)
+                    TextField(placeholder, text: $query).textFieldStyle(.plain)
+                }
+                .padding(8)
+                Divider()
+                ScrollView {
+                    LazyVStack(spacing: 1) {
+                        if allowsNone {
+                            row(LookupOption(id: "", name: "None", subtitle: nil))
+                        }
+                        ForEach(filtered) { row($0) }
+                    }
+                    .padding(6)
+                }
+            }
+            .frame(width: 280, height: 320)
+        }
+    }
+
+    private func row(_ option: LookupOption) -> some View {
+        HStack(spacing: 6) {
+            icon(for: option.id.isEmpty ? nil : option)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(option.name).font(.system(size: 11))
+                if let subtitle = option.subtitle {
+                    Text(subtitle).font(.system(size: 9)).foregroundStyle(.tertiary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 6).padding(.vertical, 3)
+        .background(option.id == selection ? Palette.accent.opacity(0.18) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            selection = option.id
+            query = ""
+            open = false
+        }
+    }
+
+    @ViewBuilder private func icon(for option: LookupOption?) -> some View {
+        switch kind {
+        case .item:
+            ItemIcon(name: option?.name ?? "", side: 15)
+        case .move:
+            if let type = option?.type { TypeIcon(type: type, side: 14) }
+            else { Color.clear.frame(width: 14, height: 14) }
+        case .form:
+            if let form = option?.form { SpriteImage(form: form, side: 18) }
+            else { Color.clear.frame(width: 18, height: 18) }
+        }
+    }
+}
+
+struct LookupOption: Identifiable, Hashable {
+    let id: String
+    let name: String
+    var subtitle: String? = nil
+    var type: PokeType? = nil
+    var form: Form? = nil
+}

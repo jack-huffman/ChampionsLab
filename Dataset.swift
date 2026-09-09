@@ -104,6 +104,34 @@ final class Store: ObservableObject {
         data.regulation.newMegas.compactMap { form(named: $0) }
     }
 
+    // MARK: - Lookup options
+    //
+    // Built once and cached. These feed LookupField, which replaced the long
+    // Pickers — a macOS Picker materialises every row into an NSMenu as soon as
+    // the view appears, and the slot editor was doing that for ~3,400 rows.
+
+    lazy var itemOptions: [LookupOption] = data.items.map {
+        LookupOption(id: $0.name, name: $0.name, subtitle: $0.category)
+    }
+
+    lazy var formOptions: [LookupOption] = data.forms.map {
+        LookupOption(id: $0.id, name: $0.formLabel,
+                     subtitle: $0.types.joined(separator: "/"), form: $0)
+    }
+
+    private var moveOptionCache: [String: [LookupOption]] = [:]
+
+    func moveOptions(for form: Form) -> [LookupOption] {
+        if let cached = moveOptionCache[form.id] { return cached }
+        let options = moves(for: form).map {
+            LookupOption(id: $0.id, name: $0.name,
+                         subtitle: "\($0.category) · \($0.power > 0 ? "\($0.power) BP" : "status")",
+                         type: PokeType(loose: $0.type))
+        }
+        moveOptionCache[form.id] = options
+        return options
+    }
+
     // MARK: - Images
 
     func sprite(_ form: Form) -> NSImage? { image(subdirectory: "sprites", name: form.icon) }

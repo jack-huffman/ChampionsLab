@@ -84,6 +84,10 @@ struct Team: Codable, Identifiable, Hashable {
     /// Champions' in-game Replica Team code. Opaque to us — the game's servers
     /// expand it — so it is stored as a label to copy, not something we resolve.
     var replicaCode: String = ""
+    /// Read-only until unlocked. A locked team renders as plain text, which is
+    /// also why it opens instantly: the editable form has to build several
+    /// hundred picker rows per slot, and a locked one builds none.
+    var locked: Bool = true
     var created = Date()
     var modified = Date()
 
@@ -92,6 +96,7 @@ struct Team: Codable, Identifiable, Hashable {
     init(name: String = "New Team", format: String = "doubles") {
         self.name = name
         self.format = format
+        self.locked = false   // you just made it; you want to edit it
     }
 
     /// Lenient for the same reason as `TeamSlot` — see the note there.
@@ -103,6 +108,7 @@ struct Team: Codable, Identifiable, Hashable {
         slots = try c.decodeIfPresent([TeamSlot].self, forKey: .slots) ?? []
         notes = try c.decodeIfPresent(String.self, forKey: .notes) ?? ""
         replicaCode = try c.decodeIfPresent(String.self, forKey: .replicaCode) ?? ""
+        locked = try c.decodeIfPresent(Bool.self, forKey: .locked) ?? true
         created = try c.decodeIfPresent(Date.self, forKey: .created) ?? Date()
         modified = try c.decodeIfPresent(Date.self, forKey: .modified) ?? Date()
     }

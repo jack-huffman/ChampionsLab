@@ -78,6 +78,13 @@ func renderAll() {
     render(TeamAnalysisView(team: team), named: "analysis-light",
            size: CGSize(width: 1000, height: 2300), dark: false)
     // Versus screen against the Big Six, with a real opposing list.
+    // A saved team as it opens: locked, read-only, no pickers.
+    if let saved = store.teams.first(where: { $0.slots.count == 6 }) {
+        var shown = saved
+        shown.locked = true
+        render(TeamEditorPreview(team: shown), named: "team-locked-dark",
+               size: CGSize(width: 1000, height: 1700), dark: true)
+    }
     render(MatchupView(team: team, initialOpponent: "big-six"), named: "versus-dark",
            size: CGSize(width: 1180, height: 1500), dark: true)
     render(CalculatorView(), named: "calc-dark",
