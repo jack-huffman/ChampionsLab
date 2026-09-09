@@ -19,11 +19,14 @@ struct Form: Codable, Identifiable, Hashable {
     let abilities: [Ability]
     let formLabel: String
     let moves: [String]
+    /// For a Mega form, the held item that triggers it. Empty when Serebii has
+    /// not published a name for that stone yet.
+    let stone: String?
 
     var id: String { icon.isEmpty ? "\(species)-\(suffix)" : icon }
 
     enum CodingKeys: String, CodingKey {
-        case dex, species, name, icon, suffix, types, stats, abilities, moves
+        case dex, species, name, icon, suffix, types, stats, abilities, moves, stone
         case formLabel = "form_label"
     }
 
@@ -38,11 +41,14 @@ struct Form: Codable, Identifiable, Hashable {
     /// A Mega only when the suffix says so *and* the label agrees — Rotom-Mow
     /// and Lycanroc-Midnight also carry a bare "-m".
     var isMega: Bool {
-        ["m", "mx", "my", "mz"].contains(suffix) && formLabel.hasPrefix("Mega")
+        ["m", "mx", "my", "mz"].contains(suffix) && formLabel.hasPrefix("Mega ")
     }
 
     /// Z Megas came from Legends: Z-A and are the M-C headliners.
     var isZMega: Bool { isMega && suffix == "mz" }
+
+    /// Mega Evolution is spelled "Mega " with a space — "Meganium" is not one.
+    var megaStone: String { stone ?? "" }
 }
 
 struct Ability: Codable, Hashable {

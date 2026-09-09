@@ -29,11 +29,29 @@ struct TeamSlot: Codable, Identifiable, Hashable {
 
     @MainActor func form(in store: Store) -> Form? { store.formsByID[formID] }
 
+    /// The form this slot fights as: the Mega when it is holding the stone,
+    /// otherwise the registered form.
+    @MainActor func battleForm(in store: Store) -> Form? {
+        guard let base = form(in: store) else { return nil }
+        return store.megaForm(for: base, holding: item) ?? base
+    }
+
+    /// The Mega this slot will become, if any — for showing "→ Mega Charizard Y".
+    @MainActor func megaEvolution(in store: Store) -> Form? {
+        guard let base = form(in: store) else { return nil }
+        return store.megaForm(for: base, holding: item)
+    }
+
     /// Ready for the calculator.
     @MainActor func combatant(in store: Store) -> Combatant? {
-        guard let form = form(in: store) else { return nil }
-        return Combatant(form: form, ability: ability, item: item, sp: sp,
-                         alignment: alignment, teraType: tera)
+        guard let base = form(in: store) else { return nil }
+        // Fight as the Mega when the stone is held; its ability replaces the
+        // base one, which is the whole point of Mega Evolving.
+        let mega = store.megaForm(for: base, holding: item)
+        let form = mega ?? base
+        return Combatant(form: form,
+                         ability: mega?.abilities.first?.name ?? ability,
+                         item: item, sp: sp, alignment: alignment, teraType: tera)
     }
 }
 

@@ -44,10 +44,10 @@ Ability: Psychic Surge
 - Dazzling Gleam
 - Helping Hand
 
-Sableye @ Leftovers
-Ability: Prankster
-- Fake Out
-- Knock Off
+Amoonguss @ Leftovers
+Ability: Regenerator
+- Spore
+- Rage Powder
 """
 
 @MainActor func run() {
@@ -75,11 +75,11 @@ Ability: Prankster
     let result = TeamPaste.parse(paste, store: store, name: "Paste test")
     print("  parsed \(result.team.slots.count) Pokemon")
     for w in result.warnings { print("  warn: \(w)") }
-    // Sableye is deliberately not in the Champions roster: the parser should skip
-    // it with a warning rather than inventing a slot.
+    // Amoonguss is deliberately not in the Champions roster — Serebii 404s on it
+    // — so the parser should skip it with a warning rather than inventing a slot.
     check("imported 4 legal slots", result.team.slots.count == 4, "\(result.team.slots.count)")
     check("warned about the illegal entry",
-          result.warnings.contains { $0.contains("Sableye") })
+          result.warnings.contains { $0.contains("Amoonguss") })
 
     let labels = result.team.slots.compactMap { $0.form(in: store)?.formLabel }
     print("  ->", labels.joined(separator: ", "))
@@ -93,10 +93,16 @@ Ability: Prankster
         check("4 moves", zard.moves.count == 4, "\(zard.moves.count)")
         check("SP within budget", zard.spUsed <= ChampionsStats.spTotal, "\(zard.spUsed)")
     }
-    if let sable = result.team.slots.first(where: { $0.form(in: store)?.name == "Sableye" }) {
-        check("illegal moves dropped", sable.moves.allSatisfy { id in
-            sable.form(in: store)!.moves.contains(id)
-        })
+    // Every imported move must be one the form can actually learn.
+    check("no unlearnable moves imported", result.team.slots.allSatisfy { slot in
+        guard let form = slot.form(in: store) else { return false }
+        return slot.moves.allSatisfy { form.moves.contains($0) }
+    })
+    // Charizard holding its stone must be analysed as Mega Charizard Y.
+    if let zard = result.team.slots.first(where: { $0.form(in: store)?.name == "Charizard" }) {
+        check("stone resolves to the Mega",
+              zard.battleForm(in: store)?.formLabel == "Mega Charizard Y",
+              zard.battleForm(in: store)?.formLabel ?? "nil")
     }
 
     print("\n== export round-trip ==")

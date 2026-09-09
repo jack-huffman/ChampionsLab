@@ -290,6 +290,27 @@
       "new": false,
       "category": "Offensive",
       "effect": "Raises Sp. Atk by 1 stage after using a sound move. Consumed."
+    },
+    {
+      "name": "Raichunite Y",
+      "new": false,
+      "category": "Mega",
+      "effect": "Lets the holder Mega Evolve once per battle. The stone occupies the item slot.",
+      "note": "Mega Raichu Y. Confirmed from in-game screenshots — Serebii does not list the Champions-era stones."
+    },
+    {
+      "name": "Staraptite",
+      "new": false,
+      "category": "Mega",
+      "effect": "Lets the holder Mega Evolve once per battle. The stone occupies the item slot.",
+      "note": "Mega Staraptor. Confirmed from in-game screenshots."
+    },
+    {
+      "name": "Dragoninite",
+      "new": false,
+      "category": "Mega",
+      "effect": "Lets the holder Mega Evolve once per battle. The stone occupies the item slot.",
+      "note": "Mega Dragonite. Confirmed from in-game screenshots."
     }
   ],
   "usage": [
@@ -802,10 +823,10 @@
       "key_moves": [
         "Rising Voltage",
         "Discharge",
-        "Spiky Shield",
-        "Sucker Punch"
+        "Sucker Punch",
+        "Protect"
       ],
-      "why": "Electric Surge on a slow body. Not the only one — Mega Raichu X already sets Electric Terrain and is far more usable — but Pincurchin is the one that fits under Trick Room. Not yet published in Serebii's Champions dex."
+      "why": "Electric Surge on a base 15 Speed body — the natural Trick Room terrain setter. Mega Raichu X sets the same terrain far more aggressively; pick by which side of Trick Room you are on."
     },
     {
       "name": "Politoed",
@@ -890,6 +911,27 @@
         "Wide Guard"
       ],
       "why": "140 Attack at 45 Speed with Guts. The natural Trick Room partner for Mega Golisopod, and Wide Guard blanks the Rock Slide and Earthquake spam that punishes slow teams."
+    },
+    {
+      "name": "Pelipper",
+      "tier": "B",
+      "usage": 12.0,
+      "projected": false,
+      "formats": [
+        "doubles"
+      ],
+      "role": "Rain setter / speed control",
+      "common_items": [
+        "Focus Sash",
+        "Damp Rock"
+      ],
+      "key_moves": [
+        "Hurricane",
+        "Weather Ball",
+        "Tailwind",
+        "Wide Guard"
+      ],
+      "why": "Drizzle plus Tailwind on one slot, and Wide Guard blanks the spread moves that define doubles. The faster of the two rain setters, where Politoed is the bulkier one."
     }
   ],
   "notes": {

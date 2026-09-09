@@ -61,13 +61,23 @@ FORM_NAMES = {
     "lycanroc:d": "%s (Dusk)", "lycanroc:m": "%s (Midnight)",
     "meowstic:f": "%s (Female)",  # "-m" here is Mega Meowstic, not the male form
     "ninetales:a": "Alolan %s", "raichu:a": "Alolan %s",
-    "rotom:f": "%s (Wash)", "rotom:h": "%s (Heat)",
+    "rotom:f": "%s (Frost)", "rotom:h": "%s (Heat)",
     "rotom:m": "%s (Mow)", "rotom:s": "%s (Fan)",
+    "rotom:w": "%s (Wash)",
     "slowbro:g": "Galarian %s", "slowking:g": "Galarian %s",
     "stunfisk:g": "Galarian %s",
     "tauros:a": "Paldean %s (Aqua)", "tauros:b": "Paldean %s (Blaze)",
     "tauros:p": "Paldean %s (Combat)",
     "toxtricity:l": "%s (Low Key)",
+    "basculegion:f": "%s (Female)",
+    "castform:r": "%s (Rainy)", "castform:s": "%s (Sunny)",
+    "castform:i": "%s (Snowy)",
+    "farfetch'd:g": "Galarian %s", "mr.mime:g": "Galarian %s",
+    "maushold:f": "%s (Family of Four)",
+    "palafin:h": "%s (Hero)",
+    "persian:a": "Alolan %s",
+    "squawkabilly:b": "%s (Blue Plumage)", "squawkabilly:w": "%s (White Plumage)",
+    "squawkabilly:y": "%s (Yellow Plumage)",
 }
 
 REFRESH = "--refresh" in sys.argv
@@ -127,37 +137,50 @@ def slug_of(name):
 # ---------------------------------------------------------------- roster ----
 
 def parse_roster():
-    """Every legal form, from the all-stats listing.
+    """Every legal form, unioned from the eighteen type listings.
 
-    One row per form, so Charizard appears three times (base, Mega X, Mega Y).
-    The icon filename is what distinguishes them: 006.png, 006-mx, 006-my.
+    Not /pokedex-champions/stat/all.shtml, which looks like the obvious source
+    and is a trap: it is sorted by base stat total and cut off at 300 rows, so
+    everything below 465 BST silently vanishes. That quietly dropped Pelipper
+    (430) and Politoed (500 — but only listed under Water), among others.
+
+    The type pages have no such cap, and carry more per row: dex number, icon,
+    name, types, abilities and the six stats. A dual-type Pokémon appears on
+    both of its pages, so rows are deduplicated by icon — which is also what
+    distinguishes forms, Charizard being 006, 006-mx and 006-my.
     """
-    page = fetch("/pokedex-champions/stat/all.shtml")
-    blocks = re.split(r"<!--<td class=\"cen\">\s*\d+ / \d+\s*</td>-->", page)[1:]
-    forms = []
-    for block in blocks:
-        num = re.search(r"#(\d{4})", block)
-        name = re.search(r'<a href="/pokedex-champions/[^"]+/">([^<]+)</a>', block)
-        slug = re.search(r'href="/pokedex-champions/([^"/]+)/"', block)
-        icon = re.search(r"/pokedex-champions/icon/([^\"]+)\.png", block)
-        types = re.findall(r"/pokedex-bw/type/([a-z]+)\.gif", block)
-        stats = re.findall(r'<td align="center" class="fooinfo">(\d{1,3})</td>', block)
-        if not (num and name and slug and len(stats) >= 6):
+    forms = {}
+    for type_name in (t.lower() for t in TYPE_ORDER):
+        page = fetch("/pokedex-champions/%s.shtml" % type_name)
+        if not page:
             continue
-        icon_name = icon.group(1) if icon else ""
-        suffix = ""
-        if "-" in icon_name:
-            suffix = icon_name.split("-", 1)[1]  # m, mx, my, mz, and form ids
-        forms.append({
-            "dex": int(num.group(1)),
-            "species": slug.group(1),
-            "name": html.unescape(name.group(1)).strip(),
-            "icon": icon_name,
-            "suffix": suffix,
-            "types": [t.capitalize() for t in types[:2]],
-            "stats": [int(s) for s in stats[:6]],
-        })
-    return forms
+        # Split on the dex number rather than <tr>: every row nests a
+        # <table class="pkmn"><tr> around its sprite, so splitting on tags cuts
+        # each entry in half and separates the number from its stats.
+        marks = [m.start() for m in re.finditer(r"#\d{4}", page)] + [len(page)]
+        for start, end in zip(marks, marks[1:]):
+            block = page[start:end]
+            num = re.search(r"#(\d{4})", block)
+            icon = re.search(r"/pokedex-champions/icon/([^\"]+)\.png", block)
+            name = re.search(r'<a href="/pokedex-champions/([^"/]+)/?">([^<]+)</a>', block)
+            types = re.findall(r"/pokedex-bw/type/([a-z]+)\.gif", block)
+            stats = re.findall(r'<td align="center" class="fooinfo">(\d{1,3})</td>', block)
+            if not (num and icon and name and len(stats) >= 6):
+                continue
+            icon_name = icon.group(1)
+            if icon_name in forms:
+                continue
+            suffix = icon_name.split("-", 1)[1] if "-" in icon_name else ""
+            forms[icon_name] = {
+                "dex": int(num.group(1)),
+                "species": name.group(1),
+                "name": html.unescape(name.group(2)).strip(),
+                "icon": icon_name,
+                "suffix": suffix,
+                "types": [t.capitalize() for t in types[:2]],
+                "stats": [int(s) for s in stats[:6]],
+            }
+    return sorted(forms.values(), key=lambda f: (f["dex"], f["suffix"]))
 
 
 # --------------------------------------------------------------- species ----
@@ -486,6 +509,10 @@ def main():
                 row["abilities"] = card["abilities"] if card else []
                 row["damage_taken"] = card["damage_taken"] if card else {}
                 row["form_label"] = (card["label"] if card else row["name"]) or row["name"]
+                # Remember that this row is a Mega, so the display name can be
+                # built from the species instead of trusting the card title —
+                # Serebii titles Meganium's Mega card just "Meganium".
+                row["_mega"] = (group_rows is mega_rows) and card is not None
 
     # Serebii titles every Mega card "Mega <species>" and every regional form
     # by its plain species name, so the icon suffix is the only thing telling
@@ -494,10 +521,13 @@ def main():
         form.setdefault("abilities", [])
         label = form.get("form_label") or form["name"]
         suffix = form["suffix"]
-        if suffix in MEGA_SUFFIXES and label.lower().startswith("mega"):
+        if form.pop("_mega", False):
+            # Serebii titles Meganium's Mega card just "Meganium", so build the
+            # name from the species rather than trusting the card title.
+            label = "Mega %s" % form["name"]
             tag = {"mx": "X", "my": "Y", "mz": "Z"}.get(suffix)
-            if tag and not label.rstrip().endswith(tag):
-                label = "%s %s" % (label.rstrip(), tag)
+            if tag:
+                label = "%s %s" % (label, tag)
         else:
             pattern = FORM_NAMES.get("%s:%s" % (form["species"], suffix))
             if pattern:
@@ -598,6 +628,8 @@ def main():
     for entry in abilities.values():
         entry["users"] = sorted(set(entry["users"]))
 
+    assign_stones(roster, items)
+
     out = {
         "regulation": overlay["regulation"],
         "rules": overlay["rules"],
@@ -637,6 +669,50 @@ def main():
         print("      " + ", ".join(absent))
 
     audit_overlay(overlay, roster, moves, items)
+
+
+def assign_stones(roster, items):
+    """Tag each Mega form with the stone that triggers it.
+
+    Champions registers the base Pokémon holding its stone — a team lists
+    "Charizard @ Charizardite Y", not "Mega Charizard Y" — so the app needs the
+    link to know that a slot will be a Mega in battle and to use the Mega's
+    stats. Stone names follow the species closely enough to match on a prefix,
+    with the X/Y/Z tag disambiguating Charizard's and Raichu's two forms.
+    """
+    names = [i["name"] for i in items]
+    tags = {"mx": "X", "my": "Y", "mz": "Z"}
+    matched, unmatched = 0, []
+    for form in roster:
+        form["stone"] = ""
+        if not (form["suffix"] in MEGA_SUFFIXES and form["form_label"].startswith("Mega ")):
+            continue
+        want_tag = tags.get(form["suffix"], "")
+        species = re.sub(r"[^a-z]", "", form["name"].lower())
+        best = None
+        for name in names:
+            flat = re.sub(r"[^a-zA-Z]", "", name).lower()
+            if "ite" not in flat:
+                continue
+            # "Dragonite" -> "Dragoninite", "Mawile" -> "Mawilite": the stem is
+            # a prefix of the species, so compare on the first few letters.
+            stem = min(len(species), 5)
+            if not flat.startswith(species[:stem]):
+                continue
+            has_tag = name.rstrip().endswith((" X", " Y", " Z"))
+            tag = name.rstrip()[-1] if has_tag else ""
+            if tag != want_tag:
+                continue
+            if best is None or len(name) < len(best):
+                best = name
+        if best:
+            form["stone"] = best
+            matched += 1
+        else:
+            unmatched.append(form["form_label"])
+    print("    stones: %d Megas linked, %d using the generic entry" % (matched, len(unmatched)))
+    if unmatched:
+        print("      " + ", ".join(unmatched[:12]) + ("…" if len(unmatched) > 12 else ""))
 
 
 def audit_overlay(overlay, roster, moves, items):

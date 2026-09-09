@@ -82,6 +82,21 @@ final class Store: ObservableObject {
 
     var megas: [Form] { data.forms.filter(\.isMega) }
 
+    /// The Mega a base form turns into while holding `item`.
+    ///
+    /// Champions registers the base Pokémon holding its stone — a team lists
+    /// "Charizard @ Charizardite Y" — so this is what tells the analysis that
+    /// the slot fights as Mega Charizard Y with 159 Sp. Atk and Drought, not as
+    /// a base Charizard with 109 and Solar Power.
+    func megaForm(for base: Form, holding item: String) -> Form? {
+        guard !item.isEmpty, !base.isMega else { return nil }
+        let candidates = data.forms.filter { $0.dex == base.dex && $0.isMega }
+        if let exact = candidates.first(where: { $0.megaStone == item }) { return exact }
+        // Only one Mega for this species and the item is some stone: take it.
+        if candidates.count == 1, item == "Mega Stone" { return candidates.first }
+        return nil
+    }
+
     var newMegas: [Form] {
         data.regulation.newMegas.compactMap { form(named: $0) }
     }

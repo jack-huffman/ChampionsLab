@@ -97,6 +97,12 @@ Mega Golisopod is Bug/Steel with Tough Claws, because that form only exists in t
 game. Raw HTML is cached under `.cache/`, and the generated
 `data/champions.json` is committed so the app never scrapes at runtime.
 
+The roster comes from the **eighteen type listings**, not from
+`/pokedex-champions/stat/all.shtml`. That page looks like the obvious source and
+is a trap: it is sorted by base stat total and cut off at 300 rows, so everything
+below 465 BST silently vanishes — which quietly dropped Pelipper, Politoed and
+about fifty others. The type pages have no cap and carry abilities inline.
+
 `mkassets.py` copies the artwork out of the sibling `PkHex Mac` checkout:
 
 - **Sprites** — PKHeX's 512×512 HOME renders (`PKHeX.Mac/Assets/hires`),
@@ -125,9 +131,11 @@ Only Mega Glalie has no dedicated render upstream and falls back to base Glalie.
   Thievul, Perrserker, Pincurchin, Squawkabilly — had not landed yet. `mkdata.py`
   prints exactly which are missing on every run; re-run it to pick them up.
 - **Mega Stones are held items here**, so a Mega spends its item slot on its stone
-  and counts against the item clause. Serebii names 47 of them; the Champions-only
-  Megas (the Legends Z-A forms, Mega Golisopod, Mega Baxcalibur) have no published
-  stone name yet and use a generic `Mega Stone` entry.
+  and counts against the item clause. Champions registers the *base* Pokémon
+  holding the stone — a team lists `Charizard @ Charizardite Y` — so the app links
+  the two: a slot holding a stone is analysed with the Mega's stats, typing and
+  ability, and the slot header shows `→ Mega Charizard Y`. 45 Megas have a
+  published stone name; the rest use a generic `Mega Stone` entry.
 - **Regional forms share a pooled ability list.** Serebii lists abilities per
   species, so Alolan Ninetales shows the whole family's pool. Mega forms are
   matched exactly; regional ones need you to pick the right ability.

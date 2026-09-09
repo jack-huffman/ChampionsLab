@@ -345,9 +345,23 @@ struct SlotEditor: View {
         HStack(spacing: 12) {
             SpriteImage(form: form, side: 46)
             VStack(alignment: .leading, spacing: 4) {
-                Text(form.formLabel).font(.system(size: 15, weight: .semibold))
+                HStack(spacing: 6) {
+                    Text(form.formLabel).font(.system(size: 15, weight: .semibold))
+                    // Champions registers the base Pokémon holding its stone, so
+                    // say plainly what it becomes — the analysis uses those stats.
+                    if let mega = slot.megaEvolution(in: store) {
+                        Text("→ \(mega.formLabel)")
+                            .font(.system(size: 11, weight: .medium))
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Palette.accent.opacity(0.18))
+                            .foregroundStyle(Palette.accent)
+                            .clipShape(Capsule())
+                    }
+                }
                 HStack(spacing: 4) {
-                    ForEach(form.pokeTypes) { TypeChip(type: $0, size: .small) }
+                    ForEach((slot.megaEvolution(in: store) ?? form).pokeTypes) {
+                        TypeChip(type: $0, size: .small)
+                    }
                     if !slot.item.isEmpty {
                         HStack(spacing: 3) {
                             ItemIcon(name: slot.item, side: 16)
