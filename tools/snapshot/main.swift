@@ -1,0 +1,93 @@
+//  tools/snapshot/main.swift
+//  Render the main screens to PNG without launching the app.
+//
+//  Compiled against every app source except ChampionsLab.swift, whose @main
+//  would collide with this one. Useful for eyeballing layout changes and for
+//  checking the dark and light palettes actually both work.
+
+import AppKit
+import SwiftUI
+
+// TeamsView listens for this; it normally lives in ChampionsLab.swift.
+extension Notification.Name {
+    static let newTeam = Notification.Name("ChampionsLab.newTeam")
+}
+
+@MainActor
+func render<V: View>(_ view: V, named name: String, size: CGSize, dark: Bool) {
+    let host = view
+        .environmentObject(Store.shared)
+        .environment(\.snapshotMode, true)
+        .frame(width: size.width, height: size.height)
+        .background(Palette.canvas)
+        .environment(\.colorScheme, dark ? .dark : .light)
+
+    let renderer = ImageRenderer(content: host)
+    renderer.scale = 2
+    guard let image = renderer.nsImage,
+          let tiff = image.tiffRepresentation,
+          let rep = NSBitmapImageRep(data: tiff),
+          let png = rep.representation(using: .png, properties: [:]) else {
+        print("  ! could not render \(name)")
+        return
+    }
+    let out = URL(fileURLWithPath: "build/shots/\(name).png")
+    try? FileManager.default.createDirectory(at: out.deletingLastPathComponent(),
+                                             withIntermediateDirectories: true)
+    try? png.write(to: out)
+    print("  wrote \(out.path)")
+}
+
+@MainActor
+func renderAll() {
+    let appearance = NSAppearance(named: .darkAqua)
+    NSApplication.shared.appearance = appearance
+
+    let store = Store.shared
+    if let error = store.loadError {
+        print("dataset error: \(error)")
+        exit(1)
+    }
+    print("dataset: \(store.data.forms.count) forms")
+
+    // A representative anti-meta team so the analysis screens have real content.
+    var team = Team(name: "Terrain Control", format: "doubles")
+    let picks = ["Rillaboom", "Mega Golisopod", "Incineroar", "Indeedee (Female)",
+                 "Garchomp", "Gholdengo"]
+    for label in picks {
+        guard let form = store.form(named: label) else {
+            print("  (missing \(label))")
+            continue
+        }
+        var slot = TeamSlot(formID: form.id)
+        slot.ability = form.abilities.first?.name ?? ""
+        slot.sp = [12, 32, 0, 0, 0, 22]
+        slot.moves = Array(store.moves(for: form).filter(\.isDamaging).prefix(3).map(\.id))
+        team.slots.append(slot)
+    }
+    switch team.slots.count {
+    case 0: print("  ! no team slots built")
+    default: print("  team has \(team.slots.count) members")
+    }
+    team.slots.indices.forEach { index in
+        team.slots[index].item = ["Terrain Extender", "Rocky Helmet", "Assault Vest",
+                                  "Psychic Seed", "Choice Scarf", "Covert Cloak"][index]
+    }
+
+    render(OverviewView(), named: "overview-dark",
+           size: CGSize(width: 1180, height: 2900), dark: true)
+    render(OverviewView(), named: "overview-light",
+           size: CGSize(width: 1180, height: 2900), dark: false)
+    render(TeamAnalysisView(team: team), named: "analysis-dark",
+           size: CGSize(width: 1000, height: 2300), dark: true)
+    render(TeamAnalysisView(team: team), named: "analysis-light",
+           size: CGSize(width: 1000, height: 2300), dark: false)
+    render(CalculatorView(), named: "calc-dark",
+           size: CGSize(width: 1180, height: 700), dark: true)
+    if let form = store.form(named: "Mega Golisopod") {
+        render(FormDetail(form: form), named: "dex-detail-dark",
+               size: CGSize(width: 620, height: 2400), dark: true)
+    }
+}
+
+MainActor.assumeIsolated { renderAll() }

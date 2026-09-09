@@ -1,0 +1,124 @@
+# ChampionsLab
+
+A native macOS app for building Pokémon Champions teams in **Regulation Set M-C**
+(9 September – 2 December 2026).
+
+It bundles the whole legal roster, every move, item and ability, a damage
+calculator that uses Champions' own stat maths, and an analysis pass that grades
+a team against the format and tells you what it loses to.
+
+It links only against system frameworks and ships its dataset inside the bundle,
+so there is nothing to install alongside it and it never touches the network.
+
+## Build
+
+```sh
+./build.sh                  # → ~/Applications/ChampionsLab.app
+./build.sh /Applications    # or anywhere else
+./make-dmg.sh               # → build/ChampionsLab-<version>.dmg
+```
+
+Universal (arm64 + x86_64), macOS 13+. Bump `VERSION` to re-version. The icon is
+generated on demand by `mkicon.py`; the dataset in `data/` is committed, so a
+clean checkout builds without network access.
+
+## What it does
+
+- **Overview** — the M-C briefing. All six new Mega Evolutions with their real
+  Champions stats and abilities, all twelve new items, and a written read on what
+  changed and how to attack it.
+- **Teams** — build, save and duplicate teams. Slot editor covers ability, item,
+  Stat Points, Stat Alignment, Tera type and four moves, and flags species-clause,
+  item-clause and SP-cap violations as you go. Teams persist in
+  `~/Library/Application Support/ChampionsLab/teams.json`.
+- **Analysis** — a 0–100 grade weighted by each threat's usage, a defensive matrix
+  across all 18 attacking types, offensive coverage, speed tiers against the field,
+  and ranked suggestions for what would patch the holes.
+- **Threat matrix** — every tracked threat, with how much damage you do to it, how
+  much it does to you, which of your Pokémon check it, and which lose to it.
+- **Calculator** — full damage calc with weather, terrain, screens, crits, spread
+  penalty, boosts, items and abilities.
+- **Database** — every legal form, all 902 moves, 246 items and 199 abilities,
+  searchable and filterable.
+
+## The stat system is not the one you know
+
+Champions dropped IVs and EVs. Every Pokémon is treated as having 31 IVs, and
+customisation happens through **Stat Points**: 66 to spend, at most 32 in any one
+stat, each worth exactly +1 at Level 50. Natures survive as "Stat Alignment" with
+the usual ±10%. At Level 50 that reduces to:
+
+```
+HP    = Base + 75 + SP
+other = floor((Base + 20 + SP) × alignment)
+```
+
+`Stats.swift` implements exactly this. A calculator built on 252 EVs would be
+wrong here, which is the main reason this app exists rather than reusing a
+standard VGC one.
+
+The other Champions-specific rule the app enforces: **one gimmick per battle**.
+Terastallize *or* Mega Evolve, never both.
+
+## Where the data comes from
+
+`mkdata.py` scrapes Serebii's Champions-specific Pokédex and Attackdex:
+
+```sh
+./mkdata.py                # incremental, uses .cache/
+./mkdata.py --refresh      # re-fetch everything
+./mkdata.py --only-roster  # skip the slow move pass
+```
+
+Serebii is the right source because it is Champions-specific — PokéAPI has no idea
+Mega Golisopod is Bug/Steel with Tough Claws, because that form only exists in this
+game. Raw HTML is cached under `.cache/`, and the generated
+`data/champions.json` is committed so the app never scrapes at runtime.
+
+`mkassets.py` copies the artwork out of the sibling `PkHex Mac` checkout:
+
+- **Sprites** — PKHeX's 512×512 HOME renders (`PKHeX.Mac/Assets/hires`),
+  downscaled to 256px on the way in. Base forms are named by dex number;
+  alternate forms resolve through `hires/forms.json`, which is keyed by PokéAPI
+  slug, so `garchomp-mega-z` → `10309` → `hires/forms/10309.png`.
+- **Type icons** — `upstream/PKHeX/.../img/types/square`, 18 badges.
+- **Item icons** — `PKHeX.Mac/Assets/img/items`, indexed by PKHeX item ID. That
+  set stops at ID 1606, so the Gen 9 items fall back to `img/items-artwork`.
+
+These are game-ripped assets from PKHeX, kept here for personal use. If the
+checkout is missing, the app still builds — type badges fall back to coloured
+pills and sprites to a placeholder glyph.
+
+Only Mega Glalie has no dedicated render upstream and falls back to base Glalie.
+
+### Caveats worth knowing
+
+- **Usage numbers are not M-C numbers.** M-C only opened on 9 September 2026, so it
+  has no ladder history. The percentages in the app are the last measured
+  Regulation M-A/M-B figures; the M-C arrivals are marked **projected** and placed
+  by their stats and abilities, not by data. Treat those as an argument, not a
+  measurement, and edit `data/overlay.json` as the meta settles.
+- **Serebii was still filling in the M-C dex** when this was built. Eleven of the
+  new arrivals — Wigglytuff, both Persians, both Farfetch'd, both Mr. Mimes,
+  Thievul, Perrserker, Pincurchin, Squawkabilly — had not landed yet. `mkdata.py`
+  prints exactly which are missing on every run; re-run it to pick them up.
+- **Regional forms share a pooled ability list.** Serebii lists abilities per
+  species, so Alolan Ninetales shows the whole family's pool. Mega forms are
+  matched exactly; regional ones need you to pick the right ability.
+
+## Verifying it
+
+```sh
+./tools/verify.sh     # stat and damage maths against hand-computed values
+./tools/snapshot.sh   # render the screens to build/shots/*.png
+```
+
+`verify.sh` checks the Champions stat formulas, the type chart (including
+ability-driven immunities like Levitate), the doubles spread penalty, Grassy
+Terrain halving Earthquake, Tough Claws, Aura Guard, and Tera STAB stacking.
+
+`snapshot.sh` renders screens without launching the app, which is useful for
+checking both palettes at once. Two known limits of `ImageRenderer`: it produces
+an empty image for a `ScrollView` (screens expose a `content` property and an
+`\.snapshotMode` environment flag to work around it), and it draws AppKit controls
+— pickers, toggles, sliders — as placeholder glyphs rather than real controls.
