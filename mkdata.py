@@ -388,13 +388,21 @@ def parse_move(slug, label):
 # ----------------------------------------------------------------- items ----
 
 def parse_item_index():
-    """Every hold item Serebii lists, as slug -> display name."""
-    page = fetch("/itemdex/list/holditem.shtml")
+    """Every hold item Serebii lists, as slug -> display name.
+
+    Two lists, because Serebii files Mega Stones separately from ordinary hold
+    items. They matter here: Champions requires a Mega to hold its stone, so the
+    stone occupies the item slot and counts against the item clause — a Mega
+    cannot also carry a Life Orb.
+    """
     found = {}
-    for m in re.finditer(r'href="/itemdex/([a-z0-9\-\']+)\.shtml"[^>]*>([^<]{2,40})</a>', page):
-        slug, label = m.group(1), html.unescape(m.group(2)).strip()
-        if label:
-            found.setdefault(slug, label)
+    for path in ("/itemdex/list/holditem.shtml", "/itemdex/list/megastone.shtml"):
+        page = fetch(path)
+        for m in re.finditer(
+                r'href="/itemdex/([a-z0-9\-\']+)\.shtml"[^>]*>([^<]{2,40})</a>', page):
+            slug, label = m.group(1), html.unescape(m.group(2)).strip()
+            if label:
+                found.setdefault(slug, label)
     return found
 
 
@@ -595,6 +603,7 @@ def main():
         "rules": overlay["rules"],
         "items": items,
         "usage": overlay["usage"],
+        "meta_teams": overlay["meta_teams"],
         "notes": overlay["notes"],
         "forms": roster,
         "moves": moves,
@@ -618,12 +627,63 @@ def main():
     # plainly which of the new arrivals have not landed yet. Re-run to pick them
     # up as they appear rather than guessing at their stats.
     have = {f["name"] for f in roster}
+    labels = {f["form_label"] for f in roster}
     absent = [n for n in overlay["regulation"]["new_pokemon"]
               if n.split(" (")[0] not in have]
+    absent += [m for m in overlay["regulation"]["new_megas"] if m not in labels]
     if absent:
         print("    note: %d M-C additions not yet in Serebii's dex — re-run later:"
               % len(absent))
         print("      " + ", ".join(absent))
+
+    audit_overlay(overlay, roster, moves, items)
+
+
+def audit_overlay(overlay, roster, moves, items):
+    """Check every hand-written reference in overlay.json against the scraped data.
+
+    The curated usage table is the one part of the dataset written from reading
+    rather than scraping, so it is the one part that can quietly describe
+    Pokémon, moves or items this game does not have. It has: an early draft
+    listed Amoonguss, Pelipper and Ursaluna, none of which are in Champions'
+    205-species roster, and gave Sinistcha a Spore that exists in no Champions
+    learnset. Fail loudly instead.
+    """
+    labels = {f["form_label"] for f in roster}
+    names = {f["name"] for f in roster}
+    by_label = {f["form_label"]: f for f in roster}
+    move_names = {m["name"] for m in moves.values()}
+    move_ids = {m["name"]: m["id"] for m in moves.values()}
+    item_names = {i["name"] for i in items}
+
+    problems = []
+    for entry in overlay["usage"]:
+        name = entry["name"]
+        alt = name.replace("-F", " (Female)").replace("-M", " (Male)")
+        known = name in labels or name in names or alt in labels
+        if not known:
+            problems.append("%s: no such Pokémon in the roster" % name)
+            continue
+        form = by_label.get(name) or by_label.get(alt)
+        for move in entry["key_moves"]:
+            if move not in move_names:
+                problems.append("%s: move '%s' does not exist in Champions" % (name, move))
+            elif form and move_ids[move] not in form["moves"]:
+                problems.append("%s: does not learn '%s'" % (name, move))
+        for item in entry["common_items"]:
+            if item not in item_names:
+                problems.append("%s: item '%s' is not in the itemdex" % (name, item))
+
+    if not problems:
+        print("    overlay: every usage reference resolves")
+        return
+    # Pending M-C content is expected to dangle; anything else is a mistake.
+    pending = set(overlay["regulation"]["new_pokemon"]) | set(overlay["regulation"]["new_megas"])
+    hard = [p for p in problems if p.split(":")[0] not in pending]
+    print("    overlay: %d unresolved reference(s)%s"
+          % (len(problems), " (%d not explained by pending M-C content)" % len(hard) if hard else ""))
+    for problem in problems[:20]:
+        print("      - " + problem)
 
 
 if __name__ == "__main__":

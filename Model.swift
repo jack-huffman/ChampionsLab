@@ -237,6 +237,28 @@ struct MetaNotes: Codable {
     }
 }
 
+// MARK: - Meta teams
+
+/// A known opposing structure to test a team against. `projected` marks the
+/// ones built for M-C from the new pieces rather than observed on a ladder.
+struct MetaTeam: Codable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let archetype: String
+    let format: String
+    let projected: Bool
+    let source: String
+    let note: String
+    let members: [Member]
+
+    struct Member: Codable, Hashable {
+        let form: String
+        let item: String
+        let ability: String
+        let moves: [String]
+    }
+}
+
 // MARK: - Root
 
 struct Dataset: Codable {
@@ -244,10 +266,17 @@ struct Dataset: Codable {
     let rules: Rules
     let items: [Item]
     let usage: [UsageEntry]
+    let metaTeams: [MetaTeam]
     let notes: MetaNotes
     let forms: [Form]
     let moves: [String: Move]
     let abilities: [String: AbilityEntry]
     let generated: String
     let sources: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case regulation, rules, items, usage, notes, forms, moves, abilities
+        case generated, sources
+        case metaTeams = "meta_teams"
+    }
 }

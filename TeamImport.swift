@@ -1,0 +1,367 @@
+//  TeamImport.swift
+//  Reading and writing teams in the format the community actually shares.
+//
+//  Pokepaste / Showdown text is the lingua franca for passing teams around, and
+//  Champions' own Replica Team codes are opaque server-side identifiers we can
+//  store but not resolve offline. So: parse the paste, keep the code as a label.
+//
+//  The wrinkle is that a paste carries EVs and Champions has none. The games
+//  convert on import at a documented rate — the first Stat Point costs 4 EVs and
+//  each one after that costs 8 — which lands 252 EVs exactly on the 32 SP cap.
+
+import Foundation
+
+enum TeamPaste {
+
+    // MARK: - EV/SP conversion
+
+    /// EVs from a Showdown paste -> Champions Stat Points.
+    ///
+    /// 0 EVs is 0 SP, 4 EVs buys the first point, and every further point costs
+    /// 8. So 252 EVs -> 1 + (248 / 8) = 32, which is exactly the per-stat cap.
+    static func statPoints(fromEVs evs: Int) -> Int {
+        guard evs >= 4 else { return 0 }
+        return min(ChampionsStats.spPerStat, 1 + (evs - 4) / 8)
+    }
+
+    /// The inverse, for writing a paste other tools can read.
+    static func evs(fromStatPoints sp: Int) -> Int {
+        guard sp > 0 else { return 0 }
+        return min(252, 4 + (sp - 1) * 8)
+    }
+
+    // MARK: - Import
+
+    struct Result {
+        var team: Team
+        /// Lines that could not be matched, reported rather than swallowed.
+        var warnings: [String]
+    }
+
+    /// Parse one or more Pokémon out of Showdown/Pokepaste text.
+    @MainActor
+    static func parse(_ text: String, store: Store, name: String? = nil) -> Result {
+        var team = Team(name: name ?? "Imported team")
+        var warnings: [String] = []
+
+        // Blocks are separated by blank lines; a block is one Pokémon.
+        let blocks = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        for block in blocks {
+            let lines = block.components(separatedBy: "\n")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            guard let head = lines.first else { continue }
+
+            // "Nickname (Species) (F) @ Item"  /  "Species @ Item"
+            var species = head
+            var item = ""
+            if let at = head.range(of: " @ ") {
+                species = String(head[head.startIndex..<at.lowerBound])
+                item = String(head[at.upperBound...]).trimmingCharacters(in: .whitespaces)
+            }
+            species = species.trimmingCharacters(in: .whitespaces)
+            // A nickname puts the real species in parentheses.
+            if let open = species.range(of: "("), let close = species.range(of: ")", options: .backwards),
+               open.upperBound < close.lowerBound {
+                let inner = String(species[open.upperBound..<close.lowerBound])
+                if !["M", "F"].contains(inner) { species = inner }
+            }
+            species = species.replacingOccurrences(of: " (M)", with: "")
+                             .replacingOccurrences(of: " (F)", with: "")
+                             .trimmingCharacters(in: .whitespaces)
+
+            guard let form = resolve(species: species, store: store) else {
+                warnings.append("Could not find “\(species)” in the Regulation M-C roster")
+                continue
+            }
+
+            var slot = TeamSlot(formID: form.id)
+            slot.ability = form.abilities.first?.name ?? ""
+            if !item.isEmpty {
+                if let known = store.data.items.first(where: {
+                    $0.name.caseInsensitiveCompare(item) == .orderedSame
+                }) {
+                    slot.item = known.name
+                } else if item.lowercased().hasSuffix("ite")
+                            || item.lowercased().contains("ite ")
+                            || item.lowercased().contains("mega stone") {
+                    // A Mega Stone we have no published name for.
+                    slot.item = "Mega Stone"
+                    warnings.append("\(form.formLabel): “\(item)” is not in the itemdex, using Mega Stone")
+                } else {
+                    warnings.append("\(form.formLabel): unknown item “\(item)”")
+                }
+            }
+
+            for line in lines.dropFirst() {
+                parse(line: line, into: &slot, form: form, store: store, warnings: &warnings)
+            }
+
+            // A Mega has to hold its stone, so fill it in if the paste omitted one.
+            if form.isMega && slot.item.isEmpty {
+                slot.item = megaStone(for: form, store: store)
+            }
+            team.slots.append(slot)
+        }
+
+        if team.slots.isEmpty && warnings.isEmpty {
+            warnings.append("No Pokémon found. Paste Showdown or Pokepaste text.")
+        }
+        return Result(team: team, warnings: warnings)
+    }
+
+    @MainActor
+    private static func parse(line: String, into slot: inout TeamSlot, form: Form,
+                              store: Store, warnings: inout [String]) {
+        if line.lowercased().hasPrefix("ability:") {
+            let value = line.dropFirst("ability:".count).trimmingCharacters(in: .whitespaces)
+            if let match = form.abilities.first(where: {
+                $0.name.caseInsensitiveCompare(value) == .orderedSame
+            }) {
+                slot.ability = match.name
+            } else {
+                warnings.append("\(form.formLabel): cannot use ability “\(value)”")
+            }
+            return
+        }
+
+        if line.lowercased().hasPrefix("tera type:") {
+            let value = line.dropFirst("tera type:".count).trimmingCharacters(in: .whitespaces)
+            if let type = PokeType(loose: value) { slot.teraType = type.rawValue }
+            return
+        }
+
+        // "Adamant Nature" — Champions calls these Stat Alignments.
+        if line.lowercased().hasSuffix("nature") {
+            let value = line.replacingOccurrences(of: "Nature", with: "",
+                                                  options: .caseInsensitive)
+                            .trimmingCharacters(in: .whitespaces)
+            if Alignment.all.contains(where: { $0.name.caseInsensitiveCompare(value) == .orderedSame }) {
+                slot.alignmentName = Alignment.all.first {
+                    $0.name.caseInsensitiveCompare(value) == .orderedSame
+                }!.name
+            } else if !value.isEmpty {
+                warnings.append("\(form.formLabel): unknown nature “\(value)”")
+            }
+            return
+        }
+
+        if line.lowercased().hasPrefix("evs:") {
+            let body = line.dropFirst("evs:".count)
+            for part in body.components(separatedBy: "/") {
+                let bits = part.trimmingCharacters(in: .whitespaces)
+                    .components(separatedBy: " ")
+                guard bits.count >= 2, let amount = Int(bits[0]),
+                      let stat = stat(named: bits[1]) else { continue }
+                slot.sp[stat.rawValue] = statPoints(fromEVs: amount)
+            }
+            return
+        }
+
+        // Champions has no IVs, so an IV line carries no information.
+        if line.lowercased().hasPrefix("ivs:") || line.lowercased().hasPrefix("level:")
+            || line.lowercased().hasPrefix("shiny:") || line.lowercased().hasPrefix("happiness:")
+            || line.lowercased().hasPrefix("gigantamax:") || line.lowercased().hasPrefix("dynamax level:") {
+            return
+        }
+
+        // "- Move Name"
+        if line.hasPrefix("-") {
+            let value = line.dropFirst().trimmingCharacters(in: .whitespaces)
+            // Hidden Power and friends carry a type in brackets.
+            let cleaned = value.components(separatedBy: " [").first ?? value
+            guard let move = store.data.moves.values.first(where: {
+                $0.name.caseInsensitiveCompare(cleaned) == .orderedSame
+            }) else {
+                warnings.append("\(form.formLabel): “\(cleaned)” is not a Champions move")
+                return
+            }
+            guard form.moves.contains(move.id) else {
+                warnings.append("\(form.formLabel) cannot learn \(move.name)")
+                return
+            }
+            if slot.moves.count < 4 { slot.moves.append(move.id) }
+            return
+        }
+    }
+
+    private static func stat(named text: String) -> Stat? {
+        switch text.lowercased() {
+        case "hp":  return .hp
+        case "atk": return .attack
+        case "def": return .defense
+        case "spa": return .spAttack
+        case "spd": return .spDefense
+        case "spe": return .speed
+        default:    return nil
+        }
+    }
+
+    /// Match a paste's species string to a form.
+    ///
+    /// Showdown writes "Charizard-Mega-Y" and "Indeedee-F"; people write "Mega
+    /// Charizard Y". Both have to land on the same row.
+    @MainActor
+    static func resolve(species raw: String, store: Store) -> Form? {
+        let text = raw.trimmingCharacters(in: .whitespaces)
+        if let exact = store.data.forms.first(where: {
+            $0.formLabel.caseInsensitiveCompare(text) == .orderedSame
+        }) { return exact }
+        if let byName = store.form(named: text) { return byName }
+
+        let key = normalise(text)
+        if let hit = store.data.forms.first(where: { normalise($0.formLabel) == key }) {
+            return hit
+        }
+
+        // "Charizard-Mega-Y" -> "megacharizardy"
+        let parts = text.components(separatedBy: CharacterSet(charactersIn: "- "))
+            .filter { !$0.isEmpty }
+        if parts.count > 1 {
+            let base = parts[0]
+            let rest = parts.dropFirst().map { $0.lowercased() }
+            var candidate = base
+            if rest.contains("mega") {
+                let tag = rest.first { ["x", "y", "z"].contains($0) }
+                candidate = "Mega \(base)" + (tag.map { " \($0.uppercased())" } ?? "")
+            } else if let region = rest.first(where: {
+                ["alola", "alolan", "galar", "galarian", "hisui", "hisuian",
+                 "paldea", "paldean"].contains($0)
+            }) {
+                let word = ["alola": "Alolan", "alolan": "Alolan",
+                            "galar": "Galarian", "galarian": "Galarian",
+                            "hisui": "Hisuian", "hisuian": "Hisuian",
+                            "paldea": "Paldean", "paldean": "Paldean"][region]!
+                candidate = "\(word) \(base)"
+            } else if rest.contains("f") || rest.contains("female") {
+                candidate = "\(base) (Female)"
+            } else if rest.contains("m") || rest.contains("male") {
+                candidate = "\(base) (Male)"
+            }
+            let wanted = normalise(candidate)
+            if let hit = store.data.forms.first(where: { normalise($0.formLabel) == wanted }) {
+                return hit
+            }
+            // Fall back to the base species so an unknown suffix still imports.
+            let baseKey = normalise(base)
+            if let hit = store.data.forms.first(where: {
+                normalise($0.formLabel) == baseKey && $0.suffix.isEmpty
+            }) { return hit }
+        }
+        return nil
+    }
+
+    private static func normalise(_ text: String) -> String {
+        text.lowercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    @MainActor
+    private static func megaStone(for form: Form, store: Store) -> String {
+        // Serebii names 47 stones; the Champions-only Megas have none published.
+        let guess = form.name + "ite"
+        if let hit = store.data.items.first(where: {
+            $0.name.replacingOccurrences(of: " ", with: "")
+                .caseInsensitiveCompare(guess) == .orderedSame
+        }) { return hit.name }
+        for item in store.data.items where item.name.hasPrefix(form.name.prefix(5)) {
+            if item.name.contains("ite") { return item.name }
+        }
+        return "Mega Stone"
+    }
+
+    // MARK: - Export
+
+    /// Write the team back out as Showdown text, with SP converted to EVs so
+    /// other tools can read it.
+    @MainActor
+    static func export(_ team: Team, store: Store) -> String {
+        var out: [String] = []
+        for slot in team.slots {
+            guard let form = slot.form(in: store) else { continue }
+            var block: [String] = []
+
+            var head = showdownName(form)
+            if !slot.item.isEmpty { head += " @ \(slot.item)" }
+            block.append(head)
+            if !slot.ability.isEmpty { block.append("Ability: \(slot.ability)") }
+            block.append("Level: \(ChampionsStats.level)")
+            if !slot.teraType.isEmpty { block.append("Tera Type: \(slot.teraType)") }
+
+            let spread = Stat.allCases.compactMap { stat -> String? in
+                let sp = slot.sp[stat.rawValue]
+                guard sp > 0 else { return nil }
+                return "\(evs(fromStatPoints: sp)) \(showdownStat(stat))"
+            }
+            if !spread.isEmpty { block.append("EVs: " + spread.joined(separator: " / ")) }
+            block.append("\(slot.alignmentName) Nature")
+            for id in slot.moves {
+                if let move = store.move(id) { block.append("- \(move.name)") }
+            }
+            out.append(block.joined(separator: "\n"))
+        }
+        return out.joined(separator: "\n\n") + "\n"
+    }
+
+    private static func showdownName(_ form: Form) -> String {
+        // Showdown spells forms with hyphens after the species.
+        let label = form.formLabel
+        if form.isMega {
+            var tag = ""
+            if label.hasSuffix(" X") { tag = "-X" }
+            if label.hasSuffix(" Y") { tag = "-Y" }
+            if label.hasSuffix(" Z") { tag = "-Z" }
+            return "\(form.name)-Mega\(tag)"
+        }
+        if label.hasPrefix("Alolan ") { return "\(form.name)-Alola" }
+        if label.hasPrefix("Galarian ") { return "\(form.name)-Galar" }
+        if label.hasPrefix("Hisuian ") { return "\(form.name)-Hisui" }
+        if label.hasPrefix("Paldean ") { return "\(form.name)-Paldea" }
+        if label.hasSuffix("(Female)") { return "\(form.name)-F" }
+        if label.hasSuffix("(Male)") { return "\(form.name)-M" }
+        return form.name
+    }
+
+    private static func showdownStat(_ stat: Stat) -> String {
+        switch stat {
+        case .hp: return "HP"
+        case .attack: return "Atk"
+        case .defense: return "Def"
+        case .spAttack: return "SpA"
+        case .spDefense: return "SpD"
+        case .speed: return "Spe"
+        }
+    }
+
+    // MARK: - Meta teams
+
+    /// Turn a bundled archetype into a real Team so it can be analysed or edited.
+    @MainActor
+    static func team(from meta: MetaTeam, store: Store) -> Team {
+        var team = Team(name: meta.name, format: meta.format)
+        team.notes = "\(meta.source)\n\n\(meta.note)"
+        for member in meta.members {
+            guard let form = store.form(named: member.form) else { continue }
+            var slot = TeamSlot(formID: form.id)
+            slot.ability = member.ability
+            slot.item = member.item
+            slot.moves = member.moves.compactMap { name in
+                store.data.moves.values.first { $0.name == name }?.id
+            }
+            // Meta lists rarely publish spreads, so assume the standard
+            // max-offence, max-speed shape rather than leaving them at zero,
+            // which would make every matchup look winnable.
+            let physical = form.attack >= form.spAttack
+            slot.sp[physical ? Stat.attack.rawValue : Stat.spAttack.rawValue] = 32
+            slot.sp[Stat.speed.rawValue] = 32
+            slot.sp[Stat.hp.rawValue] = 2
+            slot.alignmentName = physical ? "Adamant" : "Modest"
+            team.slots.append(slot)
+        }
+        return team
+    }
+}

@@ -21,7 +21,7 @@ final class Store: ObservableObject {
             // An empty dataset keeps the app launchable so the window can
             // explain what went wrong instead of dying on start.
             data = Dataset(regulation: .placeholder, rules: .placeholder, items: [],
-                           usage: [], notes: .placeholder, forms: [], moves: [:],
+                           usage: [], metaTeams: [], notes: .placeholder, forms: [], moves: [:],
                            abilities: [:], generated: "—", sources: [])
             loadError = "\(error)"
         }

@@ -3,6 +3,14 @@
 
 import Foundation
 
+/// Menu commands, posted by the app's command group and observed by the views.
+/// Declared here rather than beside @main so tools/snapshot.sh — which compiles
+/// every source except ChampionsLab.swift — still sees them.
+extension Notification.Name {
+    static let newTeam = Notification.Name("ChampionsLab.newTeam")
+    static let importTeam = Notification.Name("ChampionsLab.importTeam")
+}
+
 /// One slot on a team: a form plus everything you choose about it.
 struct TeamSlot: Codable, Identifiable, Hashable {
     var id = UUID()
@@ -35,6 +43,9 @@ struct Team: Codable, Identifiable, Hashable {
     var format: String = "doubles"
     var slots: [TeamSlot] = []
     var notes: String = ""
+    /// Champions' in-game Replica Team code. Opaque to us — the game's servers
+    /// expand it — so it is stored as a label to copy, not something we resolve.
+    var replicaCode: String = ""
     var created = Date()
     var modified = Date()
 

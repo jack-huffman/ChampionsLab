@@ -10,19 +10,42 @@
       "2027 Latin America International Championships (LAIC)"
     ],
     "new_pokemon": [
-      "Rillaboom", "Cinderace", "Inteleon", "Salamence", "Golisopod",
-      "Baxcalibur", "Wigglytuff", "Persian", "Persian (Alolan)", "Farfetch'd",
-      "Farfetch'd (Galarian)", "Sirfetch'd", "Mr. Mime", "Mr. Mime (Galarian)",
-      "Swalot", "Gogoat", "Thievul", "Toxtricity", "Grapploct", "Perrserker",
-      "Pincurchin", "Indeedee", "Pawmot", "Arboliva", "Squawkabilly",
+      "Rillaboom",
+      "Cinderace",
+      "Inteleon",
+      "Salamence",
+      "Golisopod",
+      "Baxcalibur",
+      "Wigglytuff",
+      "Persian",
+      "Persian (Alolan)",
+      "Farfetch'd",
+      "Farfetch'd (Galarian)",
+      "Sirfetch'd",
+      "Mr. Mime",
+      "Mr. Mime (Galarian)",
+      "Swalot",
+      "Gogoat",
+      "Thievul",
+      "Toxtricity",
+      "Grapploct",
+      "Perrserker",
+      "Pincurchin",
+      "Indeedee",
+      "Pawmot",
+      "Arboliva",
+      "Squawkabilly",
       "Mabosstiff"
     ],
     "new_megas": [
-      "Mega Salamence", "Mega Golisopod", "Mega Baxcalibur",
-      "Mega Absol Z", "Mega Garchomp Z", "Mega Lucario Z"
+      "Mega Salamence",
+      "Mega Golisopod",
+      "Mega Baxcalibur",
+      "Mega Absol Z",
+      "Mega Garchomp Z",
+      "Mega Lucario Z"
     ]
   },
-
   "rules": {
     "formats": [
       {
@@ -53,75 +76,822 @@
       "turn_seconds": 45
     }
   },
-
   "items": [
-    {"name": "Leek", "new": true, "category": "Species", "effect": "Raises the critical-hit ratio of Farfetch'd or Sirfetch'd by 2 stages.", "note": "With Focus Energy or Dire Claw-style boosts, Sirfetch'd crits on demand — ignores enemy Defense boosts and Intimidate."},
-    {"name": "Rocky Helmet", "new": true, "category": "Damage", "effect": "Attacker takes 1/6 of its max HP when it hits the holder with a contact move.", "note": "The single most important M-C item. Mega Golisopod and Mega Lucario Z are contact-locked; Rocky Helmet punishes both."},
-    {"name": "Air Balloon", "new": true, "category": "Defensive", "effect": "Holder is immune to Ground moves until it is hit by any damaging move, which pops the balloon.", "note": "Blanks Earthquake from Garchomp and Mega Garchomp Z, and lets a partner click spread Ground freely."},
-    {"name": "Red Card", "new": true, "category": "Disruption", "effect": "When the holder is hit by a damaging move, the attacker is switched out at random. Consumed.", "note": "Undoes a setup sweep and drags Megas out of position."},
-    {"name": "Eject Button", "new": true, "category": "Disruption", "effect": "When the holder is hit by a damaging move, it switches out immediately. Consumed.", "note": "Pivot out of an Intimidate cycle or a trapped matchup for free."},
-    {"name": "Binding Band", "new": true, "category": "Damage", "effect": "Increases damage from binding moves (Whirlpool, Fire Spin, Infestation) to 1/6 per turn.", "note": "Niche, but a real win condition on trapping cores in singles."},
-    {"name": "Normal Gem", "new": true, "category": "Offensive", "effect": "Boosts the power of a Normal-type move by 30%. Consumed on use.", "note": "Sharp with Aerilate — Mega Salamence's Normal moves convert to Flying but still consume the Gem, stacking both boosts on Double-Edge."},
-    {"name": "Terrain Extender", "new": true, "category": "Field", "effect": "Terrain set by the holder lasts 8 turns instead of 5.", "note": "Turns a 5-turn terrain window into effectively the whole game."},
-    {"name": "Electric Seed", "new": true, "category": "Field", "effect": "Raises Defense by 1 stage on Electric Terrain. Consumed.", "note": "Pairs with Pincurchin's Electric Surge."},
-    {"name": "Grassy Seed", "new": true, "category": "Field", "effect": "Raises Defense by 1 stage on Grassy Terrain. Consumed.", "note": "Pairs with Rillaboom's Grassy Surge."},
-    {"name": "Psychic Seed", "new": true, "category": "Field", "effect": "Raises Sp. Def by 1 stage on Psychic Terrain. Consumed.", "note": "Pairs with Indeedee's Psychic Surge."},
-    {"name": "Misty Seed", "new": true, "category": "Field", "effect": "Raises Sp. Def by 1 stage on Misty Terrain. Consumed.", "note": "The only Misty setter in the pool is a Tapu-less field move, so this is the weakest of the four."},
-
-    {"name": "Choice Scarf", "new": false, "category": "Offensive", "effect": "Raises Speed by 50% but locks the holder into the first move it uses."},
-    {"name": "Choice Band", "new": false, "category": "Offensive", "effect": "Raises Attack by 50% but locks the holder into the first move it uses."},
-    {"name": "Choice Specs", "new": false, "category": "Offensive", "effect": "Raises Sp. Atk by 50% but locks the holder into the first move it uses."},
-    {"name": "Life Orb", "new": false, "category": "Offensive", "effect": "Raises damage by 30%; holder loses 10% of max HP per damaging move."},
-    {"name": "Focus Sash", "new": false, "category": "Defensive", "effect": "Survives a KO from full HP with 1 HP. Consumed."},
-    {"name": "Assault Vest", "new": false, "category": "Defensive", "effect": "Raises Sp. Def by 50% but prevents the use of status moves."},
-    {"name": "Leftovers", "new": false, "category": "Defensive", "effect": "Restores 1/16 of max HP at the end of each turn."},
-    {"name": "Sitrus Berry", "new": false, "category": "Defensive", "effect": "Restores 25% of max HP when the holder drops below 50%. Consumed."},
-    {"name": "Safety Goggles", "new": false, "category": "Defensive", "effect": "Immune to powder moves and to weather chip damage.", "note": "The dedicated Amoonguss answer."},
-    {"name": "Covert Cloak", "new": false, "category": "Defensive", "effect": "Protects the holder from the secondary effects of moves.", "note": "Blanks Rock Slide flinches and Fake Out."},
-    {"name": "Clear Amulet", "new": false, "category": "Defensive", "effect": "Prevents the holder's stats from being lowered by other Pokémon.", "note": "The premier Intimidate answer for a physical Mega."},
-    {"name": "Mental Herb", "new": false, "category": "Defensive", "effect": "Cures Taunt, Encore, Torment, Attract and Disable. Consumed."},
-    {"name": "Weakness Policy", "new": false, "category": "Offensive", "effect": "Raises Attack and Sp. Atk by 2 stages when hit by a super-effective move. Consumed."},
-    {"name": "Expert Belt", "new": false, "category": "Offensive", "effect": "Raises the power of super-effective moves by 20%."},
-    {"name": "Wide Lens", "new": false, "category": "Offensive", "effect": "Raises accuracy by 10%."},
-    {"name": "Loaded Dice", "new": false, "category": "Offensive", "effect": "Multi-hit moves always hit 4-5 times."},
-    {"name": "Booster Energy", "new": false, "category": "Offensive", "effect": "Activates Protosynthesis or Quark Drive. Consumed."},
-    {"name": "Eviolite", "new": false, "category": "Defensive", "effect": "Raises Defense and Sp. Def by 50% for a Pokémon that can still evolve."},
-    {"name": "Light Clay", "new": false, "category": "Field", "effect": "Extends Reflect and Light Screen to 8 turns."},
-    {"name": "Throat Spray", "new": false, "category": "Offensive", "effect": "Raises Sp. Atk by 1 stage after using a sound move. Consumed."}
+    {
+      "name": "Mega Stone",
+      "new": false,
+      "category": "Mega",
+      "effect": "Lets the holder Mega Evolve once per battle. Champions requires the stone as a held item, so a Mega spends its item slot on it and cannot also carry a Life Orb or a Choice item.",
+      "note": "Placeholder for the Megas whose stone Serebii has not named yet — the Legends Z-A forms, Mega Golisopod and Mega Baxcalibur. The 47 stones with published names are listed individually."
+    },
+    {
+      "name": "Leek",
+      "new": true,
+      "category": "Species",
+      "effect": "Raises the critical-hit ratio of Farfetch'd or Sirfetch'd by 2 stages.",
+      "note": "With Focus Energy or Dire Claw-style boosts, Sirfetch'd crits on demand — ignores enemy Defense boosts and Intimidate."
+    },
+    {
+      "name": "Rocky Helmet",
+      "new": true,
+      "category": "Damage",
+      "effect": "Attacker takes 1/6 of its max HP when it hits the holder with a contact move.",
+      "note": "The single most important M-C item. Mega Golisopod and Mega Lucario Z are contact-locked; Rocky Helmet punishes both."
+    },
+    {
+      "name": "Air Balloon",
+      "new": true,
+      "category": "Defensive",
+      "effect": "Holder is immune to Ground moves until it is hit by any damaging move, which pops the balloon.",
+      "note": "Blanks Earthquake from Garchomp and Mega Garchomp Z, and lets a partner click spread Ground freely."
+    },
+    {
+      "name": "Red Card",
+      "new": true,
+      "category": "Disruption",
+      "effect": "When the holder is hit by a damaging move, the attacker is switched out at random. Consumed.",
+      "note": "Undoes a setup sweep and drags Megas out of position."
+    },
+    {
+      "name": "Eject Button",
+      "new": true,
+      "category": "Disruption",
+      "effect": "When the holder is hit by a damaging move, it switches out immediately. Consumed.",
+      "note": "Pivot out of an Intimidate cycle or a trapped matchup for free."
+    },
+    {
+      "name": "Binding Band",
+      "new": true,
+      "category": "Damage",
+      "effect": "Increases damage from binding moves (Whirlpool, Fire Spin, Infestation) to 1/6 per turn.",
+      "note": "Niche, but a real win condition on trapping cores in singles."
+    },
+    {
+      "name": "Normal Gem",
+      "new": true,
+      "category": "Offensive",
+      "effect": "Boosts the power of a Normal-type move by 30%. Consumed on use.",
+      "note": "Sharp with Aerilate — Mega Salamence's Normal moves convert to Flying but still consume the Gem, stacking both boosts on Double-Edge."
+    },
+    {
+      "name": "Terrain Extender",
+      "new": true,
+      "category": "Field",
+      "effect": "Terrain set by the holder lasts 8 turns instead of 5.",
+      "note": "Turns a 5-turn terrain window into effectively the whole game."
+    },
+    {
+      "name": "Electric Seed",
+      "new": true,
+      "category": "Field",
+      "effect": "Raises Defense by 1 stage on Electric Terrain. Consumed.",
+      "note": "Pairs with Mega Raichu X's Electric Surge, the only Electric Terrain setter published so far."
+    },
+    {
+      "name": "Grassy Seed",
+      "new": true,
+      "category": "Field",
+      "effect": "Raises Defense by 1 stage on Grassy Terrain. Consumed.",
+      "note": "Pairs with Rillaboom's Grassy Surge."
+    },
+    {
+      "name": "Psychic Seed",
+      "new": true,
+      "category": "Field",
+      "effect": "Raises Sp. Def by 1 stage on Psychic Terrain. Consumed.",
+      "note": "Pairs with Indeedee's Psychic Surge."
+    },
+    {
+      "name": "Misty Seed",
+      "new": true,
+      "category": "Field",
+      "effect": "Raises Sp. Def by 1 stage on Misty Terrain. Consumed.",
+      "note": "No Misty Surge ability exists in the Champions roster, so this only comes online off the Misty Terrain move. The weakest of the four seeds."
+    },
+    {
+      "name": "Choice Scarf",
+      "new": false,
+      "category": "Offensive",
+      "effect": "Raises Speed by 50% but locks the holder into the first move it uses."
+    },
+    {
+      "name": "Choice Band",
+      "new": false,
+      "category": "Offensive",
+      "effect": "Raises Attack by 50% but locks the holder into the first move it uses."
+    },
+    {
+      "name": "Choice Specs",
+      "new": false,
+      "category": "Offensive",
+      "effect": "Raises Sp. Atk by 50% but locks the holder into the first move it uses."
+    },
+    {
+      "name": "Life Orb",
+      "new": false,
+      "category": "Offensive",
+      "effect": "Raises damage by 30%; holder loses 10% of max HP per damaging move."
+    },
+    {
+      "name": "Focus Sash",
+      "new": false,
+      "category": "Defensive",
+      "effect": "Survives a KO from full HP with 1 HP. Consumed."
+    },
+    {
+      "name": "Assault Vest",
+      "new": false,
+      "category": "Defensive",
+      "effect": "Raises Sp. Def by 50% but prevents the use of status moves."
+    },
+    {
+      "name": "Leftovers",
+      "new": false,
+      "category": "Defensive",
+      "effect": "Restores 1/16 of max HP at the end of each turn."
+    },
+    {
+      "name": "Sitrus Berry",
+      "new": false,
+      "category": "Defensive",
+      "effect": "Restores 25% of max HP when the holder drops below 50%. Consumed."
+    },
+    {
+      "name": "Safety Goggles",
+      "new": false,
+      "category": "Defensive",
+      "effect": "Immune to powder moves and to weather chip damage.",
+      "note": "Blocks powder moves and weather chip. Champions has no Spore, but Sleep Powder is here on the Venusaur and Victreebel lines, and Hypnosis is widespread — Goggles answers the powder half of that."
+    },
+    {
+      "name": "Covert Cloak",
+      "new": false,
+      "category": "Defensive",
+      "effect": "Protects the holder from the secondary effects of moves.",
+      "note": "Blanks Rock Slide flinches and Fake Out."
+    },
+    {
+      "name": "Clear Amulet",
+      "new": false,
+      "category": "Defensive",
+      "effect": "Prevents the holder's stats from being lowered by other Pokémon.",
+      "note": "The premier Intimidate answer for a physical Mega."
+    },
+    {
+      "name": "Mental Herb",
+      "new": false,
+      "category": "Defensive",
+      "effect": "Cures Taunt, Encore, Torment, Attract and Disable. Consumed."
+    },
+    {
+      "name": "Weakness Policy",
+      "new": false,
+      "category": "Offensive",
+      "effect": "Raises Attack and Sp. Atk by 2 stages when hit by a super-effective move. Consumed."
+    },
+    {
+      "name": "Expert Belt",
+      "new": false,
+      "category": "Offensive",
+      "effect": "Raises the power of super-effective moves by 20%."
+    },
+    {
+      "name": "Wide Lens",
+      "new": false,
+      "category": "Offensive",
+      "effect": "Raises accuracy by 10%."
+    },
+    {
+      "name": "Loaded Dice",
+      "new": false,
+      "category": "Offensive",
+      "effect": "Multi-hit moves always hit 4-5 times."
+    },
+    {
+      "name": "Booster Energy",
+      "new": false,
+      "category": "Offensive",
+      "effect": "Activates Protosynthesis or Quark Drive. Consumed."
+    },
+    {
+      "name": "Eviolite",
+      "new": false,
+      "category": "Defensive",
+      "effect": "Raises Defense and Sp. Def by 50% for a Pokémon that can still evolve."
+    },
+    {
+      "name": "Light Clay",
+      "new": false,
+      "category": "Field",
+      "effect": "Extends Reflect and Light Screen to 8 turns."
+    },
+    {
+      "name": "Throat Spray",
+      "new": false,
+      "category": "Offensive",
+      "effect": "Raises Sp. Atk by 1 stage after using a sound move. Consumed."
+    }
   ],
-
   "usage": [
-    {"name": "Garchomp", "tier": "S", "usage": 40.5, "formats": ["doubles", "singles"], "role": "Physical attacker / speed control", "common_items": ["Choice Scarf", "Clear Amulet", "Life Orb"], "key_moves": ["Earthquake", "Dragon Claw", "Rock Slide", "Protect"], "why": "Earthquake plus Rock Slide is the best spread-damage pairing in the format, and it now has a Mega Z form that flips it to a special sweeper."},
-    {"name": "Basculegion", "tier": "S", "usage": 51.5, "formats": ["doubles"], "role": "Choice Scarf breaker", "common_items": ["Choice Scarf"], "key_moves": ["Last Respects", "Wave Crash", "Aqua Jet", "Protect"], "why": "Last Respects scales with your own fainted Pokémon and appeared on over 99% of tournament sets. The single highest-usage Pokémon of M-A."},
-    {"name": "Kingambit", "tier": "S", "usage": 40.7, "formats": ["doubles", "singles"], "role": "Late-game cleaner", "common_items": ["Assault Vest", "Life Orb", "Focus Sash"], "key_moves": ["Sucker Punch", "Kowtow Cleave", "Iron Head", "Protect"], "why": "Supreme Overlord plus priority Sucker Punch closes games. Defiant punishes Intimidate."},
-    {"name": "Whimsicott", "tier": "S", "usage": 30.0, "formats": ["doubles"], "role": "Speed control / support", "common_items": ["Focus Sash", "Covert Cloak"], "key_moves": ["Tailwind", "Encore", "Moonblast", "Fake Tears"], "why": "Prankster Tailwind is the format's default speed control, with 68% co-usage alongside Garchomp."},
-    {"name": "Sinistcha", "tier": "A", "usage": 28.0, "formats": ["doubles"], "role": "Bulky support / redirection", "common_items": ["Sitrus Berry", "Leftovers"], "key_moves": ["Matcha Gotcha", "Rage Powder", "Trick Room", "Protect"], "why": "Hospitality plus Rage Powder soaks up a turn every game and heals its partner."},
-    {"name": "Mega Metagross", "tier": "S", "usage": 26.0, "formats": ["doubles", "singles"], "role": "Mega — physical attacker", "common_items": ["Metagrossite"], "key_moves": ["Iron Head", "Zen Headbutt", "Bullet Punch", "Protect"], "why": "The best raw stat line of M-B: 145 Attack alongside 110 Speed and Tough Claws."},
-    {"name": "Mega Mawile", "tier": "S", "usage": 24.0, "formats": ["doubles", "singles"], "role": "Mega — wallbreaker", "common_items": ["Mawilite"], "key_moves": ["Play Rough", "Iron Head", "Sucker Punch", "Protect"], "why": "Huge Power doubles Attack to an effective 525. Gholdengo plus Mega Mawile is the format's safest core."},
-    {"name": "Mega Charizard Y", "tier": "A", "usage": 31.8, "formats": ["doubles"], "role": "Mega — sun setter / special attacker", "common_items": ["Charizardite Y"], "key_moves": ["Heat Wave", "Solar Beam", "Air Slash", "Protect"], "why": "Drought plus Heat Wave, and its Flying typing means a Garchomp partner can click Earthquake freely — that pair was on 23.9% of all M-A teams."},
-    {"name": "Gholdengo", "tier": "A", "usage": 25.0, "formats": ["doubles", "singles"], "role": "Special attacker / status blocker", "common_items": ["Choice Specs", "Covert Cloak"], "key_moves": ["Make It Rain", "Shadow Ball", "Nasty Plot", "Protect"], "why": "Good as Gold blanks every status move in the format, including Intimidate-adjacent support."},
-    {"name": "Incineroar", "tier": "A", "usage": 24.0, "formats": ["doubles"], "role": "Pivot / Intimidate", "common_items": ["Assault Vest", "Sitrus Berry"], "key_moves": ["Fake Out", "Knock Off", "Parting Shot", "Flare Blitz"], "why": "Intimidate plus Fake Out remains the safest support pick in doubles."},
-    {"name": "Mega Swampert", "tier": "A", "usage": 18.0, "formats": ["doubles"], "role": "Mega — rain sweeper", "common_items": ["Swampertite"], "key_moves": ["Wave Crash", "Earthquake", "Ice Punch", "Protect"], "why": "Swift Swim under rain outruns the entire unboosted format."},
-    {"name": "Mega Staraptor", "tier": "A", "usage": 16.0, "formats": ["doubles"], "role": "Mega — Contrary attacker", "common_items": ["Staraptorite"], "key_moves": ["Close Combat", "Brave Bird", "Double-Edge", "Protect"], "why": "Contrary turns Close Combat's drops into boosts, so it snowballs defensively while attacking."},
-    {"name": "Sneasler", "tier": "A", "usage": 28.6, "formats": ["doubles", "singles"], "role": "Fast physical attacker", "common_items": ["Focus Sash", "Life Orb"], "key_moves": ["Close Combat", "Dire Claw", "Fake Out", "Protect"], "why": "Unburden plus Dire Claw's status chance makes it a nightmare once it is airborne."},
-    {"name": "Amoonguss", "tier": "A", "usage": 22.0, "formats": ["doubles"], "role": "Redirection / status", "common_items": ["Sitrus Berry", "Covert Cloak"], "key_moves": ["Spore", "Rage Powder", "Pollen Puff", "Protect"], "why": "Spore is still the only sleep move worth the slot, and Rage Powder buys turns."},
-    {"name": "Annihilape", "tier": "A", "usage": 15.0, "formats": ["doubles", "singles"], "role": "Bulky attacker", "common_items": ["Leftovers", "Sitrus Berry"], "key_moves": ["Rage Fist", "Drain Punch", "Bulk Up", "Protect"], "why": "Rage Fist grows every time it is hit, which doubles punishes spread moves."},
-    {"name": "Pelipper", "tier": "B", "usage": 12.0, "formats": ["doubles"], "role": "Rain setter", "common_items": ["Focus Sash", "Damp Rock"], "key_moves": ["Hurricane", "Tailwind", "Wide Guard", "Protect"], "why": "Drizzle plus Tailwind, and the enabler for Mega Swampert."},
-    {"name": "Farigiraf", "tier": "B", "usage": 11.0, "formats": ["doubles"], "role": "Trick Room / support", "common_items": ["Sitrus Berry", "Electric Seed"], "key_moves": ["Trick Room", "Psychic Noise", "Helping Hand", "Protect"], "why": "Armor Tail shuts off every priority move in the format, protecting a Trick Room turn."},
-    {"name": "Ursaluna", "tier": "B", "usage": 10.0, "formats": ["doubles"], "role": "Trick Room attacker", "common_items": ["Flame Orb", "Assault Vest"], "key_moves": ["Facade", "Headlong Rush", "Earthquake", "Protect"], "why": "Guts Facade under Trick Room is the hardest single hit available to a non-Mega."},
-
-    {"name": "Mega Salamence", "tier": "S", "usage": 0.0, "projected": true, "formats": ["doubles", "singles"], "role": "Mega — Aerilate sweeper", "common_items": ["Salamencite"], "key_moves": ["Double-Edge", "Dragon Dance", "Earthquake", "Protect"], "why": "700 BST with 120 Speed and Aerilate Double-Edge. A two-time World Champion Mega returning into a format with no Steel-heavy top tier."},
-    {"name": "Mega Garchomp Z", "tier": "S", "usage": 0.0, "projected": true, "formats": ["doubles", "singles"], "role": "Mega — special sweeper", "common_items": ["Garchompite Z"], "key_moves": ["Draco Meteor", "Earth Power", "Flamethrower", "Protect"], "why": "151 Speed and 141 Sp. Atk on a pure-Dragon body with Levitate. It outspeeds the entire format and ignores Ground moves, Spikes and terrain."},
-    {"name": "Mega Lucario Z", "tier": "S", "usage": 0.0, "projected": true, "formats": ["doubles", "singles"], "role": "Mega — fast special attacker", "common_items": ["Lucarionite Z"], "key_moves": ["Aura Sphere", "Flash Cannon", "Nasty Plot", "Protect"], "why": "164 Sp. Atk at 151 Speed, and Aura Guard halves incoming contact damage — offense and defense in one slot."},
-    {"name": "Mega Golisopod", "tier": "A", "usage": 0.0, "projected": true, "formats": ["doubles", "singles"], "role": "Mega — Trick Room wall-breaker", "common_items": ["Golisopodite"], "key_moves": ["First Impression", "Liquidation", "Close Combat", "Protect"], "why": "Bug/Steel with 175 Defense and 150 Attack, Tough Claws, and 40 Speed that begs for Trick Room. First Impression at +30% is a genuine opening threat."},
-    {"name": "Mega Baxcalibur", "tier": "A", "usage": 0.0, "projected": true, "formats": ["doubles", "singles"], "role": "Mega — physical breaker", "common_items": ["Baxcaliburite"], "key_moves": ["Glaive Rush", "Icicle Crash", "Dragon Dance", "Protect"], "why": "175 Attack and 115 HP, and Thermal Exchange makes it burn-proof and turns Fire coverage into a free Attack boost."},
-    {"name": "Mega Absol Z", "tier": "B", "usage": 0.0, "projected": true, "formats": ["singles", "doubles"], "role": "Mega — Sharpness attacker", "common_items": ["Absolite Z"], "key_moves": ["Night Slash", "Psycho Cut", "Sucker Punch", "Swords Dance"], "why": "Sharpness gives 50% on every slicing move, but frail defenses keep it out of the top tier."},
-    {"name": "Rillaboom", "tier": "A", "usage": 0.0, "projected": true, "formats": ["doubles"], "role": "Grassy Terrain setter", "common_items": ["Terrain Extender", "Assault Vest"], "key_moves": ["Grassy Glide", "Wood Hammer", "Fake Out", "U-turn"], "why": "Grassy Surge plus priority Grassy Glide, and Grassy Terrain halves Earthquake — a direct structural answer to the Garchomp cores."},
-    {"name": "Indeedee-F", "tier": "A", "usage": 0.0, "projected": true, "formats": ["doubles"], "role": "Psychic Terrain / support", "common_items": ["Psychic Seed", "Terrain Extender"], "key_moves": ["Follow Me", "Trick Room", "Dazzling Gleam", "Helping Hand"], "why": "Psychic Surge blocks all priority — it turns off Sucker Punch, Fake Out, Grassy Glide and Aqua Jet at once, and Follow Me protects a Trick Room setter."},
-    {"name": "Cinderace", "tier": "B", "usage": 0.0, "projected": true, "formats": ["doubles", "singles"], "role": "Fast physical attacker", "common_items": ["Choice Band", "Life Orb"], "key_moves": ["Pyro Ball", "High Jump Kick", "U-turn", "Sucker Punch"], "why": "Libero gives it a free STAB on anything, and base 119 Speed sits above most of the format."},
-    {"name": "Pincurchin", "tier": "C", "usage": 0.0, "projected": true, "formats": ["doubles"], "role": "Electric Terrain setter", "common_items": ["Terrain Extender", "Electric Seed"], "key_moves": ["Rising Voltage", "Discharge", "Spiky Shield", "Sucker Punch"], "why": "The only Electric Surge in the pool. Slow and frail, but Electric Terrain blocks sleep and doubles Rising Voltage."}
+    {
+      "name": "Garchomp",
+      "tier": "S",
+      "usage": 40.5,
+      "formats": [
+        "doubles",
+        "singles"
+      ],
+      "role": "Physical attacker / speed control",
+      "common_items": [
+        "Choice Scarf",
+        "Clear Amulet",
+        "Life Orb"
+      ],
+      "key_moves": [
+        "Earthquake",
+        "Dragon Claw",
+        "Rock Slide",
+        "Protect"
+      ],
+      "why": "Earthquake plus Rock Slide is the best spread-damage pairing in the format, and it now has a Mega Z form that flips it to a special sweeper."
+    },
+    {
+      "name": "Basculegion",
+      "tier": "S",
+      "usage": 51.5,
+      "formats": [
+        "doubles"
+      ],
+      "role": "Choice Scarf breaker",
+      "common_items": [
+        "Choice Scarf"
+      ],
+      "key_moves": [
+        "Last Respects",
+        "Wave Crash",
+        "Aqua Jet",
+        "Protect"
+      ],
+      "why": "Last Respects scales with your own fainted Pokémon and appeared on over 99% of tournament sets. The single highest-usage Pokémon of M-A."
+    },
+    {
+      "name": "Kingambit",
+      "tier": "S",
+      "usage": 40.7,
+      "formats": [
+        "doubles",
+        "singles"
+      ],
+      "role": "Late-game cleaner",
+      "common_items": [
+        "Assault Vest",
+        "Life Orb",
+        "Focus Sash"
+      ],
+      "key_moves": [
+        "Sucker Punch",
+        "Kowtow Cleave",
+        "Iron Head",
+        "Protect"
+      ],
+      "why": "Supreme Overlord plus priority Sucker Punch closes games. Defiant punishes Intimidate."
+    },
+    {
+      "name": "Whimsicott",
+      "tier": "S",
+      "usage": 30.0,
+      "formats": [
+        "doubles"
+      ],
+      "role": "Speed control / support",
+      "common_items": [
+        "Focus Sash",
+        "Covert Cloak"
+      ],
+      "key_moves": [
+        "Tailwind",
+        "Encore",
+        "Moonblast",
+        "Fake Tears"
+      ],
+      "why": "Prankster Tailwind is the format's default speed control, with 68% co-usage alongside Garchomp."
+    },
+    {
+      "name": "Sinistcha",
+      "tier": "A",
+      "usage": 28.0,
+      "formats": [
+        "doubles"
+      ],
+      "role": "Bulky support / redirection",
+      "common_items": [
+        "Sitrus Berry",
+        "Leftovers"
+      ],
+      "key_moves": [
+        "Rage Powder",
+        "Trick Room",
+        "Scald",
+        "Protect"
+      ],
+      "why": "Hospitality plus Rage Powder soaks up a turn every game and heals its partner."
+    },
+    {
+      "name": "Mega Metagross",
+      "tier": "S",
+      "usage": 26.0,
+      "formats": [
+        "doubles",
+        "singles"
+      ],
+      "role": "Mega — physical attacker",
+      "common_items": [
+        "Metagrossite"
+      ],
+      "key_moves": [
+        "Iron Head",
+        "Zen Headbutt",
+        "Bullet Punch",
+        "Protect"
+      ],
+      "why": "The best raw stat line of M-B: 145 Attack alongside 110 Speed and Tough Claws."
+    },
+    {
+      "name": "Mega Mawile",
+      "tier": "S",
+      "usage": 24.0,
+      "formats": [
+        "doubles",
+        "singles"
+      ],
+      "role": "Mega — wallbreaker",
+      "common_items": [
+        "Mawilite"
+      ],
+      "key_moves": [
+        "Play Rough",
+        "Iron Head",
+        "Sucker Punch",
+        "Protect"
+      ],
+      "why": "Huge Power doubles Attack to an effective 525. Gholdengo plus Mega Mawile is the format's safest core."
+    },
+    {
+      "name": "Mega Charizard Y",
+      "tier": "A",
+      "usage": 31.8,
+      "formats": [
+        "doubles"
+      ],
+      "role": "Mega — sun setter / special attacker",
+      "common_items": [
+        "Charizardite Y"
+      ],
+      "key_moves": [
+        "Heat Wave",
+        "Solar Beam",
+        "Air Slash",
+        "Protect"
+      ],
+      "why": "Drought plus Heat Wave, and its Flying typing means a Garchomp partner can click Earthquake freely — that pair was on 23.9% of all M-A teams."
+    },
+    {
+      "name": "Gholdengo",
+      "tier": "A",
+      "usage": 25.0,
+      "formats": [
+        "doubles",
+        "singles"
+      ],
+      "role": "Special attacker / status blocker",
+      "common_items": [
+        "Choice Specs",
+        "Covert Cloak"
+      ],
+      "key_moves": [
+        "Make It Rain",
+        "Shadow Ball",
+        "Nasty Plot",
+        "Protect"
+      ],
+      "why": "Good as Gold blanks every status move in the format, including Intimidate-adjacent support."
+    },
+    {
+      "name": "Incineroar",
+      "tier": "A",
+      "usage": 24.0,
+      "formats": [
+        "doubles"
+      ],
+      "role": "Pivot / Intimidate",
+      "common_items": [
+        "Assault Vest",
+        "Sitrus Berry"
+      ],
+      "key_moves": [
+        "Fake Out",
+        "Parting Shot",
+        "Darkest Lariat",
+        "Flare Blitz"
+      ],
+      "why": "Intimidate plus Fake Out remains the safest support pick in doubles."
+    },
+    {
+      "name": "Mega Swampert",
+      "tier": "A",
+      "usage": 18.0,
+      "formats": [
+        "doubles"
+      ],
+      "role": "Mega — rain sweeper",
+      "common_items": [
+        "Swampertite"
+      ],
+      "key_moves": [
+        "Wave Crash",
+        "Earthquake",
+        "Ice Punch",
+        "Protect"
+      ],
+      "why": "Swift Swim under rain outruns the entire unboosted format."
+    },
+    {
+      "name": "Mega Staraptor",
+      "tier": "A",
+      "usage": 16.0,
+      "formats": [
+        "doubles"
+      ],
+      "role": "Mega — Contrary attacker",
+      "common_items": [
+        "Mega Stone"
+      ],
+      "key_moves": [
+        "Close Combat",
+        "Brave Bird",
+        "Double-Edge",
+        "Protect"
+      ],
+      "why": "Contrary turns Close Combat's drops into boosts, so it snowballs defensively while attacking."
+    },
+    {
+      "name": "Sneasler",
+      "tier": "A",
+      "usage": 28.6,
+      "formats": [
+        "doubles",
+        "singles"
+      ],
+      "role": "Fast physical attacker",
+      "common_items": [
+        "Focus Sash",
+        "Life Orb"
+      ],
+      "key_moves": [
+        "Close Combat",
+        "Dire Claw",
+        "Fake Out",
+        "Protect"
+      ],
+      "why": "Unburden plus Dire Claw's status chance makes it a nightmare once it is airborne."
+    },
+    {
+      "name": "Annihilape",
+      "tier": "A",
+      "usage": 15.0,
+      "formats": [
+        "doubles",
+        "singles"
+      ],
+      "role": "Bulky attacker",
+      "common_items": [
+        "Leftovers",
+        "Sitrus Berry"
+      ],
+      "key_moves": [
+        "Rage Fist",
+        "Drain Punch",
+        "Bulk Up",
+        "Protect"
+      ],
+      "why": "Rage Fist grows every time it is hit, which doubles punishes spread moves."
+    },
+    {
+      "name": "Farigiraf",
+      "tier": "B",
+      "usage": 11.0,
+      "formats": [
+        "doubles"
+      ],
+      "role": "Trick Room / support",
+      "common_items": [
+        "Sitrus Berry",
+        "Electric Seed"
+      ],
+      "key_moves": [
+        "Trick Room",
+        "Psychic Noise",
+        "Helping Hand",
+        "Protect"
+      ],
+      "why": "Armor Tail shuts off every priority move in the format, protecting a Trick Room turn."
+    },
+    {
+      "name": "Mega Salamence",
+      "tier": "S",
+      "usage": 0.0,
+      "projected": true,
+      "formats": [
+        "doubles",
+        "singles"
+      ],
+      "role": "Mega — Aerilate sweeper",
+      "common_items": [
+        "Salamencite"
+      ],
+      "key_moves": [
+        "Double-Edge",
+        "Dragon Dance",
+        "Earthquake",
+        "Protect"
+      ],
+      "why": "700 BST with 120 Speed and Aerilate Double-Edge. A two-time World Champion Mega returning into a format with no Steel-heavy top tier."
+    },
+    {
+      "name": "Mega Garchomp Z",
+      "tier": "S",
+      "usage": 0.0,
+      "projected": true,
+      "formats": [
+        "doubles",
+        "singles"
+      ],
+      "role": "Mega — special sweeper",
+      "common_items": [
+        "Mega Stone"
+      ],
+      "key_moves": [
+        "Draco Meteor",
+        "Earth Power",
+        "Flamethrower",
+        "Protect"
+      ],
+      "why": "151 Speed and 141 Sp. Atk on a pure-Dragon body with Levitate. It outspeeds the entire format and ignores Ground moves, Spikes and terrain."
+    },
+    {
+      "name": "Mega Lucario Z",
+      "tier": "S",
+      "usage": 0.0,
+      "projected": true,
+      "formats": [
+        "doubles",
+        "singles"
+      ],
+      "role": "Mega — fast special attacker",
+      "common_items": [
+        "Mega Stone"
+      ],
+      "key_moves": [
+        "Aura Sphere",
+        "Flash Cannon",
+        "Nasty Plot",
+        "Protect"
+      ],
+      "why": "164 Sp. Atk at 151 Speed, and Aura Guard halves incoming contact damage — offense and defense in one slot."
+    },
+    {
+      "name": "Mega Golisopod",
+      "tier": "A",
+      "usage": 0.0,
+      "projected": true,
+      "formats": [
+        "doubles",
+        "singles"
+      ],
+      "role": "Mega — Trick Room wall-breaker",
+      "common_items": [
+        "Mega Stone"
+      ],
+      "key_moves": [
+        "First Impression",
+        "Liquidation",
+        "Close Combat",
+        "Protect"
+      ],
+      "why": "Bug/Steel with 175 Defense and 150 Attack, Tough Claws, and 40 Speed that begs for Trick Room. First Impression at +30% is a genuine opening threat."
+    },
+    {
+      "name": "Mega Baxcalibur",
+      "tier": "A",
+      "usage": 0.0,
+      "projected": true,
+      "formats": [
+        "doubles",
+        "singles"
+      ],
+      "role": "Mega — physical breaker",
+      "common_items": [
+        "Mega Stone"
+      ],
+      "key_moves": [
+        "Glaive Rush",
+        "Icicle Crash",
+        "Dragon Dance",
+        "Protect"
+      ],
+      "why": "175 Attack and 115 HP, and Thermal Exchange makes it burn-proof and turns Fire coverage into a free Attack boost."
+    },
+    {
+      "name": "Mega Absol Z",
+      "tier": "B",
+      "usage": 0.0,
+      "projected": true,
+      "formats": [
+        "singles",
+        "doubles"
+      ],
+      "role": "Mega — Sharpness attacker",
+      "common_items": [
+        "Mega Stone"
+      ],
+      "key_moves": [
+        "Night Slash",
+        "Psycho Cut",
+        "Sucker Punch",
+        "Swords Dance"
+      ],
+      "why": "Sharpness gives 50% on every slicing move, but frail defenses keep it out of the top tier."
+    },
+    {
+      "name": "Rillaboom",
+      "tier": "A",
+      "usage": 0.0,
+      "projected": true,
+      "formats": [
+        "doubles"
+      ],
+      "role": "Grassy Terrain setter",
+      "common_items": [
+        "Terrain Extender",
+        "Assault Vest"
+      ],
+      "key_moves": [
+        "Grassy Glide",
+        "Wood Hammer",
+        "Fake Out",
+        "U-turn"
+      ],
+      "why": "Grassy Surge plus priority Grassy Glide, and Grassy Terrain halves Earthquake — a direct structural answer to the Garchomp cores."
+    },
+    {
+      "name": "Indeedee-F",
+      "tier": "A",
+      "usage": 0.0,
+      "projected": true,
+      "formats": [
+        "doubles"
+      ],
+      "role": "Psychic Terrain / support",
+      "common_items": [
+        "Psychic Seed",
+        "Terrain Extender"
+      ],
+      "key_moves": [
+        "Follow Me",
+        "Trick Room",
+        "Dazzling Gleam",
+        "Helping Hand"
+      ],
+      "why": "Psychic Surge blocks all priority — it turns off Sucker Punch, Fake Out, Grassy Glide and Aqua Jet at once, and Follow Me protects a Trick Room setter."
+    },
+    {
+      "name": "Cinderace",
+      "tier": "B",
+      "usage": 0.0,
+      "projected": true,
+      "formats": [
+        "doubles",
+        "singles"
+      ],
+      "role": "Fast physical attacker",
+      "common_items": [
+        "Choice Band",
+        "Life Orb"
+      ],
+      "key_moves": [
+        "Pyro Ball",
+        "High Jump Kick",
+        "U-turn",
+        "Sucker Punch"
+      ],
+      "why": "Libero gives it a free STAB on anything, and base 119 Speed sits above most of the format."
+    },
+    {
+      "name": "Pincurchin",
+      "tier": "C",
+      "usage": 0.0,
+      "projected": true,
+      "formats": [
+        "doubles"
+      ],
+      "role": "Electric Terrain setter",
+      "common_items": [
+        "Terrain Extender",
+        "Electric Seed"
+      ],
+      "key_moves": [
+        "Rising Voltage",
+        "Discharge",
+        "Spiky Shield",
+        "Sucker Punch"
+      ],
+      "why": "Electric Surge on a slow body. Not the only one — Mega Raichu X already sets Electric Terrain and is far more usable — but Pincurchin is the one that fits under Trick Room. Not yet published in Serebii's Champions dex."
+    },
+    {
+      "name": "Politoed",
+      "tier": "B",
+      "usage": 0.0,
+      "projected": true,
+      "formats": [
+        "doubles"
+      ],
+      "role": "Rain setter",
+      "common_items": [
+        "Damp Rock",
+        "Sitrus Berry"
+      ],
+      "key_moves": [
+        "Weather Ball",
+        "Hypnosis",
+        "Encore",
+        "Protect"
+      ],
+      "why": "The only Drizzle in the entire Champions roster, so every rain team in the format starts here. Perish Song gives it a second win condition when the rain plan stalls."
+    },
+    {
+      "name": "Mega Raichu X",
+      "tier": "A",
+      "usage": 0.0,
+      "projected": true,
+      "formats": [
+        "doubles"
+      ],
+      "role": "Mega — Electric Terrain",
+      "common_items": [
+        "Mega Stone"
+      ],
+      "key_moves": [
+        "Expanding Force",
+        "Fake Out",
+        "Encore",
+        "Protect"
+      ],
+      "why": "Electric Surge plus 135 Attack and 110 Speed. The terrain blocks sleep and doubles Rising Voltage, and Fake Out into Encore is a genuine control turn. With Terrain Extender arriving in M-C this is the most immediately usable terrain setter in the game."
+    },
+    {
+      "name": "Clefable",
+      "tier": "B",
+      "usage": 0.0,
+      "projected": true,
+      "formats": [
+        "doubles"
+      ],
+      "role": "Redirection / support",
+      "common_items": [
+        "Sitrus Berry",
+        "Covert Cloak"
+      ],
+      "key_moves": [
+        "Follow Me",
+        "Icy Wind",
+        "Moonblast",
+        "Protect"
+      ],
+      "why": "One of only five Follow Me users in the format, and the only one with Magic Guard or Unaware. Redirection matters more in M-C because so many of the new Megas want one clean turn to set up."
+    },
+    {
+      "name": "Conkeldurr",
+      "tier": "B",
+      "usage": 0.0,
+      "projected": true,
+      "formats": [
+        "doubles",
+        "singles"
+      ],
+      "role": "Trick Room attacker",
+      "common_items": [
+        "Flame Orb",
+        "Assault Vest"
+      ],
+      "key_moves": [
+        "Drain Punch",
+        "Mach Punch",
+        "Close Combat",
+        "Wide Guard"
+      ],
+      "why": "140 Attack at 45 Speed with Guts. The natural Trick Room partner for Mega Golisopod, and Wide Guard blanks the Rock Slide and Earthquake spam that punishes slow teams."
+    }
   ],
-
   "notes": {
     "headline": "M-C is a speed-tier reset and a terrain format waiting to happen.",
     "threads": [
@@ -131,7 +901,7 @@
       },
       {
         "title": "Terrain arrived fully assembled",
-        "body": "M-C added Rillaboom (Grassy Surge), Indeedee (Psychic Surge) and Pincurchin (Electric Surge) in the same patch as Terrain Extender and all four Seeds. That is not a coincidence. Grassy Terrain halving Earthquake and Psychic Terrain blocking priority both attack the exact cores that defined M-B."
+        "body": "M-C added Rillaboom (Grassy Surge) and Indeedee (Psychic Surge) in the same patch as Terrain Extender and all four Seeds. That is not a coincidence. Grassy Terrain halving Earthquake and Psychic Terrain blocking priority both attack the exact cores that defined M-B. Electric Terrain is already available on Mega Raichu X; Pincurchin adds a slow setter once it is published."
       },
       {
         "title": "Contact is a liability again",
@@ -168,5 +938,469 @@
         "body": "Intimidate from Incineroar is the cheapest way to blunt a physical Mega. Clear Amulet costs you a damage item but guarantees your Mega Salamence or Mega Baxcalibur hits at full Attack all game."
       }
     ]
-  }
+  },
+  "meta_teams": [
+    {
+      "id": "big-six",
+      "name": "Big Six",
+      "archetype": "Sun offence",
+      "format": "doubles",
+      "projected": false,
+      "source": "The most-used structure of Regulation M-B; took five of the Top 8 at Japan Nationals. Also called Sunflower or Zard Slop.",
+      "note": "Charizard Y + Garchomp was the single most common two-Pokemon core of the format, on roughly a quarter of sampled teams: Charizard is immune to Earthquake, so Garchomp can click it freely under Drought.",
+      "members": [
+        {
+          "form": "Mega Charizard Y",
+          "item": "Charizardite Y",
+          "ability": "Drought",
+          "moves": [
+            "Heat Wave",
+            "Solar Beam",
+            "Air Slash",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Garchomp",
+          "item": "Choice Scarf",
+          "ability": "Rough Skin",
+          "moves": [
+            "Earthquake",
+            "Rock Slide",
+            "Dragon Claw",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Whimsicott",
+          "item": "Focus Sash",
+          "ability": "Prankster",
+          "moves": [
+            "Tailwind",
+            "Encore",
+            "Moonblast",
+            "Helping Hand"
+          ]
+        },
+        {
+          "form": "Basculegion",
+          "item": "Choice Band",
+          "ability": "Adaptability",
+          "moves": [
+            "Wave Crash",
+            "Aqua Jet",
+            "Last Respects",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Kingambit",
+          "item": "Assault Vest",
+          "ability": "Supreme Overlord",
+          "moves": [
+            "Sucker Punch",
+            "Iron Head",
+            "Kowtow Cleave",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Mega Floette",
+          "item": "Mega Stone",
+          "ability": "Fairy Aura",
+          "moves": [
+            "Moonblast",
+            "Protect",
+            "Helping Hand",
+            "Dazzling Gleam"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "indy-sun",
+      "name": "Indianapolis Sun",
+      "archetype": "Sun offence",
+      "format": "doubles",
+      "projected": false,
+      "source": "Arsal Puri's winning list from the 2026 Indianapolis Regional Championships (Regulation M-B).",
+      "note": "A Big Six variant that cuts the priority core for Venusaur and Sinistcha. Slower and bulkier, and it beats the mirror by outlasting it.",
+      "members": [
+        {
+          "form": "Mega Charizard Y",
+          "item": "Charizardite Y",
+          "ability": "Drought",
+          "moves": [
+            "Heat Wave",
+            "Solar Beam",
+            "Air Slash",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Mega Floette",
+          "item": "Mega Stone",
+          "ability": "Fairy Aura",
+          "moves": [
+            "Moonblast",
+            "Dazzling Gleam",
+            "Helping Hand",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Venusaur",
+          "item": "Focus Sash",
+          "ability": "Chlorophyll",
+          "moves": [
+            "Sludge Bomb",
+            "Giga Drain",
+            "Protect",
+            "Sleep Powder"
+          ]
+        },
+        {
+          "form": "Garchomp",
+          "item": "Life Orb",
+          "ability": "Rough Skin",
+          "moves": [
+            "Earthquake",
+            "Rock Slide",
+            "Dragon Claw",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Incineroar",
+          "item": "Sitrus Berry",
+          "ability": "Intimidate",
+          "moves": [
+            "Fake Out",
+            "Parting Shot",
+            "Darkest Lariat",
+            "Flare Blitz"
+          ]
+        },
+        {
+          "form": "Sinistcha",
+          "item": "Leftovers",
+          "ability": "Hospitality",
+          "moves": [
+            "Rage Powder",
+            "Trick Room",
+            "Scald",
+            "Protect"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rain",
+      "name": "Dual Mega Rain",
+      "archetype": "Rain offence",
+      "format": "doubles",
+      "projected": false,
+      "source": "Recurring M-B archetype. Politoed is the only Drizzle in the Champions roster, so every rain team in the format starts from it.",
+      "note": "Swift Swim Mega Swampert outruns the entire unboosted format under rain. Mega Metagross is the backup plan for when the rain runs out.",
+      "members": [
+        {
+          "form": "Politoed",
+          "item": "Damp Rock",
+          "ability": "Drizzle",
+          "moves": [
+            "Weather Ball",
+            "Hypnosis",
+            "Encore",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Mega Swampert",
+          "item": "Swampertite",
+          "ability": "Swift Swim",
+          "moves": [
+            "Earthquake",
+            "Ice Punch",
+            "Protect",
+            "Rock Slide"
+          ]
+        },
+        {
+          "form": "Mega Metagross",
+          "item": "Metagrossite",
+          "ability": "Tough Claws",
+          "moves": [
+            "Iron Head",
+            "Zen Headbutt",
+            "Bullet Punch",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Whimsicott",
+          "item": "Focus Sash",
+          "ability": "Prankster",
+          "moves": [
+            "Tailwind",
+            "Encore",
+            "Moonblast",
+            "Helping Hand"
+          ]
+        },
+        {
+          "form": "Incineroar",
+          "item": "Assault Vest",
+          "ability": "Intimidate",
+          "moves": [
+            "Fake Out",
+            "Darkest Lariat",
+            "Flare Blitz",
+            "Parting Shot"
+          ]
+        },
+        {
+          "form": "Kingambit",
+          "item": "Life Orb",
+          "ability": "Supreme Overlord",
+          "moves": [
+            "Sucker Punch",
+            "Iron Head",
+            "Kowtow Cleave",
+            "Protect"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "gholdengo-mawile",
+      "name": "Gholdengo + Mawile",
+      "archetype": "Steel balance",
+      "format": "doubles",
+      "projected": false,
+      "source": "Named in M-B analysis as the format's new safe core, filling the role Floette + Kingambit had in M-A.",
+      "note": "Good as Gold turns off every status move aimed at the pair, and Huge Power gives Mawile an effective 525 Attack behind it.",
+      "members": [
+        {
+          "form": "Gholdengo",
+          "item": "Choice Specs",
+          "ability": "Good as Gold",
+          "moves": [
+            "Make It Rain",
+            "Shadow Ball",
+            "Nasty Plot",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Mega Mawile",
+          "item": "Mawilite",
+          "ability": "Huge Power",
+          "moves": [
+            "Play Rough",
+            "Iron Head",
+            "Sucker Punch",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Incineroar",
+          "item": "Sitrus Berry",
+          "ability": "Intimidate",
+          "moves": [
+            "Fake Out",
+            "Parting Shot",
+            "Darkest Lariat",
+            "Flare Blitz"
+          ]
+        },
+        {
+          "form": "Whimsicott",
+          "item": "Covert Cloak",
+          "ability": "Prankster",
+          "moves": [
+            "Tailwind",
+            "Encore",
+            "Moonblast",
+            "Helping Hand"
+          ]
+        },
+        {
+          "form": "Garchomp",
+          "item": "Clear Amulet",
+          "ability": "Rough Skin",
+          "moves": [
+            "Earthquake",
+            "Rock Slide",
+            "Dragon Claw",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Sinistcha",
+          "item": "Leftovers",
+          "ability": "Hospitality",
+          "moves": [
+            "Rage Powder",
+            "Trick Room",
+            "Scald",
+            "Protect"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "terrain",
+      "name": "Terrain Control",
+      "archetype": "Terrain / Trick Room",
+      "format": "doubles",
+      "projected": true,
+      "source": "Built for M-C from the terrain pieces the regulation added. No ladder history yet.",
+      "note": "Grassy Terrain halves Earthquake and Psychic Terrain switches off Sucker Punch, Fake Out and Aqua Jet. Both attack the cores that defined M-B, and Mega Golisopod is the Trick Room payoff underneath.",
+      "members": [
+        {
+          "form": "Rillaboom",
+          "item": "Terrain Extender",
+          "ability": "Grassy Surge",
+          "moves": [
+            "Wood Hammer",
+            "Fake Out",
+            "U-turn",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Indeedee (Female)",
+          "item": "Psychic Seed",
+          "ability": "Psychic Surge",
+          "moves": [
+            "Follow Me",
+            "Trick Room",
+            "Dazzling Gleam",
+            "Helping Hand"
+          ]
+        },
+        {
+          "form": "Mega Golisopod",
+          "item": "Mega Stone",
+          "ability": "Tough Claws",
+          "moves": [
+            "First Impression",
+            "Liquidation",
+            "Close Combat",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Conkeldurr",
+          "item": "Flame Orb",
+          "ability": "Guts",
+          "moves": [
+            "Drain Punch",
+            "Mach Punch",
+            "Wide Guard",
+            "Close Combat"
+          ]
+        },
+        {
+          "form": "Incineroar",
+          "item": "Rocky Helmet",
+          "ability": "Intimidate",
+          "moves": [
+            "Fake Out",
+            "Parting Shot",
+            "Darkest Lariat",
+            "Flare Blitz"
+          ]
+        },
+        {
+          "form": "Kingambit",
+          "item": "Assault Vest",
+          "ability": "Supreme Overlord",
+          "moves": [
+            "Sucker Punch",
+            "Iron Head",
+            "Kowtow Cleave",
+            "Protect"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "z-mega-ho",
+      "name": "Z-Mega Hyper Offence",
+      "archetype": "Speed offence",
+      "format": "doubles",
+      "projected": true,
+      "source": "Built for M-C around the two base-151 Speed Megas the regulation added. No ladder history yet.",
+      "note": "Both Z Megas sit above every established speed benchmark. The plan is to be faster than the answer and remove it before it moves.",
+      "members": [
+        {
+          "form": "Mega Garchomp Z",
+          "item": "Mega Stone",
+          "ability": "Levitate",
+          "moves": [
+            "Draco Meteor",
+            "Earth Power",
+            "Flamethrower",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Mega Lucario Z",
+          "item": "Mega Stone",
+          "ability": "Aura Guard",
+          "moves": [
+            "Aura Sphere",
+            "Flash Cannon",
+            "Nasty Plot",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Mega Salamence",
+          "item": "Salamencite",
+          "ability": "Aerilate",
+          "moves": [
+            "Double-Edge",
+            "Dragon Dance",
+            "Earthquake",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Whimsicott",
+          "item": "Focus Sash",
+          "ability": "Prankster",
+          "moves": [
+            "Tailwind",
+            "Encore",
+            "Moonblast",
+            "Helping Hand"
+          ]
+        },
+        {
+          "form": "Incineroar",
+          "item": "Sitrus Berry",
+          "ability": "Intimidate",
+          "moves": [
+            "Fake Out",
+            "Parting Shot",
+            "Darkest Lariat",
+            "Flare Blitz"
+          ]
+        },
+        {
+          "form": "Gholdengo",
+          "item": "Covert Cloak",
+          "ability": "Good as Gold",
+          "moves": [
+            "Make It Rain",
+            "Shadow Ball",
+            "Nasty Plot",
+            "Protect"
+          ]
+        }
+      ]
+    }
+  ]
 }

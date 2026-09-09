@@ -7,8 +7,7 @@ struct TeamsView: View {
     @EnvironmentObject private var store: Store
     @State private var selected: UUID?
     @State private var draft: Team?
-    @State private var showingPicker = false
-    @State private var pickerSlot: Int?
+    @State private var importing = false
 
     private var current: Binding<Team>? {
         guard let draft, draft.id == selected else { return nil }
@@ -38,7 +37,15 @@ struct TeamsView: View {
                     .frame(minWidth: 620)
             }
         }
+        .sheet(isPresented: $importing) {
+            ImportSheet { imported in
+                store.save(imported)
+                selected = imported.id
+                draft = imported
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .newTeam)) { _ in newTeam() }
+        .onReceive(NotificationCenter.default.publisher(for: .importTeam)) { _ in importing = true }
         .onAppear {
             if selected == nil, let first = store.teams.first {
                 selected = first.id
@@ -52,6 +59,11 @@ struct TeamsView: View {
             HStack {
                 Text("Teams").font(.system(size: 13, weight: .semibold))
                 Spacer()
+                Button { importing = true } label: {
+                    Image(systemName: "square.and.arrow.down")
+                }
+                .buttonStyle(.borderless)
+                .help("Import from a Showdown or Pokepaste list")
                 Button(action: newTeam) {
                     Image(systemName: "plus")
                 }
@@ -155,7 +167,8 @@ struct TeamEditor: View {
     @State private var picking: Int?
 
     enum Tab: String, CaseIterable, Identifiable {
-        case build = "Build", analysis = "Analysis", threats = "Threat matrix"
+        case build = "Build", analysis = "Analysis"
+        case threats = "Threats", versus = "Versus"
         var id: String { rawValue }
     }
 
@@ -167,6 +180,7 @@ struct TeamEditor: View {
             case .build:    buildTab
             case .analysis: TeamAnalysisView(team: team)
             case .threats:  ThreatMatrixView(team: team)
+            case .versus:   MatchupView(team: team)
             }
         }
         .sheet(item: Binding(
@@ -206,7 +220,16 @@ struct TeamEditor: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 300)
+            .frame(width: 340)
+
+            Button {
+                let text = TeamPaste.export(team, store: store)
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+            }
+            .help("Copy as Showdown text")
 
             Button("Save", action: onSave)
                 .keyboardShortcut("s")

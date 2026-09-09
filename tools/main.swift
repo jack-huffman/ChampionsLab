@@ -154,3 +154,4 @@ checkNear("Tera into own type is 2.0/1.5 of STAB",
 
 print("\n\(failures == 0 ? "ALL CHECKS PASSED" : "\(failures) CHECK(S) FAILED")")
 exit(failures == 0 ? 0 : 1)
+

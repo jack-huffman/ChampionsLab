@@ -8,11 +8,6 @@
 import AppKit
 import SwiftUI
 
-// TeamsView listens for this; it normally lives in ChampionsLab.swift.
-extension Notification.Name {
-    static let newTeam = Notification.Name("ChampionsLab.newTeam")
-}
-
 @MainActor
 func render<V: View>(_ view: V, named name: String, size: CGSize, dark: Bool) {
     let host = view
@@ -82,6 +77,9 @@ func renderAll() {
            size: CGSize(width: 1000, height: 2300), dark: true)
     render(TeamAnalysisView(team: team), named: "analysis-light",
            size: CGSize(width: 1000, height: 2300), dark: false)
+    // Versus screen against the Big Six, with a real opposing list.
+    render(MatchupView(team: team, initialOpponent: "big-six"), named: "versus-dark",
+           size: CGSize(width: 1180, height: 1500), dark: true)
     render(CalculatorView(), named: "calc-dark",
            size: CGSize(width: 1180, height: 700), dark: true)
     if let form = store.form(named: "Mega Golisopod") {

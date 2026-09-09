@@ -20,6 +20,10 @@ struct ChampionsLabApp: App {
                     NotificationCenter.default.post(name: .newTeam, object: nil)
                 }
                 .keyboardShortcut("n")
+                Button("Import Team…") {
+                    NotificationCenter.default.post(name: .importTeam, object: nil)
+                }
+                .keyboardShortcut("i")
             }
             CommandGroup(after: .saveItem) {
                 Button("Reveal Saved Teams in Finder") {
@@ -28,10 +32,6 @@ struct ChampionsLabApp: App {
             }
         }
     }
-}
-
-extension Notification.Name {
-    static let newTeam = Notification.Name("ChampionsLab.newTeam")
 }
 
 // MARK: - Sections
@@ -117,6 +117,9 @@ struct RootView: View {
             .background(Palette.canvas)
         }
         .onReceive(NotificationCenter.default.publisher(for: .newTeam)) { _ in
+            section = .teams
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .importTeam)) { _ in
             section = .teams
         }
         .overlay(alignment: .top) {

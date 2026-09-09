@@ -27,19 +27,41 @@ clean checkout builds without network access.
 - **Overview** — the M-C briefing. All six new Mega Evolutions with their real
   Champions stats and abilities, all twelve new items, and a written read on what
   changed and how to attack it.
-- **Teams** — build, save and duplicate teams. Slot editor covers ability, item,
-  Stat Points, Stat Alignment, Tera type and four moves, and flags species-clause,
-  item-clause and SP-cap violations as you go. Teams persist in
+- **Teams** — build, save, duplicate and import teams. Slot editor covers ability,
+  item, Stat Points, Stat Alignment, Tera type and four moves, and flags
+  species-clause, item-clause and SP-cap violations as you go. Teams persist in
   `~/Library/Application Support/ChampionsLab/teams.json`.
 - **Analysis** — a 0–100 grade weighted by each threat's usage, a defensive matrix
   across all 18 attacking types, offensive coverage, speed tiers against the field,
   and ranked suggestions for what would patch the holes.
-- **Threat matrix** — every tracked threat, with how much damage you do to it, how
-  much it does to you, which of your Pokémon check it, and which lose to it.
+- **Threats** — every tracked threat individually, with how much damage you do to
+  it, how much it does to you, which of your Pokémon check it, and which lose.
+- **Versus** — your team against a whole opposing team: a six-by-six grid of
+  one-on-one outcomes with damage both ways and who moves first, plus a verdict
+  that names which of their Pokémon you have no answer to and which of yours is
+  not earning its slot. Opponents can be one of the bundled meta archetypes or
+  another team you have saved.
 - **Calculator** — full damage calc with weather, terrain, screens, crits, spread
   penalty, boosts, items and abilities.
 - **Database** — every legal form, all 902 moves, 246 items and 199 abilities,
   searchable and filterable.
+
+## Importing and exporting
+
+⌘I, or the import button above the team list, takes Showdown / Pokepaste text.
+Because Champions has no EVs, the importer converts them on the way in at the
+game's own rate — the first Stat Point costs 4 EVs and each one after costs 8,
+so a 252 EV investment lands exactly on the 32 SP cap. Export (the share button
+in the team toolbar) converts back, so a team round-trips through other tools.
+
+The importer resolves both spellings of a form — `Charizard-Mega-Y` and `Mega
+Charizard Y`, `Indeedee-F` and `Indeedee (Female)` — and refuses to invent data:
+a Pokémon that is not in the M-C roster, a move the form cannot learn, or an
+unknown item is reported as a warning rather than silently imported.
+
+Champions' own **Replica Team codes** are expanded by the game's servers, so the
+app cannot turn one into a team. There is a field to store the code alongside an
+imported list as a label.
 
 ## The stat system is not the one you know
 
@@ -102,6 +124,10 @@ Only Mega Glalie has no dedicated render upstream and falls back to base Glalie.
   new arrivals — Wigglytuff, both Persians, both Farfetch'd, both Mr. Mimes,
   Thievul, Perrserker, Pincurchin, Squawkabilly — had not landed yet. `mkdata.py`
   prints exactly which are missing on every run; re-run it to pick them up.
+- **Mega Stones are held items here**, so a Mega spends its item slot on its stone
+  and counts against the item clause. Serebii names 47 of them; the Champions-only
+  Megas (the Legends Z-A forms, Mega Golisopod, Mega Baxcalibur) have no published
+  stone name yet and use a generic `Mega Stone` entry.
 - **Regional forms share a pooled ability list.** Serebii lists abilities per
   species, so Alolan Ninetales shows the whole family's pool. Mega forms are
   matched exactly; regional ones need you to pick the right ability.
@@ -110,12 +136,26 @@ Only Mega Glalie has no dedicated render upstream and falls back to base Glalie.
 
 ```sh
 ./tools/verify.sh     # stat and damage maths against hand-computed values
+./tools/matchup.sh    # importer, EV<->SP conversion, and the versus engine
 ./tools/snapshot.sh   # render the screens to build/shots/*.png
 ```
 
 `verify.sh` checks the Champions stat formulas, the type chart (including
 ability-driven immunities like Levitate), the doubles spread penalty, Grassy
-Terrain halving Earthquake, Tough Claws, Aura Guard, and Tera STAB stacking.
+Terrain halving Earthquake, Tough Claws, Aura Guard, Tera STAB stacking, and the
+EV↔SP conversion both ways.
+
+`matchup.sh` imports a real Showdown list, round-trips it back out, and runs the
+versus engine against a bundled archetype. It also checks that a team against
+*itself* scores exactly zero — which is how the speed-tie handling got fixed, since
+scoring ties as losses made every mirror match read negative.
+
+`mkdata.py` additionally audits `overlay.json` on every run: every Pokémon, move
+and item named in the curated usage table has to exist in the scraped data and be
+legal on the form it is attached to. That check exists because it caught real
+mistakes — an early draft listed Amoonguss, Pelipper and Ursaluna, none of which
+are in Champions' 205-species roster, and gave a Pokémon Spore, which no
+Champions learnset has.
 
 `snapshot.sh` renders screens without launching the app, which is useful for
 checking both palettes at once. Two known limits of `ImageRenderer`: it produces
