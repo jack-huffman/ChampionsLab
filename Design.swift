@@ -650,3 +650,101 @@ struct StageStepper: View {
         .opacity(enabled ? 1 : 0.35)
     }
 }
+
+// MARK: - Stat Point bar
+
+/// The in-game Stat Point track: a segmented rail of 32 with the invested
+/// portion filled, matching how Champions itself draws a stat.
+///
+/// `budget` is what is still spendable elsewhere on this Pokémon, so the rail
+/// dims the part of the range the 66-point total no longer allows — the game
+/// stops you at the cap rather than letting you overspend and warning after.
+struct StatPointBar: View {
+    let sp: Int
+    var budget: Int = ChampionsStats.spPerStat
+    var interactive = false
+    var onChange: ((Int) -> Void)? = nil
+
+    private var reachable: Int { min(ChampionsStats.spPerStat, sp + budget) }
+
+    var body: some View {
+        GeometryReader { geo in
+            let unit = geo.size.width / CGFloat(ChampionsStats.spPerStat)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Palette.hairline)
+                // The part the remaining budget cannot reach. Deliberately a
+                // dimming rather than a warning colour: with all 66 spent every
+                // rail is capped, which is a finished build, not an error.
+                if interactive && reachable < ChampionsStats.spPerStat {
+                    Capsule()
+                        .fill(Color.black.opacity(0.28))
+                        .frame(width: unit * CGFloat(ChampionsStats.spPerStat - reachable))
+                        .offset(x: unit * CGFloat(reachable))
+                }
+                Capsule()
+                    .fill(sp == ChampionsStats.spPerStat ? Palette.good : Palette.accent)
+                    .frame(width: max(0, unit * CGFloat(sp)))
+            }
+            .contentShape(Rectangle())
+            .gesture(interactive ? drag(unit: unit) : nil)
+        }
+        .frame(height: 6)
+    }
+
+    private func drag(unit: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0).onChanged { value in
+            let raw = Int((value.location.x / unit).rounded())
+            onChange?(max(0, min(reachable, raw)))
+        }
+    }
+}
+
+/// One stat line as Champions draws it: name, value, rail, points spent.
+struct StatLine: View {
+    let stat: Stat
+    let value: Int
+    let sp: Int
+    var budget: Int = ChampionsStats.spPerStat
+    var boosted: Bool = false
+    var lowered: Bool = false
+    var interactive = false
+    var onChange: ((Int) -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 3) {
+                Text(stat.short)
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(.secondary)
+                if boosted {
+                    Image(systemName: "chevron.up").font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(Palette.good)
+                } else if lowered {
+                    Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(Palette.bad)
+                }
+            }
+            .frame(width: 40, alignment: .leading)
+
+            Text("\(value)")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .frame(width: 38, alignment: .trailing)
+
+            StatPointBar(sp: sp, budget: budget, interactive: interactive, onChange: onChange)
+
+            Text(sp > 0 ? "+\(sp)" : "")
+                .font(.system(size: 10, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(sp == ChampionsStats.spPerStat ? Palette.good : Palette.fainter)
+                .frame(width: 26, alignment: .leading)
+        }
+    }
+}
+
+/// Shared metrics for the pane headers either side of a split, so their
+/// dividers line up.
+enum HeaderBar {
+    static let height: CGFloat = 44
+    static let titleSize: CGFloat = 15
+}

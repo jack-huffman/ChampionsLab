@@ -259,26 +259,20 @@ private struct SideEditor: View {
 
                     Divider()
 
-                    // Stat Points on the left, battle stages on the right.
-                    // Stages were a mini Picker crammed into this row before,
-                    // which made the most important control in the calculator
-                    // the hardest one to find.
+                    // Same 66-point budget the game enforces, plus the battle
+                    // stage for that stat.
+                    let remaining = ChampionsStats.spTotal - side.sp.reduce(0, +)
                     ForEach(Stat.allCases) { stat in
-                        HStack(spacing: 6) {
-                            Text(stat.short)
-                                .font(.system(size: 10, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 26, alignment: .leading)
-                            Slider(
-                                value: Binding(
-                                    get: { Double(side.sp[stat.rawValue]) },
-                                    set: { side.sp[stat.rawValue] = Int($0) }
-                                ),
-                                in: 0...Double(ChampionsStats.spPerStat), step: 1
-                            ).controlSize(.mini)
-                            Text("\(side.sp[stat.rawValue])")
-                                .font(.system(size: 9, design: .rounded)).monospacedDigit()
-                                .foregroundStyle(.tertiary).frame(width: 18, alignment: .trailing)
+                        HStack(spacing: 8) {
+                            StatLine(
+                                stat: stat,
+                                value: staged(form, stat),
+                                sp: side.sp[stat.rawValue],
+                                budget: remaining,
+                                boosted: Alignment.named(side.alignmentName).up == stat,
+                                lowered: Alignment.named(side.alignmentName).down == stat,
+                                interactive: true,
+                                onChange: { side.sp[stat.rawValue] = $0 })
 
                             if stat != .hp {
                                 StageStepper(stage: Binding(
@@ -287,15 +281,6 @@ private struct SideEditor: View {
                             } else {
                                 Color.clear.frame(width: 66, height: 1)
                             }
-
-                            Text("\(staged(form, stat))")
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                .monospacedDigit()
-                                .foregroundStyle(side.boosts[stat.rawValue] == 0
-                                                 ? Palette.normal
-                                                 : (side.boosts[stat.rawValue] > 0
-                                                    ? Palette.good : Palette.bad))
-                                .frame(width: 42, alignment: .trailing)
                         }
                     }
 

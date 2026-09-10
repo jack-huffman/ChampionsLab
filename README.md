@@ -186,6 +186,12 @@ ability-driven immunities like Levitate), the doubles spread penalty, Grassy
 Terrain halving Earthquake, Tough Claws, Aura Guard, Tera STAB stacking, and the
 EV↔SP conversion both ways.
 
+Stat Points are drawn the way the game draws them: a rail of 32 per stat with the
+invested portion filled, an arrow on whichever stats the alignment raises and
+lowers, and the 66-point total enforced while you drag rather than reported
+afterwards — a stat can only reach what the remaining budget allows, and the rest
+of its rail dims.
+
 Saved teams decode leniently, field by field: a default value on a property does
 *not* make a key optional to Swift's synthesised decoder, so adding one field to
 `Team` would otherwise make every previously saved team fail to load. It did

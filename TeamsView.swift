@@ -57,7 +57,7 @@ struct TeamsView: View {
     private var teamList: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Teams").font(.system(size: 13, weight: .semibold))
+                Text("Teams").font(.system(size: 15, weight: .semibold))
                 Spacer()
                 Button { importing = true } label: {
                     Image(systemName: "square.and.arrow.down")
@@ -70,7 +70,10 @@ struct TeamsView: View {
                 .buttonStyle(.borderless)
                 .help("New team (⌘N)")
             }
-            .padding(12)
+            // Both panes' headers are pinned to the same height so the divider
+            // runs straight across the split, whatever controls sit in them.
+            .padding(.horizontal, 12)
+            .frame(height: HeaderBar.height)
             if let warning = store.teamWarning {
                 Label(warning, systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 11))
@@ -223,13 +226,13 @@ struct TeamEditor: View {
 
             if team.locked {
                 Text(team.name.isEmpty ? "Untitled" : team.name)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .frame(maxWidth: 260, alignment: .leading)
                     .lineLimit(1)
             } else {
                 TextField("Team name", text: $team.name)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .frame(maxWidth: 260)
                     .onSubmit(onSave)
             }
@@ -265,7 +268,8 @@ struct TeamEditor: View {
             Button("Save", action: onSave)
                 .keyboardShortcut("s")
         }
-        .padding(12)
+        .padding(.horizontal, 12)
+        .frame(height: HeaderBar.height)
     }
 
     @ViewBuilder private var buildTab: some View {
@@ -492,46 +496,30 @@ struct SlotEditor: View {
         .frame(maxWidth: 420, alignment: .leading)
     }
 
-    /// Locked stat readout: the computed numbers, no sliders.
+    /// Locked stat readout: the same rails, not draggable.
     private func statReadout(_ form: Form) -> some View {
         let battle = slot.battleForm(in: store) ?? form
         let mega = slot.megaEvolution(in: store)
-        return VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: 5) {
             HStack {
-                // Say which form these numbers are for. In game you see the base
-                // Pokémon's stats; these are what it fights with after evolving.
                 Text(mega == nil ? "Stats" : "Stats as \(mega!.formLabel)")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button {
-                store.pendingCalculation = CalculatorPreload(slot: slot, store: store)
-                NotificationCenter.default.post(name: .openCalculator, object: nil)
-            } label: {
-                Image(systemName: "function")
-            }
-            .buttonStyle(.borderless)
-            .help("Open \(form.formLabel) in the calculator with this build")
-
-            Text("\(slot.spUsed)/\(ChampionsStats.spTotal) SP")
-                    .font(.system(size: 10, design: .rounded)).foregroundStyle(.tertiary)
+                Text("\(slot.spUsed)/\(ChampionsStats.spTotal) SP")
+                    .font(.system(size: 10, design: .rounded))
+                    .foregroundStyle(.tertiary)
             }
             ForEach(Stat.allCases) { stat in
-                HStack(spacing: 8) {
-                    Text(stat.short)
-                        .font(.system(size: 11, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28, alignment: .leading)
-                    Text("\(ChampionsStats.value(base: battle.stats[stat.rawValue], sp: slot.sp[stat.rawValue], stat: stat, alignment: slot.alignment))")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .frame(width: 40, alignment: .trailing)
-                    Text(slot.sp[stat.rawValue] > 0 ? "+\(slot.sp[stat.rawValue])" : "")
-                        .font(.system(size: 10, design: .rounded))
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 28, alignment: .leading)
-                    Spacer(minLength: 0)
-                }
+                StatLine(
+                    stat: stat,
+                    value: ChampionsStats.value(base: battle.stats[stat.rawValue],
+                                                sp: slot.sp[stat.rawValue], stat: stat,
+                                                alignment: slot.alignment),
+                    sp: slot.sp[stat.rawValue],
+                    budget: ChampionsStats.spTotal - slot.spUsed,
+                    boosted: slot.alignment.up == stat,
+                    lowered: slot.alignment.down == stat)
             }
         }
         .frame(maxWidth: .infinity)
@@ -609,53 +597,43 @@ struct SlotEditor: View {
     }
 
     private func statPlanner(_ form: Form) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        let remaining = ChampionsStats.spTotal - slot.spUsed
+        return VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text("Stat Points")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("\(ChampionsStats.spTotal - slot.spUsed) left")
+                Text("\(slot.spUsed)/\(ChampionsStats.spTotal)")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(remaining == 0 ? Palette.good : Palette.dim)
+                Text(remaining == 0 ? "spent" : "\(remaining) left")
                     .font(.system(size: 10, design: .rounded))
-                    .foregroundStyle(slot.spUsed > ChampionsStats.spTotal ? Palette.bad : Palette.fainter)
+                    .foregroundStyle(Palette.fainter)
             }
             ForEach(Stat.allCases) { stat in
-                HStack(spacing: 8) {
-                    Text(stat.short)
-                        .font(.system(size: 11, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28, alignment: .leading)
-
-                    Slider(
-                        value: Binding(
-                            get: { Double(slot.sp[stat.rawValue]) },
-                            set: { slot.sp[stat.rawValue] = Int($0); onChange() }
-                        ),
-                        in: 0...Double(ChampionsStats.spPerStat), step: 1
-                    )
-                    .controlSize(.mini)
-
-                    Text("\(slot.sp[stat.rawValue])")
-                        .font(.system(size: 10, design: .rounded)).monospacedDigit()
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 20, alignment: .trailing)
-
-                    Text("\(ChampionsStats.value(base: form.stats[stat.rawValue], sp: slot.sp[stat.rawValue], stat: stat, alignment: slot.alignment))")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .frame(width: 34, alignment: .trailing)
-                }
+                StatLine(
+                    stat: stat,
+                    value: ChampionsStats.value(base: form.stats[stat.rawValue],
+                                                sp: slot.sp[stat.rawValue], stat: stat,
+                                                alignment: slot.alignment),
+                    sp: slot.sp[stat.rawValue],
+                    // What is left over once this stat's own spend is returned,
+                    // so the rail can grey out what the total no longer allows.
+                    budget: remaining,
+                    boosted: slot.alignment.up == stat,
+                    lowered: slot.alignment.down == stat,
+                    interactive: true,
+                    onChange: { value in
+                        slot.sp[stat.rawValue] = value
+                        onChange()
+                    })
             }
         }
         .frame(maxWidth: .infinity)
     }
 
-    /// Four full-width rows rather than four columns.
-    ///
-    /// Side by side there is no room for a move's numbers, so they ended up
-    /// stacked underneath the picker, which read as a caption rather than as
-    /// part of the row. Down the page each move gets the same aligned columns as
-    /// the learnset table: power, accuracy, priority, flags.
     private func moves(_ form: Form) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
