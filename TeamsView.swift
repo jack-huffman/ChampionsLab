@@ -176,7 +176,7 @@ struct TeamEditor: View {
     @Environment(\.snapshotMode) private var snapshotMode
 
     enum Tab: String, CaseIterable, Identifiable {
-        case build = "Build", analysis = "Analysis"
+        case build = "Build", assist = "Assist", analysis = "Analysis"
         case threats = "Threats", versus = "Versus"
         var id: String { rawValue }
     }
@@ -187,6 +187,10 @@ struct TeamEditor: View {
             Divider()
             switch tab {
             case .build:    buildTab
+            case .assist:
+                AdvisorView(team: team, onAdd: team.locked ? nil : { form in
+                    appendSlot(form)
+                })
             case .analysis: TeamAnalysisView(team: team)
             case .threats:  ThreatMatrixView(team: team)
             case .versus:   MatchupView(team: team)
@@ -247,7 +251,7 @@ struct TeamEditor: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 340)
+            .frame(width: 400)
 
             Button {
                 let text = TeamPaste.export(team, store: store)
@@ -335,6 +339,18 @@ struct TeamEditor: View {
                 }
         }
         .padding(16)
+    }
+
+    /// Add a recommendation straight onto the end of the team.
+    private func appendSlot(_ form: Form) {
+        guard team.slots.count < (store.data.rules.formats
+            .first { $0.id == team.format }?.teamSize ?? 6) else { return }
+        var slot = TeamSlot(formID: form.id)
+        slot.ability = form.abilities.first?.name ?? ""
+        // A Mega is useless without its stone, so fill it in.
+        if form.isMega { slot.item = form.megaStone.isEmpty ? "Mega Stone" : form.megaStone }
+        team.slots.append(slot)
+        onSave()
     }
 
     private func assign(_ form: Form, at index: Int) {

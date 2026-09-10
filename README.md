@@ -34,6 +34,12 @@ clean checkout builds without network access.
   item, Stat Points, Stat Alignment and four moves, and flags
   species-clause, item-clause and SP-cap violations as you go. Teams persist in
   `~/Library/Application Support/ChampionsLab/teams.json`.
+- **Assist** — the guided builder. Reads the archetype off the abilities and moves
+  actually on the team, reports which of the fourteen roles are filled and which
+  of the five essential ones are not, runs the Regulation M-C checks (Megas
+  registered vs usable, whether a stone is actually held, terrain exposure, the
+  contact tax), then ranks additions — roles you lack first, then what you are
+  weak to, then quality — with an Add button on each.
 - **Analysis** — a 0–100 grade weighted by each threat's usage, a defensive matrix
   across all 18 attacking types, offensive coverage, speed tiers against the field,
   and ranked suggestions for what would patch the holes.
@@ -187,6 +193,21 @@ legal on the form it is attached to. That check exists because it caught real
 mistakes — an early draft listed Amoonguss, Pelipper and Ursaluna, none of which
 are in Champions' 205-species roster, and gave a Pokémon Spore, which no
 Champions learnset has.
+
+### How the advisor ranks
+
+Roles are detected, never assumed: Tailwind and Trick Room from the moves,
+redirection from Follow Me and Rage Powder, terrain from a Surge ability, and so
+on. Candidates are probed against their **whole learnset** rather than their
+attacking moves — every support role is a status move, so probing with attacks
+alone made redirection undetectable, and the advisor would report "no
+redirection" and then never suggest a redirector.
+
+Scoring puts an unfilled essential role first (4.0), then resisting what the team
+is weak to, then archetype fit, then the candidate's own standing against the
+field from the Forecast engine (2.5) — enough to separate Sinistcha from Ariados,
+both of which technically have Rage Powder, without letting raw quality outrank a
+missing role. A second Mega is penalised, since only one can be used per battle.
 
 ### A note on the forecast maths
 
