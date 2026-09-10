@@ -9,6 +9,34 @@ import Foundation
 extension Notification.Name {
     static let newTeam = Notification.Name("ChampionsLab.newTeam")
     static let importTeam = Notification.Name("ChampionsLab.importTeam")
+    static let openCalculator = Notification.Name("ChampionsLab.openCalculator")
+}
+
+/// A team slot handed to the calculator, so "check this Pokémon's damage" opens
+/// with the build you actually registered rather than a blank attacker.
+struct CalculatorPreload: Equatable {
+    var formID: String
+    var ability: String
+    var item: String
+    var sp: [Int]
+    var alignmentName: String
+    var moveID: String
+    /// Changes on every request, so asking again for the same Pokémon still
+    /// rebuilds the view rather than reusing the old state.
+    var token = UUID()
+
+    @MainActor
+    init(slot: TeamSlot, store: Store) {
+        let form = slot.battleForm(in: store)
+        formID = form?.id ?? slot.formID
+        // A Mega fights with its own ability, which is the point of evolving.
+        ability = slot.megaEvolution(in: store)?.abilities.first?.name
+            ?? (slot.ability.isEmpty ? (form?.abilities.first?.name ?? "") : slot.ability)
+        item = slot.item
+        sp = slot.sp
+        alignmentName = slot.alignmentName
+        moveID = slot.moves.first { store.move($0)?.isDamaging == true } ?? ""
+    }
 }
 
 /// One slot on a team: a form plus everything you choose about it.

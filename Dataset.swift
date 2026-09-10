@@ -13,6 +13,8 @@ final class Store: ObservableObject {
     @Published var loadError: String?
     /// Set when saved teams could not be read — surfaced rather than swallowed.
     @Published var teamWarning: String?
+    /// Set when a team slot asks to be opened in the calculator.
+    @Published var pendingCalculation: CalculatorPreload?
 
     private var spriteCache: [String: NSImage] = [:]
 

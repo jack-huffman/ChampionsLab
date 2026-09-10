@@ -50,6 +50,10 @@ clean checkout builds without network access.
   that names which of their Pokémon you have no answer to and which of yours is
   not earning its slot. Opponents can be one of the bundled meta archetypes or
   another team you have saved.
+- Every slot in a team carries an **ƒ** button that opens it in the calculator with
+  the build it was registered with — ability, item, Stat Points, alignment and its
+  first damaging move. A slot holding a Mega Stone opens as the Mega, using the
+  Mega's ability, since that is what actually fights.
 - **Calculator** — full damage calc with weather, terrain, screens, crits, the
   spread penalty, items and abilities. Battle stages get a −6…+6 stepper per stat
   with the resulting number beside it, and a row of one-click sources read from

@@ -97,6 +97,15 @@ func renderAll() {
            size: CGSize(width: 1180, height: 4200), dark: true)
     render(MatchupView(team: team, initialOpponent: "big-six"), named: "versus-dark",
            size: CGSize(width: 1180, height: 1500), dark: true)
+    // The calculator as it opens from a team slot's ƒ button.
+    if let saved = store.teams.first(where: { $0.name == "Sun / Dual Mega" }),
+       let zard = saved.slots.first(where: { $0.form(in: store)?.name == "Charizard" }),
+       let target = store.form(named: "Garchomp") {
+        render(CalculatorView(preload: CalculatorPreload(slot: zard, store: store),
+                              initialDefender: target.id),
+               named: "calc-preloaded-dark",
+               size: CGSize(width: 1180, height: 1200), dark: true)
+    }
     render(CalculatorView(
             initialAttacker: store.form(named: "Mega Baxcalibur")?.id,
             initialDefender: store.form(named: "Incineroar")?.id,

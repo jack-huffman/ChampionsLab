@@ -114,7 +114,11 @@ struct RootView: View {
                 case .abilities:  AbilityDexView()
                 case .meta:       MetaView()
                 case .forecast:   ForecastView()
-                case .calculator: CalculatorView()
+                case .calculator:
+                    // .id forces a fresh view when a new slot is sent over, so
+                    // the seeded @State is rebuilt rather than reused.
+                    CalculatorView(preload: store.pendingCalculation)
+                        .id(store.pendingCalculation?.token)
                 }
             }
             .background(Palette.canvas)
@@ -124,6 +128,9 @@ struct RootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .importTeam)) { _ in
             section = .teams
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openCalculator)) { _ in
+            section = .calculator
         }
         .overlay(alignment: .top) {
             if let error = store.loadError {

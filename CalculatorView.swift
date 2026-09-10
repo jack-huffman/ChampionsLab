@@ -12,10 +12,19 @@ struct CalculatorView: View {
     /// Optionally start on a given matchup. Seeded in init rather than onAppear
     /// so it is set before the first render — tools/snapshot.sh has no view
     /// lifecycle to fire onAppear from.
-    init(initialAttacker: String? = nil, initialDefender: String? = nil,
+    init(preload: CalculatorPreload? = nil,
+         initialAttacker: String? = nil, initialDefender: String? = nil,
          initialMove: String? = nil) {
         var attacking = Side()
-        if let initialAttacker {
+        if let preload {
+            // Everything the slot was actually built with.
+            attacking.formID = preload.formID
+            attacking.ability = preload.ability
+            attacking.item = preload.item
+            attacking.sp = preload.sp
+            attacking.alignmentName = preload.alignmentName
+            attacking.moveID = preload.moveID
+        } else if let initialAttacker {
             attacking.formID = initialAttacker
             attacking.sp = [2, 32, 0, 0, 0, 32]
             attacking.alignmentName = "Adamant"

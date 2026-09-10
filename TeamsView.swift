@@ -439,6 +439,15 @@ struct SlotEditor: View {
                 }
             }
             Spacer()
+            Button {
+                store.pendingCalculation = CalculatorPreload(slot: slot, store: store)
+                NotificationCenter.default.post(name: .openCalculator, object: nil)
+            } label: {
+                Image(systemName: "function")
+            }
+            .buttonStyle(.borderless)
+            .help("Open \(form.formLabel) in the calculator with this build")
+
             Text("\(slot.spUsed)/\(ChampionsStats.spTotal) SP")
                 .font(.system(size: 11, design: .rounded))
                 .monospacedDigit()
@@ -495,7 +504,16 @@ struct SlotEditor: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("\(slot.spUsed)/\(ChampionsStats.spTotal) SP")
+                Button {
+                store.pendingCalculation = CalculatorPreload(slot: slot, store: store)
+                NotificationCenter.default.post(name: .openCalculator, object: nil)
+            } label: {
+                Image(systemName: "function")
+            }
+            .buttonStyle(.borderless)
+            .help("Open \(form.formLabel) in the calculator with this build")
+
+            Text("\(slot.spUsed)/\(ChampionsStats.spTotal) SP")
                     .font(.system(size: 10, design: .rounded)).foregroundStyle(.tertiary)
             }
             ForEach(Stat.allCases) { stat in
