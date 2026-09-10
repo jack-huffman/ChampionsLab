@@ -93,6 +93,14 @@ func renderAll() {
         render(AdvisorView(team: saved, onAdd: { _ in }), named: "assist-dark",
                size: CGSize(width: 1000, height: 2600), dark: true)
     }
+let builderSeed = store.form(named: "Mega Baxcalibur")
+    let builderPicks = Forecast(store: store, format: "doubles").picks(limit: 400)
+    let generated = builderSeed.map {
+        TeamBuilder(store: store).blueprints(seed: $0, picks: builderPicks)
+    } ?? []
+    render(BuilderView(preGenerated: generated, seedID: builderSeed?.id ?? ""),
+           named: "builder-dark",
+           size: CGSize(width: 1180, height: 900), dark: true)
     render(ForecastView(), named: "forecast-dark",
            size: CGSize(width: 1180, height: 4200), dark: true)
     render(MatchupView(team: team, initialOpponent: "big-six"), named: "versus-dark",

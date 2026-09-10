@@ -34,6 +34,10 @@ clean checkout builds without network access.
   item, Stat Points, Stat Alignment and four moves, and flags
   species-clause, item-clause and SP-cap violations as you go. Teams persist in
   `~/Library/Application Support/ChampionsLab/teams.json`.
+- **Builder** — pick a Pokémon to build around and get a complete six for every
+  plan it can support, each scored and ready to save. Search is a beam over slots
+  using precomputed per-Pokémon standings; only the finished teams are run through
+  the real matchup engine, which keeps a full generation at around 300 ms.
 - **Assist** — the guided builder. Reads the archetype off the abilities and moves
   actually on the team, reports which of the fourteen roles are filled and which
   of the five essential ones are not, runs the Regulation M-C checks (Megas
@@ -216,6 +220,20 @@ legal on the form it is attached to. That check exists because it caught real
 mistakes — an early draft listed Amoonguss, Pelipper and Ursaluna, none of which
 are in Champions' 205-species roster, and gave a Pokémon Spore, which no
 Champions learnset has.
+
+### Why the builder does not score on matchups alone
+
+The Versus engine scores one-on-one trades, and a trade model cannot see that
+Tailwind doubles the whole side's Speed for four turns or that Rage Powder buys a
+partner a free turn. Run on a real team it recommends cutting Whimsicott, which
+is wrong — measured on the user's own team, replacing it with a Mega scored +24.3
+against +9.5.
+
+So a team is scored on five components — matchup edge, roles filled, defensive
+spread, offensive coverage, plan coherence — with matchup worth 38 of the 100 and
+support earning its slot in three of the others. Matchups are also run with the
+team's own speed control switched on, so Tailwind and Trick Room affect the
+trades they actually affect.
 
 ### How the advisor ranks
 

@@ -39,6 +39,7 @@ struct ChampionsLabApp: App {
 enum Section: String, CaseIterable, Identifiable, Hashable {
     case overview = "Overview"
     case teams = "Teams"
+    case builder = "Builder"
     case dex = "Pokédex"
     case moves = "Moves"
     case items = "Items"
@@ -53,6 +54,7 @@ enum Section: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .overview:   return "sparkles.rectangle.stack"
         case .teams:      return "person.3.fill"
+        case .builder:    return "square.stack.3d.up.fill"
         case .dex:        return "book.closed.fill"
         case .moves:      return "bolt.fill"
         case .items:      return "bag.fill"
@@ -66,7 +68,7 @@ enum Section: String, CaseIterable, Identifiable, Hashable {
     var group: String {
         switch self {
         case .overview, .meta, .forecast:       return "Regulation"
-        case .teams, .calculator:               return "Build"
+        case .teams, .builder, .calculator:     return "Build"
         case .dex, .moves, .items, .abilities:  return "Database"
         }
     }
@@ -108,6 +110,7 @@ struct RootView: View {
                 switch section {
                 case .overview:   OverviewView()
                 case .teams:      TeamsView()
+                case .builder:    BuilderView()
                 case .dex:        DexView()
                 case .moves:      MoveDexView()
                 case .items:      ItemDexView()

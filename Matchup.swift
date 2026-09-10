@@ -101,6 +101,12 @@ struct Matchup {
     let theirs: Team
     let store: Store
     var field: Field = Field()
+    /// Speed control in effect for each side. Tailwind doubles Speed for four
+    /// turns, which decides a large share of the one-on-ones — scoring without
+    /// it made every support Pokémon look like a wasted slot.
+    var myTailwind = false
+    var theirTailwind = false
+    var myTrickRoom = false
 
     /// Computed once at construction; every report below reads this array.
     ///
@@ -108,12 +114,25 @@ struct Matchup {
     /// initialised self to run — it is never written again after init.
     private(set) var duels: [Duel] = []
 
-    init(mine: Team, theirs: Team, store: Store, field: Field = Field()) {
+    init(mine: Team, theirs: Team, store: Store, field: Field = Field(),
+         myTailwind: Bool = false, theirTailwind: Bool = false,
+         myTrickRoom: Bool = false) {
         self.mine = mine
         self.theirs = theirs
         self.store = store
         self.field = field
+        self.myTailwind = myTailwind
+        self.theirTailwind = theirTailwind
+        self.myTrickRoom = myTrickRoom
         self.duels = buildDuels()
+    }
+
+    /// Effective Speed for the comparison that decides who moves first.
+    /// Trick Room inverts the order, so it is expressed by negating both sides.
+    private func order(mine: Int, theirs: Int) -> (Int, Int) {
+        let a = myTailwind ? mine * 2 : mine
+        let b = theirTailwind ? theirs * 2 : theirs
+        return myTrickRoom ? (-a, -b) : (a, b)
     }
 
     /// A representative build for a slot. Anything the paste or archetype left
@@ -194,9 +213,10 @@ struct Matchup {
                     }
                 }
 
+                let speeds = order(mine: me.stat(.speed), theirs: them.stat(.speed))
                 out.append(Duel(mine: myForm, theirs: theirForm,
                                 outgoing: best, incoming: worst,
-                                mySpeed: me.stat(.speed), theirSpeed: them.stat(.speed),
+                                mySpeed: speeds.0, theirSpeed: speeds.1,
                                 myBestMove: bestName, theirBestMove: worstName))
             }
         }
