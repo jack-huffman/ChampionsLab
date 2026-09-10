@@ -97,8 +97,12 @@ func renderAll() {
            size: CGSize(width: 1180, height: 4200), dark: true)
     render(MatchupView(team: team, initialOpponent: "big-six"), named: "versus-dark",
            size: CGSize(width: 1180, height: 1500), dark: true)
-    render(CalculatorView(), named: "calc-dark",
-           size: CGSize(width: 1180, height: 700), dark: true)
+    render(CalculatorView(
+            initialAttacker: store.form(named: "Mega Baxcalibur")?.id,
+            initialDefender: store.form(named: "Incineroar")?.id,
+            initialMove: store.data.moves.values.first { $0.name == "Glaive Rush" }?.id),
+           named: "calc-dark",
+           size: CGSize(width: 1180, height: 1100), dark: true)
     if let form = store.form(named: "Mega Golisopod") {
         render(FormDetail(form: form), named: "dex-detail-dark",
                size: CGSize(width: 620, height: 2400), dark: true)

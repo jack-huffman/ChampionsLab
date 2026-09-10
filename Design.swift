@@ -608,3 +608,45 @@ struct InfoButton: View {
         }
     }
 }
+
+/// A −6…+6 battle stage control.
+///
+/// Stages change damage more than almost anything else the calculator exposes —
+/// a Swords Dance is 2.0x and a Swords Dance plus a Thermal Exchange proc is
+/// 2.5x — so this is a visible stepper rather than a mini popup menu.
+struct StageStepper: View {
+    @Binding var stage: Int
+
+    var body: some View {
+        HStack(spacing: 2) {
+            button("minus", enabled: stage > -6) { stage = max(-6, stage - 1) }
+            Text(stage == 0 ? "—" : (stage > 0 ? "+\(stage)" : "\(stage)"))
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .frame(width: 24)
+                .foregroundStyle(stage == 0 ? Palette.fainter
+                                 : (stage > 0 ? Palette.good : Palette.bad))
+            button("plus", enabled: stage < 6) { stage = min(6, stage + 1) }
+        }
+        .frame(width: 66)
+        .help("Battle stages: \(stage == 0 ? "none" : "×\(String(format: "%.2f", multiplier))")")
+    }
+
+    private var multiplier: Double {
+        stage >= 0 ? Double(2 + stage) / 2 : 2 / Double(2 - stage)
+    }
+
+    private func button(_ symbol: String, enabled: Bool,
+                        action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 8, weight: .bold))
+                .frame(width: 16, height: 16)
+                .background(Palette.surfaceRaised)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.35)
+    }
+}

@@ -154,5 +154,44 @@ report("Dragon Claw Adaptability STAB", "\(adaptiveStab.maxDamage)")
 checkNear("Adaptability turns 1.5x STAB into 2.0x",
           Int((Double(adaptiveStab.maxDamage) / Double(stabOnly.maxDamage) * 100).rounded()), 133)
 
+// ------------------------------------------------------- battle stages ----
+print("\n== battle stages ==")
+// The standard stage table, which is what makes a Swords Dance worth 2.0x.
+check("+1 on 100", ChampionsStats.staged(100, stage: 1), 150)
+check("+2 on 100", ChampionsStats.staged(100, stage: 2), 200)
+check("+3 on 100", ChampionsStats.staged(100, stage: 3), 250)
+check("-1 on 100", ChampionsStats.staged(100, stage: -1), 66)
+check("-2 on 100", ChampionsStats.staged(100, stage: -2), 50)
+check("+6 on 100", ChampionsStats.staged(100, stage: 6), 400)
+
+// Boost moves are read out of the effect text rather than a hand-kept list.
+check("Swords Dance parses as +2 Attack",
+      movesByName["Swords Dance"]!.selfBoosts[.attack] ?? 0, 2)
+check("Dragon Dance parses as +1 Attack",
+      movesByName["Dragon Dance"]!.selfBoosts[.attack] ?? 0, 1)
+check("Dragon Dance parses as +1 Speed",
+      movesByName["Dragon Dance"]!.selfBoosts[.speed] ?? 0, 1)
+
+// Swords Dance plus a Thermal Exchange proc, which is the case that prompted this.
+let baxcalibur = forms["Mega Baxcalibur"]!
+var boosted = Combatant(form: baxcalibur, ability: "Thermal Exchange", item: "",
+                        sp: [2, 32, 0, 0, 0, 32], alignment: Alignment.named("Adamant"))
+report("Mega Baxcalibur Attack at +0", "\(boosted.stagedStat(.attack))")
+boosted.boosts[Stat.attack.rawValue] = 3
+check("Attack at +3 is 2.5x", boosted.stagedStat(.attack), 622)
+
+// Glaive Rush doubles what its user takes until its next action.
+var open = Combatant(form: forms["Tyranitar"]!, ability: "Sand Stream", item: "")
+let shut = DamageCalc.calculate(attacker: boosted, defender: open,
+                                move: movesByName["Ice Shard"]!, field: singles)
+open.wideOpen = true
+let exposed = DamageCalc.calculate(attacker: boosted, defender: open,
+                                   move: movesByName["Ice Shard"]!, field: singles)
+let exposedMax = Double(exposed.maxDamage)
+let shutMax = Double(shut.maxDamage)
+let wideOpenRatio = Int((exposedMax / shutMax * 100).rounded())
+report("Ice Shard normal / Wide Open", "\(shut.maxDamage) / \(exposed.maxDamage)")
+checkNear("Wide Open doubles damage taken", wideOpenRatio, 200)
+
 print("\n\(failures == 0 ? "ALL CHECKS PASSED" : "\(failures) CHECK(S) FAILED")")
 exit(failures == 0 ? 0 : 1)

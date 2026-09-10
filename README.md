@@ -50,8 +50,12 @@ clean checkout builds without network access.
   that names which of their Pokémon you have no answer to and which of yours is
   not earning its slot. Opponents can be one of the bundled meta archetypes or
   another team you have saved.
-- **Calculator** — full damage calc with weather, terrain, screens, crits, spread
-  penalty, boosts, items and abilities.
+- **Calculator** — full damage calc with weather, terrain, screens, crits, the
+  spread penalty, items and abilities. Battle stages get a −6…+6 stepper per stat
+  with the resulting number beside it, and a row of one-click sources read from
+  that Pokémon's own learnset: its setup moves, an ability proc like Thermal
+  Exchange, and Intimidate. Glaive Rush's Wide Open is a defender toggle, since
+  it doubles what its user takes until its next action.
 - **Forecast** — format predictions and anti-meta picks. The attacking-type
   landscape, the speed gaps and the pick ranking are computed: every legal form is
   run against the whole weighted field with a standard build and the real damage
@@ -163,6 +167,15 @@ Only Mega Glalie has no dedicated render upstream and falls back to base Glalie.
 ./tools/matchup.sh    # importer, EV<->SP conversion, and the versus engine
 ./tools/snapshot.sh   # render the screens to build/shots/*.png
 ```
+
+Battle stages matter more than almost anything else the calculator exposes — a
+Swords Dance is 2.0x, and a Swords Dance plus a Thermal Exchange proc is 2.5x, or
+249 Attack to 622 on Mega Baxcalibur. They used to be a mini popup menu buried in
+the stat row, which made the most consequential control the hardest to find.
+
+Setup moves are parsed out of the effect text ("Boosts the user's Attack and Speed
+stats by 1 stage"), so the shortcut row is generated rather than hand-kept — 28
+moves across the dex.
 
 `verify.sh` checks the Champions stat formulas, the type chart (including
 ability-driven immunities like Levitate), the doubles spread penalty, Grassy

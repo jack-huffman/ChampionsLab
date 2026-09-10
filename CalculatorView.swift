@@ -6,8 +6,30 @@ import SwiftUI
 struct CalculatorView: View {
     @EnvironmentObject private var store: Store
 
-    @State private var attacker = Side()
-    @State private var defender = Side()
+    @State private var attacker: Side
+    @State private var defender: Side
+
+    /// Optionally start on a given matchup. Seeded in init rather than onAppear
+    /// so it is set before the first render — tools/snapshot.sh has no view
+    /// lifecycle to fire onAppear from.
+    init(initialAttacker: String? = nil, initialDefender: String? = nil,
+         initialMove: String? = nil) {
+        var attacking = Side()
+        if let initialAttacker {
+            attacking.formID = initialAttacker
+            attacking.sp = [2, 32, 0, 0, 0, 32]
+            attacking.alignmentName = "Adamant"
+        }
+        if let initialMove { attacking.moveID = initialMove }
+        var defending = Side()
+        if let initialDefender {
+            defending.formID = initialDefender
+            defending.sp = [32, 0, 2, 0, 32, 0]
+            defending.alignmentName = "Careful"
+        }
+        _attacker = State(initialValue: attacking)
+        _defender = State(initialValue: defending)
+    }
     @State private var weather: Weather = .none
     @State private var terrain: Terrain = .none
     @State private var doubles = true
@@ -22,6 +44,7 @@ struct CalculatorView: View {
         var sp = Array(repeating: 0, count: 6)
         var alignmentName = "Serious"
         var boosts = Array(repeating: 0, count: 6)
+        var wideOpen = false
         var moveID = ""
         var fallen = 0
     }
@@ -36,6 +59,7 @@ struct CalculatorView: View {
         var c = Combatant(form: form, ability: side.ability, item: side.item,
                           sp: side.sp, alignment: Alignment.named(side.alignmentName))
         c.boosts = side.boosts
+        c.wideOpen = side.wideOpen
         c.fallenAllies = side.fallen
         return c
     }
@@ -78,6 +102,9 @@ struct CalculatorView: View {
                     Toggle("Doubles", isOn: $doubles).controlSize(.small)
                     Toggle("Screen", isOn: $screen).controlSize(.small)
                     Toggle("Critical", isOn: $critical).controlSize(.small)
+                    Toggle("Target used Glaive Rush", isOn: $defender.wideOpen)
+                        .controlSize(.small)
+                        .help("Glaive Rush leaves its user Wide Open until its next action: attacks against it cannot miss and deal double damage.")
                     Spacer()
                 }
             }
@@ -223,7 +250,10 @@ private struct SideEditor: View {
 
                     Divider()
 
-                    // SP and battle stages together, since both change the number.
+                    // Stat Points on the left, battle stages on the right.
+                    // Stages were a mini Picker crammed into this row before,
+                    // which made the most important control in the calculator
+                    // the hardest one to find.
                     ForEach(Stat.allCases) { stat in
                         HStack(spacing: 6) {
                             Text(stat.short)
@@ -240,26 +270,27 @@ private struct SideEditor: View {
                             Text("\(side.sp[stat.rawValue])")
                                 .font(.system(size: 9, design: .rounded)).monospacedDigit()
                                 .foregroundStyle(.tertiary).frame(width: 18, alignment: .trailing)
+
                             if stat != .hp {
-                                Picker("", selection: Binding(
+                                StageStepper(stage: Binding(
                                     get: { side.boosts[stat.rawValue] },
-                                    set: { side.boosts[stat.rawValue] = $0 }
-                                )) {
-                                    ForEach(-6...6, id: \.self) { value in
-                                        Text(value == 0 ? "—" : (value > 0 ? "+\(value)" : "\(value)"))
-                                            .tag(value)
-                                    }
-                                }
-                                .labelsHidden().controlSize(.mini).frame(width: 52)
+                                    set: { side.boosts[stat.rawValue] = $0 }))
                             } else {
-                                Color.clear.frame(width: 52, height: 1)
+                                Color.clear.frame(width: 66, height: 1)
                             }
-                            Text("\(ChampionsStats.value(base: form.stats[stat.rawValue], sp: side.sp[stat.rawValue], stat: stat, alignment: Alignment.named(side.alignmentName)))")
+
+                            Text("\(staged(form, stat))")
                                 .font(.system(size: 11, weight: .semibold, design: .rounded))
                                 .monospacedDigit()
-                                .frame(width: 32, alignment: .trailing)
+                                .foregroundStyle(side.boosts[stat.rawValue] == 0
+                                                 ? Palette.normal
+                                                 : (side.boosts[stat.rawValue] > 0
+                                                    ? Palette.good : Palette.bad))
+                                .frame(width: 42, alignment: .trailing)
                         }
                     }
+
+                    boostShortcuts(form)
 
                     HStack {
                         Text("\(side.sp.reduce(0, +))/\(ChampionsStats.spTotal) SP")
@@ -273,6 +304,71 @@ private struct SideEditor: View {
                 }
             }
         }
+    }
+
+    /// The stat after Stat Points, alignment and any battle stages.
+    private func staged(_ form: Form, _ stat: Stat) -> Int {
+        let base = ChampionsStats.value(base: form.stats[stat.rawValue],
+                                        sp: side.sp[stat.rawValue], stat: stat,
+                                        alignment: Alignment.named(side.alignmentName))
+        return stat == .hp ? base
+            : ChampionsStats.staged(base, stage: side.boosts[stat.rawValue])
+    }
+
+    /// One-click stages for things that actually happen in a turn: the setup
+    /// moves this Pokémon knows, the ability boosts it has, and Intimidate.
+    @ViewBuilder private func boostShortcuts(_ form: Form) -> some View {
+        let setup = store.moves(for: form)
+            .filter { !$0.selfBoosts.isEmpty }
+            .sorted { $0.name < $1.name }
+        let ability = side.ability
+
+        if !setup.isEmpty || ability == "Thermal Exchange" || ability == "Defiant" {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 4) {
+                    Text("Apply").font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Reset") { side.boosts = Array(repeating: 0, count: 6) }
+                        .controlSize(.mini)
+                        .disabled(side.boosts.allSatisfy { $0 == 0 })
+                }
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 4)], spacing: 4) {
+                    ForEach(setup) { move in
+                        chip(move.name, move.selfBoosts.map { ($0.key, $0.value) })
+                    }
+                    if ability == "Thermal Exchange" {
+                        chip("Hit by Fire", [(.attack, 1)])
+                    }
+                    if ability == "Defiant" {
+                        chip("Intimidated", [(.attack, 2)])
+                    }
+                    chip("Intimidate", [(.attack, -1)])
+                }
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    private func chip(_ label: String, _ changes: [(Stat, Int)]) -> some View {
+        Button {
+            for (stat, amount) in changes {
+                side.boosts[stat.rawValue] = max(-6, min(6, side.boosts[stat.rawValue] + amount))
+            }
+        } label: {
+            let summary = changes
+                .map { "\($0.1 > 0 ? "+" : "")\($0.1) \($0.0.short)" }
+                .joined(separator: " ")
+            VStack(spacing: 0) {
+                Text(label).font(.system(size: 9, weight: .medium)).lineLimit(1)
+                Text(summary).font(.system(size: 8)).foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 3)
+            .background(Palette.surfaceRaised)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+        }
+        .buttonStyle(.plain)
     }
 
     private func row<V: View>(_ label: String, @ViewBuilder content: () -> V) -> some View {

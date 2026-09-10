@@ -127,6 +127,34 @@ struct Move: Codable, Identifiable, Hashable {
         "belch", "dreameater", "hyperspacefury",
     ]
 
+    /// Stages this move gives its own user, read from the effect text —
+    /// "Boosts the user's Attack and Speed stats by 1 stage."
+    var selfBoosts: [Stat: Int] {
+        guard let match = effect.range(of: #"Boosts the user's .+? stats? by \d+ stage"#,
+                                       options: .regularExpression) else { return [:] }
+        let phrase = String(effect[match])
+        guard let amount = phrase.range(of: #"\d+"#, options: [.regularExpression, .backwards])
+            .flatMap({ Int(phrase[$0]) }) else { return [:] }
+        let statsPart = phrase
+            .replacingOccurrences(of: "Boosts the user's ", with: "")
+            .replacingOccurrences(of: #" stats? by \d+ stage"#, with: "",
+                                  options: .regularExpression)
+        var out: [Stat: Int] = [:]
+        for piece in statsPart.components(separatedBy: CharacterSet(charactersIn: ","))
+            .flatMap({ $0.components(separatedBy: " and ") }) {
+            let name = piece.trimmingCharacters(in: .whitespaces)
+            switch name {
+            case "Attack":  out[.attack] = amount
+            case "Defense": out[.defense] = amount
+            case "Sp. Atk": out[.spAttack] = amount
+            case "Sp. Def": out[.spDefense] = amount
+            case "Speed":   out[.speed] = amount
+            default: break
+            }
+        }
+        return out
+    }
+
     var isImmediateAttack: Bool {
         guard isDamaging, power > 0 else { return false }
         if Move.unusableWithoutEffectText.contains(id) { return false }

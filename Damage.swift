@@ -41,6 +41,9 @@ struct Combatant {
     var boosts: [Int] = Array(repeating: 0, count: 6)
     /// Fainted allies, for Supreme Overlord and Last Respects.
     var fallenAllies = 0
+    /// Left itself open by using Glaive Rush: until its next action, attacks
+    /// against it cannot miss and deal double damage.
+    var wideOpen = false
 
     func stat(_ stat: Stat) -> Int {
         ChampionsStats.value(base: form.stats[stat.rawValue],
@@ -263,6 +266,11 @@ enum DamageCalc {
         }
         if effectiveness > 1, defender.item == "Weakness Policy" {
             notes.append("Triggers Weakness Policy (+2 Atk / +2 SpA)")
+        }
+
+        if defender.wideOpen {
+            modifier *= 2
+            notes.append("Glaive Rush: target is Wide Open, damage doubled")
         }
 
         if field.screen, !field.critical {
