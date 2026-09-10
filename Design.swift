@@ -565,3 +565,46 @@ struct LookupOption: Identifiable, Hashable {
     var type: PokeType? = nil
     var form: Form? = nil
 }
+
+// MARK: - Info affordance
+
+/// A small "i" that explains the field it sits beside.
+///
+/// Hovering gives the plain text immediately through the standard tooltip;
+/// clicking opens the same thing as a popover for when the text is long enough
+/// that a tooltip would be a poor way to read it.
+struct InfoButton: View {
+    let title: String
+    let body_: String
+    var accent: Color = Palette.accent
+
+    @State private var open = false
+
+    init(title: String, body: String, accent: Color = Palette.accent) {
+        self.title = title
+        self.body_ = body
+        self.accent = accent
+    }
+
+    var body: some View {
+        Button { open = true } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 11))
+                .foregroundStyle(body_.isEmpty ? Palette.fainter : accent)
+        }
+        .buttonStyle(.plain)
+        .disabled(body_.isEmpty)
+        .help(body_.isEmpty ? "" : "\(title)\n\n\(body_)")
+        .popover(isPresented: $open, arrowEdge: .trailing) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(.system(size: 13, weight: .semibold))
+                Text(body_)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(12)
+            .frame(width: 300)
+        }
+    }
+}

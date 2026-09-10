@@ -84,6 +84,10 @@ func renderAll() {
         shown.locked = true
         render(TeamEditorPreview(team: shown), named: "team-locked-dark",
                size: CGSize(width: 1000, height: 1700), dark: true)
+        var editable = saved
+        editable.locked = false
+        render(TeamEditorPreview(team: editable), named: "team-editing-dark",
+               size: CGSize(width: 1180, height: 2400), dark: true)
     }
     if let saved = store.teams.first(where: { $0.slots.count == 6 }) {
         render(AdvisorView(team: saved, onAdd: { _ in }), named: "assist-dark",

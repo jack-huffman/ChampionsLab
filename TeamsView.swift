@@ -521,7 +521,7 @@ struct SlotEditor: View {
 
     private func loadout(_ form: Form) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            labelled("Ability") {
+            labelled("Ability", info: abilityInfo(form)) {
                 Picker("", selection: $slot.ability) {
                     ForEach(form.abilities, id: \.name) { Text($0.name).tag($0.name) }
                 }
@@ -529,32 +529,64 @@ struct SlotEditor: View {
                 .onChange(of: slot.ability) { _ in onChange() }
             }
 
-            labelled("Item") {
+            labelled("Item", info: itemInfo()) {
                 LookupField(kind: .item, placeholder: "Item",
                             options: store.itemOptions, selection: $slot.item)
                     .onChange(of: slot.item) { _ in onChange() }
             }
 
-            labelled("Alignment") {
+            labelled("Alignment", info: alignmentInfo()) {
                 Picker("", selection: $slot.alignmentName) {
                     ForEach(Alignment.all) { Text($0.label).tag($0.name) }
                 }
                 .labelsHidden().controlSize(.small)
                 .onChange(of: slot.alignmentName) { _ in onChange() }
             }
-
-
         }
-        .frame(maxWidth: 250)
+        .frame(maxWidth: 300)
     }
 
-    private func labelled<V: View>(_ text: String, @ViewBuilder content: () -> V) -> some View {
-        HStack(spacing: 8) {
+    /// What the currently selected ability does.
+    private func abilityInfo(_ form: Form) -> (String, String) {
+        let name = slot.ability.isEmpty
+            ? (form.abilities.first?.name ?? "") : slot.ability
+        return (name, store.data.abilities[name]?.desc ?? "")
+    }
+
+    private func itemInfo() -> (String, String) {
+        guard !slot.item.isEmpty, let item = store.item(named: slot.item) else {
+            return ("Item", "")
+        }
+        // blurb prefers the curated wording, which matters where Serebii's text
+        // describes an older generation's behaviour — Mental Herb is the one
+        // item in the set where that is true.
+        var text = item.blurb
+        if let note = item.note, !note.isEmpty { text += "\n\n" + note }
+        return (item.name, text)
+    }
+
+    /// Stat Alignment is Champions' name for a nature, and the arithmetic is
+    /// worth spelling out — it multiplies the final stat, not the base.
+    private func alignmentInfo() -> (String, String) {
+        let alignment = slot.alignment
+        guard let up = alignment.up, let down = alignment.down else {
+            return (alignment.name, "Neutral: no stat is raised or lowered. Serious is the only neutral alignment Champions offers.")
+        }
+        return (alignment.name,
+                "Raises \(up.long) by 10% and lowers \(down.long) by 10%. The multiplier applies to the finished stat — base plus 20 plus Stat Points at Level 50 — so it is worth more on a high base stat than a low one.")
+    }
+
+    private func labelled<V: View>(_ text: String, info: (String, String)? = nil,
+                                   @ViewBuilder content: () -> V) -> some View {
+        HStack(spacing: 6) {
             Text(text)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .frame(width: 62, alignment: .leading)
             content()
+            if let info {
+                InfoButton(title: info.0, body: info.1)
+            }
         }
     }
 
@@ -600,15 +632,23 @@ struct SlotEditor: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// Four full-width rows rather than four columns.
+    ///
+    /// Side by side there is no room for a move's numbers, so they ended up
+    /// stacked underneath the picker, which read as a caption rather than as
+    /// part of the row. Down the page each move gets the same aligned columns as
+    /// the learnset table: power, accuracy, priority, flags.
     private func moves(_ form: Form) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Moves \(slot.moves.count)/4")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-            HStack(spacing: 8) {
-                ForEach(0..<4, id: \.self) { index in
-                    MoveSlotPicker(form: form, slot: $slot, index: index, onChange: onChange)
-                }
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Moves \(slot.moves.count)/4")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                MoveStatHeader()
+            }
+            ForEach(0..<4, id: \.self) { index in
+                MoveSlotPicker(form: form, slot: $slot, index: index, onChange: onChange)
             }
         }
     }
@@ -637,23 +677,123 @@ struct MoveSlotPicker: View {
 
     var body: some View {
         let move = index < slot.moves.count ? store.move(slot.moves[index]) : nil
-        VStack(spacing: 3) {
-            LookupField(kind: .move, placeholder: "Move",
+        HStack(spacing: MoveColumn.spacing) {
+            LookupField(kind: .move, placeholder: "Move \(index + 1)",
                         options: store.moveOptions(for: form), selection: selection)
+                .frame(maxWidth: .infinity)
 
+            MoveStats(move: move)
+
+            // Opens the full record, the same popover the move tables use.
             if let move {
-                HStack(spacing: 4) {
-                    if let type = PokeType(loose: move.type) { TypeIcon(type: type, side: 14) }
-                    Text(move.power > 0 ? "\(move.power)" : "—")
-                        .font(.system(size: 10, design: .rounded)).monospacedDigit()
-                    if move.isSpread {
-                        Image(systemName: "arrow.left.and.right")
-                            .font(.system(size: 8)).foregroundStyle(Palette.warn)
-                    }
-                }
+                MoveInfoButton(move: move)
+            } else {
+                Color.clear.frame(width: 13, height: 13)
             }
         }
-        .frame(maxWidth: .infinity)
+    }
+}
+
+/// Column labels for the inline move stats.
+struct MoveStatHeader: View {
+    var body: some View {
+        HStack(spacing: MoveColumn.spacing) {
+            label("Class", MoveColumn.category, .center)
+            label("Pow", MoveColumn.power, .trailing)
+            label("Acc", MoveColumn.accuracy, .trailing)
+            label("Pri", MoveColumn.priority, .center)
+            label("", MoveColumn.flags, .leading)
+            Color.clear.frame(width: 13, height: 1)
+        }
+    }
+
+    private func label(_ text: String, _ width: CGFloat,
+                       _ alignment: SwiftUI.Alignment) -> some View {
+        Text(text.uppercased())
+            .font(.system(size: 9, weight: .semibold))
+            .kerning(0.4)
+            .foregroundStyle(.tertiary)
+            .frame(width: width, alignment: alignment)
+    }
+}
+
+/// The numeric half of a move row, in the shared column widths so the editor
+/// and the learnset table line up with each other.
+struct MoveStats: View {
+    let move: Move?
+
+    var body: some View {
+        HStack(spacing: MoveColumn.spacing) {
+            if let move {
+                CategoryBadge(category: move.category)
+                Text(move.power > 0 ? "\(move.power)" : "—")
+                    .font(.system(size: 11, design: .rounded)).monospacedDigit()
+                    .foregroundStyle(move.power > 0 ? Palette.normal : Palette.fainter)
+                    .frame(width: MoveColumn.power, alignment: .trailing)
+                Text(move.accuracyLabel)
+                    .font(.system(size: 11, design: .rounded)).monospacedDigit()
+                    .foregroundStyle(Palette.dim)
+                    .frame(width: MoveColumn.accuracy, alignment: .trailing)
+                Group {
+                    if move.priority != 0 {
+                        Text(move.priority > 0 ? "+\(move.priority)" : "\(move.priority)")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .frame(width: MoveColumn.priority, height: 16)
+                            .background(move.priority > 0
+                                        ? Palette.good.opacity(0.20) : Palette.bad.opacity(0.20))
+                            .foregroundStyle(move.priority > 0 ? Palette.good : Palette.bad)
+                            .clipShape(Capsule())
+                    } else {
+                        Color.clear.frame(width: MoveColumn.priority, height: 16)
+                    }
+                }
+                HStack(spacing: 4) {
+                    flag("arrow.left.and.right", shown: move.isSpread, colour: Palette.warn,
+                         hint: move.target)
+                    flag("hand.tap.fill", shown: move.makesContact, colour: Palette.fainter,
+                         hint: "Makes contact — taxed by Rocky Helmet and Aura Guard")
+                }
+                .frame(width: MoveColumn.flags, alignment: .leading)
+            } else {
+                // Keep the columns even while the slot is empty.
+                Color.clear.frame(width: MoveColumn.category, height: 18)
+                Color.clear.frame(width: MoveColumn.power, height: 1)
+                Color.clear.frame(width: MoveColumn.accuracy, height: 1)
+                Color.clear.frame(width: MoveColumn.priority, height: 1)
+                Color.clear.frame(width: MoveColumn.flags, height: 1)
+            }
+        }
+    }
+
+    private func flag(_ symbol: String, shown: Bool, colour: Color, hint: String) -> some View {
+        Color.clear
+            .frame(width: MoveColumn.flag, height: 12)
+            .overlay {
+                if shown {
+                    Image(systemName: symbol)
+                        .font(.system(size: 9)).foregroundStyle(colour).help(hint)
+                }
+            }
+    }
+}
+
+/// An "i" that opens the full move record.
+struct MoveInfoButton: View {
+    let move: Move
+    @State private var open = false
+
+    var body: some View {
+        Button { open = true } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 11))
+                .foregroundStyle(Palette.accent)
+        }
+        .buttonStyle(.plain)
+        .help(move.effect.isEmpty ? move.name : move.effect)
+        .popover(isPresented: $open, arrowEdge: .trailing) {
+            MoveDetail(move: move)
+        }
     }
 }
 
