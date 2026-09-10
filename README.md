@@ -170,6 +170,12 @@ versus engine against a bundled archetype. It also checks that a team against
 *itself* scores exactly zero — which is how the speed-tie handling got fixed, since
 scoring ties as losses made every mirror match read negative.
 
+`mkdata.py` also audits the ability descriptions on every run. Serebii puts every
+ability for a form in one table cell separated by `<br />`, so a parser that gets
+the boundaries wrong produces text that reads fine until you notice Farigiraf's
+Armor Tail explaining Sap Sipper. That was true of 99 of 214 abilities until it
+was caught; the audit now fails loudly on the signature.
+
 `mkdata.py` additionally audits `overlay.json` on every run: every Pokémon, move
 and item named in the curated usage table has to exist in the scraped data and be
 legal on the form it is attached to. That check exists because it caught real

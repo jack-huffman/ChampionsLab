@@ -209,25 +209,67 @@ def parse_form_label(section):
     return re.sub(r"\s+", " ", html.unescape(m.group(1))).strip()
 
 
+ABILITY_LINK = re.compile(
+    r'<a href="/abilitydex/[^"]+\.shtml">\s*<b>([^<]+)</b>\s*</a>')
+
+# The same link, but followed by the colon that introduces its description.
+ABILITY_ENTRY = re.compile(
+    r'<a href="/abilitydex/[^"]+\.shtml">\s*<b>([^<]+)</b>\s*</a>\s*:')
+
+
+def clean_ability_text(desc):
+    """Trim the sub-headers that share the abilities cell.
+
+    A species with regional forms lists them all in the same <td>, introduced by
+    headings like "Hisuian Form Abilities:" and "(Available) -->". Those land on
+    the end of whichever description precedes them.
+    """
+    desc = re.sub(r"^\(?Available\)?\s*(?:--?>)?\s*", "", desc)
+    desc = re.split(r"\s+(?:\w+\s+){0,2}Abilities\s*:", desc)[0]
+    desc = re.split(r"\s*\(Available\)", desc)[0]
+    return desc.strip().rstrip(":-\u2014> ").strip()
+
+
 def parse_abilities(section):
     """Ability names and their in-game descriptions from one form's card.
 
-    Serebii wraps the link text in <b>, and prints each ability twice: once in
-    the 'Abilities:' header and once with its description below it.
+    Every ability for a form shares a single <td>, separated by <br />, each
+    written as "<a …><b>Name</b></a>: description". So a description runs until
+    the next ability's link, and nothing else bounds it.
+
+    Reading this off the flattened text does not work. An earlier version ended
+    each description at the "Weakness" or "Damage Taken" heading instead, which
+    meant every ability but the last swallowed the ones after it — Farigiraf's
+    Armor Tail carried the text for Sap Sipper, and 99 of 214 abilities were
+    wrong the same way.
     """
+    # The header row lists the names; the cell below pairs each with its text.
+    cell = None
+    for m in re.finditer(r'<td[^>]*class="fooinfo"[^>]*>(.*?)</td>', section, re.S):
+        if "/abilitydex/" in m.group(1) and ABILITY_ENTRY.search(m.group(1)):
+            cell = m.group(1)
+            break
+
+    if cell is None:
+        # No description cell on this card; keep the names from the header.
+        out, seen = [], set()
+        for m in ABILITY_LINK.finditer(section):
+            name = re.sub(r"\s+", " ", html.unescape(m.group(1))).strip()
+            if name and name not in seen:
+                seen.add(name)
+                out.append({"name": name, "desc": ""})
+        return out
+
+    entries = list(ABILITY_ENTRY.finditer(cell))
     out, seen = [], set()
-    for m in re.finditer(r'<a href="/abilitydex/[^"]+\.shtml">\s*<b>([^<]+)</b>\s*</a>', section):
-        name = re.sub(r"\s+", " ", html.unescape(m.group(1))).strip()
+    for i, match in enumerate(entries):
+        name = re.sub(r"\s+", " ", html.unescape(match.group(1))).strip()
+        end = entries[i + 1].start() if i + 1 < len(entries) else len(cell)
+        desc = text_of(cell[match.end():end])
+        desc = clean_ability_text(desc)
         if name and name not in seen:
             seen.add(name)
-            out.append({"name": name, "desc": ""})
-    body = text_of(section)
-    for ability in out:
-        hit = re.search(
-            re.escape(ability["name"]) + r"\s*:\s*([A-Z].{10,400}?)(?=\s*(?:Damage Taken|Weakness|Stats|Evolutionary Chain|$))",
-            body)
-        if hit:
-            ability["desc"] = re.sub(r"\s+", " ", hit.group(1)).strip()
+            out.append({"name": name, "desc": desc})
     return out
 
 
@@ -628,6 +670,8 @@ def main():
     for entry in abilities.values():
         entry["users"] = sorted(set(entry["users"]))
 
+    audit_abilities(abilities)
+
     assign_stones(roster, items)
 
     out = {
@@ -713,6 +757,35 @@ def assign_stones(roster, items):
     print("    stones: %d Megas linked, %d using the generic entry" % (matched, len(unmatched)))
     if unmatched:
         print("      " + ", ".join(unmatched[:12]) + ("…" if len(unmatched) > 12 else ""))
+
+
+def audit_abilities(abilities):
+    """Catch descriptions that have run into a neighbouring ability.
+
+    Serebii puts every ability for a form in one cell, so a parser that gets the
+    boundaries wrong produces text that reads fine until you notice Armor Tail
+    explaining Sap Sipper. The signature is another ability's name immediately
+    followed by a colon, or a description left dangling on punctuation.
+    """
+    names = sorted(abilities, key=len, reverse=True)
+    problems = []
+    for name, entry in abilities.items():
+        desc = entry["desc"]
+        if not desc:
+            problems.append("%s: no description" % name)
+            continue
+        if desc.rstrip().endswith((":", "-", ">")):
+            problems.append("%s: description ends on punctuation" % name)
+        for other in names:
+            if other != name and other + " :" in desc:
+                problems.append("%s: runs into %s" % (name, other))
+                break
+    if problems:
+        print("    abilities: %d suspect description(s)" % len(problems))
+        for problem in problems[:10]:
+            print("      - " + problem)
+    else:
+        print("    abilities: %d descriptions, all cleanly bounded" % len(abilities))
 
 
 def audit_overlay(overlay, roster, moves, items):
