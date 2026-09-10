@@ -111,6 +111,34 @@ struct Move: Codable, Identifiable, Hashable {
     var hitsAlly: Bool { target == "All Adjacent Pokémon" }
 
     var accuracyLabel: String { neverMisses || accuracy == 0 ? "—" : "\(accuracy)" }
+
+    /// Moves whose base power the calculator should not take at face value when
+    /// picking a representative set: they cannot simply be clicked for that
+    /// damage on the turn you want it.
+    ///
+    /// Serebii's effect text identifies most of them — "gains the Recharging
+    /// status", "gains the Charging status", "The user faints" — so the test is
+    /// mostly data-driven. A handful print no Battle Effect at all, and those are
+    /// named explicitly.
+    private static let unusableWithoutEffectText: Set<String> = [
+        "shadowforce", "prismaticlaser", "eternabeam", "roaroftime",
+        "skullbash", "freezeshock", "iceburn", "razorwind", "bide",
+        // Conditional on a setup this model does not simulate.
+        "belch", "dreameater", "hyperspacefury",
+    ]
+
+    var isImmediateAttack: Bool {
+        guard isDamaging, power > 0 else { return false }
+        if Move.unusableWithoutEffectText.contains(id) { return false }
+        let text = effect.lowercased()
+        for marker in ["recharging status", "charging status", "sky-high status",
+                       "underground status", "submerged status", "concealed status",
+                       "future attack status", "the user faints",
+                       "fails if the user has already taken damage"] {
+            if text.contains(marker) { return false }
+        }
+        return true
+    }
 }
 
 // MARK: - Items
@@ -265,6 +293,17 @@ struct MetaTeam: Codable, Identifiable, Hashable {
     }
 }
 
+/// A forward-looking call about the format, with its basis stated so a reader
+/// can tell arithmetic from judgement.
+struct Prediction: Codable, Identifiable, Hashable {
+    let title: String
+    let call: String
+    let why: String
+    let confidence: String
+    let basis: String
+    var id: String { title }
+}
+
 // MARK: - Root
 
 struct Dataset: Codable {
@@ -273,6 +312,7 @@ struct Dataset: Codable {
     let items: [Item]
     let usage: [UsageEntry]
     let metaTeams: [MetaTeam]
+    let predictions: [Prediction]
     let notes: MetaNotes
     let forms: [Form]
     let moves: [String: Move]
@@ -284,5 +324,6 @@ struct Dataset: Codable {
         case regulation, rules, items, usage, notes, forms, moves, abilities
         case generated, sources
         case metaTeams = "meta_teams"
+        case predictions
     }
 }

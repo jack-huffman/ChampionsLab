@@ -1444,5 +1444,56 @@
         }
       ]
     }
+  ],
+  "predictions": [
+    {
+      "title": "Fire and Ice are the answer keys",
+      "call": "Every serious team wants one Fire move and one Ice move, and the teams that skip them will keep losing to the same four Pokémon.",
+      "why": "Against the weighted field, Ice averages 1.23x and Fire 1.20x — the two best attacking types in the format. Six of the thirty tracked threats are part Steel and four are part Dragon, and those two groups barely overlap in what answers them.",
+      "confidence": "High",
+      "basis": "Computed from the type chart against the usage table."
+    },
+    {
+      "title": "Normal is the worst attacking type, which is why Aerilate matters",
+      "call": "Do not bring a Normal-type attacker. Do bring the one that stops being Normal.",
+      "why": "Normal averages 0.64x into the field, last of the eighteen, with five Ghosts among the tracked threats walling it outright. Mega Salamence's Aerilate converts its Normal moves to Flying, which averages 1.13x — the conversion is worth more than the 20% power bonus attached to it.",
+      "confidence": "High",
+      "basis": "Computed. The Aerilate reading is judgement on top of it."
+    },
+    {
+      "title": "The middle speed tier is dead",
+      "call": "Invest past 223 Speed or commit to Trick Room. Anything built to sit around 150 is choosing to move second.",
+      "why": "The three Z Megas all reach 223 at full investment, then there is a 34-point gap to the next benchmark at 189. Nothing occupies the space between, so the usual approach of creeping a few points past a rival does not work here — you are either above the Z Megas or you are not.",
+      "confidence": "High",
+      "basis": "Computed from base Speed at 32 SP with a boosting alignment."
+    },
+    {
+      "title": "Flying/Steel is the best defensive shell in the format",
+      "call": "Corviknight and Skarmory rise, and Mega Skarmory is underrated at the moment.",
+      "why": "Flying/Steel takes 0.71x from the field's STAB moves, the lowest of any typing in the roster. It resists or is immune to the Fighting, Bug, Grass, Dragon, Psychic and Fairy attacks that the top threats lean on, and its Fire weakness is the one thing the format is genuinely loaded with — so it wants a partner that likes Fire aimed at it.",
+      "confidence": "Medium",
+      "basis": "Computed defensive average; the usage call is judgement."
+    },
+    {
+      "title": "Terrain will be under-adopted for the first month",
+      "call": "Grassy and Psychic Terrain teams are stronger than their usage will show until people adjust.",
+      "why": "M-C shipped Rillaboom, Indeedee and Pincurchin in the same patch as Terrain Extender and all four Seeds. Grassy Terrain halves Earthquake, and Garchomp was the most-used Pokemon of both prior regulations. Psychic Terrain switches off Sucker Punch, Fake Out, Aqua Jet and Grassy Glide, which is most of the format's priority. New mechanics take weeks to be taken seriously.",
+      "confidence": "Medium",
+      "basis": "Judgement, from what the regulation added together."
+    },
+    {
+      "title": "Contact moves are a liability this regulation",
+      "call": "Rocky Helmet on a bulky redirector will over-perform.",
+      "why": "Rocky Helmet arrived in the same regulation as Mega Golisopod and Mega Lucario Z, and joins Mega Metagross and Mega Mawile — four Megas whose main attacks all make contact. Aura Guard already halves contact damage in the other direction. One Helmet holder taxes a large share of the format 1/6 per hit.",
+      "confidence": "Medium",
+      "basis": "Judgement, from the item and Mega lists."
+    },
+    {
+      "title": "The projected placements are the weakest part of this page",
+      "call": "Re-check everything here once the ladder has a month of M-C data.",
+      "why": "Fourteen of the thirty tracked threats have no measured usage at all — they are placed by their stats and abilities, and given an assumed weight so they stay in the maths. The type and speed numbers above are arithmetic and will hold; the ranking of picks depends on those assumed weights and will move.",
+      "confidence": "Certain",
+      "basis": "A statement about the data, not a prediction about the game."
+    }
   ]
 }

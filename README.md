@@ -46,6 +46,11 @@ clean checkout builds without network access.
   another team you have saved.
 - **Calculator** — full damage calc with weather, terrain, screens, crits, spread
   penalty, boosts, items and abilities.
+- **Forecast** — format predictions and anti-meta picks. The attacking-type
+  landscape, the speed gaps and the pick ranking are computed: every legal form is
+  run against the whole weighted field with a standard build and the real damage
+  calculator, then ranked. The written predictions sit below and each states
+  whether it is arithmetic or judgement.
 - **Database** — every legal form, all 902 moves, 246 items and 199 abilities,
   searchable and filterable.
 
@@ -182,6 +187,15 @@ legal on the form it is attached to. That check exists because it caught real
 mistakes — an early draft listed Amoonguss, Pelipper and Ursaluna, none of which
 are in Champions' 205-species roster, and gave a Pokémon Spore, which no
 Champions learnset has.
+
+### A note on the forecast maths
+
+Ranking a candidate's moves by raw base power hands everything a Giga Impact or a
+Focus Punch and scores it as though those were free. `Move.isImmediateAttack`
+filters to moves that can be clicked for their damage on the turn you want it,
+reading Serebii's own effect text — "gains the Recharging status", "gains the
+Charging status", "The user faints" — with a short explicit list for the handful
+whose Battle Effect field is blank.
 
 ### Why the long lists are not Pickers
 

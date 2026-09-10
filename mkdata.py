@@ -680,6 +680,7 @@ def main():
         "items": items,
         "usage": overlay["usage"],
         "meta_teams": overlay["meta_teams"],
+        "predictions": overlay["predictions"],
         "notes": overlay["notes"],
         "forms": roster,
         "moves": moves,

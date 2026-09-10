@@ -23,7 +23,7 @@ final class Store: ObservableObject {
             // An empty dataset keeps the app launchable so the window can
             // explain what went wrong instead of dying on start.
             data = Dataset(regulation: .placeholder, rules: .placeholder, items: [],
-                           usage: [], metaTeams: [], notes: .placeholder, forms: [], moves: [:],
+                           usage: [], metaTeams: [], predictions: [], notes: .placeholder, forms: [], moves: [:],
                            abilities: [:], generated: "—", sources: [])
             loadError = "\(error)"
         }
@@ -117,6 +117,23 @@ final class Store: ObservableObject {
     lazy var formOptions: [LookupOption] = data.forms.map {
         LookupOption(id: $0.id, name: $0.formLabel,
                      subtitle: $0.types.joined(separator: "/"), form: $0)
+    }
+
+    /// Move ids that can be clicked for their damage on the turn you want it.
+    /// Precomputed because Forecast tests it for every move of every form, and
+    /// the check reads the effect text.
+    lazy var immediateAttackIDs: Set<String> = Set(
+        data.moves.values.filter(\.isImmediateAttack).map(\.id))
+
+    /// The subset of a form's learnset worth ranking as an attack.
+    private var attackCache: [String: [Move]] = [:]
+
+    func attackingMoves(for form: Form) -> [Move] {
+        if let cached = attackCache[form.id] { return cached }
+        let moves = form.moves.compactMap { data.moves[$0] }
+            .filter { immediateAttackIDs.contains($0.id) }
+        attackCache[form.id] = moves
+        return moves
     }
 
     private var moveOptionCache: [String: [LookupOption]] = [:]

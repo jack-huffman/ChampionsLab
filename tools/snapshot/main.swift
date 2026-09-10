@@ -85,6 +85,8 @@ func renderAll() {
         render(TeamEditorPreview(team: shown), named: "team-locked-dark",
                size: CGSize(width: 1000, height: 1700), dark: true)
     }
+    render(ForecastView(), named: "forecast-dark",
+           size: CGSize(width: 1180, height: 4200), dark: true)
     render(MatchupView(team: team, initialOpponent: "big-six"), named: "versus-dark",
            size: CGSize(width: 1180, height: 1500), dark: true)
     render(CalculatorView(), named: "calc-dark",

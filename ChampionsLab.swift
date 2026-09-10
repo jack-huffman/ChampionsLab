@@ -44,6 +44,7 @@ enum Section: String, CaseIterable, Identifiable, Hashable {
     case items = "Items"
     case abilities = "Abilities"
     case meta = "Usage & Meta"
+    case forecast = "Forecast"
     case calculator = "Calculator"
 
     var id: String { rawValue }
@@ -57,13 +58,14 @@ enum Section: String, CaseIterable, Identifiable, Hashable {
         case .items:      return "bag.fill"
         case .abilities:  return "wand.and.stars"
         case .meta:       return "chart.bar.fill"
+        case .forecast:   return "chart.line.uptrend.xyaxis"
         case .calculator: return "function"
         }
     }
 
     var group: String {
         switch self {
-        case .overview, .meta:                  return "Regulation"
+        case .overview, .meta, .forecast:       return "Regulation"
         case .teams, .calculator:               return "Build"
         case .dex, .moves, .items, .abilities:  return "Database"
         }
@@ -111,6 +113,7 @@ struct RootView: View {
                 case .items:      ItemDexView()
                 case .abilities:  AbilityDexView()
                 case .meta:       MetaView()
+                case .forecast:   ForecastView()
                 case .calculator: CalculatorView()
                 }
             }
