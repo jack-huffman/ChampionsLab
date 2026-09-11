@@ -114,6 +114,13 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
                named: "guided-interview-dark",
                size: CGSize(width: 1000, height: 900), dark: true)
     }
+    render(ZStack {
+               Color.clear.frame(width: 700, height: 420)
+               ProcessingOverlay(title: "Building teams",
+                                 step: "Searching the Trick Room plan",
+                                 fraction: 0.5) {}
+           },
+           named: "overlay-dark", size: CGSize(width: 700, height: 420), dark: true)
     render(ForecastView(), named: "forecast-dark",
            size: CGSize(width: 1180, height: 4200), dark: true)
     render(MatchupView(team: team, initialOpponent: "big-six"), named: "versus-dark",

@@ -18,6 +18,9 @@ struct AdvisorView: View {
     @State private var refinements: [TeamRefiner.Suggestion] = []
     @State private var refining = false
     @State private var refined = false
+    @State private var refineStep = ""
+    @State private var refineFraction: Double?
+    @State private var refineJob: Task<Void, Never>?
 
     private var advisor: TeamAdvisor { TeamAdvisor(team: team, store: store) }
 
@@ -38,6 +41,17 @@ struct AdvisorView: View {
                 picks = Forecast(store: store, format: team.format).picks(limit: 400)
             }
         }
+        .overlay {
+            if refining {
+                ProcessingOverlay(title: "Looking for one change",
+                                  step: refineStep, fraction: refineFraction) {
+                    refineJob?.cancel()
+                    refineJob = nil
+                    refining = false
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: refining)
     }
 
     private var emptyState: some View {
@@ -124,7 +138,10 @@ struct AdvisorView: View {
                 }
 
                 if refining {
-                    ProgressView().controlSize(.small)
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(refineStep).font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
                 } else if refined && refinements.isEmpty {
                     Label("Nothing single beats what is already here. The next gain needs more than one change.",
                           systemImage: "checkmark.seal")
@@ -173,13 +190,23 @@ struct AdvisorView: View {
     private func runRefiner() {
         refining = true
         refinements = []
-        // A few hundred evaluations; done inline but bounded so it stays quick.
-        var refiner = TeamRefiner(store: store, team: team)
-        refiner.format = team.format
-        refiner.plan = advisor.archetypes.first?.archetype ?? .balance
-        refinements = refiner.suggestions(picks: picks, budget: 14, limit: 6)
-        refined = true
-        refining = false
+        refineStep = "Scoring the team as it stands"
+        refineFraction = nil
+        refineJob = Task { @MainActor in
+            var refiner = TeamRefiner(store: store, team: team)
+            refiner.format = team.format
+            refiner.plan = advisor.archetypes.first?.archetype ?? .balance
+            let found = await refiner.suggestions(picks: picks, budget: 14, limit: 6) {
+                message, done in
+                refineStep = message
+                refineFraction = done
+            }
+            guard !Task.isCancelled else { refining = false; return }
+            refinements = found
+            refined = true
+            refining = false
+            refineJob = nil
+        }
     }
 
     // MARK: What the format does to this team

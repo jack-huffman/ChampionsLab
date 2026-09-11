@@ -60,8 +60,30 @@ struct TeamRefiner {
         "Pollen Puff", "Aromatherapy", "Heal Bell",
     ]
 
+    /// The same search, yielding between candidates so the overlay can move.
+    func suggestions(picks: [Forecast.Pick], budget: Int = 18, limit: Int = 8,
+                     progress: @escaping @MainActor (String, Double) -> Void) async -> [Suggestion] {
+        var found: [Suggestion] = []
+        let members = team.slots.compactMap { $0.battleForm(in: store)?.formLabel }
+        for (index, name) in members.enumerated() {
+            await progress("Trying changes to \(name)",
+                           Double(index) / Double(max(1, members.count)))
+            await Task.yield()
+            found += suggestions(picks: picks, budget: budget, limit: limit,
+                                 onlySlot: index)
+        }
+        await progress("Ranking what helped", 1)
+        var seenSlots = Set<String>()
+        return found.sorted { $0.delta > $1.delta }.filter { suggestion in
+            let key = suggestion.headline.components(separatedBy: ":").first
+                ?? suggestion.headline
+            return seenSlots.insert(key).inserted
+        }
+        .prefix(limit).map { $0 }
+    }
+
     func suggestions(picks: [Forecast.Pick], budget: Int = 18,
-                     limit: Int = 8) -> [Suggestion] {
+                     limit: Int = 8, onlySlot: Int? = nil) -> [Suggestion] {
         var builder = TeamBuilder(store: store)
         builder.format = format
         var pinned = self.pinned
@@ -87,7 +109,7 @@ struct TeamRefiner {
         }
         candidates = Array(candidates.prefix(budget))
 
-        for index in team.slots.indices {
+        for index in team.slots.indices where onlySlot == nil || index == onlySlot {
             guard let outgoing = team.slots[index].battleForm(in: store) else { continue }
             // Never propose cutting the Pokémon the team exists to use. A team
             // called "Mega Bax" does not want to be told to drop Baxcalibur, and
@@ -125,7 +147,7 @@ struct TeamRefiner {
                        "Rage Powder", "Tailwind", "Trick Room", "Encore", "Snarl",
                        "Grassy Terrain", "Misty Terrain", "Electric Terrain",
                        "Swords Dance", "Nasty Plot", "Coaching"]
-        for index in team.slots.indices {
+        for index in team.slots.indices where onlySlot == nil || index == onlySlot {
             guard let form = team.slots[index].battleForm(in: store) else { continue }
             let learnable = store.moves(for: form)
             let current = Set(team.slots[index].moves)

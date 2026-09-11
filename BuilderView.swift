@@ -22,6 +22,9 @@ struct BuilderView: View {
     /// decision the engine could have talked you through.
     @State private var guided = true
     @State private var brief: BuildBrief?
+    @State private var step = ""
+    @State private var fraction: Double?
+    @State private var job: Task<Void, Never>?
 
     /// Pre-generated results, so tools/snapshot.sh can render the populated
     /// state — it has no view lifecycle to trigger a build from.
@@ -39,6 +42,16 @@ struct BuilderView: View {
             Divider()
             if snapshotMode { content } else { ScrollView { content } }
         }
+        .overlay {
+            if working {
+                ProcessingOverlay(title: "Building teams", step: step, fraction: fraction) {
+                    job?.cancel()
+                    job = nil
+                    working = false
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: working)
     }
 
     private var controls: some View {
@@ -82,27 +95,50 @@ struct BuilderView: View {
         if let incoming { brief = incoming }
         working = true
         fellBack = false
-        if picks.isEmpty {
-            picks = Forecast(store: store, format: format).picks(limit: 400)
+        step = "Ranking every legal Pokémon against the field"
+        fraction = nil
+
+        // Run as a task that yields between plans. Done synchronously this
+        // froze the window for a second or two and drew nothing at all.
+        job = Task { @MainActor in
+            if picks.isEmpty {
+                await Task.yield()
+                picks = Forecast(store: store, format: format).picks(limit: 400)
+            }
+            guard !Task.isCancelled else { working = false; return }
+
+            var builder = TeamBuilder(store: store)
+            builder.format = format
+            builder.brief = brief
+            let plan = brief?.plan
+            var found = await builder.blueprints(
+                seed: seed, picks: picks, dualMega: dualMega) { message, done in
+                    step = message
+                    fraction = done
+                }
+            guard !Task.isCancelled else { working = false; return }
+
+            // Not every seed can support a second Mega — a Trick Room plan
+            // built around a slow wall often cannot. Say so rather than
+            // returning nothing.
+            if dualMega && found.isEmpty {
+                step = "No two-Mega six held together; trying one"
+                found = await builder.blueprints(seed: seed, picks: picks) { message, done in
+                    step = message
+                    fraction = done
+                }
+                fellBack = !found.isEmpty
+            }
+            // The interview settled on a plan, so lead with it.
+            if let plan {
+                found.sort { ($0.plan == plan ? 1 : 0, $0.score.total)
+                    > ($1.plan == plan ? 1 : 0, $1.score.total) }
+            }
+            blueprints = found
+            expanded = found.first?.id
+            working = false
+            job = nil
         }
-        var builder = TeamBuilder(store: store)
-        builder.format = format
-        builder.brief = brief
-        let plan = brief?.plan
-        blueprints = builder.blueprints(seed: seed, picks: picks, dualMega: dualMega)
-        // The interview settled on a plan, so lead with it.
-        if let plan {
-            blueprints.sort { ($0.plan == plan ? 1 : 0, $0.score.total)
-                > ($1.plan == plan ? 1 : 0, $1.score.total) }
-        }
-        // Not every seed can support a second Mega — a Trick Room plan built
-        // around a slow wall often cannot. Say so rather than returning nothing.
-        if dualMega && blueprints.isEmpty {
-            blueprints = builder.blueprints(seed: seed, picks: picks)
-            fellBack = !blueprints.isEmpty
-        }
-        expanded = blueprints.first?.id
-        working = false
     }
 
     @ViewBuilder private var content: some View {

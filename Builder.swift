@@ -897,8 +897,26 @@ struct TeamBuilder {
 
     /// Build several complete teams around `seed`, one per viable plan, each
     /// fully evaluated against the bundled archetypes.
+    /// The same search, handing control back between plans so the interface
+    /// can draw and say where it has got to.
     func blueprints(seed: Form, picks: [Forecast.Pick], perPlan: Int = 1,
-                    dualMega: Bool = false) -> [Blueprint] {
+                    dualMega: Bool = false,
+                    progress: @escaping @MainActor (String, Double) -> Void) async -> [Blueprint] {
+        let plans = self.plans(for: seed)
+        var out: [Blueprint] = []
+        for (index, plan) in plans.enumerated() {
+            await progress("Searching the \(plan.rawValue) plan",
+                           Double(index) / Double(max(1, plans.count)))
+            await Task.yield()
+            out += blueprints(seed: seed, picks: picks, perPlan: perPlan,
+                              dualMega: dualMega, only: plan)
+        }
+        await progress("Scoring the finalists", 1)
+        return out.sorted { $0.score.total > $1.score.total }
+    }
+
+    func blueprints(seed: Form, picks: [Forecast.Pick], perPlan: Int = 1,
+                    dualMega: Bool = false, only: Archetype? = nil) -> [Blueprint] {
         var candidates = profiles(picks: picks)
         if !candidates.contains(where: { $0.form.id == seed.id }) {
             candidates += profiles(for: [seed])
@@ -908,7 +926,7 @@ struct TeamBuilder {
         // attributed to the plan that scored it highest.
         var seenTeams = Set<String>()
 
-        for plan in plans(for: seed) {
+        for plan in plans(for: seed) where only == nil || plan == only {
             let results = search(seed: seed, plan: plan, pool: candidates,
                                  dualMega: dualMega)
             var taken = 0
