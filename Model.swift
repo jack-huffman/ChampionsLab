@@ -271,6 +271,20 @@ struct UsageEntry: Codable, Identifiable, Hashable {
     let commonItems: [String]
     let keyMoves: [String]
     let why: String
+    /// Measured ladder figures, present when data/usage.json has been built.
+    let winrate: Double?
+    let wins: Int?
+    let losses: Int?
+    let moveUsage: [UsageShare]?
+    let itemUsage: [UsageShare]?
+    let abilityUsage: [UsageShare]?
+    let teammates: [String]?
+
+    var hasLiveData: Bool { winrate != nil || (moveUsage?.isEmpty == false) }
+    var record: String? {
+        guard let wins, let losses else { return nil }
+        return "\(wins)W / \(losses)L"
+    }
 
     var id: String { name }
     var isProjected: Bool { projected == true }
@@ -279,7 +293,18 @@ struct UsageEntry: Codable, Identifiable, Hashable {
         case name, tier, usage, projected, formats, role, why
         case commonItems = "common_items"
         case keyMoves = "key_moves"
+        case winrate, wins, losses, teammates
+        case moveUsage = "move_usage"
+        case itemUsage = "item_usage"
+        case abilityUsage = "ability_usage"
     }
+}
+
+/// One line of a usage breakdown: a name and the share of sets running it.
+struct UsageShare: Codable, Identifiable, Hashable {
+    let name: String
+    let percent: Double
+    var id: String { name }
 }
 
 struct MetaNotes: Codable {

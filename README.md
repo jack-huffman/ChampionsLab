@@ -147,13 +147,31 @@ pills and sprites to a placeholder glyph.
 
 Only Mega Glalie has no dedicated render upstream and falls back to base Glalie.
 
+### Real usage data
+
+`mkusage.py` pulls measured per-Pokémon usage from Pikalytics, which embeds it as
+JSON-LD on each Pokémon's page — usage share, winrate and win/loss counts, and the
+percentage of sets running each move, item and ability. Their data is CC BY-NC
+4.0 and the app credits them on screen.
+
+```sh
+./mkusage.py                    # current Regulation M-C ladder
+./mkusage.py --format <slug>    # another format
+```
+
+Every reference is checked against the scraped Serebii data before it is used and
+dropped if it cannot be true. That matters: their ability figures are noisy on a
+format this young and claim things like a Basculegion with Trace, which is how 24
+impossible references were caught on the first run.
+
+This replaced a hand-written table of roughly thirty entries that was guesswork —
+it listed three Pokémon that are not in this game and gave one of them a move no
+Champions Pokémon learns.
+
 ### Caveats worth knowing
 
-- **Usage numbers are not M-C numbers.** M-C only opened on 9 September 2026, so it
-  has no ladder history. The percentages in the app are the last measured
-  Regulation M-A/M-B figures; the M-C arrivals are marked **projected** and placed
-  by their stats and abilities, not by data. Treat those as an argument, not a
-  measurement, and edit `data/overlay.json` as the meta settles.
+- **Usage is now measured, but the ladder is young.** The M-C figures are real,
+  from a format a day or two old, so they will move. Re-run `./mkusage.py`.
 - **Serebii was still filling in the M-C dex** when this was built. Eleven of the
   new arrivals — Wigglytuff, both Persians, both Farfetch'd, both Mr. Mimes,
   Thievul, Perrserker, Pincurchin, Squawkabilly — had not landed yet. `mkdata.py`

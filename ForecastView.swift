@@ -79,7 +79,9 @@ struct ForecastView: View {
                         .foregroundStyle(Palette.accent)
                         .clipShape(Capsule())
                 }
-                Text("Everything below the written predictions is computed from the dataset — the type numbers are arithmetic over the usage table, and the picks come from the damage calculator run against every legal form. What is soft is the field itself: \(report.projectedCount) of the \(report.fieldSize) tracked threats have no measured usage yet and carry an assumed weight, because Regulation M-C only opened on \(store.data.regulation.start). Treat the ordering as an argument and the arithmetic as fact.")
+                Text(report.projectedCount == 0
+                     ? "Everything below the written predictions is computed from the dataset. The field is real measured Regulation M-C ladder usage, so the weights are no longer assumptions — the type numbers are arithmetic over that table and the picks come from the damage calculator run against every legal form."
+                     : "Everything below the written predictions is computed from the dataset — the type numbers are arithmetic over the usage table, and the picks come from the damage calculator run against every legal form. What is soft is the field itself: \(report.projectedCount) of the \(report.fieldSize) tracked threats have no measured usage yet and carry an assumed weight. Treat the ordering as an argument and the arithmetic as fact.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

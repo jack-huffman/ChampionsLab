@@ -248,6 +248,9 @@ struct OverviewView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Text("Usage figures come from Pikalytics (CC BY-NC 4.0), refreshed by mkusage.py.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
                 ForEach(store.data.sources, id: \.self) { source in
                     Text(source)
                         .font(.system(size: 10, design: .monospaced))

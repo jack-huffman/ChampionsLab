@@ -1,0 +1,1115 @@
+{
+ "format": "gen9championsvgc2026regmc",
+ "source": "https://www.pikalytics.com/pokedex/gen9championsvgc2026regmc",
+ "license": "CC BY-NC 4.0",
+ "generated": "2026-09-10",
+ "entries": [
+  {
+   "moves": [
+    {
+     "name": "Fake Out",
+     "percent": 56.51
+    },
+    {
+     "name": "Grassy Glide",
+     "percent": 38.38
+    },
+    {
+     "name": "Wood Hammer",
+     "percent": 29.52
+    },
+    {
+     "name": "U-turn",
+     "percent": 23.41
+    }
+   ],
+   "items": [
+    {
+     "name": "Life Orb",
+     "percent": 28.65
+    },
+    {
+     "name": "Leftovers",
+     "percent": 19.75
+    },
+    {
+     "name": "Grassy Seed",
+     "percent": 19.22
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Grassy Surge",
+     "percent": 98.69
+    },
+    {
+     "name": "Trace",
+     "percent": 0.97
+    }
+   ],
+   "teammates": [
+    "Incineroar",
+    "Sneasler",
+    "Salamence",
+    "Kingambit"
+   ],
+   "winrate": 52.3,
+   "wins": 1541,
+   "losses": 1406,
+   "slug": "Rillaboom",
+   "usage": 37.11
+  },
+  {
+   "moves": [
+    {
+     "name": "Close Combat",
+     "percent": 49.63
+    },
+    {
+     "name": "Dire Claw",
+     "percent": 39.1
+    },
+    {
+     "name": "Fake Out",
+     "percent": 29.75
+    },
+    {
+     "name": "Protect",
+     "percent": 18.27
+    }
+   ],
+   "items": [
+    {
+     "name": "Psychic Seed",
+     "percent": 30.85
+    },
+    {
+     "name": "Grassy Seed",
+     "percent": 30.01
+    },
+    {
+     "name": "White Herb",
+     "percent": 19.95
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Poison Touch",
+     "percent": 51.48
+    },
+    {
+     "name": "Pressure",
+     "percent": 20.79
+    }
+   ],
+   "teammates": [
+    "Rillaboom",
+    "Salamence",
+    "Basculegion",
+    "Kingambit"
+   ],
+   "winrate": 49.4,
+   "wins": 1451,
+   "losses": 1487,
+   "slug": "Sneasler",
+   "usage": 36.99
+  },
+  {
+   "moves": [
+    {
+     "name": "Fake Out",
+     "percent": 56.01
+    },
+    {
+     "name": "Parting Shot",
+     "percent": 45.57
+    },
+    {
+     "name": "Flare Blitz",
+     "percent": 39.02
+    },
+    {
+     "name": "Darkest Lariat",
+     "percent": 14.14
+    }
+   ],
+   "items": [
+    {
+     "name": "Sitrus Berry",
+     "percent": 77.5
+    },
+    {
+     "name": "Chople Berry",
+     "percent": 4.94
+    },
+    {
+     "name": "Rocky Helmet",
+     "percent": 4.94
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Intimidate",
+     "percent": 98.41
+    },
+    {
+     "name": "Hospitality",
+     "percent": 1.1
+    }
+   ],
+   "teammates": [
+    "Rillaboom",
+    "Sneasler",
+    "Salamence",
+    "Basculegion"
+   ],
+   "winrate": 49.0,
+   "wins": 1155,
+   "losses": 1204,
+   "slug": "Incineroar",
+   "usage": 29.7
+  },
+  {
+   "moves": [
+    {
+     "name": "Hyper Voice",
+     "percent": 57.43
+    },
+    {
+     "name": "Protect",
+     "percent": 42.74
+    },
+    {
+     "name": "Double-Edge",
+     "percent": 22.48
+    },
+    {
+     "name": "Tailwind",
+     "percent": 21.86
+    }
+   ],
+   "items": [
+    {
+     "name": "Salamencite",
+     "percent": 99.01
+    },
+    {
+     "name": "Rocky Helmet",
+     "percent": 0.6
+    },
+    {
+     "name": "Life Orb",
+     "percent": 0.4
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Intimidate",
+     "percent": 97.49
+    },
+    {
+     "name": "Trace",
+     "percent": 1.07
+    }
+   ],
+   "teammates": [
+    "Rillaboom",
+    "Sneasler",
+    "Incineroar",
+    "Kingambit"
+   ],
+   "winrate": 53.0,
+   "wins": 1041,
+   "losses": 922,
+   "slug": "Salamence",
+   "usage": 24.72
+  },
+  {
+   "moves": [
+    {
+     "name": "Kowtow Cleave",
+     "percent": 52.87
+    },
+    {
+     "name": "Sucker Punch",
+     "percent": 43.73
+    },
+    {
+     "name": "Protect",
+     "percent": 23.32
+    },
+    {
+     "name": "Iron Head",
+     "percent": 20.6
+    }
+   ],
+   "items": [
+    {
+     "name": "Chople Berry",
+     "percent": 42.19
+    },
+    {
+     "name": "Life Orb",
+     "percent": 31.56
+    },
+    {
+     "name": "Focus Sash",
+     "percent": 9.69
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Defiant",
+     "percent": 93.1
+    },
+    {
+     "name": "Trace",
+     "percent": 4.31
+    }
+   ],
+   "teammates": [
+    "Sneasler",
+    "Rillaboom",
+    "Salamence",
+    "Basculegion"
+   ],
+   "winrate": 51.2,
+   "wins": 986,
+   "losses": 940,
+   "slug": "Kingambit",
+   "usage": 24.25
+  },
+  {
+   "moves": [
+    {
+     "name": "Wave Crash",
+     "percent": 38.57
+    },
+    {
+     "name": "Last Respects",
+     "percent": 36.73
+    },
+    {
+     "name": "Aqua Jet",
+     "percent": 20.57
+    },
+    {
+     "name": "Protect",
+     "percent": 15.52
+    }
+   ],
+   "items": [
+    {
+     "name": "Life Orb",
+     "percent": 80.95
+    },
+    {
+     "name": "Rocky Helmet",
+     "percent": 7.14
+    },
+    {
+     "name": "Sitrus Berry",
+     "percent": 7.14
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Trace",
+     "percent": 57.14
+    },
+    {
+     "name": "Hospitality",
+     "percent": 14.29
+    }
+   ],
+   "teammates": [
+    "Sneasler",
+    "Rillaboom",
+    "Kingambit",
+    "Salamence"
+   ],
+   "winrate": 48.6,
+   "wins": 935,
+   "losses": 990,
+   "slug": "Basculegion",
+   "usage": 24.24
+  },
+  {
+   "moves": [
+    {
+     "name": "Follow Me",
+     "percent": 59.75
+    },
+    {
+     "name": "Helping Hand",
+     "percent": 23.58
+    },
+    {
+     "name": "Trick Room",
+     "percent": 23.14
+    },
+    {
+     "name": "Psychic",
+     "percent": 15.14
+    }
+   ],
+   "items": [
+    {
+     "name": "Psychic Seed",
+     "percent": 57.7
+    },
+    {
+     "name": "Sitrus Berry",
+     "percent": 16.07
+    },
+    {
+     "name": "Colbur Berry",
+     "percent": 10.49
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Psychic Surge",
+     "percent": 98.37
+    },
+    {
+     "name": "Trace",
+     "percent": 0.86
+    }
+   ],
+   "teammates": [
+    "Sneasler",
+    "Gardevoir",
+    "Golisopod",
+    "Hatterene"
+   ],
+   "winrate": 52.8,
+   "wins": 914,
+   "losses": 817,
+   "slug": "Indeedee-F",
+   "usage": 21.8
+  },
+  {
+   "moves": [
+    {
+     "name": "Leech Life",
+     "percent": 43.73
+    },
+    {
+     "name": "Iron Head",
+     "percent": 35.17
+    },
+    {
+     "name": "First Impression",
+     "percent": 29.09
+    },
+    {
+     "name": "Protect",
+     "percent": 22.53
+    }
+   ],
+   "items": [
+    {
+     "name": "Golisopite",
+     "percent": 94.52
+    },
+    {
+     "name": "Rocky Helmet",
+     "percent": 4.96
+    },
+    {
+     "name": "Sitrus Berry",
+     "percent": 0.32
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Hospitality",
+     "percent": 54.9
+    },
+    {
+     "name": "Trace",
+     "percent": 39.22
+    }
+   ],
+   "teammates": [
+    "Pelipper",
+    "Rillaboom",
+    "Farigiraf",
+    "Sneasler"
+   ],
+   "winrate": 51.7,
+   "wins": 825,
+   "losses": 770,
+   "slug": "Golisopod",
+   "usage": 20.08
+  },
+  {
+   "moves": [
+    {
+     "name": "Trick Room",
+     "percent": 51.85
+    },
+    {
+     "name": "Psychic",
+     "percent": 27.11
+    },
+    {
+     "name": "Helping Hand",
+     "percent": 23.1
+    },
+    {
+     "name": "Protect",
+     "percent": 13.55
+    }
+   ],
+   "items": [
+    {
+     "name": "Sitrus Berry",
+     "percent": 59.2
+    },
+    {
+     "name": "Colbur Berry",
+     "percent": 15.33
+    },
+    {
+     "name": "Grassy Seed",
+     "percent": 13.44
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Trace",
+     "percent": 72.73
+    },
+    {
+     "name": "Hospitality",
+     "percent": 22.73
+    }
+   ],
+   "teammates": [
+    "Rillaboom",
+    "Golisopod",
+    "Incineroar",
+    "Sneasler"
+   ],
+   "winrate": 51.8,
+   "wins": 734,
+   "losses": 684,
+   "slug": "Farigiraf",
+   "usage": 17.85
+  },
+  {
+   "moves": [
+    {
+     "name": "Protect",
+     "percent": 24.59
+    },
+    {
+     "name": "Earthquake",
+     "percent": 23.2
+    },
+    {
+     "name": "Rock Slide",
+     "percent": 22.57
+    },
+    {
+     "name": "Dragon Claw",
+     "percent": 19.17
+    }
+   ],
+   "items": [
+    {
+     "name": "Life Orb",
+     "percent": 51.53
+    },
+    {
+     "name": "Garchompite Z",
+     "percent": 34.35
+    },
+    {
+     "name": "Sitrus Berry",
+     "percent": 5.41
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Rough Skin",
+     "percent": 89.73
+    },
+    {
+     "name": "Trace",
+     "percent": 5.63
+    }
+   ],
+   "teammates": [
+    "Incineroar",
+    "Kingambit",
+    "Sneasler",
+    "Basculegion"
+   ],
+   "winrate": 48.1,
+   "wins": 621,
+   "losses": 670,
+   "slug": "Garchomp",
+   "usage": 16.25
+  },
+  {
+   "moves": [
+    {
+     "name": "Hurricane",
+     "percent": 39.71
+    },
+    {
+     "name": "Weather Ball",
+     "percent": 37.05
+    },
+    {
+     "name": "Tailwind",
+     "percent": 33.41
+    },
+    {
+     "name": "Wide Guard",
+     "percent": 16.83
+    }
+   ],
+   "items": [
+    {
+     "name": "Sitrus Berry",
+     "percent": 45.38
+    },
+    {
+     "name": "Focus Sash",
+     "percent": 36.55
+    },
+    {
+     "name": "Life Orb",
+     "percent": 11.35
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Drizzle",
+     "percent": 98.24
+    },
+    {
+     "name": "Trace",
+     "percent": 1.25
+    }
+   ],
+   "teammates": [
+    "Golisopod",
+    "Archaludon",
+    "Basculegion",
+    "Rillaboom"
+   ],
+   "winrate": 50.3,
+   "wins": 594,
+   "losses": 586,
+   "slug": "Pelipper",
+   "usage": 14.86
+  },
+  {
+   "moves": [
+    {
+     "name": "Tailwind",
+     "percent": 64.41
+    },
+    {
+     "name": "Moonblast",
+     "percent": 52.43
+    },
+    {
+     "name": "Encore",
+     "percent": 25.35
+    },
+    {
+     "name": "Protect",
+     "percent": 22.92
+    }
+   ],
+   "items": [
+    {
+     "name": "Focus Sash",
+     "percent": 87.22
+    },
+    {
+     "name": "Life Orb",
+     "percent": 7.22
+    },
+    {
+     "name": "Leftovers",
+     "percent": 2.22
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Trace",
+     "percent": 85.71
+    },
+    {
+     "name": "Intimidate",
+     "percent": 14.29
+    }
+   ],
+   "teammates": [
+    "Basculegion",
+    "Garchomp",
+    "Kingambit",
+    "Sneasler"
+   ],
+   "winrate": 48.7,
+   "wins": 484,
+   "losses": 509,
+   "slug": "Whimsicott",
+   "usage": 12.5
+  },
+  {
+   "moves": [
+    {
+     "name": "Rage Powder",
+     "percent": 41.98
+    },
+    {
+     "name": "Matcha Gotcha",
+     "percent": 35.14
+    },
+    {
+     "name": "Trick Room",
+     "percent": 15.33
+    },
+    {
+     "name": "Protect",
+     "percent": 13.91
+    }
+   ],
+   "items": [
+    {
+     "name": "Sitrus Berry",
+     "percent": 38.73
+    },
+    {
+     "name": "Leftovers",
+     "percent": 19.01
+    },
+    {
+     "name": "Colbur Berry",
+     "percent": 9.86
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Trace",
+     "percent": 83.33
+    },
+    {
+     "name": "No Guard",
+     "percent": 16.67
+    }
+   ],
+   "teammates": [
+    "Incineroar",
+    "Sneasler",
+    "Golisopod",
+    "Tyranitar"
+   ],
+   "winrate": 47.2,
+   "wins": 418,
+   "losses": 468,
+   "slug": "Sinistcha",
+   "usage": 11.16
+  },
+  {
+   "moves": [
+    {
+     "name": "Dazzling Gleam",
+     "percent": 62.68
+    },
+    {
+     "name": "Protect",
+     "percent": 58.12
+    },
+    {
+     "name": "Calm Mind",
+     "percent": 33.9
+    },
+    {
+     "name": "Moonblast",
+     "percent": 31.05
+    }
+   ],
+   "items": [
+    {
+     "name": "Floettite",
+     "percent": 98.41
+    },
+    {
+     "name": "Rocky Helmet",
+     "percent": 1.27
+    },
+    {
+     "name": "Leftovers",
+     "percent": 0.32
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Fairy Aura",
+     "percent": 96.19
+    },
+    {
+     "name": "Hospitality",
+     "percent": 1.91
+    }
+   ],
+   "teammates": [
+    "Rillaboom",
+    "Sneasler",
+    "Incineroar",
+    "Salamence"
+   ],
+   "winrate": 49.2,
+   "wins": 424,
+   "losses": 437,
+   "slug": "Floette-Eternal",
+   "usage": 10.84
+  },
+  {
+   "moves": [
+    {
+     "name": "Electro Shot",
+     "percent": 62.25
+    },
+    {
+     "name": "Protect",
+     "percent": 43.29
+    },
+    {
+     "name": "Dragon Pulse",
+     "percent": 38.1
+    },
+    {
+     "name": "Flash Cannon",
+     "percent": 22.72
+    }
+   ],
+   "items": [
+    {
+     "name": "Leftovers",
+     "percent": 88.95
+    },
+    {
+     "name": "Psychic Seed",
+     "percent": 3.68
+    },
+    {
+     "name": "Sitrus Berry",
+     "percent": 3.12
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Stamina",
+     "percent": 95.81
+    },
+    {
+     "name": "Hospitality",
+     "percent": 2.22
+    }
+   ],
+   "teammates": [
+    "Pelipper",
+    "Golisopod",
+    "Rillaboom",
+    "Basculegion"
+   ],
+   "winrate": 52.8,
+   "wins": 440,
+   "losses": 393,
+   "slug": "Archaludon",
+   "usage": 10.49
+  },
+  {
+   "moves": [
+    {
+     "name": "Make It Rain",
+     "percent": 50.11
+    },
+    {
+     "name": "Shadow Ball",
+     "percent": 46.25
+    },
+    {
+     "name": "Nasty Plot",
+     "percent": 31.48
+    },
+    {
+     "name": "Protect",
+     "percent": 29.76
+    }
+   ],
+   "items": [
+    {
+     "name": "Life Orb",
+     "percent": 78.75
+    },
+    {
+     "name": "Grassy Seed",
+     "percent": 6.97
+    },
+    {
+     "name": "Leftovers",
+     "percent": 4.88
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Good as Gold",
+     "percent": 76.47
+    },
+    {
+     "name": "Trace",
+     "percent": 20.59
+    }
+   ],
+   "teammates": [
+    "Rillaboom",
+    "Salamence",
+    "Incineroar",
+    "Sneasler"
+   ],
+   "winrate": 51.4,
+   "wins": 421,
+   "losses": 398,
+   "slug": "Gholdengo",
+   "usage": 10.31
+  },
+  {
+   "moves": [
+    {
+     "name": "Rock Slide",
+     "percent": 46.33
+    },
+    {
+     "name": "Knock Off",
+     "percent": 36.27
+    },
+    {
+     "name": "Protect",
+     "percent": 34.8
+    },
+    {
+     "name": "Dragon Dance",
+     "percent": 9.02
+    }
+   ],
+   "items": [
+    {
+     "name": "Tyranitarite",
+     "percent": 79.04
+    },
+    {
+     "name": "Chople Berry",
+     "percent": 5.24
+    },
+    {
+     "name": "Leftovers",
+     "percent": 3.93
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Sand Stream",
+     "percent": 97.45
+    },
+    {
+     "name": "Hospitality",
+     "percent": 1.49
+    }
+   ],
+   "teammates": [
+    "Excadrill",
+    "Salamence",
+    "Sneasler",
+    "Rillaboom"
+   ],
+   "winrate": 51.1,
+   "wins": 388,
+   "losses": 371,
+   "slug": "Tyranitar",
+   "usage": 9.56
+  },
+  {
+   "moves": [
+    {
+     "name": "Protect",
+     "percent": 47.65
+    },
+    {
+     "name": "Glaive Rush",
+     "percent": 45.3
+    },
+    {
+     "name": "Ice Shard",
+     "percent": 29.58
+    },
+    {
+     "name": "Icicle Crash",
+     "percent": 20.66
+    }
+   ],
+   "items": [
+    {
+     "name": "Baxcalibrite",
+     "percent": 92.54
+    },
+    {
+     "name": "Life Orb",
+     "percent": 3.87
+    },
+    {
+     "name": "Rocky Helmet",
+     "percent": 2.21
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Thermal Exchange",
+     "percent": 72.29
+    },
+    {
+     "name": "Hospitality",
+     "percent": 21.69
+    }
+   ],
+   "teammates": [
+    "Rillaboom",
+    "Sneasler",
+    "Incineroar",
+    "Ninetales-Alola"
+   ],
+   "winrate": 46.8,
+   "wins": 327,
+   "losses": 371,
+   "slug": "Baxcalibur",
+   "usage": 8.79
+  },
+  {
+   "moves": [
+    {
+     "name": "Aura Sphere",
+     "percent": 48.97
+    },
+    {
+     "name": "Flash Cannon",
+     "percent": 37.95
+    },
+    {
+     "name": "Protect",
+     "percent": 33.33
+    },
+    {
+     "name": "Calm Mind",
+     "percent": 19.23
+    }
+   ],
+   "items": [
+    {
+     "name": "Lucarionite Z",
+     "percent": 96.28
+    },
+    {
+     "name": "Lucarionite",
+     "percent": 2.87
+    },
+    {
+     "name": "Choice Scarf",
+     "percent": 0.29
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Inner Focus",
+     "percent": 63.75
+    },
+    {
+     "name": "Hospitality",
+     "percent": 17.5
+    }
+   ],
+   "teammates": [
+    "Rillaboom",
+    "Incineroar",
+    "Basculegion",
+    "Garchomp"
+   ],
+   "winrate": 49.0,
+   "wins": 324,
+   "losses": 337,
+   "slug": "Lucario",
+   "usage": 8.32
+  },
+  {
+   "moves": [
+    {
+     "name": "Heat Wave",
+     "percent": 56.3
+    },
+    {
+     "name": "Protect",
+     "percent": 45.58
+    },
+    {
+     "name": "Weather Ball",
+     "percent": 30.03
+    },
+    {
+     "name": "Ancient Power",
+     "percent": 10.46
+    }
+   ],
+   "items": [
+    {
+     "name": "Charizardite Y",
+     "percent": 92.75
+    },
+    {
+     "name": "Charizardite X",
+     "percent": 7.25
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Drought",
+     "percent": 98.68
+    },
+    {
+     "name": "Solar Power",
+     "percent": 0.66
+    }
+   ],
+   "teammates": [
+    "Garchomp",
+    "Basculegion",
+    "Kingambit",
+    "Whimsicott"
+   ],
+   "winrate": 44.8,
+   "wins": 273,
+   "losses": 337,
+   "slug": "Charizard",
+   "usage": 7.68
+  },
+  {
+   "moves": [],
+   "items": [],
+   "abilities": [],
+   "teammates": [],
+   "winrate": null,
+   "wins": null,
+   "losses": null,
+   "slug": "Salamence-Mega",
+   "usage": 21.2
+  }
+ ]
+}

@@ -672,6 +672,11 @@ def main():
 
     audit_abilities(abilities)
 
+    # Real ladder usage, if mkusage.py has been run.
+    live = load_live_usage(roster, moves, items)
+    if live:
+        overlay["usage"] = live
+
     assign_stones(roster, items)
 
     out = {
@@ -758,6 +763,123 @@ def assign_stones(roster, items):
     print("    stones: %d Megas linked, %d using the generic entry" % (matched, len(unmatched)))
     if unmatched:
         print("      " + ", ".join(unmatched[:12]) + ("…" if len(unmatched) > 12 else ""))
+
+
+PIKALYTICS_NAMES = {
+    "Indeedee-F": "Indeedee (Female)",
+    "Indeedee-M": "Indeedee",
+    "Floette-Eternal": "Floette (Eternal)",
+    "Basculegion-F": "Basculegion (Female)",
+    "Tauros-Paldea-Aqua": "Paldean Tauros (Aqua)",
+    "Tauros-Paldea-Blaze": "Paldean Tauros (Blaze)",
+    "Tauros-Paldea-Combat": "Paldean Tauros (Combat)",
+    "Ninetales-Alola": "Alolan Ninetales",
+    "Raichu-Alola": "Alolan Raichu",
+    "Arcanine-Hisui": "Hisuian Arcanine",
+    "Rotom-Wash": "Rotom (Wash)",
+    "Rotom-Heat": "Rotom (Heat)",
+    "Maushold-Four": "Maushold (Family of Four)",
+}
+
+
+def pikalytics_label(slug):
+    """Map a Pikalytics slug to our form label.
+
+    Their Mega forms are suffixed ("Salamence-Mega", "Charizard-Mega-Y") where
+    ours are prefixed, and their regional forms use a hyphen where ours spell
+    the region out.
+    """
+    if slug in PIKALYTICS_NAMES:
+        return PIKALYTICS_NAMES[slug]
+    parts = slug.split("-")
+    if len(parts) > 1 and parts[1] == "Mega":
+        tag = (" " + parts[2].upper()) if len(parts) > 2 else ""
+        return "Mega %s%s" % (parts[0], tag)
+    return slug.replace("-", " ")
+
+
+def load_live_usage(roster, moves, items):
+    """Fold data/usage.json into the shape the app already expects.
+
+    Written by mkusage.py from Pikalytics. Every reference is checked against the
+    scraped data and dropped if it cannot be true — their ability figures are
+    noisy on a format this young, and claim things like a Basculegion with Trace.
+    """
+    path = os.path.join(HERE, "data", "usage.json")
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as fh:
+        payload = json.load(fh)
+
+    by_label = {f["form_label"]: f for f in roster}
+    by_name = {f["name"]: f for f in roster if not f["suffix"]}
+    move_names = {m["name"]: m for m in moves.values()}
+    item_names = {i["name"] for i in items}
+
+    out, dropped = [], []
+    for entry in payload.get("entries", []):
+        slug = entry["slug"]
+        label = pikalytics_label(slug)
+        form = by_label.get(label) or by_name.get(label) or by_name.get(slug)
+        if form is None:
+            dropped.append("%s: not in the roster" % slug)
+            continue
+
+        legal_moves = set(form["moves"])
+        keep_moves = []
+        for move in entry.get("moves", []):
+            record = move_names.get(move["name"])
+            if record is None or record["id"] not in legal_moves:
+                dropped.append("%s: cannot learn %s" % (label, move["name"]))
+                continue
+            keep_moves.append(move)
+
+        own = {a["name"] for a in form["abilities"]}
+        keep_abilities = []
+        for ability in entry.get("abilities", []):
+            if ability["name"] not in own:
+                dropped.append("%s: cannot have %s" % (label, ability["name"]))
+                continue
+            keep_abilities.append(ability)
+
+        keep_items = [i for i in entry.get("items", []) if i["name"] in item_names]
+
+        out.append({
+            "name": form["form_label"],
+            "tier": tier_for(entry["usage"]),
+            "usage": entry["usage"],
+            "projected": False,
+            "formats": ["doubles"],
+            "role": "",
+            "common_items": [i["name"] for i in keep_items][:3],
+            "key_moves": [m["name"] for m in keep_moves][:4],
+            "why": "",
+            "winrate": entry.get("winrate"),
+            "wins": entry.get("wins"),
+            "losses": entry.get("losses"),
+            "move_usage": keep_moves,
+            "item_usage": keep_items,
+            "ability_usage": keep_abilities,
+            "teammates": entry.get("teammates", [])[:4],
+        })
+
+    print("==> live usage: %d entries from %s (%s)"
+          % (len(out), payload.get("format"), payload.get("generated")))
+    if dropped:
+        print("    dropped %d unverifiable reference(s):" % len(dropped))
+        for item in dropped[:8]:
+            print("      - " + item)
+    return out
+
+
+def tier_for(usage):
+    if usage >= 25:
+        return "S"
+    if usage >= 12:
+        return "A"
+    if usage >= 5:
+        return "B"
+    return "C"
 
 
 def audit_abilities(abilities):

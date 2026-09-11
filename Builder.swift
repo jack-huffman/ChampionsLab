@@ -276,17 +276,28 @@ struct TeamBuilder {
     // MARK: Fleshing a team out
 
     /// Give a form the build it is actually used with, falling back to its role.
-    private func flesh(_ form: Form, plan: Archetype, usedItems: inout Set<String>) -> TeamSlot {
+    private func flesh(_ form: Form, plan: Archetype, usedItems: inout Set<String>,
+                       allyGrounded: Int = 0) -> TeamSlot {
         var slot = TeamSlot(formID: form.id)
         let advisor = TeamAdvisor(team: Team(), store: store)
         let roles = advisor.potentialRoles(of: form)
         let usage = store.data.usage.first { $0.name == form.formLabel || $0.name == form.name }
 
-        slot.ability = preferredAbility(form, plan: plan)
+        // The ladder's own answer beats anything derived, where there is one.
+        let live = store.data.usage.first {
+            ($0.name == form.formLabel || $0.name == form.name) && $0.hasLiveData
+        }
+        if let measured = live?.abilityUsage?.first,
+           form.abilities.contains(where: { $0.name == measured.name }) {
+            slot.ability = measured.name
+        } else {
+            slot.ability = preferredAbility(form, plan: plan)
+        }
 
         // Item: what it is usually seen with, else something that suits the role.
         let physicalAttacker = form.attack >= form.spAttack
-        var wanted: [String] = usage?.commonItems ?? []
+        // Measured item share first, then the role-appropriate fallbacks.
+        var wanted: [String] = (live?.itemUsage?.map(\.name) ?? usage?.commonItems ?? [])
         if form.isMega { wanted = [form.megaStone.isEmpty ? "Mega Stone" : form.megaStone] }
         // A Choice item has to match the attacking stat: Specs on an Adamant
         // physical attacker is a wasted slot, which an earlier version did.
@@ -299,28 +310,85 @@ struct TeamBuilder {
             ?? "Leftovers"
         usedItems.insert(slot.item)
 
-        // Spread and alignment: bulky for support, offensive otherwise.
+        // Spread and alignment, built to a benchmark rather than to a habit.
         let support = roles.contains(.redirection) || roles.contains(.tailwind)
             || roles.contains(.trickRoom) || roles.contains(.terrain)
         let physical = form.attack >= form.spAttack
-        if support {
-            slot.sp = [32, 0, 16, 0, 16, 2]
-            // Never lower the stat it actually attacks with. Calm drops Attack,
-            // which is wrong on a physical supporter like Grimmsnarl; Careful
-            // drops Sp. Atk instead, and Timid drops Attack for a fast special one.
-            slot.alignmentName = form.speed >= 90
-                ? (physical ? "Jolly" : "Timid")
-                : (physical ? "Careful" : "Calm")
-        } else {
-            slot.sp = physical ? [2, 32, 0, 0, 0, 32] : [2, 0, 0, 32, 0, 32]
-            slot.alignmentName = plan == .trickRoom
-                ? (physical ? "Brave" : "Quiet")
-                : (physical ? "Adamant" : "Modest")
-            if plan == .trickRoom { slot.sp = physical ? [32, 32, 2, 0, 0, 0] : [32, 0, 2, 32, 0, 0] }
+        let built = spread(for: form, physical: physical, support: support, plan: plan)
+        slot.sp = built.sp
+        slot.alignmentName = built.alignment
+
+        slot.moves = chooseMoves(form, roles: roles, plan: plan, usage: usage,
+                                 item: slot.item, allyGrounded: allyGrounded)
+        return slot
+    }
+
+    /// Speed numbers worth investing to beat, from the tracked field.
+    private var benchmarks: [Int] {
+        Forecast(store: store, format: format).speedLandscape.map(\.speed)
+    }
+
+    /// A spread aimed at a Speed benchmark the Pokémon can actually reach.
+    ///
+    /// The previous version gave every attacker 32 Speed and every supporter 2,
+    /// which produced teams sitting at 108-139 against a field whose benchmarks
+    /// are 178 to 223 — investment that bought nothing. Here, Speed is only paid
+    /// for when it clears something real, and the points go into bulk otherwise.
+    func spread(for form: Form, physical: Bool, support: Bool,
+                plan: Archetype) -> (sp: [Int], alignment: String) {
+        var sp = Array(repeating: 0, count: 6)
+        let attacking: Stat = physical ? .attack : .spAttack
+
+        // Trick Room wants to be slow, so none of this applies.
+        if plan == .trickRoom {
+            sp[attacking.rawValue] = 32
+            sp[Stat.hp.rawValue] = 32
+            sp[Stat.defense.rawValue] = 2
+            return (sp, physical ? "Brave" : "Quiet")
         }
 
-        slot.moves = chooseMoves(form, roles: roles, plan: plan, usage: usage)
-        return slot
+        let marks = benchmarks
+        // Try the attack-boosting alignment first: Speed that clears a benchmark
+        // is worth having, but not at the cost of the attacking stat if the
+        // benchmark is reachable either way.
+        for alignmentName in [physical ? "Adamant" : "Modest", physical ? "Jolly" : "Timid"] {
+            let alignment = Alignment.named(alignmentName)
+            let ceiling = ChampionsStats.value(base: form.speed, sp: 32,
+                                               stat: .speed, alignment: alignment)
+            // The highest mark this Pokémon can actually get above.
+            guard let target = marks.first(where: { $0 < ceiling }) else { continue }
+            // Cheapest investment that clears it.
+            var needed = 32
+            for candidate in 0...32 {
+                let value = ChampionsStats.value(base: form.speed, sp: candidate,
+                                                 stat: .speed, alignment: alignment)
+                if value > target { needed = candidate; break }
+            }
+            sp[Stat.speed.rawValue] = needed
+            sp[attacking.rawValue] = support ? 0 : 32
+            let spent = sp.reduce(0, +)
+            // Everything left goes into bulk rather than being wasted.
+            let spare = ChampionsStats.spTotal - spent
+            sp[Stat.hp.rawValue] = min(32, spare)
+            let after = ChampionsStats.spTotal - sp.reduce(0, +)
+            if after > 0 {
+                sp[Stat.spDefense.rawValue] = min(32, after)
+                let last = ChampionsStats.spTotal - sp.reduce(0, +)
+                if last > 0 { sp[Stat.defense.rawValue] = min(32, last) }
+            }
+            return (sp, alignmentName)
+        }
+
+        // Nothing reachable: do not pay for Speed at all.
+        sp[attacking.rawValue] = support ? 0 : 32
+        sp[Stat.hp.rawValue] = 32
+        let spare = ChampionsStats.spTotal - sp.reduce(0, +)
+        sp[Stat.spDefense.rawValue] = min(32, spare)
+        let last = ChampionsStats.spTotal - sp.reduce(0, +)
+        if last > 0 { sp[Stat.defense.rawValue] = min(32, last) }
+        return (sp, support
+                ? (physical ? "Careful" : "Calm")
+                : (physical ? "Adamant" : "Modest"))
     }
 
     private func preferredAbility(_ form: Form, plan: Archetype) -> String {
@@ -336,48 +404,81 @@ struct TeamBuilder {
         return form.abilities.first?.name ?? ""
     }
 
+    /// Four moves, built to a doubles shape rather than to raw power.
+    ///
+    /// Reserving the last slot for Protect matters: the previous version added
+    /// it after coverage, so it was crowded out of 58 of 78 slots. Two damaging
+    /// moves of the same type are a wasted slot, and a team with no spread move
+    /// at all has no way to win a doubles game, so both are handled explicitly.
+    ///
+    /// `allyGrounded` is the count of partners an Earthquake would also hit.
     private func chooseMoves(_ form: Form, roles: Set<TeamRole>, plan: Archetype,
-                             usage: UsageEntry?) -> [String] {
+                             usage: UsageEntry?, item: String,
+                             allyGrounded: Int) -> [String] {
         var chosen: [String] = []
+        var usedTypes = Set<String>()
         let learnset = store.moves(for: form)
-        func add(_ name: String) {
-            guard chosen.count < 4, let move = learnset.first(where: { $0.name == name }),
-                  !chosen.contains(move.id) else { return }
+
+        // Assault Vest forbids status moves, and a Choice item locks you into
+        // one — neither wants Protect.
+        let wantsProtect = item != "Assault Vest"
+            && !item.hasPrefix("Choice")
+        let budget = wantsProtect ? 3 : 4
+
+        @discardableResult
+        func add(_ name: String) -> Bool {
+            guard chosen.count < budget,
+                  let move = learnset.first(where: { $0.name == name }),
+                  !chosen.contains(move.id) else { return false }
+            if move.isDamaging {
+                guard usedTypes.insert(move.type).inserted else { return false }
+            }
             chosen.append(move.id)
+            return true
         }
 
-        // Whatever it is actually known for.
-        for name in usage?.keyMoves ?? [] { add(name) }
-
-        // The role move is the reason the slot exists, so it goes in early.
+        // The role move is the reason the slot exists.
         if plan == .trickRoom { add("Trick Room") }
         if roles.contains(.tailwind) { add("Tailwind") }
-        if roles.contains(.redirection) { add("Follow Me"); add("Rage Powder") }
+        if roles.contains(.redirection) { if !add("Follow Me") { add("Rage Powder") } }
         if roles.contains(.fakeOut) { add("Fake Out") }
-        if let enabler = plan.enabler, form.abilities.contains(where: { $0.name == enabler }) == false {
-            add(plan.rawValue)   // e.g. the Terrain move itself
-        }
+        // Moves people actually run, in the order they run them.
+        for name in usage?.keyMoves ?? [] where !name.hasPrefix("Protect") { add(name) }
 
-        // Then the strongest usable attack per type, for coverage.
         let physical = form.attack >= form.spAttack
-        let attacks = store.attackingMoves(for: form)
-            .filter { physical ? $0.category == "Physical" : $0.category == "Special" }
-            .sorted { lhs, rhs in
+        let usesNormal = form.types.contains("Normal")
+            || form.abilities.contains { ["Aerilate", "Pixilate", "Refrigerate",
+                                          "Galvanize", "Normalize"].contains($0.name) }
+        func ranked(_ pool: [Move]) -> [Move] {
+            pool.sorted { lhs, rhs in
                 let l = Double(lhs.power) * (form.types.contains(lhs.type) ? 1.5 : 1)
                 let r = Double(rhs.power) * (form.types.contains(rhs.type) ? 1.5 : 1)
                 return l > r
             }
-        // Skip Normal-type filler. A 120 BP Mega Kick on a Dark/Fairy Pokémon
-        // is worse than nothing — it is resisted or blanked by most of what it
-        // would ever be aimed at, and it crowds out real coverage.
-        let usesNormal = form.types.contains("Normal")
-            || form.abilities.contains { ["Aerilate", "Pixilate", "Refrigerate",
-                                          "Galvanize", "Normalize"].contains($0.name) }
-        var seenTypes = Set<String>()
-        for move in attacks where move.type != "Normal" || usesNormal {
-            if seenTypes.insert(move.type).inserted { add(move.name) }
         }
-        add("Protect")
+        let attacks = ranked(store.attackingMoves(for: form)
+            .filter { physical ? $0.category == "Physical" : $0.category == "Special" }
+            .filter { $0.type != "Normal" || usesNormal }
+            // An Earthquake beside three grounded partners costs more than it wins.
+            .filter { !($0.hitsAlly && allyGrounded >= 2) })
+
+        // A spread move first — doubles games are decided by hitting both.
+        if let spreadMove = attacks.first(where: { $0.isSpread }) { add(spreadMove.name) }
+        // Then the strongest STAB, then coverage, one per type.
+        for move in attacks where form.types.contains(move.type) { add(move.name) }
+        for move in attacks { add(move.name) }
+
+        if wantsProtect, chosen.count < 4 {
+            if learnset.contains(where: { $0.name == "Protect" }) {
+                chosen.append(learnset.first { $0.name == "Protect" }!.id)
+            } else if let detect = learnset.first(where: { $0.name == "Detect" }) {
+                chosen.append(detect.id)
+            }
+        }
+        // If anything is still short, top up with the best remaining attack.
+        for move in attacks where chosen.count < 4 {
+            if !chosen.contains(move.id) { chosen.append(move.id) }
+        }
         return chosen
     }
 
@@ -406,7 +507,17 @@ struct TeamBuilder {
 
                 var usedItems = Set<String>()
                 var team = Team(name: "\(seed.formLabel) · \(plan.rawValue)", format: format)
-                team.slots = profileSet.map { flesh($0.form, plan: plan, usedItems: &usedItems) }
+                // How many partners an ally-hitting spread move would catch.
+                let grounded = profileSet.filter { profile in
+                    !profile.types.contains(.flying)
+                        && profile.form.abilities.first?.name != "Levitate"
+                }.count
+                team.slots = profileSet.map {
+                    let others = grounded - ((!$0.types.contains(.flying)
+                        && $0.form.abilities.first?.name != "Levitate") ? 1 : 0)
+                    return flesh($0.form, plan: plan, usedItems: &usedItems,
+                                 allyGrounded: others)
+                }
                 team.locked = true
                 let scored = evaluate(team, plan: plan)
                 out.append(Blueprint(plan: plan,

@@ -49,7 +49,7 @@ struct MetaView: View {
                     UsageDetail(entry: entry)
                 } else {
                     EmptyHint(symbol: "chart.bar.xaxis", title: "Select a threat",
-                              detail: "Measured figures are the last full Regulation M-A/M-B numbers. M-C entries are projections until the ladder settles.")
+                              detail: "Usage, winrate, and the share of sets running each move, item and ability.")
                 }
             }
             .frame(minWidth: 400)
@@ -65,7 +65,7 @@ struct MetaView: View {
             .labelsHidden()
 
             HStack {
-                Toggle("Include M-C projections", isOn: $showProjected)
+                Toggle("Include projections", isOn: $showProjected)
                     .toggleStyle(.checkbox)
                     .controlSize(.small)
                 Spacer()
@@ -73,7 +73,9 @@ struct MetaView: View {
                     .font(.system(size: 11)).foregroundStyle(.tertiary)
             }
 
-            Text("Regulation M-C opened \(store.data.regulation.start), so it has no usage history of its own yet. Percentages below are the last measured figures; rows marked “projected” are placed by their stats and abilities.")
+            Text(store.data.usage.contains { $0.hasLiveData }
+                 ? "Measured Regulation M-C ladder usage, with the moves, items and abilities sets actually run. Data from Pikalytics, refreshed by mkusage.py."
+                 : "Regulation M-C has no usage history of its own yet, so rows marked “projected” are placed by their stats and abilities. Run ./mkusage.py to pull the live ladder.")
                 .font(.system(size: 10))
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -146,6 +148,29 @@ private struct UsageDetail: View {
     @EnvironmentObject private var store: Store
     let entry: UsageEntry
 
+    /// A measured breakdown — what share of sets run each option.
+    @ViewBuilder private func shares(_ title: String, _ rows: [UsageShare]?) -> some View {
+        if let rows, !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                ForEach(rows) { row in
+                    HStack(spacing: 6) {
+                        Text(row.name).font(.system(size: 11)).frame(width: 130, alignment: .leading)
+                        GeometryReader { geo in
+                            Capsule().fill(Palette.accent.opacity(0.65))
+                                .frame(width: geo.size.width * min(1, row.percent / 100))
+                        }
+                        .frame(height: 5)
+                        Text(String(format: "%.1f%%", row.percent))
+                            .font(.system(size: 10, design: .rounded)).monospacedDigit()
+                            .foregroundStyle(.tertiary).frame(width: 44, alignment: .trailing)
+                    }
+                }
+            }
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -186,6 +211,30 @@ private struct UsageDetail: View {
                         Text(entry.why)
                             .font(.system(size: 12))
                             .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                if entry.hasLiveData {
+                    Card {
+                        VStack(alignment: .leading, spacing: 10) {
+                            SectionHeader(title: "Measured sets",
+                                          subtitle: entry.record.map { "\($0) on the M-C ladder" })
+                            if let winrate = entry.winrate {
+                                HStack(spacing: 6) {
+                                    Text(String(format: "%.1f%% winrate", winrate))
+                                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(winrate >= 50 ? Palette.good : Palette.bad)
+                                    Text("· usage \(String(format: "%.1f%%", entry.usage))")
+                                        .font(.system(size: 11)).foregroundStyle(.tertiary)
+                                }
+                            }
+                            shares("Moves", entry.moveUsage)
+                            shares("Items", entry.itemUsage)
+                            shares("Abilities", entry.abilityUsage)
+                            if let mates = entry.teammates, !mates.isEmpty {
+                                DetailRow(label: "Teammates", value: mates.joined(separator: ", "))
+                            }
+                        }
                     }
                 }
 

@@ -311,6 +311,55 @@
       "category": "Mega",
       "effect": "Lets the holder Mega Evolve once per battle. The stone occupies the item slot.",
       "note": "Mega Dragonite. Confirmed from in-game screenshots."
+    },
+    {
+      "name": "Baxcalibrite",
+      "new": false,
+      "category": "Mega",
+      "effect": "Lets Baxcalibur Mega Evolve.",
+      "note": "Confirmed from ladder usage data; Serebii has not published the Champions-era stone names."
+    },
+    {
+      "name": "Golisopite",
+      "new": false,
+      "category": "Mega",
+      "effect": "Lets Golisopod Mega Evolve.",
+      "note": "Confirmed from ladder usage data — 94.5% of Golisopod carry it."
+    },
+    {
+      "name": "Garchompite Z",
+      "new": false,
+      "category": "Mega",
+      "effect": "Lets Garchomp Mega Evolve into its Z form.",
+      "note": "Confirmed from ladder usage data — 34.4% of Garchomp carry it."
+    },
+    {
+      "name": "Lucarionite Z",
+      "new": false,
+      "category": "Mega",
+      "effect": "Lets Lucario Mega Evolve into its Z form.",
+      "note": "Confirmed from ladder usage data."
+    },
+    {
+      "name": "Floettite",
+      "new": false,
+      "category": "Mega",
+      "effect": "Lets Floette Mega Evolve.",
+      "note": "Confirmed from ladder usage data."
+    },
+    {
+      "name": "Chople Berry",
+      "new": false,
+      "category": "Defensive",
+      "effect": "Halves the damage of one super-effective Fighting-type move, then is consumed.",
+      "note": "42% of Kingambit carry this in M-C — Fighting is what answers it, and one Berry turns a knockout into a survivable hit."
+    },
+    {
+      "name": "Colbur Berry",
+      "new": false,
+      "category": "Defensive",
+      "effect": "Halves the damage of one super-effective Dark-type move, then is consumed.",
+      "note": "Seen on Indeedee and Farigiraf, whose Psychic typing makes Dark the obvious way to remove them."
     }
   ],
   "usage": [
@@ -982,6 +1031,83 @@
     ]
   },
   "meta_teams": [
+    {
+      "id": "mc-ladder",
+      "name": "M-C Ladder Core",
+      "archetype": "Grassy Terrain offence",
+      "format": "doubles",
+      "projected": false,
+      "source": "The six highest-usage Pokémon on the live Regulation M-C ladder, with the items, abilities and moves most sets actually run. Usage data from Pikalytics (CC BY-NC 4.0), 2026-09-10.",
+      "note": "Rillaboom at 37.1% and Sneasler at 37.0% are the format, and every one of these six lists the others as its most common teammates. If you test a team against one thing, test it against this.",
+      "members": [
+        {
+          "form": "Rillaboom",
+          "item": "Life Orb",
+          "ability": "Grassy Surge",
+          "moves": [
+            "Fake Out",
+            "Grassy Glide",
+            "Wood Hammer",
+            "U-turn"
+          ]
+        },
+        {
+          "form": "Sneasler",
+          "item": "Psychic Seed",
+          "ability": "Poison Touch",
+          "moves": [
+            "Close Combat",
+            "Dire Claw",
+            "Fake Out",
+            "Protect"
+          ]
+        },
+        {
+          "form": "Incineroar",
+          "item": "Sitrus Berry",
+          "ability": "Intimidate",
+          "moves": [
+            "Fake Out",
+            "Parting Shot",
+            "Flare Blitz",
+            "Darkest Lariat"
+          ]
+        },
+        {
+          "form": "Salamence",
+          "item": "Salamencite",
+          "ability": "Intimidate",
+          "moves": [
+            "Hyper Voice",
+            "Protect",
+            "Double-Edge",
+            "Tailwind"
+          ]
+        },
+        {
+          "form": "Kingambit",
+          "item": "Chople Berry",
+          "ability": "Defiant",
+          "moves": [
+            "Kowtow Cleave",
+            "Sucker Punch",
+            "Protect",
+            "Iron Head"
+          ]
+        },
+        {
+          "form": "Basculegion",
+          "item": "Life Orb",
+          "ability": "Swift Swim",
+          "moves": [
+            "Wave Crash",
+            "Last Respects",
+            "Aqua Jet",
+            "Protect"
+          ]
+        }
+      ]
+    },
     {
       "id": "big-six",
       "name": "Big Six",
