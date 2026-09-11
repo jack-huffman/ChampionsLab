@@ -598,7 +598,7 @@ struct TeamBuilder {
     /// four. Every combination of that Mega plus three partners is run against
     /// the bundled meta archetypes and the best four kept — which is the Team
     /// Preview decision, made in advance.
-    private func battlePlans(for team: Team) -> [BattlePlan] {
+    private func battlePlans(for team: Team, seed: Form) -> [BattlePlan] {
         let bring = store.data.rules.formats.first { $0.id == format }?.bring ?? 4
         guard team.slots.count > bring, bring >= 2 else { return [] }
 
@@ -640,7 +640,18 @@ struct TeamBuilder {
         }
         guard lines.count == 2 else { return [] }
 
-        let ranked = lines.sorted { $0.edge > $1.edge }
+        // The Pokémon you asked to build around leads, even when the other Mega
+        // scores better — "build around Golisopod" and then being handed a
+        // Dragonite team is not the thing that was asked for. The edges are on
+        // screen either way, and the alternate says when it is the stronger of
+        // the two so the call is still yours.
+        let ranked = lines.sorted { first, second in
+            if first.mega.dex != second.mega.dex {
+                if first.mega.dex == seed.dex { return true }
+                if second.mega.dex == seed.dex { return false }
+            }
+            return first.edge > second.edge
+        }
         return ranked.enumerated().map { position, line in
             let other = ranked[1 - position]
             // What this line is for: where it is clearly the better of the two.
@@ -652,7 +663,9 @@ struct TeamBuilder {
                               bring: line.slots,
                               strategy: strategy(for: line.mega, slots: line.slots,
                                                  isPrimary: position == 0,
-                                                 bestInto: bestInto),
+                                                 bestInto: bestInto,
+                                                 outscoresPrimary: position == 1
+                                                    && line.edge > other.edge),
                               edge: line.edge, bestInto: bestInto)
         }
     }
@@ -697,7 +710,7 @@ struct TeamBuilder {
 
     /// A sentence a person can actually follow at Team Preview.
     private func strategy(for mega: Form, slots: [TeamSlot], isPrimary: Bool,
-                          bestInto: [String]) -> String {
+                          bestInto: [String], outscoresPrimary: Bool = false) -> String {
         // What these four actually have selected, not what they could learn.
         // Reading potential roles claimed Tailwind on a four where nobody had
         // picked it, which is worse than saying nothing.
@@ -734,6 +747,9 @@ struct TeamBuilder {
             parts.append("Bring this four into \(bestInto.prefix(2).joined(separator: " and ")).")
         } else if !isPrimary {
             parts.append("Roughly even with the primary line — pick on what you see in Preview.")
+        }
+        if outscoresPrimary {
+            parts.append("This line actually scores higher than the primary against the tracked archetypes — the primary leads because it is what you asked to build around, not because it is better.")
         }
         return parts.joined(separator: " ")
     }
@@ -788,7 +804,7 @@ struct TeamBuilder {
                 }
                 team.locked = true
                 let scored = evaluate(team, plan: plan)
-                let lines = dualMega ? battlePlans(for: team) : []
+                let lines = dualMega ? battlePlans(for: team, seed: seed) : []
                 out.append(Blueprint(plan: plan,
                                      title: "\(seed.formLabel) · \(plan.rawValue)",
                                      rationale: lines.count == 2
