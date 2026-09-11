@@ -298,6 +298,14 @@ struct Matchup {
     private func focusFire(attackers: [Form], defenders: [Form],
                            cells: [Duel], mineAttacking: Bool) -> [FocusKO] {
         var out: [FocusKO] = []
+        // Helping Hand and Coaching are the other way two Pokémon remove one
+        // target: instead of both attacking, one boosts and the other hits for
+        // half again as much. They did nothing in this model before, because
+        // they deal no damage on the turn they are used.
+        let boosters = (mineAttacking ? myPairs : theirPairs).filter { slot, _ in
+            slot.moves.contains { ["Helping Hand", "Coaching"].contains(store.move($0)?.name) }
+        }.map(\.1)
+        let boost = boosters.isEmpty ? 1.0 : 1.5
         for defender in defenders {
             // Every attacker's single-turn share of this defender.
             let shares: [(Form, Double)] = attackers.compactMap { attacker in
@@ -314,11 +322,19 @@ struct Matchup {
             }
             let ranked = shares.sorted { $0.1 > $1.1 }
             guard ranked.count >= 2 else { continue }
-            let combined = ranked[0].1 + ranked[1].1
+            // Two attacks, or one attack backed by Helping Hand — whichever
+            // actually removes the target.
+            let bothAttack = ranked[0].1 + ranked[1].1
+            let boosted = boosters.contains { $0.id != ranked[0].0.id }
+                ? ranked[0].1 * boost : 0
+            let combined = max(bothAttack, boosted)
             // Only interesting when neither could do it alone.
             guard combined >= 1.0, ranked[0].1 < 1.0 else { continue }
+            let partner = boosted > bothAttack
+                ? (boosters.first { $0.id != ranked[0].0.id } ?? ranked[1].0)
+                : ranked[1].0
             out.append(FocusKO(target: defender, first: ranked[0].0,
-                               second: ranked[1].0, combined: combined))
+                               second: partner, combined: combined))
         }
         return out.sorted { $0.combined > $1.combined }
     }

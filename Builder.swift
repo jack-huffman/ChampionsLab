@@ -34,17 +34,39 @@ struct TeamScore {
     var disruption = 0.0
     var violations: [String] = []
 
+    /// How much each component counts.
+    ///
+    /// These were six numbers I chose. They are now fitted against the only
+    /// outside evidence available — the records of teams that actually won
+    /// games — by tools/calibrate.sh, and the fitted values live here with the
+    /// date and sample size they came from. Change them by re-running that,
+    /// not by taste.
+    struct Weights: Equatable {
+        var matchup = 34.0
+        var roles = 20.0
+        var defence = 12.0
+        var coverage = 10.0
+        var synergy = 10.0
+        var disruption = 14.0
+
+        var sum: Double { matchup + roles + defence + coverage + synergy + disruption }
+        static var current = Weights()
+    }
+
     /// 0…100. Matchup is the largest single term but deliberately not a
     /// majority, so a team of six strong attackers with no speed control and no
     /// redirection cannot outscore a coherent one.
-    var total: Int {
-        let raw = (matchup + 100) / 200 * 34
-            + roles * 20
-            + defence * 12
-            + coverage * 10
-            + synergy * 10
-            + disruption * 14
-        return max(0, min(100, Int(raw.rounded()) - violations.count * 3))
+    var total: Int { total(with: Weights.current) }
+
+    func total(with w: Weights) -> Int {
+        let raw = (matchup + 100) / 200 * w.matchup
+            + roles * w.roles
+            + defence * w.defence
+            + coverage * w.coverage
+            + synergy * w.synergy
+            + disruption * w.disruption
+        let scaled = w.sum > 0 ? raw * 100 / w.sum : raw
+        return max(0, min(100, Int(scaled.rounded()) - violations.count * 3))
     }
 }
 
@@ -1041,14 +1063,30 @@ struct TeamBuilder {
         }
         score.matchup = weight > 0 ? total / weight : 0
 
-        let filled = TeamRole.essentials.filter { !(held[$0]?.isEmpty ?? true) }.count
-        score.roles = Double(filled) / Double(TeamRole.essentials.count)
+        // Jobs a team needs done, weighted by how often teams that actually won
+        // carry them, rather than a checklist of five categories I chose.
+        let meta = MetaModel(store: store, format: format)
+        let structure = meta.winningStructure()
+        var carried = 0.0, expected = 0.0
+        for (group, share) in structure {
+            expected += share
+            if !meta.fills(group, in: team).isEmpty { carried += share }
+        }
+        score.roles = expected > 0 ? carried / expected : 0
         score.defence = 1 - min(1, Double(analysis.softSpots.count) / 8)
         score.coverage = Double(analysis.coverage.filter { !$0.carriers.isEmpty }.count) / 18
         let detected = advisor.archetypes
         score.synergy = detected.contains { $0.archetype == plan && $0.isSupported } ? 1
             : (detected.contains { $0.isSupported } ? 0.6 : 0.25)
         score.disruption = disruption(of: team)
+        // Revival Blessing brings a fainted member back at half health. In a
+        // format where you bring four, that is close to a fifth body, and it
+        // scored nothing at all because it deals no damage.
+        if team.slots.contains(where: { slot in
+            slot.moves.contains { store.move($0)?.name == "Revival Blessing" }
+        }) {
+            score.synergy = min(1, score.synergy + 0.25)
+        }
         score.violations = team.violations(in: store)
         return (score, perArchetype)
     }

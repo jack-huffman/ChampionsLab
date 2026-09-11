@@ -337,6 +337,23 @@ struct MetaTeam: Codable, Identifiable, Hashable {
     let source: String
     let note: String
     let members: [Member]
+    /// "7-0" for a team taken from a real event; nil for a written archetype.
+    let record: String?
+    let placement: String?
+
+    /// Games won as a share, where a real record exists. This is the only
+    /// outside evidence in the whole dataset about whether a team is any good,
+    /// so it is what the scoring weights get calibrated against.
+    var winRate: Double? {
+        guard let record else { return nil }
+        let parts = record.split(separator: "-").compactMap { Int($0) }
+        guard parts.count >= 2, parts[0] + parts[1] > 0 else { return nil }
+        return Double(parts[0]) / Double(parts[0] + parts[1])
+    }
+    var gamesPlayed: Int {
+        guard let record else { return 0 }
+        return record.split(separator: "-").compactMap { Int($0) }.prefix(2).reduce(0, +)
+    }
 
     struct Member: Codable, Hashable {
         let form: String

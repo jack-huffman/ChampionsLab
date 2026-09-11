@@ -921,6 +921,8 @@ def load_tournaments(roster, usage_by_name):
             "members": members,
             "source": entry.get("source", ""),
             "tournament": True,
+            "record": entry.get("record", ""),
+            "placement": placement,
         })
     if dropped:
         print("    tournament members not in the dex: %s" % ", ".join(dropped[:6]))

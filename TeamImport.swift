@@ -383,14 +383,25 @@ enum TeamPaste {
                     slot.item = form.attack >= form.spAttack ? "Life Orb" : "Life Orb"
                 }
             }
-            // Meta lists rarely publish spreads, so assume the standard
-            // max-offence, max-speed shape rather than leaving them at zero,
-            // which would make every matchup look winnable.
+            // Spreads are almost never published with a team list. Giving every
+            // member max offence and max Speed was measurably wrong: it is the
+            // right shape for an attacker and the wrong one for a bulky support,
+            // and it left teams that won real events scoring ten points below
+            // untested teams whose spreads had been thought about. They get the
+            // same role-aware spread the builder would give them instead.
             let physical = form.attack >= form.spAttack
-            slot.sp[physical ? Stat.attack.rawValue : Stat.spAttack.rawValue] = 32
-            slot.sp[Stat.speed.rawValue] = 32
-            slot.sp[Stat.hp.rawValue] = 2
-            slot.alignmentName = physical ? "Adamant" : "Modest"
+            let advisor = TeamAdvisor(team: Team(), store: store)
+            let roles = advisor.potentialRoles(of: form)
+            let support = roles.contains(.redirection) || roles.contains(.tailwind)
+                || roles.contains(.trickRoom) || roles.contains(.terrain)
+                || max(form.attack, form.spAttack) < 100
+            var builder = TeamBuilder(store: store)
+            builder.format = meta.format
+            let built = builder.spread(for: form, physical: physical,
+                                       support: support, plan: .balance,
+                                       tailwind: roles.contains(.tailwind))
+            slot.sp = built.sp
+            slot.alignmentName = built.alignment
             team.slots.append(slot)
         }
         return team

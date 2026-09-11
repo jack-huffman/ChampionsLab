@@ -50,9 +50,14 @@ struct TeamRefiner {
     /// Blessing brings a fainted Pokémon back at half health in a bring-four
     /// format, and the first version of this happily recommended dropping it
     /// for a Fake Out because Fake Out ticks a role box.
+    /// Helping Hand, Coaching and Revival Blessing are modelled now — the first
+    /// two as the other way two Pokémon remove one target, the third as the
+    /// extra body it is. What remains here is what genuinely has no
+    /// representation yet, and the rule stands: do not recommend cutting
+    /// something the engine cannot judge.
     static let notUnderstood: Set<String> = [
-        "Revival Blessing", "Coaching", "Helping Hand", "Decorate", "Heal Pulse",
-        "Life Dew", "Ally Switch", "After You", "Instruct", "Pollen Puff",
+        "Decorate", "Heal Pulse", "Ally Switch", "After You", "Instruct",
+        "Pollen Puff", "Aromatherapy", "Heal Bell",
     ]
 
     func suggestions(picks: [Forecast.Pick], budget: Int = 18,

@@ -399,6 +399,110 @@ struct MetaModel {
         return out
     }
 
+    // MARK: - What winning teams are actually made of
+
+    /// A job a team needs done, and the different ways of doing it.
+    ///
+    /// This replaces a five-item checklist I wrote from memory. That checklist
+    /// scored a team that beats twelve of sixteen tournament teams at 40%,
+    /// because it counted categories rather than answers and had no notion that
+    /// Trick Room and Tailwind do the same job, or that Armor Tail buys the same
+    /// turn redirection does. Groups are substitutable, and each one's weight is
+    /// how often teams that actually won carry it — measured, not asserted.
+    struct RoleGroup: Identifiable {
+        let name: String
+        let moves: Set<String>
+        let abilities: Set<String>
+        /// Satisfied by any spread move, any priority attack, and so on.
+        let anySpread: Bool
+        let anyPriority: Bool
+        let anySetup: Bool
+        var id: String { name }
+
+        init(_ name: String, moves: Set<String> = [], abilities: Set<String> = [],
+             anySpread: Bool = false, anyPriority: Bool = false, anySetup: Bool = false) {
+            self.name = name; self.moves = moves; self.abilities = abilities
+            self.anySpread = anySpread; self.anyPriority = anyPriority; self.anySetup = anySetup
+        }
+    }
+
+    static let roleGroups: [RoleGroup] = [
+        RoleGroup("Speed control",
+                  moves: ["Tailwind", "Trick Room", "Icy Wind", "Electroweb",
+                          "Thunder Wave", "Glare", "Nuzzle", "Rock Tomb", "Bulldoze",
+                          "Quash", "After You"],
+                  abilities: ["Swift Swim", "Chlorophyll", "Sand Rush", "Slush Rush",
+                              "Unburden", "Prankster"]),
+        RoleGroup("Buying a turn",
+                  moves: ["Fake Out", "Follow Me", "Rage Powder", "Taunt", "Encore",
+                          "Parting Shot", "Spore", "Hypnosis", "Revival Blessing"],
+                  abilities: ["Armor Tail", "Queenly Majesty", "Intimidate"]),
+        RoleGroup("Blunting their damage",
+                  moves: ["Will-O-Wisp", "Snarl", "Wide Guard", "Reflect",
+                          "Light Screen", "Aurora Veil", "Struggle Bug", "Charm"],
+                  abilities: ["Intimidate", "Heatproof", "Thick Fat", "Multiscale",
+                              "Aura Guard", "Ice Scales", "Furry Coat"]),
+        RoleGroup("Hitting both", anySpread: true),
+        RoleGroup("Closing the game", anyPriority: true, anySetup: true),
+        RoleGroup("Owning the field",
+                  moves: ["Grassy Terrain", "Psychic Terrain", "Electric Terrain",
+                          "Misty Terrain", "Sunny Day", "Rain Dance", "Sandstorm",
+                          "Snowscape", "Steel Roller", "Defog"],
+                  abilities: ["Grassy Surge", "Psychic Surge", "Electric Surge",
+                              "Misty Surge", "Drizzle", "Drought", "Sand Stream",
+                              "Snow Warning"]),
+        RoleGroup("Staying alive",
+                  moves: ["Recover", "Life Dew", "Strength Sap", "Roost", "Wish",
+                          "Rest", "Leech Life", "Drain Punch", "Giga Drain",
+                          "Matcha Gotcha", "Revival Blessing"],
+                  abilities: ["Regenerator", "Poison Heal", "Hospitality"]),
+    ]
+
+    /// Whether a team does a job, and who does it.
+    func fills(_ group: RoleGroup, in team: Team) -> [Form] {
+        team.slots.compactMap { slot -> Form? in
+            guard let form = slot.battleForm(in: store),
+                  let combatant = slot.combatant(in: store) else { return nil }
+            let moves = slot.moves.compactMap { store.move($0) }
+            if moves.contains(where: { group.moves.contains($0.name) }) { return form }
+            if group.abilities.contains(combatant.ability) { return form }
+            if group.anySpread, moves.contains(where: \.isSpread) { return form }
+            if group.anyPriority,
+               moves.contains(where: { $0.priority > 0 && $0.isDamaging && $0.power >= 40 }) {
+                return form
+            }
+            if group.anySetup,
+               moves.contains(where: { !$0.selfBoosts.isEmpty }) { return form }
+            return nil
+        }
+    }
+
+    /// How often teams that actually won a game carry each job, weighted by how
+    /// many games they won. This is the only outside evidence available about
+    /// what a team needs, so it is what the role weights come from.
+    func winningStructure() -> [(group: RoleGroup, share: Double)] {
+        let winners = store.data.metaTeams.filter {
+            $0.format == format && ($0.winRate ?? 0) > 0 && $0.gamesPlayed > 0
+        }
+        guard winners.count >= 8 else {
+            // Not enough evidence: treat every job as equally expected.
+            return MetaModel.roleGroups.map { ($0, 1.0) }
+        }
+        var out: [(RoleGroup, Double)] = []
+        for group in MetaModel.roleGroups {
+            var carried = 0.0, total = 0.0
+            for meta in winners {
+                let weight = Double(meta.gamesPlayed) * (meta.winRate ?? 0)
+                total += weight
+                if !fills(group, in: TeamPaste.team(from: meta, store: store)).isEmpty {
+                    carried += weight
+                }
+            }
+            out.append((group, total > 0 ? carried / total : 0))
+        }
+        return out
+    }
+
     // MARK: - Does a team answer any of it?
 
     struct Coverage: Identifiable {
