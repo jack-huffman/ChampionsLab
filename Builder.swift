@@ -820,8 +820,11 @@ struct TeamBuilder {
 
         let control = meta.fieldControl(of: team)
         let fieldWeight = control.reduce(0.0) { $0 + $1.pressure.probability }
-        let controlled = control.reduce(0.0) {
-            $0 + ($1.answer != nil ? $1.pressure.probability : 0)
+        // An override nobody has selected is worth half: it is real, but it is
+        // a move slot they have not spent.
+        let controlled = control.reduce(0.0) { running, entry in
+            guard entry.answer != nil else { return running }
+            return running + entry.pressure.probability * (entry.isSelected ? 1 : 0.5)
         }
         let fieldScore = fieldWeight > 0 ? controlled / fieldWeight : 0.5
 

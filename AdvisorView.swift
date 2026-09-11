@@ -90,11 +90,109 @@ struct AdvisorView: View {
         VStack(alignment: .leading, spacing: 18) {
             planCard
             rolesCard
+            formatCard
             metaCard
             recommendationsCard
             prescriptionsCard
         }
         .padding(20)
+    }
+
+    // MARK: What the format does to this team
+
+    /// The other half of building a team: not what it does, but what it stops
+    /// the field from doing. Weighted by measured usage, so the gaps listed
+    /// first are the ones you will actually meet.
+    private var formatCard: some View {
+        let meta = MetaModel(store: store, format: team.format)
+        let coverage = meta.coverage(of: team)
+        let control = meta.fieldControl(of: team)
+        let gaps = coverage.filter { !$0.isAnswered }.sorted { $0.share > $1.share }
+
+        return Card {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(
+                    title: "Against the format",
+                    subtitle: "What the field is trying to do, and whether this team can turn it off.")
+
+                ForEach(coverage.sorted { $0.share > $1.share }) { entry in
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: entry.isAnswered ? "checkmark.circle.fill"
+                                                           : "exclamationmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(entry.isAnswered ? Palette.good
+                                             : (entry.share >= 0.35 ? Palette.bad : Palette.warn))
+                        VStack(alignment: .leading, spacing: 1) {
+                            HStack(spacing: 5) {
+                                Text(entry.pressure).font(.system(size: 12, weight: .medium))
+                                Text(String(format: "%.0f%% of teams", entry.share * 100))
+                                    .font(.system(size: 10, design: .rounded)).monospacedDigit()
+                                    .foregroundStyle(.tertiary)
+                            }
+                            if entry.isAnswered {
+                                Text(entry.providers.prefix(3)
+                                        .map { "\($0.form.formLabel) — \($0.how)" }
+                                        .joined(separator: " · "))
+                                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                Text(entry.advice)
+                                    .font(.system(size: 10)).foregroundStyle(Palette.warn)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                if !entry.couldAnswer.isEmpty {
+                                    // The cheapest fix on the board: a move slot,
+                                    // not a new Pokémon.
+                                    Text("One move slot away — " + entry.couldAnswer.prefix(2)
+                                            .map { "\($0.form.formLabel) \($0.how)" }
+                                            .joined(separator: ", "))
+                                        .font(.system(size: 10)).foregroundStyle(Palette.accent)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+
+                if !control.isEmpty {
+                    Divider()
+                    Text("FIELD CONTROL").font(.system(size: 9, weight: .bold)).kerning(0.5)
+                        .foregroundStyle(.tertiary)
+                    ForEach(control, id: \.pressure.id) { entry in
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: entry.isSelected ? "checkmark.circle.fill"
+                                  : (entry.answer != nil ? "circle.dashed" : "minus.circle"))
+                                .font(.system(size: 11))
+                                .foregroundStyle(entry.isSelected ? Palette.good
+                                                 : (entry.answer != nil ? Palette.accent : Palette.dim))
+                            VStack(alignment: .leading, spacing: 1) {
+                                HStack(spacing: 5) {
+                                    Text(entry.pressure.label)
+                                        .font(.system(size: 12, weight: .medium))
+                                    Text(String(format: "up in ~%.0f%% of games",
+                                                entry.pressure.probability * 100))
+                                        .font(.system(size: 10, design: .rounded)).monospacedDigit()
+                                        .foregroundStyle(.tertiary)
+                                }
+                                Text(entry.answer
+                                     ?? "Nothing here changes it — you play the whole game under theirs.")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(entry.isSelected ? Color.secondary
+                                                     : (entry.answer != nil ? Palette.accent : Color.secondary))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+
+                if let worst = gaps.first, worst.share >= 0.3 {
+                    Text("The biggest hole is \(worst.pressure), which \(Int(worst.share * 100))% of teams run. \(worst.advice)")
+                        .font(.system(size: 11)).foregroundStyle(Palette.bad)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
     }
 
     // MARK: Plan

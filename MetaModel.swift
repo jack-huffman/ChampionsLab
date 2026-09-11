@@ -241,6 +241,9 @@ struct MetaModel {
         var moves: Set<String> = []
         var abilities: Set<String> = []
         var items: Set<String> = []
+        /// Any spread move counts — the answer to redirection is not a
+        /// particular move, it is hitting both of them at once.
+        var anySpreadMove = false
     }
 
     var tactics: [TacticPressure] {
@@ -274,8 +277,10 @@ struct MetaModel {
         add("Fake Out",
             effect: "A free flinch on turn one, which is a free turn for whatever is beside it.",
             answers: ["Covert Cloak ignores the flinch entirely.",
-                      "Inner Focus and Own Tempo cannot be made to flinch."],
-            tools: Tools(abilities: ["Inner Focus", "Own Tempo"], items: ["Covert Cloak"])) {
+                      "Your own Fake Out trades it off, and Inner Focus or Own Tempo cannot be made to flinch."],
+            tools: Tools(moves: ["Fake Out"],
+                         abilities: ["Inner Focus", "Own Tempo"],
+                         items: ["Covert Cloak"])) {
             self.moveShare($0, "Fake Out")
         }
 
@@ -283,7 +288,7 @@ struct MetaModel {
             effect: "Follow Me and Rage Powder pull your single-target attacks away from what you meant to hit.",
             answers: ["Spread moves hit both regardless of redirection.",
                       "Safety Goggles ignores Rage Powder specifically."],
-            tools: Tools(items: ["Safety Goggles"])) {
+            tools: Tools(items: ["Safety Goggles"], anySpreadMove: true)) {
             max(self.moveShare($0, "Follow Me"), self.moveShare($0, "Rage Powder"))
         }
 
@@ -312,7 +317,7 @@ struct MetaModel {
             effect: "Earthquake, Rock Slide, Make It Rain and Hyper Voice hit both of yours for 75% each.",
             answers: ["Wide Guard blocks the whole turn for your side.",
                       "A Flying type or Levitate simply ignores Earthquake."],
-            tools: Tools(moves: ["Wide Guard"], abilities: ["Levitate"])) { member in
+            tools: Tools(moves: ["Wide Guard"], abilities: ["Levitate", "Telepathy"])) { member in
             ["Earthquake", "Rock Slide", "Make It Rain", "Hyper Voice", "Heat Wave",
              "Blizzard", "Muddy Water", "Dazzling Gleam", "Snarl", "Icy Wind"]
                 .map { self.moveShare(member, $0) }.reduce(0, +)
@@ -329,50 +334,94 @@ struct MetaModel {
         /// Members that provide an answer, and what the answer is.
         let providers: [(form: Form, how: String)]
         let advice: String
+        /// Members that own the answer but have not selected it — a swap away.
+        let couldAnswer: [(form: Form, how: String)]
         var id: String { pressure }
         var isAnswered: Bool { !providers.isEmpty }
     }
 
     /// Who on this team turns each of the format's tactics off.
     func coverage(of team: Team) -> [Coverage] {
-        // Learnsets resolved once per member rather than once per tactic.
-        let members: [(slot: TeamSlot, form: Form, moves: Set<String>, abilities: Set<String>)] =
-            team.slots.compactMap { slot in
-                guard let form = slot.battleForm(in: store) else { return nil }
-                return (slot, form,
-                        Set(form.moves.compactMap { store.move($0)?.name }),
-                        Set(form.abilities.map(\.name)))
-            }
+        // Resolved once per member rather than once per tactic. What a slot has
+        // selected is kept apart from what it merely could learn: crediting a
+        // team with a Taunt nobody picked is worse than reporting the gap.
+        struct Member {
+            let slot: TeamSlot
+            let form: Form
+            let running: Set<String>
+            let learnable: Set<String>
+            let abilities: Set<String>
+            let spreads: Bool
+        }
+        let members: [Member] = team.slots.compactMap { slot in
+            guard let form = slot.battleForm(in: store) else { return nil }
+            let running = Set(slot.moves.compactMap { store.move($0)?.name })
+            return Member(slot: slot, form: form, running: running,
+                          learnable: Set(form.moves.compactMap { store.move($0)?.name }),
+                          abilities: Set(form.abilities.map(\.name)),
+                          spreads: slot.moves.contains { store.move($0)?.isSpread == true })
+        }
         return tactics.map { tactic in
             var providers: [(Form, String)] = []
-            for (slot, form, learnset, abilities) in members {
-                var how: [String] = []
-                for move in tactic.tools.moves where learnset.contains(move) {
-                    how.append(move)
+            for member in members {
+                var confirmed: [String] = []
+                var possible: [String] = []
+                for move in tactic.tools.moves {
+                    if member.running.contains(move) { confirmed.append(move) }
+                    else if member.learnable.contains(move) { possible.append(move) }
                 }
-                for ability in tactic.tools.abilities where abilities.contains(ability) {
-                    how.append(ability + (slot.ability == ability ? "" : " (not selected)"))
+                for ability in tactic.tools.abilities where member.abilities.contains(ability) {
+                    if member.slot.ability == ability { confirmed.append(ability) }
+                    else { possible.append(ability) }
                 }
-                for item in tactic.tools.items where slot.item == item {
-                    how.append(item)
+                for item in tactic.tools.items where member.slot.item == item {
+                    confirmed.append(item)
                 }
-                if !how.isEmpty { providers.append((form, how.prefix(2).joined(separator: ", "))) }
+                if tactic.tools.anySpreadMove, member.spreads {
+                    confirmed.append("a spread move")
+                }
+                if !confirmed.isEmpty {
+                    providers.append((member.form, confirmed.prefix(2).joined(separator: ", ")))
+                } else if !possible.isEmpty {
+                    providers.append((member.form,
+                                      "could run " + possible.prefix(2).joined(separator: " or ")))
+                }
             }
-            let advice = providers.isEmpty
-                ? "Nothing on this team answers it. " + (tactic.answers.first ?? "")
+            // An answer nobody has selected is not an answer yet.
+            providers.sort { !$0.1.hasPrefix("could run") && $1.1.hasPrefix("could run") }
+            let selected = providers.filter { !$0.1.hasPrefix("could run") }
+            let advice = selected.isEmpty
+                ? (providers.isEmpty
+                   ? "Nothing on this team answers it. " + (tactic.answers.first ?? "")
+                   : "Nobody has the answer selected. " + (tactic.answers.first ?? ""))
                 : tactic.answers.first ?? ""
             return Coverage(pressure: tactic.name, share: tactic.share,
-                            providers: providers, advice: advice)
+                            providers: selected, advice: advice,
+                            couldAnswer: providers.filter { $0.1.hasPrefix("could run") })
         }
     }
 
+    struct FieldAnswer {
+        let pressure: FieldPressure
+        let answer: String?
+        /// True when the answer is an ability it has or a move it has selected,
+        /// rather than something it merely could run.
+        let isSelected: Bool
+    }
+
     /// Whether this team can change the field the format puts up, and how.
-    func fieldControl(of team: Team) -> [(pressure: FieldPressure, answer: String?)] {
-        let members = team.slots.compactMap { $0.battleForm(in: store) }
+    func fieldControl(of team: Team) -> [FieldAnswer] {
+        let members: [(Form, Set<String>, Set<String>, String)] = team.slots.compactMap { slot in
+            guard let form = slot.battleForm(in: store) else { return nil }
+            return (form,
+                    Set(slot.moves.compactMap { store.move($0)?.name }),
+                    Set(form.moves.compactMap { store.move($0)?.name }),
+                    slot.ability)
+        }
         return fieldPressures.map { pressure in
-            var answers: [String] = []
-            for form in members {
-                let learnset = Set(store.moves(for: form).map(\.name))
+            var confirmed: [String] = []
+            var possible: [String] = []
+            for (form, running, learnset, chosen) in members {
                 let abilities = Set(form.abilities.map(\.name))
                 // Any other terrain displaces theirs; any other weather does too.
                 for (terrain, ability, move) in [(Terrain.grassy, "Grassy Surge", "Grassy Terrain"),
@@ -381,9 +430,12 @@ struct MetaModel {
                                                  (.misty, "Misty Surge", "Misty Terrain")]
                 where pressure.terrain != .none && terrain != pressure.terrain {
                     if abilities.contains(ability) {
-                        answers.append("\(form.formLabel) overrides it with \(ability)")
+                        let line = "\(form.formLabel) overrides it with \(ability)"
+                        if chosen == ability { confirmed.append(line) } else { possible.append(line) }
+                    } else if running.contains(move) {
+                        confirmed.append("\(form.formLabel) clicks \(move)")
                     } else if learnset.contains(move) {
-                        answers.append("\(form.formLabel) can click \(move)")
+                        possible.append("\(form.formLabel) could run \(move)")
                     }
                 }
                 for (weather, ability, move) in [(Weather.sun, "Drought", "Sunny Day"),
@@ -392,16 +444,25 @@ struct MetaModel {
                                                  (.snow, "Snow Warning", "Snowscape")]
                 where pressure.weather != .none && weather != pressure.weather {
                     if abilities.contains(ability) {
-                        answers.append("\(form.formLabel) overrides it with \(ability)")
+                        let line = "\(form.formLabel) overrides it with \(ability)"
+                        if chosen == ability { confirmed.append(line) } else { possible.append(line) }
+                    } else if running.contains(move) {
+                        confirmed.append("\(form.formLabel) clicks \(move)")
                     } else if learnset.contains(move) {
-                        answers.append("\(form.formLabel) can click \(move)")
+                        possible.append("\(form.formLabel) could run \(move)")
                     }
                 }
-                if pressure.terrain != .none, learnset.contains("Steel Roller") {
-                    answers.append("\(form.formLabel) removes it with Steel Roller")
+                if pressure.terrain != .none {
+                    if running.contains("Steel Roller") {
+                        confirmed.append("\(form.formLabel) removes it with Steel Roller")
+                    } else if learnset.contains("Steel Roller") {
+                        possible.append("\(form.formLabel) could run Steel Roller")
+                    }
                 }
             }
-            return (pressure, answers.first)
+            return FieldAnswer(pressure: pressure,
+                               answer: confirmed.first ?? possible.first,
+                               isSelected: !confirmed.isEmpty)
         }
     }
 }
