@@ -171,6 +171,9 @@ struct GuidedBuilderView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     SectionHeader(title: "What it is",
                                   subtitle: "Run against every tracked threat before a single partner is chosen.")
+                    Text(brief.role.summary)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Palette.accent)
                     HStack(alignment: .top, spacing: 22) {
                         figure(String(format: "%+.2f", brief.standing), "standing",
                                Palette.grade(Int((brief.standing + 1) * 50)))

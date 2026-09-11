@@ -281,6 +281,32 @@ struct FormDetail: View {
         }
     }
 
+    /// What the stats say it is for, which is not obvious from six numbers.
+    private var roleLine: some View {
+        let role = store.statRole(of: form)
+        return HStack(spacing: 6) {
+            Label(role.offence.rawValue, systemImage: role.offence == .special
+                  ? "sparkles" : (role.offence == .none ? "hand.raised" : "burst.fill"))
+                .font(.system(size: 11, weight: .medium))
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(Palette.accent.opacity(0.14))
+                .foregroundStyle(Palette.accent)
+                .clipShape(Capsule())
+            Label(role.defence.rawValue, systemImage: "shield.lefthalf.filled")
+                .font(.system(size: 11, weight: .medium))
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(Palette.surfaceRaised)
+                .foregroundStyle(.secondary)
+                .clipShape(Capsule())
+            if let also = role.alsoViable {
+                Text("can also run \(also == .physical ? "physical" : "special")")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+            Spacer()
+        }
+    }
+
     private var abilitiesCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 10) {

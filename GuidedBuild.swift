@@ -60,6 +60,7 @@ struct BuildInterview {
         let types: [PokeType]
         let worstWeaknesses: [(type: PokeType, multiplier: Double, fieldShare: Double)]
         let bestMove: String
+        let role: StatRole
         let speed: Int
         let outspeeds: Int
         let fieldSize: Int
@@ -96,6 +97,7 @@ struct BuildInterview {
                 (type: $0.0, multiplier: $0.1, fieldShare: $0.2)
             },
             bestMove: store.bestMove(for: seed)?.name ?? "—",
+            role: store.statRole(of: seed),
             speed: combatant.stat(.speed),
             outspeeds: profile.outspeeds,
             fieldSize: profile.fieldSize,

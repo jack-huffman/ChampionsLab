@@ -589,14 +589,19 @@ struct TeamBuilder {
             sp[Stat.speed.rawValue] = needed
             sp[attacking.rawValue] = support ? 0 : 32
             let spent = sp.reduce(0, +)
-            // Everything left goes into bulk rather than being wasted.
+            // Everything left goes into bulk rather than being wasted, and into
+            // the side it is already good at: health multiplies whichever
+            // defence it has, so points spent there are worth more.
             let spare = ChampionsStats.spTotal - spent
             sp[Stat.hp.rawValue] = min(32, spare)
             let after = ChampionsStats.spTotal - sp.reduce(0, +)
             if after > 0 {
-                sp[Stat.spDefense.rawValue] = min(32, after)
+                let role = store.statRole(of: form)
+                let strong: Stat = role.defence == .specialWall ? .spDefense : .defense
+                let other: Stat = strong == .defense ? .spDefense : .defense
+                sp[strong.rawValue] = min(32, after)
                 let last = ChampionsStats.spTotal - sp.reduce(0, +)
-                if last > 0 { sp[Stat.defense.rawValue] = min(32, last) }
+                if last > 0 { sp[other.rawValue] = min(32, last) }
             }
             return (sp, alignmentName)
         }
@@ -605,9 +610,12 @@ struct TeamBuilder {
         sp[attacking.rawValue] = support ? 0 : 32
         sp[Stat.hp.rawValue] = 32
         let spare = ChampionsStats.spTotal - sp.reduce(0, +)
-        sp[Stat.spDefense.rawValue] = min(32, spare)
+        let role = store.statRole(of: form)
+        let strong: Stat = role.defence == .specialWall ? .spDefense : .defense
+        let other: Stat = strong == .defense ? .spDefense : .defense
+        sp[strong.rawValue] = min(32, spare)
         let last = ChampionsStats.spTotal - sp.reduce(0, +)
-        if last > 0 { sp[Stat.defense.rawValue] = min(32, last) }
+        if last > 0 { sp[other.rawValue] = min(32, last) }
         return (sp, support
                 ? (physical ? "Careful" : "Calm")
                 : (physical ? "Adamant" : "Modest"))

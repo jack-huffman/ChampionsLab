@@ -163,6 +163,28 @@ Ability: Regenerator
     check("STAB Glaive Rush beats neutral Double-Edge on Baxcalibur",
           store.moveValue(glaive, for: bax) > store.moveValue(edge, for: bax), "no")
 
+    // -- what a Pokemon's stats say it is for -----------------------------
+    print("\n== stat roles ==")
+    let pult = form("Dragapult")
+    let pultRole = store.statRole(of: pult)
+    print("  Dragapult: \(pultRole.summary)")
+    check("Dragapult is physical", pultRole.offence == .physical, pultRole.offence.rawValue)
+    check("and special is recognised as a real second set",
+          pultRole.alsoViable == .special, "\(String(describing: pultRole.alsoViable))")
+
+    let goliRole = store.statRole(of: goli)
+    print("  Mega Golisopod: \(goliRole.summary)")
+    check("175 Def against 120 SpD is physically bulky",
+          goliRole.defence == .physicalWall, goliRole.defence.rawValue)
+
+    let milo = store.statRole(of: form("Milotic"))
+    check("Milotic is specially bulky", milo.defence == .specialWall, milo.defence.rawValue)
+    let gengar = store.statRole(of: form("Mega Gengar"))
+    check("Mega Gengar is a special attacker", gengar.offence == .special, gengar.offence.rawValue)
+    check("and frail", gengar.defence == .frail, gengar.defence.rawValue)
+    let whim = store.statRole(of: form("Whimsicott"))
+    check("Whimsicott is not an attacker", whim.offence == .none, whim.offence.rawValue)
+
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)
 }

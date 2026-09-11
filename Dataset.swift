@@ -27,6 +27,8 @@ final class Store: ObservableObject {
     private var bundledUsage: [UsageEntry] = []
 
     private var spriteCache: [String: NSImage] = [:]
+    /// What each form's stats say it is for, worked out once.
+    var roleCache: [String: StatRole] = [:]
 
     private init() {
         do {
