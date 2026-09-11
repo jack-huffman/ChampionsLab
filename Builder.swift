@@ -43,6 +43,29 @@ struct TeamScore {
     }
 }
 
+// MARK: - Battle plans
+
+/// One of the two ways to play a two-Mega team.
+///
+/// Doubles brings four of six, and only one Pokémon may Mega Evolve per battle,
+/// so a second Mega is not a wasted slot — it is a second team hiding inside the
+/// first. Team Preview tells you which one the matchup wants, and the four you
+/// bring changes completely depending on the answer.
+struct BattlePlan: Identifiable {
+    let mega: Form
+    let isPrimary: Bool
+    /// The four to bring, in lead order: the front two first.
+    let bring: [TeamSlot]
+    let strategy: String
+    /// Average edge across the bundled meta archetypes with this four.
+    let edge: Int
+    /// The archetypes this line is the right answer to.
+    let bestInto: [String]
+
+    var id: String { mega.id }
+    var title: String { (isPrimary ? "Primary — " : "Alternate — ") + mega.formLabel }
+}
+
 // MARK: - Blueprint
 
 struct Blueprint: Identifiable {
@@ -55,6 +78,9 @@ struct Blueprint: Identifiable {
     /// Per-archetype results, filled in for the finalists only.
     var perArchetype: [(name: String, edge: Int)] = []
     var notes: [String] = []
+    /// The two ways to play it, when the six carries two Megas.
+    var lines: [BattlePlan] = []
+    var isDualMega: Bool { lines.count == 2 }
 }
 
 // MARK: - Builder
@@ -124,7 +150,8 @@ struct TeamBuilder {
     // MARK: Cheap scoring, used inside the search
 
     /// A partial team's quality without running the damage calculator.
-    private func quickScore(_ team: [Profile], seed: Form, plan: Archetype) -> Double {
+    private func quickScore(_ team: [Profile], seed: Form, plan: Archetype,
+                            dualMega: Bool = false) -> Double {
         guard !team.isEmpty else { return 0 }
         var value = 0.0
 
@@ -168,8 +195,21 @@ struct TeamBuilder {
 
         var seen = Set<Int>()
         for member in team where !seen.insert(member.dex).inserted { value -= 40 }
-        let megas = team.filter(\.isMega).count
-        if megas > 2 { value -= 12 } else if megas == 2 { value -= 4 }
+        let megas = team.filter(\.isMega)
+        if dualMega {
+            // The second Mega is the point, not a cost — but only if it answers
+            // what the first one cannot. Two Megas weak to the same thing is
+            // one Mega and a dead slot.
+            if megas.count == 2 {
+                value += 12 + complement(megas[0], megas[1])
+            } else if megas.count > 2 {
+                value -= 25
+            }
+        } else if megas.count > 2 {
+            value -= 12
+        } else if megas.count == 2 {
+            value -= 4
+        }
         if !team.contains(where: { $0.form.id == seed.id }) { value -= 100 }
 
         // A little balance between physical and special, so the whole team is
@@ -177,6 +217,23 @@ struct TeamBuilder {
         let physical = team.filter(\.physical).count
         if physical == team.count || physical == 0 { value -= 4 }
         return value
+    }
+
+    /// How well a second Mega covers the first: the types the first takes badly
+    /// that the second resists, less the ones they share.
+    private func complement(_ first: Profile, _ second: Profile) -> Double {
+        var covered = 0.0, shared = 0.0
+        for type in PokeType.allCases {
+            let a = first.taken[type] ?? 1
+            let b = second.taken[type] ?? 1
+            if a > 1 && b < 1 { covered += 1 }
+            if a > 1 && b > 1 { shared += 1 }
+        }
+        // One attacks physically and one specially is worth real points: it
+        // means the same wall cannot hold both lines.
+        let split = first.physical != second.physical ? 3.0 : 0.0
+        let speedSplit = abs(first.speed - second.speed) >= 30 ? 2.0 : 0.0
+        return covered * 2.0 - shared * 2.5 + split + speedSplit
     }
 
     private func benefits(from plan: Archetype, _ form: Form) -> Bool {
@@ -230,7 +287,7 @@ struct TeamBuilder {
 
     /// Beam search over the remaining slots.
     private func search(seed: Form, plan: Archetype, pool: [Profile],
-                        beamWidth: Int = 8) -> [[Profile]] {
+                        dualMega: Bool = false, beamWidth: Int = 8) -> [[Profile]] {
         guard let seedProfile = pool.first(where: { $0.form.id == seed.id })
                 ?? profiles(for: [seed]).first else { return [] }
         var beam: [[Profile]] = [[seedProfile]]
@@ -242,7 +299,8 @@ struct TeamBuilder {
                 let used = Set(partial.map(\.dex))
                 for candidate in pool where !used.contains(candidate.dex) {
                     let trial = partial + [candidate]
-                    next.append((trial, quickScore(trial, seed: seed, plan: plan)))
+                    next.append((trial, quickScore(trial, seed: seed, plan: plan,
+                                                   dualMega: dualMega)))
                 }
             }
             var seen = Set<String>()
@@ -253,7 +311,9 @@ struct TeamBuilder {
             .prefix(beamWidth).map { $0 }
             if beam.isEmpty { break }
         }
-        return beam
+        // A two-Mega build that came back with one Mega is not the thing that
+        // was asked for, so it is dropped rather than quietly returned.
+        return dualMega ? beam.filter { $0.filter(\.isMega).count == 2 } : beam
     }
 
     /// Profiles for specific forms, for a seed that the pool filtered out.
@@ -487,11 +547,164 @@ struct TeamBuilder {
         return chosen
     }
 
+    // MARK: Two-Mega lines
+
+    /// The two ways to play a six that carries two Megas.
+    ///
+    /// Only one Pokémon may Mega Evolve per battle, so each Mega defines its own
+    /// four. Every combination of that Mega plus three partners is run against
+    /// the bundled meta archetypes and the best four kept — which is the Team
+    /// Preview decision, made in advance.
+    private func battlePlans(for team: Team) -> [BattlePlan] {
+        let bring = store.data.rules.formats.first { $0.id == format }?.bring ?? 4
+        guard team.slots.count > bring, bring >= 2 else { return [] }
+
+        let megaIndices = team.slots.indices.filter { index in
+            let slot = team.slots[index]
+            return slot.megaEvolution(in: store) != nil
+                || (slot.form(in: store)?.isMega ?? false)
+        }
+        guard megaIndices.count == 2 else { return [] }
+
+        struct Line {
+            let mega: Form
+            let slots: [TeamSlot]
+            let edge: Int
+            let perArchetype: [String: Int]
+        }
+
+        var lines: [Line] = []
+        for index in megaIndices {
+            guard let mega = team.slots[index].battleForm(in: store) else { continue }
+            // The other Mega stays home: bringing both wastes a slot on a
+            // Pokémon that cannot use its item.
+            let partners = team.slots.indices
+                .filter { $0 != index && !megaIndices.contains($0) }
+                .map { team.slots[$0] }
+
+            var best: Line?
+            for combination in choose(partners, bring - 1) {
+                let slots = [team.slots[index]] + combination
+                var four = team
+                four.slots = slots
+                let (edge, perArchetype) = edgeOf(four)
+                if best == nil || edge > best!.edge {
+                    best = Line(mega: mega, slots: leadOrder(slots),
+                                edge: edge, perArchetype: perArchetype)
+                }
+            }
+            if let best { lines.append(best) }
+        }
+        guard lines.count == 2 else { return [] }
+
+        let ranked = lines.sorted { $0.edge > $1.edge }
+        return ranked.enumerated().map { position, line in
+            let other = ranked[1 - position]
+            // What this line is for: where it is clearly the better of the two.
+            let bestInto = line.perArchetype
+                .filter { $0.value - (other.perArchetype[$0.key] ?? 0) >= 8 }
+                .sorted { $0.value > $1.value }
+                .map(\.key)
+            return BattlePlan(mega: line.mega, isPrimary: position == 0,
+                              bring: line.slots,
+                              strategy: strategy(for: line.mega, slots: line.slots,
+                                                 isPrimary: position == 0,
+                                                 bestInto: bestInto),
+                              edge: line.edge, bestInto: bestInto)
+        }
+    }
+
+    /// Average edge across the bundled archetypes, and the per-archetype split.
+    private func edgeOf(_ team: Team) -> (Int, [String: Int]) {
+        let advisor = TeamAdvisor(team: team, store: store)
+        let held = advisor.rolesPresent
+        let hasTailwind = !(held[.tailwind]?.isEmpty ?? true)
+        let hasTrickRoom = !(held[.trickRoom]?.isEmpty ?? true)
+        var per: [String: Int] = [:]
+        var total = 0.0, count = 0.0
+        for meta in store.data.metaTeams where meta.format == team.format {
+            let matchup = Matchup(mine: team, theirs: TeamPaste.team(from: meta, store: store),
+                                  store: store,
+                                  field: Field(isDoubles: team.format == "doubles"),
+                                  myTailwind: hasTailwind, theirTailwind: true,
+                                  myTrickRoom: hasTrickRoom)
+            let edge = matchup.verdict.score
+            per[meta.name] = edge
+            total += Double(edge); count += 1
+        }
+        return (count > 0 ? Int((total / count).rounded()) : 0, per)
+    }
+
+    /// Front two first: the Mega leads beside whatever supports it turn one.
+    private func leadOrder(_ slots: [TeamSlot]) -> [TeamSlot] {
+        guard slots.count > 2 else { return slots }
+        let advisor = TeamAdvisor(team: Team(), store: store)
+        func supportRank(_ slot: TeamSlot) -> Int {
+            guard let form = slot.battleForm(in: store) else { return 9 }
+            let roles = advisor.potentialRoles(of: form)
+            if roles.contains(.fakeOut) || roles.contains(.redirection) { return 0 }
+            if roles.contains(.intimidate) { return 1 }
+            if roles.contains(.tailwind) || roles.contains(.trickRoom) { return 2 }
+            return 3
+        }
+        let mega = slots[0]
+        let rest = slots.dropFirst().sorted { supportRank($0) < supportRank($1) }
+        return [mega] + rest
+    }
+
+    /// A sentence a person can actually follow at Team Preview.
+    private func strategy(for mega: Form, slots: [TeamSlot], isPrimary: Bool,
+                          bestInto: [String]) -> String {
+        let advisor = TeamAdvisor(team: Team(), store: store)
+        var held: Set<TeamRole> = []
+        var names: [String] = []
+        for slot in slots.dropFirst() {
+            guard let form = slot.battleForm(in: store) else { continue }
+            names.append(form.formLabel)
+            held.formUnion(advisor.potentialRoles(of: form))
+        }
+
+        var parts: [String] = []
+        let lead = slots.count > 1
+            ? (slots[1].battleForm(in: store)?.formLabel ?? "its partner") : "its partner"
+        parts.append("Lead \(mega.formLabel) beside \(lead); Mega Evolve turn one.")
+
+        if held.contains(.redirection) {
+            parts.append("Redirection buys the turn it needs to start attacking.")
+        } else if held.contains(.fakeOut) {
+            parts.append("Fake Out buys the turn it needs to start attacking.")
+        }
+        if held.contains(.tailwind) {
+            parts.append("Tailwind is the speed control — win the four turns it gives you.")
+        } else if held.contains(.trickRoom) {
+            parts.append("Trick Room is the speed control; set it before committing.")
+        } else {
+            parts.append("There is no speed control on this four, so it has to win on raw stats.")
+        }
+        if !bestInto.isEmpty {
+            parts.append("Bring this four into \(bestInto.prefix(2).joined(separator: " and ")).")
+        } else if !isPrimary {
+            parts.append("Roughly even with the primary line — pick on what you see in Preview.")
+        }
+        return parts.joined(separator: " ")
+    }
+
+    /// Every combination of `count` items, for the bring-four search.
+    private func choose<T>(_ items: [T], _ count: Int) -> [[T]] {
+        guard count > 0 else { return [[]] }
+        guard items.count >= count else { return [] }
+        if items.count == count { return [items] }
+        let head = items[0]
+        let tail = Array(items.dropFirst())
+        return choose(tail, count - 1).map { [head] + $0 } + choose(tail, count)
+    }
+
     // MARK: Public entry point
 
     /// Build several complete teams around `seed`, one per viable plan, each
     /// fully evaluated against the bundled archetypes.
-    func blueprints(seed: Form, picks: [Forecast.Pick], perPlan: Int = 1) -> [Blueprint] {
+    func blueprints(seed: Form, picks: [Forecast.Pick], perPlan: Int = 1,
+                    dualMega: Bool = false) -> [Blueprint] {
         var candidates = profiles(picks: picks)
         if !candidates.contains(where: { $0.form.id == seed.id }) {
             candidates += profiles(for: [seed])
@@ -502,7 +715,8 @@ struct TeamBuilder {
         var seenTeams = Set<String>()
 
         for plan in plans(for: seed) {
-            let results = search(seed: seed, plan: plan, pool: candidates)
+            let results = search(seed: seed, plan: plan, pool: candidates,
+                                 dualMega: dualMega)
             var taken = 0
             for profileSet in results {
                 guard taken < perPlan else { break }
@@ -525,13 +739,17 @@ struct TeamBuilder {
                 }
                 team.locked = true
                 let scored = evaluate(team, plan: plan)
+                let lines = dualMega ? battlePlans(for: team) : []
                 out.append(Blueprint(plan: plan,
                                      title: "\(seed.formLabel) · \(plan.rawValue)",
-                                     rationale: plan.advice,
+                                     rationale: lines.count == 2
+                                        ? "Two Megas, two ways to play it. \(plan.advice)"
+                                        : plan.advice,
                                      team: team, score: scored.0,
                                      perArchetype: scored.1,
                                      notes: TeamAdvisor(team: team, store: store)
-                                        .metaNotes.map(\.title)))
+                                        .metaNotes.map(\.title),
+                                     lines: lines))
             }
         }
         return out.sorted { $0.score.total > $1.score.total }

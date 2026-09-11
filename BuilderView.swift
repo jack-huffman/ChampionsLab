@@ -13,6 +13,11 @@ struct BuilderView: View {
     @State private var working = false
     @State private var expanded: UUID?
     @State private var picks: [Forecast.Pick] = []
+    /// Two Megas is the default: only one may Mega Evolve per battle, and you
+    /// bring four of six, so the second is a whole alternate team rather than a
+    /// wasted slot.
+    @State private var dualMega = true
+    @State private var fellBack = false
 
     /// Pre-generated results, so tools/snapshot.sh can render the populated
     /// state — it has no view lifecycle to trigger a build from.
@@ -46,6 +51,10 @@ struct BuilderView: View {
             }
             .labelsHidden().frame(width: 150).controlSize(.small)
 
+            Toggle("Two Megas", isOn: $dualMega)
+                .toggleStyle(.checkbox).controlSize(.small)
+                .help("Build around two Mega Evolutions. Only one can Mega Evolve per battle, so each defines its own four to bring — a primary line and an alternate.")
+
             Button(working ? "Building…" : "Build teams") { generate() }
                 .disabled(seedID.isEmpty || working)
                 .keyboardShortcut(.return)
@@ -63,12 +72,19 @@ struct BuilderView: View {
     private func generate() {
         guard let seed else { return }
         working = true
+        fellBack = false
         if picks.isEmpty {
             picks = Forecast(store: store, format: format).picks(limit: 400)
         }
         var builder = TeamBuilder(store: store)
         builder.format = format
-        blueprints = builder.blueprints(seed: seed, picks: picks)
+        blueprints = builder.blueprints(seed: seed, picks: picks, dualMega: dualMega)
+        // Not every seed can support a second Mega — a Trick Room plan built
+        // around a slow wall often cannot. Say so rather than returning nothing.
+        if dualMega && blueprints.isEmpty {
+            blueprints = builder.blueprints(seed: seed, picks: picks)
+            fellBack = !blueprints.isEmpty
+        }
         expanded = blueprints.first?.id
         working = false
     }
@@ -78,6 +94,11 @@ struct BuilderView: View {
             intro
         } else {
             VStack(alignment: .leading, spacing: 16) {
+                if fellBack {
+                    Label("No two-Mega six held together around this Pokémon, so these are single-Mega builds.",
+                          systemImage: "info.circle")
+                        .font(.system(size: 11)).foregroundStyle(Palette.warn)
+                }
                 ForEach(blueprints) { blueprint in
                     card(blueprint)
                 }
@@ -133,6 +154,7 @@ struct BuilderView: View {
                     Divider()
                     breakdown(blueprint)
                     members(blueprint)
+                    if blueprint.isDualMega { linesCard(blueprint) }
                     archetypeRow(blueprint)
                     if !blueprint.notes.isEmpty {
                         Text(blueprint.notes.joined(separator: " · "))
@@ -253,6 +275,84 @@ struct BuilderView: View {
         }
     }
 
+    // MARK: The two ways to play it
+
+    private func linesCard(_ blueprint: Blueprint) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeader(title: "How to play it",
+                          subtitle: "Only one Pokémon may Mega Evolve, and you bring four of six — so each Mega has its own four.")
+            HStack(alignment: .top, spacing: 10) {
+                ForEach(blueprint.lines) { line in
+                    lineCard(line)
+                }
+            }
+        }
+    }
+
+    private func lineCard(_ line: BattlePlan) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text(line.isPrimary ? "PRIMARY" : "ALTERNATE")
+                    .font(.system(size: 9, weight: .bold)).kerning(0.5)
+                    .padding(.horizontal, 5).padding(.vertical, 2)
+                    .background((line.isPrimary ? Palette.accent : Palette.dim).opacity(0.18))
+                    .foregroundStyle(line.isPrimary ? Palette.accent : Palette.dim)
+                    .clipShape(Capsule())
+                Spacer()
+                Text(line.edge > 0 ? "+\(line.edge)" : "\(line.edge)")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Palette.grade((line.edge + 100) / 2))
+            }
+
+            HStack(spacing: 5) {
+                SpriteImage(form: line.mega, side: 30)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(line.mega.formLabel)
+                        .font(.system(size: 12, weight: .semibold))
+                    HStack(spacing: 3) {
+                        ForEach(line.mega.pokeTypes) { TypeChip(type: $0, size: .small) }
+                    }
+                }
+            }
+
+            // The four to bring, in lead order — the front two first.
+            HStack(spacing: 4) {
+                ForEach(Array(line.bring.enumerated()), id: \.element.id) { position, slot in
+                    if let form = slot.battleForm(in: store) {
+                        VStack(spacing: 2) {
+                            SpriteImage(form: form, side: 28)
+                            Text(position < 2 ? "lead" : "back")
+                                .font(.system(size: 8))
+                                .foregroundStyle(position < 2 ? Palette.accent : Palette.dim)
+                        }
+                        .help(form.formLabel)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+
+            Text(line.strategy)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if !line.bestInto.isEmpty {
+                Text("Best into " + line.bestInto.prefix(3).joined(separator: ", "))
+                    .font(.system(size: 10))
+                    .foregroundStyle(Palette.good)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.surfaceRaised)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(
+            line.isPrimary ? Palette.accent.opacity(0.4) : Palette.hairline))
+    }
+
     private func archetypeRow(_ blueprint: Blueprint) -> some View {
         HStack(spacing: 6) {
             ForEach(blueprint.perArchetype, id: \.name) { entry in
@@ -283,6 +383,12 @@ struct BuilderView: View {
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("The matchup half is deliberately not the whole score. Scored purely on one-on-one trades this engine recommends cutting Whimsicott, because a trade model cannot see that Tailwind doubles the whole side's Speed. Matchups here are run with your own speed control switched on, and roles are scored separately on top.")
+                    .font(.system(size: 11)).foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("A two-Mega six is scored on whether the second Mega answers what the first cannot — types it resists that the first does not, one physical and one special, a real Speed gap. Two Megas weak to the same thing is one Mega and a dead slot. Each Mega\'s four is then chosen by running every combination of it plus three partners against the bundled archetypes.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Move choice is priced on what a move is worth, not its base power: accuracy counts twice, once as expected value and once as a preference for consistency, and recoil, crash damage, self-inflicted damage and stat drops are all charged against it.")
                     .font(.system(size: 11)).foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("Suggested spreads are sensible defaults, not tuned benchmarks — the builder does not know what you specifically need to outrun or survive.")
