@@ -235,5 +235,33 @@ check("but it still costs something to be first-turn only",
 check("A clean move takes no discount",
       worth("Flamethrower"), movesByName["Flamethrower"]!.power)
 
+// -- survival items and multi-hit -----------------------------------------
+//
+// A Focus Sash stops one hit, not a move. Anything that strikes more than once
+// breaks it on the first and knocks out with the second, and the calculator
+// used to read the printed power and stop -- Icicle Spear came out as a single
+// 25 BP hit.
+let sashTarget = forms["Whimsicott"]!
+var bare = Combatant(form: sashTarget, ability: "Prankster", item: "",
+                     sp: [2, 0, 0, 0, 0, 32], alignment: Alignment.named("Timid"))
+var sashed = bare
+sashed.item = "Focus Sash"
+let spear = movesByName["Icicle Spear"]!
+let crash = movesByName["Icicle Crash"]!
+let doubles = Field(isDoubles: true)
+
+let spearBare = DamageCalc.calculate(attacker: boosted, defender: bare, move: spear, field: doubles)
+let spearSash = DamageCalc.calculate(attacker: boosted, defender: sashed, move: spear, field: doubles)
+report("Icicle Spear bare / into a Sash",
+       "\(spearBare.maxDamage) / \(spearSash.maxDamage)")
+check("a multi-hit move counts every strike",
+      spearBare.maxDamage > spear.power * 2 ? 1 : 0, 1)
+check("and goes through a Focus Sash",
+      spearSash.minDamage >= spearSash.targetHP ? 1 : 0, 1)
+
+let crashSash = DamageCalc.calculate(attacker: boosted, defender: sashed, move: crash, field: doubles)
+check("while a single-hit move is still stopped by one",
+      crashSash.maxDamage < crashSash.targetHP ? 1 : 0, 1)
+
 print("\n\(failures == 0 ? "ALL CHECKS PASSED" : "\(failures) CHECK(S) FAILED")")
 exit(failures == 0 ? 0 : 1)

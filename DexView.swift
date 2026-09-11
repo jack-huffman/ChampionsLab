@@ -228,6 +228,7 @@ struct FormDetail: View {
             statsCard
             abilitiesCard
             weaknessCard
+            stylesCard
             if let usage { usageCard(usage) }
             matchupsCard
             movesCard
@@ -304,6 +305,46 @@ struct FormDetail: View {
                     .foregroundStyle(.tertiary)
             }
             Spacer()
+        }
+    }
+
+    /// The jobs it can be built for, and which of them people actually build.
+    @ViewBuilder private var stylesCard: some View {
+        let styles = store.playStyles(of: form)
+        if !styles.isEmpty {
+            Card {
+                VStack(alignment: .leading, spacing: 9) {
+                    SectionHeader(
+                        title: "What it can be built as",
+                        subtitle: "Read off its learnset and stats, with how often the ladder actually does it.")
+                    ForEach(styles) { style in
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: style.isPlayed
+                                  ? "checkmark.circle.fill" : "circle.dashed")
+                                .font(.system(size: 11))
+                                .foregroundStyle(style.isPlayed ? Palette.good : Palette.dim)
+                                .padding(.top, 1)
+                            VStack(alignment: .leading, spacing: 1) {
+                                HStack(spacing: 6) {
+                                    Text(style.name)
+                                        .font(.system(size: 12, weight: .medium))
+                                    Text(style.evidence)
+                                        .font(.system(size: 10, design: .rounded))
+                                        .monospacedDigit()
+                                        .foregroundStyle(style.isPlayed
+                                                         ? Palette.good : Color.secondary)
+                                }
+                                if !style.how.isEmpty {
+                                    Text(style.how.joined(separator: ", "))
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+            }
         }
     }
 

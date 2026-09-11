@@ -379,16 +379,51 @@ enum DamageCalc {
             notes.append("Supreme Overlord ×\(String(format: "%.1f", boost))")
         }
 
+        // -- multi-hit ---------------------------------------------------------
+        //
+        // The calculator was reading the printed power and stopping there, so
+        // Icicle Spear came out as a single 25 BP hit and Dragon Darts as 50.
+        // Each strike is its own calculation in the game; totalling them is
+        // close enough and is what the number on screen should mean.
+        var strikes = 1.0
+        var multiHit = false
+        if let hits = move.drawbacks.hits {
+            multiHit = hits.max > 1
+            if attacker.ability == "Skill Link" {
+                strikes = Double(hits.max)
+            } else if hits.min == hits.max {
+                strikes = Double(hits.min)
+            } else if attacker.item == "Loaded Dice" {
+                strikes = Double(hits.max) - 0.5
+            } else {
+                // The Gen 5+ 2-5 distribution averages 3.
+                strikes = hits.max == 5 && hits.min == 2 ? 3.0
+                        : Double(hits.min + hits.max) / 2
+            }
+            if strikes > 1 {
+                notes.append(String(format: "%@ hits %.1f times on average",
+                                    move.name, strikes))
+            }
+        }
+
         // -- rolls -----------------------------------------------------------
         var damages = rolls.map { roll -> Int in
-            max(1, Int(floor(floor(base * roll) * modifier)))
+            max(1, Int(floor(floor(base * roll) * modifier) * strikes))
         }
 
         // Focus Sash. From full HP it cannot be knocked out in one hit, which
         // makes "guaranteed OHKO" wrong against the 87% of Whimsicott sets
         // holding one. Sturdy behaves the same way.
-        let survivesAnything = (defender.item == "Focus Sash" && !defender.itemSpent)
-            || defender.ability == "Sturdy"
+        // A Sash stops one hit, not a move. Anything that strikes more than
+        // once breaks it on the first and knocks out with the second, which is
+        // most of the reason those moves are worth running.
+        let survivesAnything = ((defender.item == "Focus Sash" && !defender.itemSpent)
+            || defender.ability == "Sturdy") && !multiHit
+        if multiHit, defender.atFullHP,
+           (defender.item == "Focus Sash" && !defender.itemSpent)
+            || defender.ability == "Sturdy" {
+            notes.append("Hits more than once, so it goes through a Focus Sash or Sturdy")
+        }
         if survivesAnything, defender.atFullHP {
             let cap = max(1, defender.maxHP - 1)
             if damages.contains(where: { $0 >= defender.maxHP }) {
