@@ -35,10 +35,24 @@ struct Duel: Identifiable {
 
     var iAmFaster: Bool { mySpeed > theirSpeed }
 
+    /// Turns this side needs to knock the other out, on the high roll.
+    var myTurnsToKO: Int {
+        effectiveOutgoing > 0 ? Int(ceil(1 / effectiveOutgoing)) : 99
+    }
+    var theirTurnsToKO: Int {
+        effectiveIncoming > 0 ? Int(ceil(1 / effectiveIncoming)) : 99
+    }
+
     /// Rough 1v1 verdict, respecting who moves first.
     ///
-    /// Speed decides ties: if we both OHKO, the faster one wins, which is why
-    /// the base-151 Z Megas change so many of these cells.
+    /// Speed is not just a tie-break. It used to be consulted only when both
+    /// sides scored a one-hit knockout; every other cell — which is most of
+    /// them — compared raw damage ratios and ignored turn order entirely. That
+    /// scored a two-hit race identically whether you moved first or last, which
+    /// is the opposite of how those games go.
+    ///
+    /// Both sides are now raced: how many turns each needs, and who lands the
+    /// last one. Moving first wins an equal race outright.
     var outcome: Outcome {
         let iKO = effectiveOutgoing >= 1.0
         let theyKO = effectiveIncoming >= 1.0
@@ -51,9 +65,15 @@ struct Duel: Identifiable {
         case (true, false):  return .win
         case (false, true):  return .loss
         case (false, false):
-            if effectiveOutgoing >= effectiveIncoming * 1.5 { return .favoured }
-            if effectiveIncoming >= effectiveOutgoing * 1.5 { return .against }
-            return .neutral
+            let mine = myTurnsToKO, theirs = theirTurnsToKO
+            // Two clear turns ahead is a win, not merely an advantage.
+            if mine + 2 <= theirs { return .win }
+            if theirs + 2 <= mine { return .loss }
+            if mine < theirs { return .favoured }
+            if theirs < mine { return .against }
+            // Same number of turns: whoever moves first lands the last hit.
+            if mySpeed == theirSpeed { return .neutral }
+            return iAmFaster ? .favoured : .against
         }
     }
 
