@@ -66,13 +66,13 @@ struct TeamRefiner {
         var found: [Suggestion] = []
         let members = team.slots.compactMap { $0.battleForm(in: store)?.formLabel }
         for (index, name) in members.enumerated() {
-            await progress("Trying changes to \(name)",
+            progress("Trying changes to \(name)",
                            Double(index) / Double(max(1, members.count)))
             await Task.yield()
             found += suggestions(picks: picks, budget: budget, limit: limit,
                                  onlySlot: index)
         }
-        await progress("Ranking what helped", 1)
+        progress("Ranking what helped", 1)
         var seenSlots = Set<String>()
         return found.sorted { $0.delta > $1.delta }.filter { suggestion in
             let key = suggestion.headline.components(separatedBy: ":").first

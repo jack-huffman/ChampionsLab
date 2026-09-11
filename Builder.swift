@@ -905,13 +905,13 @@ struct TeamBuilder {
         let plans = self.plans(for: seed)
         var out: [Blueprint] = []
         for (index, plan) in plans.enumerated() {
-            await progress("Searching the \(plan.rawValue) plan",
+            progress("Searching the \(plan.rawValue) plan",
                            Double(index) / Double(max(1, plans.count)))
             await Task.yield()
             out += blueprints(seed: seed, picks: picks, perPlan: perPlan,
                               dualMega: dualMega, only: plan)
         }
-        await progress("Scoring the finalists", 1)
+        progress("Scoring the finalists", 1)
         return out.sorted { $0.score.total > $1.score.total }
     }
 

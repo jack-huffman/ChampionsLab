@@ -43,7 +43,9 @@ ln -s /Applications "$STAGE/Applications"
 cp "$SRC_DIR/AppIcon.icns" "$STAGE/.VolumeIcon.icns"
 cat > "$STAGE/First launch - please read.txt" <<'TXT'
 ChampionsLab
-========
+============
+
+A team builder and analyser for Pokemon Champions, Regulation Set M-C.
 
 To install: drag ChampionsLab to the Applications folder in this window.
 
@@ -74,37 +76,58 @@ Or, from Terminal, clear the download quarantine flag directly:
 WHAT IT NEEDS
 -------------
 
-Nothing. The app is a universal binary (Apple silicon and Intel) that uses
-only macOS system frameworks. It requires macOS 13 (Ventura) or later. The
-full Regulation M-C dataset ships inside the bundle, so it works offline and
-never contacts a server.
+A universal binary (Apple silicon and Intel) using only macOS system
+frameworks. Requires macOS 13 (Ventura) or later. Nothing to install alongside.
+
+The full dataset ships inside the bundle and the app works offline. It reaches
+the network in exactly one place: the Refresh button on the Usage & Meta
+screen, which pulls current ladder figures from Pikalytics on request. It never
+does so on its own.
 
 
-WHAT IT DOES
-------------
+WHAT IS IN IT
+-------------
 
-Builds and analyses teams for Pokemon Champions Regulation Set M-C, which runs
-from 9 September to 2 December 2026.
+  - 349 forms across 231 species, including all 81 Mega Evolutions, with 902
+    moves, 304 items and 214 abilities.
+  - Team building for six, with ability, item, Stat Points, Stat Alignment and
+    moves per slot. Species-clause, item-clause and SP-cap problems are flagged
+    as you build, and teams save automatically.
+  - A guided builder: pick a Mega and answer questions worked out from it, each
+    option carrying the arithmetic behind it, and get complete teams back.
+  - Team analysis: a defensive matrix over all 18 attacking types, offensive
+    coverage, speed tiers, a per-threat verdict, and what one change would help
+    most.
+  - Damage calculation with weather, terrain, screens, crits, the doubles
+    spread penalty, stat stages, Helping Hand, items and abilities.
 
-  - Browse all 300 legal forms, 902 moves, 246 items and 199 abilities.
-  - Build teams of six, with ability, item, Stat Points, Stat Alignment, Tera
-    type and moves per slot. Species-clause, item-clause and SP-cap problems
-    are flagged as you build. Teams are saved automatically.
-  - Grade a team against the format: a defensive matrix over all 18 attacking
-    types, offensive coverage, speed tiers, a per-threat verdict, and ranked
-    suggestions for what would patch the holes.
-  - Run damage calculations with weather, terrain, screens, crits, the doubles
-    spread penalty, stat boosts, items and abilities.
+Teams are scored against three kinds of opponent: written archetypes, cores
+sampled from measured ladder usage, and 48 teams that people actually played at
+Regulation M-C tournaments, with their records.
 
-Champions uses Stat Points rather than EVs and IVs -- 66 to spend, 32 maximum
-in one stat, each worth +1 at Level 50 -- and the app calculates on that basis
-throughout. It also enforces one gimmick per battle: Terastallize or Mega
-Evolve, never both.
 
-A note on the usage figures: Regulation M-C opened on 9 September 2026 and has
-no ladder history yet. Percentages shown are the last measured M-A/M-B numbers,
-and the new M-C arrivals are marked "projected" -- placed by their stats and
-abilities rather than by data.
+WHAT CHAMPIONS DOES DIFFERENTLY
+-------------------------------
+
+Stat Points replace EVs and IVs: 66 to spend, 32 maximum in one stat, each
+worth +1 at Level 50. Natures are Stat Alignment, and there are 21 of them.
+The app calculates on that basis throughout, and its numbers have been checked
+against the values the game itself displays.
+
+Mega Evolution is the only gimmick, one per battle, and a Mega must hold its
+stone. There is no Terastallization in this game.
+
+
+ON THE NUMBERS
+--------------
+
+Usage figures are real measured Regulation M-C ladder data from Pikalytics,
+used under CC BY-NC 4.0. Tournament results come from the events Limitless
+hosts. Compositions and placements there are real; the sets shown with them are
+the ladder's most common, because team lists rarely publish spreads.
+
+Everything the app asserts is meant to say whether it is arithmetic or
+judgement. Where it is guessing, it says so.
 TXT
 
 echo "==> creating read-write image"
