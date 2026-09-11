@@ -85,6 +85,8 @@ struct Blueprint: Identifiable {
     var notes: [String] = []
     /// The two ways to play it, when the six carries two Megas.
     var lines: [BattlePlan] = []
+    /// How this six handles faster teams, Trick Room, and the field.
+    var answers: [GamePlanner.Answer] = []
     var isDualMega: Bool { lines.count == 2 }
 }
 
@@ -814,7 +816,9 @@ struct TeamBuilder {
                                      perArchetype: scored.1,
                                      notes: TeamAdvisor(team: team, store: store)
                                         .metaNotes.map(\.title),
-                                     lines: lines))
+                                     lines: lines,
+                                     answers: GamePlanner(store: store, team: team,
+                                                          format: format).answers))
             }
         }
         return out.sorted { $0.score.total > $1.score.total }

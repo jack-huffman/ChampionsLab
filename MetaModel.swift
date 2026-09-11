@@ -351,14 +351,19 @@ struct MetaModel {
             let running: Set<String>
             let learnable: Set<String>
             let abilities: Set<String>
+            let ability: String
             let spreads: Bool
         }
         let members: [Member] = team.slots.compactMap { slot in
-            guard let form = slot.battleForm(in: store) else { return nil }
+            guard let form = slot.battleForm(in: store),
+                  let combatant = slot.combatant(in: store) else { return nil }
             let running = Set(slot.moves.compactMap { store.move($0)?.name })
             return Member(slot: slot, form: form, running: running,
                           learnable: Set(form.moves.compactMap { store.move($0)?.name }),
                           abilities: Set(form.abilities.map(\.name)),
+                          // The ability it fights with: a Mega's replaces the
+                          // base form's, which is what the slot stores.
+                          ability: combatant.ability,
                           spreads: slot.moves.contains { store.move($0)?.isSpread == true })
         }
         return tactics.map { tactic in
@@ -371,7 +376,7 @@ struct MetaModel {
                     else if member.learnable.contains(move) { possible.append(move) }
                 }
                 for ability in tactic.tools.abilities where member.abilities.contains(ability) {
-                    if member.slot.ability == ability { confirmed.append(ability) }
+                    if member.ability == ability { confirmed.append(ability) }
                     else { possible.append(ability) }
                 }
                 for item in tactic.tools.items where member.slot.item == item {
@@ -411,12 +416,16 @@ struct MetaModel {
 
     /// Whether this team can change the field the format puts up, and how.
     func fieldControl(of team: Team) -> [FieldAnswer] {
+        // Mega Evolution replaces the ability, and the slot stores the base
+        // form's. Reading slot.ability directly reported Mega Charizard Y's
+        // Drought as something it "could run" rather than something it has.
         let members: [(Form, Set<String>, Set<String>, String)] = team.slots.compactMap { slot in
-            guard let form = slot.battleForm(in: store) else { return nil }
+            guard let form = slot.battleForm(in: store),
+                  let combatant = slot.combatant(in: store) else { return nil }
             return (form,
                     Set(slot.moves.compactMap { store.move($0)?.name }),
                     Set(form.moves.compactMap { store.move($0)?.name }),
-                    slot.ability)
+                    combatant.ability)
         }
         return fieldPressures.map { pressure in
             var confirmed: [String] = []

@@ -155,6 +155,8 @@ struct BuilderView: View {
                     breakdown(blueprint)
                     members(blueprint)
                     if blueprint.isDualMega { linesCard(blueprint) }
+                    GamePlanCard(team: blueprint.team, format: format,
+                                 precomputed: blueprint.answers)
                     archetypeRow(blueprint)
                     if !blueprint.notes.isEmpty {
                         Text(blueprint.notes.joined(separator: " · "))

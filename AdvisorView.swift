@@ -90,6 +90,7 @@ struct AdvisorView: View {
         VStack(alignment: .leading, spacing: 18) {
             planCard
             rolesCard
+            Card { GamePlanCard(team: team, format: team.format) }
             formatCard
             metaCard
             recommendationsCard
