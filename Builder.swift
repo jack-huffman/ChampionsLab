@@ -227,6 +227,35 @@ struct TeamBuilder {
         for member in team { types.formUnion(member.types) }
         value += Double(types.count) * 1.2
 
+        // Pairings, not just roles. A redirector and a setup sweeper are worth
+        // more together than apart: Rage Powder is what buys the Swords Dance
+        // turn, and a sweeper with no cover rarely gets to use it. Likewise a
+        // setup sweeper with priority behind it is a win condition; without one
+        // it is a Pokémon that spends a turn doing nothing.
+        let redirects = team.contains { !$0.roles.isDisjoint(with: [.redirection]) }
+        let setsUp = team.contains { profile in
+            profile.form.moves.contains { store.move($0)?.selfBoosts.isEmpty == false }
+        }
+        let hasPriority = team.contains { profile in
+            profile.form.moves.contains {
+                guard let move = store.move($0) else { return false }
+                return move.priority > 0 && move.isDamaging && move.power >= 40
+            }
+        }
+        let hasStatus = team.contains { profile in
+            profile.form.moves.contains { id in
+                guard let move = store.move(id) else { return false }
+                return move.effect.hasPrefix("Burns the target")
+                    || move.effect.hasPrefix("Paralyzes the target")
+                    || move.effect.hasPrefix("Puts the target to sleep")
+            }
+        }
+        if redirects && setsUp { value += 6 }
+        if setsUp && hasPriority { value += 5 }
+        // Status is tempo, and the format rewards it: Intimidate and priority
+        // are on most teams, and a burn blunts both.
+        if hasStatus { value += 4 }
+
         if let enabler = plan.enabler {
             let sets = team.contains { $0.form.abilities.contains { $0.name == enabler } }
             let payoff = team.filter { benefits(from: plan, $0.form) }.count
@@ -432,7 +461,8 @@ struct TeamBuilder {
         let support = roles.contains(.redirection) || roles.contains(.tailwind)
             || roles.contains(.trickRoom) || roles.contains(.terrain)
         let physical = form.attack >= form.spAttack
-        let built = spread(for: form, physical: physical, support: support, plan: plan)
+        let built = spread(for: form, physical: physical, support: support, plan: plan,
+                           tailwind: roles.contains(.tailwind) || plan == .tailwind)
         slot.sp = built.sp
         slot.alignmentName = built.alignment
 
@@ -442,9 +472,27 @@ struct TeamBuilder {
         return slot
     }
 
+    /// Something whose whole case is hitting hard should be hitting hard.
+    private func physicalAttackerIsTheWholePoint(_ form: Form) -> Bool {
+        max(form.attack, form.spAttack) >= 130
+    }
+
     /// Speed numbers worth investing to beat, from the tracked field.
     private var benchmarks: [Int] {
         Forecast(store: store, format: format).speedLandscape.map(\.speed)
+    }
+
+    /// The same numbers seen from under your own Tailwind.
+    ///
+    /// Coaching advice that keeps coming up is "invest enough to outspeed X
+    /// under Tailwind", and that is a different number: doubling your own Speed
+    /// halves what you need to reach. A team that carries Tailwind was still
+    /// paying full price for Speed it did not need.
+    private func benchmarks(underTailwind: Bool) -> [Int] {
+        let marks = benchmarks
+        // Opponents in this format nearly all carry Tailwind of their own, so
+        // yours buys parity rather than a free halving. Half the gap, not all.
+        return underTailwind ? marks.map { Int(Double($0) * 0.72) } : marks
     }
 
     /// A spread aimed at a Speed benchmark the Pokémon can actually reach.
@@ -454,7 +502,7 @@ struct TeamBuilder {
     /// are 178 to 223 — investment that bought nothing. Here, Speed is only paid
     /// for when it clears something real, and the points go into bulk otherwise.
     func spread(for form: Form, physical: Bool, support: Bool,
-                plan: Archetype) -> (sp: [Int], alignment: String) {
+                plan: Archetype, tailwind: Bool = false) -> (sp: [Int], alignment: String) {
         var sp = Array(repeating: 0, count: 6)
         let attacking: Stat = physical ? .attack : .spAttack
 
@@ -466,7 +514,7 @@ struct TeamBuilder {
             return (sp, physical ? "Brave" : "Quiet")
         }
 
-        let marks = benchmarks
+        let marks = benchmarks(underTailwind: tailwind)
         // Try the attack-boosting alignment first: Speed that clears a benchmark
         // is worth having, but not at the cost of the attacking stat if the
         // benchmark is reachable either way.
@@ -554,6 +602,17 @@ struct TeamBuilder {
             }
             chosen.append(move.id)
             return true
+        }
+
+        // Status before damage on something built to survive. Coaching material
+        // is emphatic about this and the engine now agrees: a burn halves a
+        // physical attacker for the whole game, which beats one more attack from
+        // a Pokémon that was never going to out-damage it anyway.
+        let bulky = form.hp + form.defense + form.spDefense >= 300
+        if bulky && !physicalAttackerIsTheWholePoint(form) {
+            for name in ["Will-O-Wisp", "Thunder Wave", "Hypnosis", "Spore"] {
+                if add(name) { break }
+            }
         }
 
         // The role move is the reason the slot exists.
@@ -872,6 +931,37 @@ struct TeamBuilder {
             isDoubles: team.format == "doubles")
     }
 
+    /// Whether this team can remove something behind a Focus Sash.
+    ///
+    /// Sash is on 87% of measured Whimsicott sets and 37% of Pelipper, and the
+    /// hardest single hit in the game does not get through one. What does: a
+    /// multi-hit move, a chip attack followed by priority, or simply two
+    /// attackers on the same target. A team with none of those loses tempo to
+    /// every Sash lead it meets.
+    func breaksSashes(_ team: Team) -> (can: Bool, how: [String]) {
+        var how: [String] = []
+        for slot in team.slots {
+            guard let form = slot.battleForm(in: store) else { continue }
+            for id in slot.moves {
+                guard let move = store.move(id), move.isDamaging else { continue }
+                if move.effect.contains("attacks 2 to") || move.effect.contains("times in a row") {
+                    how.append("\(form.formLabel)'s \(move.name) hits more than once")
+                } else if move.priority > 0 && move.power >= 40 {
+                    how.append("\(form.formLabel)'s \(move.name) finishes through it")
+                } else if move.isSpread {
+                    how.append("\(form.formLabel)'s \(move.name) chips both")
+                }
+            }
+        }
+        // Two attackers on one target does it too, which the matchup engine
+        // already works out; here it is enough that the team has two.
+        let attackers = team.slots.filter { slot in
+            slot.moves.contains { store.move($0)?.isDamaging == true }
+        }.count
+        if attackers >= 3 { how.append("three or more attackers can focus one target") }
+        return (!how.isEmpty, Array(Set(how)).sorted())
+    }
+
     /// How much of the format's game plan this team can turn off.
     ///
     /// Weighted by how much of the field actually runs each tactic, so an answer
@@ -896,11 +986,18 @@ struct TeamBuilder {
         }
         let fieldScore = fieldWeight > 0 ? controlled / fieldWeight : 0.5
 
-        return tacticScore * 0.7 + fieldScore * 0.3
+        // Getting through a Focus Sash is part of turning the format off.
+        let sash = breaksSashes(team).can ? 1.0 : 0.0
+        return tacticScore * 0.6 + fieldScore * 0.25 + sash * 0.15
     }
 
     /// The real evaluation, run on finished teams only.
-    func evaluate(_ team: Team, plan: Archetype) -> (TeamScore, [(String, Int)]) {
+    ///
+    /// `opponentLimit` trims the pool for search passes that need to score
+    /// hundreds of candidate teams; the finalists are always re-scored against
+    /// everything.
+    func evaluate(_ team: Team, plan: Archetype,
+                  opponentLimit: Int? = nil) -> (TeamScore, [(String, Int)]) {
         let advisor = TeamAdvisor(team: team, store: store)
         let analysis = TeamAnalysis(team: team, store: store)
         var score = TeamScore()
@@ -923,6 +1020,11 @@ struct TeamBuilder {
             }
         for (sampled, share) in MetaModel(store: store, format: format).ladderTeams() {
             opponents.append((sampled.name, sampled, max(0.5, share * 3)))
+        }
+        if let limit = opponentLimit, opponents.count > limit {
+            // Keep a spread: the heaviest-weighted first, which is the measured
+            // ladder, then whatever archetypes fit.
+            opponents = Array(opponents.sorted { $0.weight > $1.weight }.prefix(limit))
         }
 
         for opponent in opponents {

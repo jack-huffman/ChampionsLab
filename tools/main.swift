@@ -226,6 +226,12 @@ check("Triple Axel is worth more than its 20 BP",
       worth("Triple Axel") > 80 ? 1 : 0, 1)
 check("Sucker Punch is discounted for failing on the wrong read",
       movesByName["Sucker Punch"]!.quality().reliability < 0.8 ? 1 : 0, 1)
+// First Impression is not a read: it always works on the turn you send it in.
+// Charging it Sucker Punch's penalty ranked it below a weaker neutral move.
+check("First Impression beats Liquidation on worth",
+      worth("First Impression") > worth("Liquidation") ? 1 : 0, 1)
+check("but it still costs something to be first-turn only",
+      movesByName["First Impression"]!.quality().reliability < 1.0 ? 1 : 0, 1)
 check("A clean move takes no discount",
       worth("Flamethrower"), movesByName["Flamethrower"]!.power)
 

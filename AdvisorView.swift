@@ -11,8 +11,13 @@ struct AdvisorView: View {
     let team: Team
     /// nil when the team is locked; the view then explains rather than offering.
     let onAdd: ((Form) -> Void)?
+    /// Applies a whole refined team in place. nil when the team is locked.
+    var onReplace: ((Team) -> Void)? = nil
 
     @State private var picks: [Forecast.Pick] = []
+    @State private var refinements: [TeamRefiner.Suggestion] = []
+    @State private var refining = false
+    @State private var refined = false
 
     private var advisor: TeamAdvisor { TeamAdvisor(team: team, store: store) }
 
@@ -89,6 +94,7 @@ struct AdvisorView: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: 18) {
             planCard
+            refineCard
             rolesCard
             Card { GamePlanCard(team: team, format: team.format) }
             formatCard
@@ -97,6 +103,83 @@ struct AdvisorView: View {
             prescriptionsCard
         }
         .padding(20)
+    }
+
+    // MARK: One change at a time
+
+    /// The way teams actually improve: not a rebuild, one part at a time.
+    private var refineCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    SectionHeader(
+                        title: "The next single change",
+                        subtitle: "Every member, move and item tried one at a time, ranked by what it actually moves.")
+                    Spacer()
+                    Button(refining ? "Working…" : (refined ? "Try again" : "Find changes")) {
+                        runRefiner()
+                    }
+                    .controlSize(.small)
+                    .disabled(refining || picks.isEmpty)
+                }
+
+                if refining {
+                    ProgressView().controlSize(.small)
+                } else if refined && refinements.isEmpty {
+                    Label("Nothing single beats what is already here. The next gain needs more than one change.",
+                          systemImage: "checkmark.seal")
+                        .font(.system(size: 11)).foregroundStyle(Palette.good)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ForEach(refinements) { suggestion in
+                        HStack(alignment: .top, spacing: 8) {
+                            Text("+\(suggestion.delta)")
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(Palette.good)
+                                .frame(width: 26, alignment: .trailing)
+                            VStack(alignment: .leading, spacing: 1) {
+                                HStack(spacing: 5) {
+                                    Text(suggestion.kind.rawValue.uppercased())
+                                        .font(.system(size: 8, weight: .bold)).kerning(0.4)
+                                        .padding(.horizontal, 4).padding(.vertical, 1)
+                                        .background(Palette.accent.opacity(0.16))
+                                        .foregroundStyle(Palette.accent)
+                                        .clipShape(Capsule())
+                                    Text(suggestion.headline)
+                                        .font(.system(size: 12, weight: .medium))
+                                }
+                                Text(suggestion.reason)
+                                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 0)
+                            if let onReplace {
+                                Button("Apply") { onReplace(suggestion.result) }
+                                    .controlSize(.small)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    if !refinements.isEmpty {
+                        Text("Each is scored on its own against the same opponents the team score uses — the archetypes, the ladder cores and the tournament results. Anything that buys a role by giving up real matchup is left out.")
+                            .font(.system(size: 10)).foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
+    private func runRefiner() {
+        refining = true
+        refinements = []
+        // A few hundred evaluations; done inline but bounded so it stays quick.
+        var refiner = TeamRefiner(store: store, team: team)
+        refiner.format = team.format
+        refiner.plan = advisor.archetypes.first?.archetype ?? .balance
+        refinements = refiner.suggestions(picks: picks, budget: 14, limit: 6)
+        refined = true
+        refining = false
     }
 
     // MARK: What the format does to this team

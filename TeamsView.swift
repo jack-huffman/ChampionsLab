@@ -193,6 +193,12 @@ struct TeamEditor: View {
             case .assist:
                 AdvisorView(team: team, onAdd: team.locked ? nil : { form in
                     appendSlot(form)
+                }, onReplace: team.locked ? nil : { refined in
+                    var updated = refined
+                    updated.id = team.id
+                    updated.name = team.name
+                    updated.notes = team.notes
+                    store.save(updated)
                 })
             case .analysis: TeamAnalysisView(team: team)
             case .threats:  ThreatMatrixView(team: team)

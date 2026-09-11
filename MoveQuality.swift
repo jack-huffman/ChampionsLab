@@ -65,6 +65,12 @@ extension Move {
         var leavesOpen = false
         /// Sucker Punch and friends, which fail outright on the wrong read.
         var conditional = false
+        /// First Impression and Fake Out: they work every time you send the
+        /// Pokémon in, and never otherwise. That is a cost, but it is not the
+        /// same cost as a prediction — it is timing you control completely.
+        /// Charging them the read penalty scored a 100 BP priority move below
+        /// an 85 BP neutral one, and the builder then wanted to cut it.
+        var firstTurnOnly = false
         /// Outrage and Thrash: locked in for two or three turns, confused after.
         /// Far worse in doubles, where the target you were aimed at leaves.
         var rampaging = false
@@ -92,7 +98,9 @@ extension Move {
             out.crash = fraction
         }
         if text.contains("Wide Open") { out.leavesOpen = true }
-        if text.contains("This move fails unless") || text.contains("This move fails if") {
+        if text.contains("first move used by the user after it enters a battle") {
+            out.firstTurnOnly = true
+        } else if text.contains("This move fails unless") || text.contains("This move fails if") {
             out.conditional = true
         }
         if text.contains("Rampaging status") { out.rampaging = true }
@@ -200,6 +208,12 @@ extension Move {
         if costs.conditional {
             cost *= 0.70
             notes.append("fails on the wrong read")
+        }
+        if costs.firstTurnOnly {
+            // Available on the turn it switches in, and only then. Worth a
+            // little less than an unconditional move, not a third less.
+            cost *= 0.88
+            notes.append("only on the turn it comes in")
         }
         if costs.rampaging {
             // Two or three turns locked into one move and confused afterwards,
