@@ -223,6 +223,7 @@ struct BuilderView: View {
             component("Coverage", blueprint.score.coverage,
                       label: "\(Int(blueprint.score.coverage * 18))/18")
             component("Synergy", blueprint.score.synergy)
+            component("Disruption", blueprint.score.disruption)
         }
     }
 
@@ -379,7 +380,10 @@ struct BuilderView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text("How these are scored")
                     .font(.system(size: 12, weight: .semibold))
-                Text("Each plan is searched separately and the six are scored on five things: the average edge against the bundled meta archetypes, how many of the five essential doubles roles are filled, whether any type weakness is stacked, how many attacking types are represented, and whether the plan hangs together — an enabler with nothing that benefits is marked down.")
+                Text("Each plan is searched separately and the six are scored on six things: the average edge against the bundled meta archetypes, how many of the five essential doubles roles are filled, whether any type weakness is stacked, how many attacking types are represented, whether the plan hangs together — an enabler with nothing that benefits is marked down — and how much of what the format is actually doing the team can turn off.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Disruption is weighted by measured usage, not by how clever an answer sounds. Priority is on 60% of teams and Intimidate on 46%, so carrying an answer to those counts for far more than an answer to something nobody is running. Matchups themselves are run across the terrain and weather the format actually puts up rather than on an empty field — Grassy Terrain is up in roughly a third of games, and a pick that only works with no terrain is not a pick.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("The matchup half is deliberately not the whole score. Scored purely on one-on-one trades this engine recommends cutting Whimsicott, because a trade model cannot see that Tailwind doubles the whole side's Speed. Matchups here are run with your own speed control switched on, and roles are scored separately on top.")

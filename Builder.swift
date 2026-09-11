@@ -28,17 +28,22 @@ struct TeamScore {
     var coverage = 0.0
     /// Whether the plan hangs together — enabler with payoff, speed control.
     var synergy = 0.0
+    /// How much of what the format is actually doing this team can turn off,
+    /// weighted by how much of the field does it. A team that beats nothing it
+    /// will meet is not a good team, however good its stats are.
+    var disruption = 0.0
     var violations: [String] = []
 
     /// 0…100. Matchup is the largest single term but deliberately not a
     /// majority, so a team of six strong attackers with no speed control and no
     /// redirection cannot outscore a coherent one.
     var total: Int {
-        let raw = (matchup + 100) / 200 * 38
-            + roles * 24
-            + defence * 14
-            + coverage * 12
-            + synergy * 12
+        let raw = (matchup + 100) / 200 * 34
+            + roles * 20
+            + defence * 12
+            + coverage * 10
+            + synergy * 10
+            + disruption * 14
         return max(0, min(100, Int(raw.rounded()) - violations.count * 3))
     }
 }
@@ -109,6 +114,22 @@ struct TeamBuilder {
         }
     }
 
+    /// Whether the build will hand this form a Mega Stone.
+    ///
+    /// `flesh` follows measured item usage, and the ladder's top item for
+    /// Salamence is Salamencite on 99% of sets — so a "base" Salamence in a
+    /// generated six is a Mega in every way that counts. Counting only forms
+    /// named "Mega" let three Megas into a two-Mega team.
+    func buildsAsMega(_ form: Form, usage: UsageEntry?) -> Bool {
+        if form.isMega { return true }
+        let stones = Set(store.data.forms
+            .filter { $0.dex == form.dex && $0.isMega }
+            .map(\.megaStone).filter { !$0.isEmpty })
+        guard !stones.isEmpty else { return false }
+        let items = usage?.itemUsage?.map(\.name) ?? usage?.commonItems ?? []
+        return items.first.map { stones.contains($0) } ?? false
+    }
+
     /// Everything the search needs about a candidate, worked out once.
     ///
     /// The beam evaluates thousands of partial teams; building a TeamAdvisor and
@@ -120,7 +141,14 @@ struct TeamBuilder {
         let roles: Set<TeamRole>
         let types: [PokeType]
         let standing: Double
-        let isMega: Bool
+        /// Share of teams running it on the measured ladder, 0…1.
+        let usage: Double
+        /// Measured winrate, where the ladder has one.
+        let winrate: Double?
+        /// Fights as a Mega. Champions registers the base Pokémon holding its
+        /// stone, so Salamence carrying a Salamencite is a Mega for every
+        /// purpose that matters here even though the form is not named one.
+        let megaBuild: Bool
         let speed: Int
         let physical: Bool
         /// Incoming multiplier for each of the 18 attacking types.
@@ -137,11 +165,16 @@ struct TeamBuilder {
                 taken[type] = TypeChart.multiplier(type, into: form,
                                                   ability: form.abilities.first?.name)
             }
+            let measured = store.data.usage.first {
+                $0.name == form.formLabel || $0.name == form.name
+            }
             return Profile(form: form, dex: form.dex,
                            roles: advisor.potentialRoles(of: form),
                            types: form.pokeTypes,
                            standing: standing[form.id] ?? 0,
-                           isMega: form.isMega, speed: form.speed,
+                           usage: (measured?.isProjected == false ? measured?.usage : nil).map { $0 / 100 } ?? 0,
+                           winrate: measured?.winrate,
+                           megaBuild: buildsAsMega(form, usage: measured), speed: form.speed,
                            physical: form.attack >= form.spAttack,
                            taken: taken)
         }
@@ -156,6 +189,16 @@ struct TeamBuilder {
         var value = 0.0
 
         value += team.reduce(0.0) { $0 + $1.standing } / Double(team.count) * 22
+
+        // What the ladder has already proved. A trade model on its own reaches
+        // for whatever happens to score well against the tracked field, which is
+        // how a six ends up with Torterra in it. Pokémon people actually win
+        // with get a prior — deliberately a modest one, so it nudges the search
+        // rather than just rebuilding the usage list.
+        for member in team {
+            value += min(3.5, member.usage * 9)
+            if let winrate = member.winrate { value += (winrate - 50) * 0.25 }
+        }
 
         // Roles. The first holder of an essential role is worth a lot; the
         // second is worth almost nothing, which stops the search stacking two
@@ -195,7 +238,7 @@ struct TeamBuilder {
 
         var seen = Set<Int>()
         for member in team where !seen.insert(member.dex).inserted { value -= 40 }
-        let megas = team.filter(\.isMega)
+        let megas = team.filter(\.megaBuild)
         if dualMega {
             // The second Mega is the point, not a cost — but only if it answers
             // what the first one cannot. Two Megas weak to the same thing is
@@ -313,7 +356,7 @@ struct TeamBuilder {
         }
         // A two-Mega build that came back with one Mega is not the thing that
         // was asked for, so it is dropped rather than quietly returned.
-        return dualMega ? beam.filter { $0.filter(\.isMega).count == 2 } : beam
+        return dualMega ? beam.filter { $0.filter(\.megaBuild).count == 2 } : beam
     }
 
     /// Profiles for specific forms, for a seed that the pool filtered out.
@@ -327,8 +370,8 @@ struct TeamBuilder {
             }
             return Profile(form: form, dex: form.dex,
                            roles: advisor.potentialRoles(of: form),
-                           types: form.pokeTypes, standing: 0,
-                           isMega: form.isMega, speed: form.speed,
+                           types: form.pokeTypes, standing: 0, usage: 0, winrate: nil,
+                           megaBuild: form.isMega, speed: form.speed,
                            physical: form.attack >= form.spAttack, taken: taken)
         }
     }
@@ -655,13 +698,14 @@ struct TeamBuilder {
     /// A sentence a person can actually follow at Team Preview.
     private func strategy(for mega: Form, slots: [TeamSlot], isPrimary: Bool,
                           bestInto: [String]) -> String {
-        let advisor = TeamAdvisor(team: Team(), store: store)
-        var held: Set<TeamRole> = []
-        var names: [String] = []
-        for slot in slots.dropFirst() {
-            guard let form = slot.battleForm(in: store) else { continue }
-            names.append(form.formLabel)
-            held.formUnion(advisor.potentialRoles(of: form))
+        // What these four actually have selected, not what they could learn.
+        // Reading potential roles claimed Tailwind on a four where nobody had
+        // picked it, which is worse than saying nothing.
+        var running: Set<String> = []
+        var abilities: Set<String> = []
+        for slot in slots {
+            running.formUnion(slot.moves.compactMap { store.move($0)?.name })
+            abilities.insert(slot.ability)
         }
 
         var parts: [String] = []
@@ -669,17 +713,22 @@ struct TeamBuilder {
             ? (slots[1].battleForm(in: store)?.formLabel ?? "its partner") : "its partner"
         parts.append("Lead \(mega.formLabel) beside \(lead); Mega Evolve turn one.")
 
-        if held.contains(.redirection) {
-            parts.append("Redirection buys the turn it needs to start attacking.")
-        } else if held.contains(.fakeOut) {
-            parts.append("Fake Out buys the turn it needs to start attacking.")
+        if !running.isDisjoint(with: ["Follow Me", "Rage Powder"]) {
+            parts.append("Redirection buys it the turn it needs to start attacking.")
+        } else if running.contains("Fake Out") {
+            parts.append("Fake Out buys it the turn it needs to start attacking.")
         }
-        if held.contains(.tailwind) {
+        if running.contains("Tailwind") {
             parts.append("Tailwind is the speed control — win the four turns it gives you.")
-        } else if held.contains(.trickRoom) {
+        } else if running.contains("Trick Room") {
             parts.append("Trick Room is the speed control; set it before committing.")
+        } else if !running.isDisjoint(with: ["Icy Wind", "Electroweb", "Thunder Wave"]) {
+            parts.append("Speed control here is chip, not a boost — drop theirs rather than raising yours.")
         } else {
-            parts.append("There is no speed control on this four, so it has to win on raw stats.")
+            parts.append("No speed control on this four, so it has to win on raw stats.")
+        }
+        if abilities.contains("Intimidate") {
+            parts.append("Intimidate on the switch keeps their physical attackers off a clean knockout.")
         }
         if !bestInto.isEmpty {
             parts.append("Bring this four into \(bestInto.prefix(2).joined(separator: " and ")).")
@@ -755,6 +804,30 @@ struct TeamBuilder {
         return out.sorted { $0.score.total > $1.score.total }
     }
 
+    /// How much of the format's game plan this team can turn off.
+    ///
+    /// Weighted by how much of the field actually runs each tactic, so an answer
+    /// to Fake Out — which 41% of teams carry — counts for far more than an
+    /// answer to something nobody is playing. Changing the terrain the format
+    /// puts up is scored separately, because it is the one answer that affects
+    /// every turn rather than one of them.
+    func disruption(of team: Team) -> Double {
+        let meta = MetaModel(store: store, format: format)
+        let coverage = meta.coverage(of: team)
+        let weight = coverage.reduce(0.0) { $0 + $1.share }
+        let answered = coverage.reduce(0.0) { $0 + ($1.isAnswered ? $1.share : 0) }
+        let tacticScore = weight > 0 ? answered / weight : 0.5
+
+        let control = meta.fieldControl(of: team)
+        let fieldWeight = control.reduce(0.0) { $0 + $1.pressure.probability }
+        let controlled = control.reduce(0.0) {
+            $0 + ($1.answer != nil ? $1.pressure.probability : 0)
+        }
+        let fieldScore = fieldWeight > 0 ? controlled / fieldWeight : 0.5
+
+        return tacticScore * 0.7 + fieldScore * 0.3
+    }
+
     /// The real evaluation, run on finished teams only.
     func evaluate(_ team: Team, plan: Archetype) -> (TeamScore, [(String, Int)]) {
         let advisor = TeamAdvisor(team: team, store: store)
@@ -788,6 +861,7 @@ struct TeamBuilder {
         let detected = advisor.archetypes
         score.synergy = detected.contains { $0.archetype == plan && $0.isSupported } ? 1
             : (detected.contains { $0.isSupported } ? 0.6 : 0.25)
+        score.disruption = disruption(of: team)
         score.violations = team.violations(in: store)
         return (score, perArchetype)
     }

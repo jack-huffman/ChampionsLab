@@ -54,6 +54,8 @@ struct ForecastView: View {
         if let report {
             VStack(alignment: .leading, spacing: 20) {
                 caveat(report)
+                fieldCard(report)
+                tacticsCard(report)
                 typeLandscape(report)
                 speedCard(report)
                 picksCard(report)
@@ -87,6 +89,119 @@ struct ForecastView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    // MARK: What the field is actually doing
+
+    private func fieldCard(_ report: Forecast.Report) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "The field you are actually playing on",
+                          subtitle: "Who sets what, how often, and what it does to the moves people are clicking.")
+            if report.fieldPressures.isEmpty {
+                Card(padding: 14) {
+                    Text("No terrain or weather setter has measurable usage in this format, so the field is neutral.")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            } else {
+                ForEach(report.fieldPressures) { pressure in
+                    Card(padding: 14) {
+                        VStack(alignment: .leading, spacing: 7) {
+                            HStack(spacing: 8) {
+                                Text(pressure.label)
+                                    .font(.system(size: 13, weight: .semibold))
+                                Text(String(format: "up in ~%.0f%% of games", pressure.probability * 100))
+                                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                                    .monospacedDigit()
+                                    .padding(.horizontal, 6).padding(.vertical, 2)
+                                    .background(Palette.accent.opacity(0.16))
+                                    .foregroundStyle(Palette.accent)
+                                    .clipShape(Capsule())
+                                Spacer()
+                                Text("set by " + pressure.setters.prefix(3)
+                                        .map { String(format: "%@ %.0f%%", $0.name, $0.value * 100) }
+                                        .joined(separator: ", "))
+                                    .font(.system(size: 10)).foregroundStyle(.tertiary)
+                                    .lineLimit(1)
+                            }
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Palette.hairline)
+                                    Capsule().fill(Palette.accent.opacity(0.6))
+                                        .frame(width: geo.size.width * min(1, pressure.probability))
+                                }
+                            }
+                            .frame(height: 5)
+                            ForEach(pressure.consequences, id: \.self) { line in
+                                Text("· " + line)
+                                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+                Text("Anti-meta picks below are scored across these states — "
+                     + report.states.map { String(format: "%@ %.0f%%", $0.label, $0.weight * 100) }
+                        .joined(separator: ", ")
+                     + " — rather than on an empty field, because that is not the game being played.")
+                    .font(.system(size: 10)).foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    // MARK: What the field is trying to do to you
+
+    private func tacticsCard(_ report: Forecast.Report) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "How the format wants to win",
+                          subtitle: "Measured from the sets people are running, with what turns each one off.")
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: 12)], spacing: 12) {
+                ForEach(report.tactics) { tactic in
+                    Card(padding: 14) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 6) {
+                                Text(tactic.name)
+                                    .font(.system(size: 13, weight: .semibold))
+                                Spacer()
+                                Text(String(format: "%.0f%%", tactic.share * 100))
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .monospacedDigit()
+                                    .foregroundStyle(tactic.share >= 0.4 ? Palette.bad
+                                                     : (tactic.share >= 0.2 ? Palette.warn : Palette.dim))
+                            }
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Palette.hairline)
+                                    Capsule()
+                                        .fill(tactic.share >= 0.4 ? Palette.bad : Palette.warn)
+                                        .frame(width: geo.size.width * min(1, tactic.share))
+                                }
+                            }
+                            .frame(height: 4)
+                            HStack(spacing: 4) {
+                                ForEach(tactic.carriers.prefix(5)) { carrier in
+                                    if let form = store.form(named: carrier.name) {
+                                        SpriteImage(form: form, side: 24)
+                                            .help(String(format: "%@ · %.0f%% of teams",
+                                                         carrier.name, carrier.value * 100))
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            Text(tactic.effect)
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            ForEach(tactic.answers, id: \.self) { answer in
+                                Label(answer, systemImage: "arrow.turn.down.right")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Palette.good)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
             }
         }
     }

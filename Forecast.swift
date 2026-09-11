@@ -182,7 +182,11 @@ struct Forecast {
         let entries = field
         guard !entries.isEmpty else { return [] }
         let total = entries.reduce(0.0) { $0 + $1.weight }
-        let context = Field(isDoubles: format == "doubles")
+        // Not a neutral field. Rillaboom is on a third of teams and runs Grassy
+        // Surge on essentially all of them, so a third of games start with
+        // Earthquake already halved. Picks are scored across the states the
+        // format actually produces, weighted by how often they happen.
+        let states = MetaModel(store: store, format: format).fieldStates
 
         // Precompute the threats once.
         let threats: [(Combatant, [Move], Double, String)] = entries.map {
@@ -203,49 +207,57 @@ struct Forecast {
             var bestSeen = 0.0
 
             for (them, theirMoves, weight, name) in threats {
-                // Best move by what it is worth once accuracy and self-inflicted
-                // costs are priced in, not by the biggest number on the roll.
-                var outgoing = 0.0
-                var outgoingReliability = 1.0
-                for move in myMoves {
-                    let result = DamageCalc.calculate(attacker: me, defender: them,
-                                                      move: move, field: context)
-                    let quality = store.quality(of: move, ability: me.ability)
-                    let worth = result.maxPercent / 100 * quality.reliability
-                    if worth > outgoing * outgoingReliability {
-                        outgoing = result.maxPercent / 100
-                        outgoingReliability = quality.reliability
-                        if worth > bestSeen { bestSeen = worth; bestMove = move.name }
-                    }
-                }
-                var incoming = 0.0
-                var incomingReliability = 1.0
-                for move in theirMoves {
-                    let result = DamageCalc.calculate(attacker: them, defender: me,
-                                                      move: move, field: context)
-                    let quality = store.quality(of: move, ability: them.ability)
-                    let worth = result.maxPercent / 100 * quality.reliability
-                    if worth > incoming * incomingReliability {
-                        incoming = result.maxPercent / 100
-                        incomingReliability = quality.reliability
-                    }
-                }
-
                 let faster = me.stat(.speed) > them.stat(.speed)
                 if faster { outspeeds += 1 }
 
-                let duel = Duel(mine: candidate, theirs: them.form,
-                                outgoing: outgoing, incoming: incoming,
-                                mySpeed: me.stat(.speed), theirSpeed: them.stat(.speed),
-                                myBestMove: bestMove, theirBestMove: "",
-                                myReliability: outgoingReliability,
-                                theirReliability: incomingReliability)
-                weighted += weight * duel.outcome.score
-                switch duel.outcome {
-                case .win: beats.append(name)
-                case .loss: losesTo.append(name)
-                default: break
+                // The same duel, run once per field state and averaged. A pick
+                // that only wins with no terrain up is not a pick.
+                var duelScore = 0.0
+                for (context, stateWeight, _) in states {
+                    // Best move by what it is worth once accuracy and
+                    // self-inflicted costs are priced in, not by the biggest
+                    // number on the roll.
+                    var outgoing = 0.0
+                    var outgoingReliability = 1.0
+                    for move in myMoves {
+                        let result = DamageCalc.calculate(attacker: me, defender: them,
+                                                          move: move, field: context)
+                        let quality = store.quality(of: move, ability: me.ability)
+                        let worth = result.maxPercent / 100 * quality.reliability
+                        if worth > outgoing * outgoingReliability {
+                            outgoing = result.maxPercent / 100
+                            outgoingReliability = quality.reliability
+                            if worth * stateWeight > bestSeen {
+                                bestSeen = worth * stateWeight
+                                bestMove = move.name
+                            }
+                        }
+                    }
+                    var incoming = 0.0
+                    var incomingReliability = 1.0
+                    for move in theirMoves {
+                        let result = DamageCalc.calculate(attacker: them, defender: me,
+                                                          move: move, field: context)
+                        let quality = store.quality(of: move, ability: them.ability)
+                        let worth = result.maxPercent / 100 * quality.reliability
+                        if worth > incoming * incomingReliability {
+                            incoming = result.maxPercent / 100
+                            incomingReliability = quality.reliability
+                        }
+                    }
+
+                    let duel = Duel(mine: candidate, theirs: them.form,
+                                    outgoing: outgoing, incoming: incoming,
+                                    mySpeed: me.stat(.speed), theirSpeed: them.stat(.speed),
+                                    myBestMove: bestMove, theirBestMove: "",
+                                    myReliability: outgoingReliability,
+                                    theirReliability: incomingReliability)
+                    duelScore += stateWeight * duel.outcome.score
                 }
+                weighted += weight * duelScore
+                // Winning in most field states, rather than in one lucky one.
+                if duelScore >= 0.7 { beats.append(name) }
+                else if duelScore <= -0.7 { losesTo.append(name) }
             }
 
             out.append(Pick(form: candidate, score: weighted / total,
@@ -266,11 +278,17 @@ struct Forecast {
         let fieldSize: Int
         let projectedCount: Int
         let measuredCount: Int
+        /// The terrain and weather the format actually puts up.
+        let fieldPressures: [MetaModel.FieldPressure]
+        /// The tactics a measurable share of the field runs, and what stops them.
+        let tactics: [MetaModel.TacticPressure]
+        let states: [(label: String, weight: Double)]
     }
 
     func report() -> Report {
         let attacking = attackingTypes
         let entries = field
+        let meta = MetaModel(store: store, format: format)
         return Report(
             attackingTypes: Array(attacking.prefix(6)),
             worstAttackingTypes: Array(attacking.suffix(4).reversed()),
@@ -279,6 +297,9 @@ struct Forecast {
             typeShare: Array(typeShare.prefix(8)),
             fieldSize: entries.count,
             projectedCount: entries.filter { $0.entry.isProjected }.count,
-            measuredCount: entries.filter { !$0.entry.isProjected }.count)
+            measuredCount: entries.filter { !$0.entry.isProjected }.count,
+            fieldPressures: meta.fieldPressures,
+            tactics: meta.tactics,
+            states: meta.fieldStates.map { (label: $0.label, weight: $0.weight) })
     }
 }
