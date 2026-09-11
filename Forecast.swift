@@ -267,6 +267,140 @@ struct Forecast {
         return out.sorted { $0.score > $1.score }.prefix(limit).map { $0 }
     }
 
+    // MARK: - One Pokémon against the whole field
+
+    /// How a single form fares against every tracked threat, both directions.
+    ///
+    /// Same machinery as `picks`, but kept for one candidate and with the detail
+    /// retained: which move does the work, what beats it back, and whether Speed
+    /// decides it. Cheap enough to compute on selection — one form against
+    /// twenty threats in three field states.
+    struct FormProfile {
+        struct Row: Identifiable {
+            let form: Form
+            let name: String
+            let usage: Double
+            let outcome: Duel.Outcome
+            let score: Double
+            let myBest: String
+            let myPercent: Double
+            let theirBest: String
+            let theirPercent: Double
+            let faster: Bool
+            var id: String { form.id }
+        }
+        let beats: [Row]
+        let loses: [Row]
+        let even: [Row]
+        /// Usage-weighted standing, −1…1.
+        let score: Double
+        let outspeeds: Int
+        let fieldSize: Int
+        let stateLabels: [String]
+    }
+
+    func profile(of candidate: Form) -> FormProfile {
+        let entries = self.field
+        let states = MetaModel(store: store, format: format).fieldStates
+        let me = standardBuild(candidate)
+        let myMoves = standardMoves(candidate)
+        var rows: [FormProfile.Row] = []
+        var weighted = 0.0, total = 0.0, outspeeds = 0
+
+        for entry in entries {
+            let them = standardBuild(entry.form)
+            let theirMoves = standardMoves(entry.form)
+            let faster = me.stat(.speed) > them.stat(.speed)
+            if faster { outspeeds += 1 }
+
+            var duelScore = 0.0
+            var bestOut = 0.0, bestOutName = "—"
+            var bestIn = 0.0, bestInName = "—"
+            for (context, weight, _) in states {
+                var outgoing = 0.0, outgoingReliability = 1.0
+                for move in myMoves {
+                    let result = DamageCalc.calculate(attacker: me, defender: them,
+                                                      move: move, field: context)
+                    let quality = store.quality(of: move, ability: me.ability)
+                    let worth = result.maxPercent / 100 * quality.reliability
+                    if worth > outgoing * outgoingReliability {
+                        outgoing = result.maxPercent / 100
+                        outgoingReliability = quality.reliability
+                    }
+                    if result.maxPercent / 100 * quality.reliability * weight > bestOut {
+                        bestOut = result.maxPercent / 100 * quality.reliability * weight
+                        bestOutName = move.name
+                    }
+                }
+                var incoming = 0.0, incomingReliability = 1.0
+                for move in theirMoves {
+                    let result = DamageCalc.calculate(attacker: them, defender: me,
+                                                      move: move, field: context)
+                    let quality = store.quality(of: move, ability: them.ability)
+                    let worth = result.maxPercent / 100 * quality.reliability
+                    if worth > incoming * incomingReliability {
+                        incoming = result.maxPercent / 100
+                        incomingReliability = quality.reliability
+                    }
+                    if worth * weight > bestIn {
+                        bestIn = worth * weight
+                        bestInName = move.name
+                    }
+                }
+                let duel = Duel(mine: candidate, theirs: them.form,
+                                outgoing: outgoing, incoming: incoming,
+                                mySpeed: me.stat(.speed), theirSpeed: them.stat(.speed),
+                                myBestMove: bestOutName, theirBestMove: bestInName,
+                                myReliability: outgoingReliability,
+                                theirReliability: incomingReliability)
+                duelScore += weight * duel.outcome.score
+            }
+
+            // Percentages from the likeliest field state, so the numbers shown
+            // belong to a single coherent scenario rather than an average.
+            let main = states.max { $0.weight < $1.weight }?.field
+                ?? Field(isDoubles: format == "doubles")
+            let myBestResult = myMoves
+                .map { ($0, DamageCalc.calculate(attacker: me, defender: them,
+                                                 move: $0, field: main)) }
+                .max { a, b in
+                    a.1.maxPercent * store.quality(of: a.0, ability: me.ability).reliability
+                        < b.1.maxPercent * store.quality(of: b.0, ability: me.ability).reliability
+                }
+            let theirBestResult = theirMoves
+                .map { ($0, DamageCalc.calculate(attacker: them, defender: me,
+                                                 move: $0, field: main)) }
+                .max { a, b in
+                    a.1.maxPercent * store.quality(of: a.0, ability: them.ability).reliability
+                        < b.1.maxPercent * store.quality(of: b.0, ability: them.ability).reliability
+                }
+
+            let outcome: Duel.Outcome = duelScore >= 0.7 ? .win
+                : (duelScore >= 0.25 ? .favoured
+                   : (duelScore <= -0.7 ? .loss
+                      : (duelScore <= -0.25 ? .against : .neutral)))
+            rows.append(FormProfile.Row(
+                form: entry.form, name: entry.entry.name, usage: entry.entry.usage,
+                outcome: outcome, score: duelScore,
+                myBest: myBestResult?.0.name ?? "—",
+                myPercent: myBestResult?.1.maxPercent ?? 0,
+                theirBest: theirBestResult?.0.name ?? "—",
+                theirPercent: theirBestResult?.1.maxPercent ?? 0,
+                faster: faster))
+            weighted += entry.weight * duelScore
+            total += entry.weight
+        }
+
+        let ordered = rows.sorted { $0.score == $1.score ? $0.usage > $1.usage : $0.score > $1.score }
+        return FormProfile(
+            beats: ordered.filter { $0.score > 0.2 },
+            loses: ordered.filter { $0.score < -0.2 }.reversed(),
+            even: ordered.filter { abs($0.score) <= 0.2 },
+            score: total > 0 ? weighted / total : 0,
+            outspeeds: outspeeds, fieldSize: rows.count,
+            stateLabels: states.map(\.label))
+    }
+
     // MARK: - Everything, computed once
 
     struct Report {

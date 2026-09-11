@@ -199,6 +199,9 @@ struct FormDetail: View {
     @EnvironmentObject private var store: Store
     let form: Form
     @State private var moveQuery = ""
+    /// Computed on selection and held — it is one form against the whole
+    /// tracked field in three field states, which is not free in a body.
+    @State private var profile: Forecast.FormProfile?
 
     private var usage: UsageEntry? {
         store.data.usage.first { $0.name == form.formLabel || $0.name == form.name }
@@ -207,7 +210,16 @@ struct FormDetail: View {
     @Environment(\.snapshotMode) private var snapshotMode
 
     @ViewBuilder var body: some View {
-        if snapshotMode { content } else { ScrollView { content } }
+        Group {
+            if snapshotMode { content } else { ScrollView { content } }
+        }
+        .onAppear(perform: recompute)
+        .onChange(of: form.id) { _ in recompute() }
+        .onChange(of: store.usageVersion) { _ in recompute() }
+    }
+
+    private func recompute() {
+        profile = Forecast(store: store, format: "doubles").profile(of: form)
     }
 
     var content: some View {
@@ -217,6 +229,7 @@ struct FormDetail: View {
             abilitiesCard
             weaknessCard
             if let usage { usageCard(usage) }
+            matchupsCard
             movesCard
         }
         .padding(20)
@@ -345,6 +358,115 @@ struct FormDetail: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    // MARK: Against the field
+
+    @ViewBuilder private var matchupsCard: some View {
+        if let profile, profile.fieldSize > 0 {
+            Card {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .firstTextBaseline) {
+                        SectionHeader(
+                            title: "Against the field",
+                            subtitle: "Run against every tracked threat with a standard build, across the terrain the format actually puts up.")
+                        Spacer()
+                        Text(String(format: "%+.2f", profile.score))
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(Palette.grade(Int((profile.score + 1) * 50)))
+                    }
+
+                    HStack(spacing: 14) {
+                        tally("Beats", profile.beats.count, Palette.good)
+                        tally("Even", profile.even.count, Palette.dim)
+                        tally("Loses to", profile.loses.count, Palette.bad)
+                        tally("Outspeeds", profile.outspeeds, Palette.accent)
+                        Spacer()
+                    }
+
+                    if !profile.beats.isEmpty {
+                        matchupList("Good into", profile.beats, Palette.good)
+                    }
+                    if !profile.loses.isEmpty {
+                        matchupList("Countered by", profile.loses, Palette.bad)
+                    }
+                    if !profile.even.isEmpty {
+                        matchupList("Close", profile.even, Palette.dim)
+                    }
+
+                    Text("Both sides are given the same standard build — everything into the better attacking stat and Speed — so a lot of these are mutual knockouts settled by who moves first. Percentages are the high roll of each side's best move under "
+                         + (profile.stateLabels.first ?? "a neutral field")
+                         + ", the likeliest state; the verdict is averaged across "
+                         + profile.stateLabels.joined(separator: ", ")
+                         + ", and a move that misses or costs you HP is discounted for it.")
+                        .font(.system(size: 10)).foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func tally(_ label: String, _ count: Int, _ colour: Color) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text("\(count)")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .monospacedDigit().foregroundStyle(colour)
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .semibold)).kerning(0.4)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private func matchupList(_ title: String, _ rows: [Forecast.FormProfile.Row],
+                             _ colour: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title.uppercased())
+                .font(.system(size: 9, weight: .bold)).kerning(0.5)
+                .foregroundStyle(colour)
+            ForEach(rows.prefix(8)) { row in
+                HStack(spacing: 8) {
+                    SpriteImage(form: row.form, side: 28)
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 5) {
+                            Text(row.name).font(.system(size: 12, weight: .medium))
+                            Text(String(format: "%.0f%% usage", row.usage))
+                                .font(.system(size: 9)).foregroundStyle(.tertiary)
+                            if row.faster {
+                                Image(systemName: "bolt.fill")
+                                    .font(.system(size: 8)).foregroundStyle(Palette.accent)
+                                    .help("\(form.formLabel) is faster")
+                            }
+                        }
+                        Text("\(form.formLabel)'s \(row.myBest) does \(Int(row.myPercent))% · their \(row.theirBest) does \(Int(row.theirPercent))%")
+                            .font(.system(size: 10)).foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    Text(row.outcome.rawValue)
+                        .font(.system(size: 10, weight: .semibold))
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(outcomeColour(row.outcome).opacity(0.18))
+                        .foregroundStyle(outcomeColour(row.outcome))
+                        .clipShape(Capsule())
+                }
+                .padding(.vertical, 1)
+            }
+            if rows.count > 8 {
+                Text("…and \(rows.count - 8) more")
+                    .font(.system(size: 10)).foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func outcomeColour(_ outcome: Duel.Outcome) -> Color {
+        switch outcome {
+        case .win:      return Palette.good
+        case .favoured: return Palette.good.opacity(0.8)
+        case .neutral:  return Palette.dim
+        case .against:  return Palette.warn
+        case .loss:     return Palette.bad
         }
     }
 
