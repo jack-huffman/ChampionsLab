@@ -227,21 +227,29 @@ struct Matchup {
                 let them = combatant(theirSlot, form: theirForm)
                 let theirMoves = moves(theirSlot, form: theirForm)
 
-                var best = 0.0, bestName = "—"
+                // Best move by what it is worth, not the biggest number on the
+                // roll. This grid was the last place still choosing on raw
+                // damage, so it picked a 70% accurate Focus Blast over a sure
+                // Aura Sphere and then scored the miss as though it never came.
+                var best = 0.0, bestName = "—", myReliability = 1.0
                 for move in myMoves {
                     let result = DamageCalc.calculate(attacker: me, defender: them,
                                                       move: move, field: field)
-                    if result.maxPercent / 100 > best {
+                    let quality = store.quality(of: move, ability: me.ability, item: me.item)
+                    if result.maxPercent / 100 * quality.reliability > best * myReliability {
                         best = result.maxPercent / 100
+                        myReliability = quality.reliability
                         bestName = move.name
                     }
                 }
-                var worst = 0.0, worstName = "—"
+                var worst = 0.0, worstName = "—", theirReliability = 1.0
                 for move in theirMoves {
                     let result = DamageCalc.calculate(attacker: them, defender: me,
                                                       move: move, field: field)
-                    if result.maxPercent / 100 > worst {
+                    let quality = store.quality(of: move, ability: them.ability, item: them.item)
+                    if result.maxPercent / 100 * quality.reliability > worst * theirReliability {
                         worst = result.maxPercent / 100
+                        theirReliability = quality.reliability
                         worstName = move.name
                     }
                 }
@@ -250,7 +258,9 @@ struct Matchup {
                 out.append(Duel(mine: myForm, theirs: theirForm,
                                 outgoing: best, incoming: worst,
                                 mySpeed: speeds.0, theirSpeed: speeds.1,
-                                myBestMove: bestName, theirBestMove: worstName))
+                                myBestMove: bestName, theirBestMove: worstName,
+                                myReliability: myReliability,
+                                theirReliability: theirReliability))
             }
         }
         return out

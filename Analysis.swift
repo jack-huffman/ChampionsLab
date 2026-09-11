@@ -43,17 +43,24 @@ struct ThreatAssessment: Identifiable {
     let outspeedsCount: Int
     let checkedBy: [String]
     let losesTo: [String]
+    /// Average one-on-one outcome across the team, −1…1, raced on Speed.
+    ///
+    /// This screen used to work out who outspeeds what and then never use it:
+    /// a member was called a check because it knocked the threat out, whether
+    /// or not the threat moved first and knocked it out instead. It now runs
+    /// the same `Duel` the Versus grid does, so the two cannot disagree.
+    let duelScore: Double
 
     var id: String { threat.name }
 
     /// Positive is good for you. Weighted so a threat you cannot damage but
     /// that flattens you scores worst.
-    var score: Double { bestOutgoing - worstIncoming }
+    var score: Double { duelScore }
 
     var verdict: Verdict {
         if checkedBy.isEmpty && worstIncoming >= 0.7 { return .losing }
         if checkedBy.isEmpty { return .shaky }
-        if bestOutgoing >= 1.0 && !checkedBy.isEmpty { return .favourable }
+        if duelScore > 0.2 && !checkedBy.isEmpty { return .favourable }
         return .even
     }
 
@@ -168,7 +175,7 @@ struct TeamAnalysis {
             guard let threatForm = store.form(named: entry.name) else {
                 out.append(ThreatAssessment(threat: entry, form: nil, bestOutgoing: 0,
                                             worstIncoming: 0, outspeedsCount: 0,
-                                            checkedBy: [], losesTo: []))
+                                            checkedBy: [], losesTo: [], duelScore: 0))
                 continue
             }
 
@@ -196,6 +203,8 @@ struct TeamAnalysis {
             var checkedBy: [String] = []
             var losesTo: [String] = []
             var outspeeds = 0
+            var duelTotal = 0.0
+            var duelCount = 0.0
 
             for member in members {
                 guard var attacker = member.slot.combatant(in: store) else { continue }
@@ -204,32 +213,58 @@ struct TeamAnalysis {
 
                 if attacker.stat(.speed) > threatSpeed { outspeeds += 1 }
 
-                // Us into them.
+                // Us into them, discounted for accuracy and what the move
+                // costs to click — the same pricing the rest of the app uses.
                 let ourMoves = member.slot.moves.compactMap { store.move($0) }.filter(\.isDamaging)
                 var memberBest = 0.0
+                var myReliability = 1.0
+                var myMove = "—"
                 for move in ourMoves {
                     let result = DamageCalc.calculate(attacker: attacker,
                                                       defender: threatCombatant,
                                                       move: move, field: field)
-                    memberBest = max(memberBest, result.maxPercent / 100)
+                    let quality = store.quality(of: move, ability: attacker.ability,
+                                                item: attacker.item)
+                    if result.maxPercent / 100 * quality.reliability
+                        > memberBest * myReliability {
+                        memberBest = result.maxPercent / 100
+                        myReliability = quality.reliability
+                        myMove = move.name
+                    }
                 }
                 bestOutgoing = max(bestOutgoing, memberBest)
 
                 // Them into us.
                 var memberWorst = 0.0
+                var theirReliability = 1.0
+                var theirMove = "—"
                 for move in threatMoves {
                     let result = DamageCalc.calculate(attacker: threatCombatant,
                                                       defender: attacker,
                                                       move: move, field: field)
-                    memberWorst = max(memberWorst, result.maxPercent / 100)
+                    let quality = store.quality(of: move, ability: threatCombatant.ability)
+                    if result.maxPercent / 100 * quality.reliability
+                        > memberWorst * theirReliability {
+                        memberWorst = result.maxPercent / 100
+                        theirReliability = quality.reliability
+                        theirMove = move.name
+                    }
                 }
                 worstIncoming = max(worstIncoming, memberWorst)
 
-                // A check survives the threat's best hit and KOs back.
-                if memberWorst < 1.0 && memberBest >= 1.0 {
-                    checkedBy.append(member.form.formLabel)
-                } else if memberWorst >= 1.0 && memberBest < 0.5 {
-                    losesTo.append(member.form.formLabel)
+                // The verdict is the raced one, so who moves first counts.
+                let duel = Duel(mine: member.form, theirs: threatForm,
+                                outgoing: memberBest, incoming: memberWorst,
+                                mySpeed: attacker.stat(.speed), theirSpeed: threatSpeed,
+                                myBestMove: myMove, theirBestMove: theirMove,
+                                myReliability: myReliability,
+                                theirReliability: theirReliability)
+                duelTotal += duel.outcome.score
+                duelCount += 1
+                switch duel.outcome {
+                case .win:  checkedBy.append(member.form.formLabel)
+                case .loss: losesTo.append(member.form.formLabel)
+                default:    break
                 }
             }
 
@@ -237,7 +272,8 @@ struct TeamAnalysis {
                                         bestOutgoing: bestOutgoing,
                                         worstIncoming: worstIncoming,
                                         outspeedsCount: outspeeds,
-                                        checkedBy: checkedBy, losesTo: losesTo))
+                                        checkedBy: checkedBy, losesTo: losesTo,
+                                        duelScore: duelCount > 0 ? duelTotal / duelCount : 0))
         }
         return out.sorted { $0.score < $1.score }
     }

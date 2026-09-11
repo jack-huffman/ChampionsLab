@@ -257,6 +257,19 @@ struct TeamBuilder {
         }
         if !team.contains(where: { $0.form.id == seed.id }) { value -= 100 }
 
+        // Speed, which the search ignored outside of a Trick Room plan. A six
+        // that is slower than the format and carries no way to fix that loses
+        // the first move in most games, and nothing else here noticed.
+        if plan != .trickRoom {
+            let control = (counts[.tailwind] ?? 0) + (counts[.trickRoom] ?? 0)
+            let fast = team.filter { $0.speed >= 90 }.count
+            if control == 0 && fast <= 1 {
+                value -= 8
+            } else {
+                value += Double(min(3, fast)) * 1.5
+            }
+        }
+
         // A little balance between physical and special, so the whole team is
         // not walled by one bulky wall.
         let physical = team.filter(\.physical).count
