@@ -27,6 +27,9 @@ struct Duel: Identifiable {
     /// Beam that halves your own HP is not the same trade as an Iron Head.
     var myReliability: Double = 1
     var theirReliability: Double = 1
+    /// Turns spent setting up or applying status before attacking starts.
+    var mySetupTurns: Int = 0
+    var theirSetupTurns: Int = 0
 
     var id: String { "\(mine.id)-vs-\(theirs.id)" }
 
@@ -35,12 +38,13 @@ struct Duel: Identifiable {
 
     var iAmFaster: Bool { mySpeed > theirSpeed }
 
-    /// Turns this side needs to knock the other out, on the high roll.
+    /// Turns this side needs to knock the other out, on the high roll,
+    /// including any spent setting up or applying status first.
     var myTurnsToKO: Int {
-        effectiveOutgoing > 0 ? Int(ceil(1 / effectiveOutgoing)) : 99
+        effectiveOutgoing > 0 ? mySetupTurns + Int(ceil(1 / effectiveOutgoing)) : 99
     }
     var theirTurnsToKO: Int {
-        effectiveIncoming > 0 ? Int(ceil(1 / effectiveIncoming)) : 99
+        effectiveIncoming > 0 ? theirSetupTurns + Int(ceil(1 / effectiveIncoming)) : 99
     }
 
     /// Rough 1v1 verdict, respecting who moves first.
@@ -54,8 +58,10 @@ struct Duel: Identifiable {
     /// Both sides are now raced: how many turns each needs, and who lands the
     /// last one. Moving first wins an equal race outright.
     var outcome: Outcome {
-        let iKO = effectiveOutgoing >= 1.0
-        let theyKO = effectiveIncoming >= 1.0
+        // A one-hit knockout only counts if it happens on the first turn; a
+        // setup turn means they get to act first whatever the damage says.
+        let iKO = effectiveOutgoing >= 1.0 && mySetupTurns == 0
+        let theyKO = effectiveIncoming >= 1.0 && theirSetupTurns == 0
         switch (iKO, theyKO) {
         case (true, true):
             // A genuine speed tie is a coin flip, not a loss. Scoring it as a
@@ -183,11 +189,12 @@ struct Matchup {
         return c
     }
 
-    /// Damaging moves for a slot, falling back to the form's best STAB when the
-    /// slot has none selected.
+    /// The slot's whole set, falling back to the form's best STAB when it has
+    /// nothing selected. Status and setup moves are included deliberately —
+    /// filtering to damage is what made Will-O-Wisp and Swords Dance worth zero.
     private func moves(_ slot: TeamSlot, form: Form) -> [Move] {
-        let chosen = slot.moves.compactMap { store.move($0) }.filter(\.isDamaging)
-        if !chosen.isEmpty { return chosen }
+        let chosen = slot.moves.compactMap { store.move($0) }
+        if chosen.contains(where: \.isDamaging) { return chosen }
         let learnable = store.moves(for: form).filter { $0.isDamaging && $0.power > 0 }
         let stab = learnable.filter { form.types.contains($0.type) }
         let pool = stab.isEmpty ? learnable : stab
@@ -227,40 +234,11 @@ struct Matchup {
                 let them = combatant(theirSlot, form: theirForm)
                 let theirMoves = moves(theirSlot, form: theirForm)
 
-                // Best move by what it is worth, not the biggest number on the
-                // roll. This grid was the last place still choosing on raw
-                // damage, so it picked a 70% accurate Focus Blast over a sure
-                // Aura Sphere and then scored the miss as though it never came.
-                var best = 0.0, bestName = "—", myReliability = 1.0
-                for move in myMoves {
-                    let result = DamageCalc.calculate(attacker: me, defender: them,
-                                                      move: move, field: field)
-                    let quality = store.quality(of: move, ability: me.ability, item: me.item)
-                    if result.maxPercent / 100 * quality.reliability > best * myReliability {
-                        best = result.maxPercent / 100
-                        myReliability = quality.reliability
-                        bestName = move.name
-                    }
-                }
-                var worst = 0.0, worstName = "—", theirReliability = 1.0
-                for move in theirMoves {
-                    let result = DamageCalc.calculate(attacker: them, defender: me,
-                                                      move: move, field: field)
-                    let quality = store.quality(of: move, ability: them.ability, item: them.item)
-                    if result.maxPercent / 100 * quality.reliability > worst * theirReliability {
-                        worst = result.maxPercent / 100
-                        theirReliability = quality.reliability
-                        worstName = move.name
-                    }
-                }
-
                 let speeds = order(mine: me.stat(.speed), theirs: them.stat(.speed))
-                out.append(Duel(mine: myForm, theirs: theirForm,
-                                outgoing: best, incoming: worst,
-                                mySpeed: speeds.0, theirSpeed: speeds.1,
-                                myBestMove: bestName, theirBestMove: worstName,
-                                myReliability: myReliability,
-                                theirReliability: theirReliability))
+                out.append(DuelEngine.duel(
+                    mine: DuelEngine.Side(combatant: me, moves: myMoves, speed: speeds.0),
+                    theirs: DuelEngine.Side(combatant: them, moves: theirMoves, speed: speeds.1),
+                    field: field, store: store))
             }
         }
         return out

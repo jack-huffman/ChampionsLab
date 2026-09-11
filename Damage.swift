@@ -47,6 +47,11 @@ struct Combatant {
     /// Left itself open by using Glaive Rush: until its next action, attacks
     /// against it cannot miss and deal double damage.
     var wideOpen = false
+    /// Untouched so far. Focus Sash only works from full HP, and every
+    /// evaluation in this app opens from full, so it defaults to true.
+    var atFullHP = true
+    /// Whether its berry or Sash has already been used this battle.
+    var itemSpent = false
 
     func stat(_ stat: Stat) -> Int {
         ChampionsStats.value(base: form.stats[stat.rawValue],
@@ -60,6 +65,30 @@ struct Combatant {
     var effectiveTypes: [PokeType] { form.pokeTypes }
 
     var maxHP: Int { stat(.hp) }
+
+    /// Health it effectively has across a fight, which is what a damage race
+    /// should be run against. Sitrus is worth a quarter of its maximum the
+    /// first time it drops below half, and that is often the difference
+    /// between a two- and a three-hit knockout.
+    var effectiveHP: Int {
+        guard !itemSpent else { return maxHP }
+        switch item {
+        case "Sitrus Berry":   return maxHP + maxHP / 4
+        case "Oran Berry":     return maxHP + 10
+        case "Leftovers":      return maxHP + maxHP / 16
+        default:               return maxHP
+        }
+    }
+
+    /// The resist berries, which halve one super-effective hit of their type.
+    static let resistBerries: [String: PokeType] = [
+        "Occa Berry": .fire, "Passho Berry": .water, "Wacan Berry": .electric,
+        "Rindo Berry": .grass, "Yache Berry": .ice, "Chople Berry": .fighting,
+        "Kebia Berry": .poison, "Shuca Berry": .ground, "Coba Berry": .flying,
+        "Payapa Berry": .psychic, "Tanga Berry": .bug, "Charti Berry": .rock,
+        "Kasib Berry": .ghost, "Haban Berry": .dragon, "Colbur Berry": .dark,
+        "Babiri Berry": .steel, "Roseli Berry": .fairy,
+    ]
 }
 
 // MARK: - Result
@@ -278,6 +307,21 @@ enum DamageCalc {
             notes.append("Triggers Weakness Policy (+2 Atk / +2 SpA)")
         }
 
+        // Resist berries halve one super-effective hit of their type. Kingambit
+        // holds a Chople on 42% of measured sets precisely to survive one
+        // Fighting move, and that was not being modelled at all.
+        if !defender.itemSpent,
+           let berry = Combatant.resistBerries[defender.item],
+           berry == moveType, effectiveness > 1 {
+            modifier *= 0.5
+            notes.append("\(defender.item) halves it, then is consumed")
+        }
+        // Chilan halves any Normal-type hit, super-effective or not.
+        if !defender.itemSpent, defender.item == "Chilan Berry", moveType == .normal {
+            modifier *= 0.5
+            notes.append("Chilan Berry halves it, then is consumed")
+        }
+
         if defender.wideOpen {
             modifier *= 2
             notes.append("Glaive Rush: target is Wide Open, damage doubled")
@@ -301,9 +345,25 @@ enum DamageCalc {
         }
 
         // -- rolls -----------------------------------------------------------
-        let damages = rolls.map { roll -> Int in
+        var damages = rolls.map { roll -> Int in
             max(1, Int(floor(floor(base * roll) * modifier)))
         }
+
+        // Focus Sash. From full HP it cannot be knocked out in one hit, which
+        // makes "guaranteed OHKO" wrong against the 87% of Whimsicott sets
+        // holding one. Sturdy behaves the same way.
+        let survivesAnything = (defender.item == "Focus Sash" && !defender.itemSpent)
+            || defender.ability == "Sturdy"
+        if survivesAnything, defender.atFullHP {
+            let cap = max(1, defender.maxHP - 1)
+            if damages.contains(where: { $0 >= defender.maxHP }) {
+                notes.append(defender.ability == "Sturdy"
+                             ? "Sturdy: survives on 1 HP from full"
+                             : "Focus Sash: survives on 1 HP from full")
+            }
+            damages = damages.map { min($0, cap) }
+        }
+
         return DamageResult(minDamage: damages.first ?? 0,
                             maxDamage: damages.last ?? 0,
                             targetHP: defender.maxHP,

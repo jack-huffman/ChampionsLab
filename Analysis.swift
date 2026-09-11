@@ -194,9 +194,11 @@ struct TeamAnalysis {
                                      up: physical ? .attack : .spAttack, down: .hp))
 
             let threatSpeed = threatCombatant.stat(.speed)
+            // Their whole measured set, status included: a threat that carries
+            // Will-O-Wisp is a different problem from one that does not.
             let threatMoves = entry.keyMoves.compactMap { name in
                 store.data.moves.values.first { $0.name == name }
-            }.filter(\.isDamaging)
+            }
 
             var bestOutgoing = 0.0
             var worstIncoming = 0.0
@@ -213,52 +215,16 @@ struct TeamAnalysis {
 
                 if attacker.stat(.speed) > threatSpeed { outspeeds += 1 }
 
-                // Us into them, discounted for accuracy and what the move
-                // costs to click — the same pricing the rest of the app uses.
-                let ourMoves = member.slot.moves.compactMap { store.move($0) }.filter(\.isDamaging)
-                var memberBest = 0.0
-                var myReliability = 1.0
-                var myMove = "—"
-                for move in ourMoves {
-                    let result = DamageCalc.calculate(attacker: attacker,
-                                                      defender: threatCombatant,
-                                                      move: move, field: field)
-                    let quality = store.quality(of: move, ability: attacker.ability,
-                                                item: attacker.item)
-                    if result.maxPercent / 100 * quality.reliability
-                        > memberBest * myReliability {
-                        memberBest = result.maxPercent / 100
-                        myReliability = quality.reliability
-                        myMove = move.name
-                    }
-                }
+                let ourMoves = member.slot.moves.compactMap { store.move($0) }
+                let duel = DuelEngine.duel(
+                    mine: DuelEngine.Side(combatant: attacker, moves: ourMoves, speed: nil),
+                    theirs: DuelEngine.Side(combatant: threatCombatant,
+                                            moves: threatMoves, speed: threatSpeed),
+                    field: field, store: store)
+                let memberBest = duel.outgoing
+                let memberWorst = duel.incoming
                 bestOutgoing = max(bestOutgoing, memberBest)
-
-                // Them into us.
-                var memberWorst = 0.0
-                var theirReliability = 1.0
-                var theirMove = "—"
-                for move in threatMoves {
-                    let result = DamageCalc.calculate(attacker: threatCombatant,
-                                                      defender: attacker,
-                                                      move: move, field: field)
-                    let quality = store.quality(of: move, ability: threatCombatant.ability)
-                    if result.maxPercent / 100 * quality.reliability
-                        > memberWorst * theirReliability {
-                        memberWorst = result.maxPercent / 100
-                        theirReliability = quality.reliability
-                        theirMove = move.name
-                    }
-                }
                 worstIncoming = max(worstIncoming, memberWorst)
-
-                // The verdict is the raced one, so who moves first counts.
-                let duel = Duel(mine: member.form, theirs: threatForm,
-                                outgoing: memberBest, incoming: memberWorst,
-                                mySpeed: attacker.stat(.speed), theirSpeed: threatSpeed,
-                                myBestMove: myMove, theirBestMove: theirMove,
-                                myReliability: myReliability,
-                                theirReliability: theirReliability)
                 duelTotal += duel.outcome.score
                 duelCount += 1
                 switch duel.outcome {
