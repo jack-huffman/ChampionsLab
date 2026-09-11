@@ -183,6 +183,30 @@ final class Store: ObservableObject {
         return moves
     }
 
+    /// The format's speed benchmarks, worked out once.
+    ///
+    /// Spreads are built against these, and giving meta teams role-aware
+    /// spreads meant every one of their members recomputed the whole landscape
+    /// — about a hundred and ninety times per team evaluation.
+    private var speedCache: [String: [Int]] = [:]
+
+    func speedBenchmarks(format: String) -> [Int] {
+        if let hit = speedCache[format] { return hit }
+        let made = Forecast(store: self, format: format).speedLandscape.map(\.speed)
+        speedCache[format] = made
+        return made
+    }
+
+    /// Opponent teams built from the meta list, kept rather than rebuilt.
+    private var opponentCache: [String: Team] = [:]
+
+    func opponentTeam(_ meta: MetaTeam) -> Team {
+        if let hit = opponentCache[meta.id] { return hit }
+        let made = TeamPaste.team(from: meta, store: self)
+        opponentCache[meta.id] = made
+        return made
+    }
+
     /// What winning teams carry, worked out once. It depends only on the
     /// dataset, and rebuilding forty-eight teams inside every team evaluation
     /// took a score from 100ms to 390ms.

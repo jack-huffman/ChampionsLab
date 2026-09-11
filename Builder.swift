@@ -114,6 +114,40 @@ struct Blueprint: Identifiable {
 
 // MARK: - Builder
 
+/// Hand the main thread back for long enough that the run loop can draw.
+///
+/// `Task.yield()` does not do this. It offers the cooperative pool a chance to
+/// run another task, and on the main actor that means the search simply
+/// resumes — the run loop never gets in, so nothing repaints. A watchdog timer
+/// set to fire every 4ms during a build recorded exactly one tick. A real
+/// suspension is what lets AppKit draw a frame.
+@MainActor
+func breathe() async {
+    BreathLog.mark()
+    try? await Task.sleep(nanoseconds: 1_200_000)
+}
+
+/// How long the main thread runs between suspensions. This is what decides
+/// whether an animation can draw, and unlike a run-loop probe it means the same
+/// thing in a test harness as it does in the app.
+@MainActor
+enum BreathLog {
+    static var enabled = false
+    static var gaps: [Double] = []
+    private static var last = Date()
+
+    static func begin() { enabled = true; gaps = []; last = Date() }
+    static func mark() {
+        guard enabled else { return }
+        gaps.append(Date().timeIntervalSince(last))
+        last = Date()
+    }
+    static func end() -> (count: Int, worst: Double) {
+        enabled = false
+        return (gaps.count, gaps.max() ?? 0)
+    }
+}
+
 @MainActor
 struct TeamBuilder {
     let store: Store
@@ -126,6 +160,8 @@ struct TeamBuilder {
     /// not competitively relevant; searching over all of them wastes the beam on
     /// noise. This keeps anything with a real standing, anything that fills an
     /// essential role, and everything in the usage table.
+    func publicPool(picks: [Forecast.Pick]) -> [Form] { pool(picks: picks) }
+
     private func pool(picks: [Forecast.Pick]) -> [Form] {
         let standing = Dictionary(picks.map { ($0.form.id, $0.score) },
                                   uniquingKeysWith: { a, _ in a })
@@ -180,6 +216,41 @@ struct TeamBuilder {
         let physical: Bool
         /// Incoming multiplier for each of the 18 attacking types.
         let taken: [PokeType: Double]
+    }
+
+    /// The same work, letting go of the main thread as it goes.
+    func profiles(picks: [Forecast.Pick], yielding: Bool) async -> [Profile] {
+        let standing = Dictionary(picks.map { ($0.form.id, $0.score) },
+                                  uniquingKeysWith: { a, _ in a })
+        let advisor = TeamAdvisor(team: Team(), store: store)
+        var out: [Profile] = []
+        for (index, form) in pool(picks: picks).enumerated() {
+            if yielding, index % 25 == 0 { await breathe() }
+            out.append(profile(of: form, standing: standing, advisor: advisor))
+        }
+        return out
+    }
+
+    private func profile(of form: Form, standing: [String: Double],
+                         advisor: TeamAdvisor) -> Profile {
+        var taken: [PokeType: Double] = [:]
+        for type in PokeType.allCases {
+            taken[type] = TypeChart.multiplier(type, into: form,
+                                               ability: form.abilities.first?.name)
+        }
+        let measured = store.data.usage.first {
+            $0.name == form.formLabel || $0.name == form.name
+        }
+        return Profile(form: form, dex: form.dex,
+                       roles: advisor.potentialRoles(of: form),
+                       types: form.pokeTypes,
+                       standing: standing[form.id] ?? 0,
+                       usage: (measured?.isProjected == false ? measured?.usage : nil)
+                            .map { $0 / 100 } ?? 0,
+                       winrate: measured?.winrate,
+                       megaBuild: buildsAsMega(form, usage: measured), speed: form.speed,
+                       physical: form.attack >= form.spAttack,
+                       taken: taken)
     }
 
     func profiles(picks: [Forecast.Pick]) -> [Profile] {
@@ -428,11 +499,62 @@ struct TeamBuilder {
     }
 
     /// Beam search over the remaining slots.
+    /// The beam, yielding as it goes.
+    ///
+    /// Yielding only between plans left four-hundred-millisecond blocks, which
+    /// is what a frozen spinner with occasional stutters actually is: the
+    /// animation getting one frame per plan. A frame needs the main thread
+    /// every sixteen milliseconds, so this hands it back inside the beam.
     private func search(seed: Form, plan: Archetype, pool: [Profile],
-                        dualMega: Bool = false, beamWidth: Int = 8) -> [[Profile]] {
+                        dualMega: Bool = false, beamWidth: Int = 8,
+                        yielding: Bool) async -> [[Profile]] {
         guard let seedProfile = pool.first(where: { $0.form.id == seed.id })
                 ?? profiles(for: [seed]).first else { return [] }
         var beam: [[Profile]] = [[seedProfile]]
+        if let chosen = brief?.secondMegaID, chosen != seed.id,
+           let partner = pool.first(where: { $0.form.id == chosen })
+            ?? profiles(for: [store.formsByID[chosen]].compactMap { $0 }).first {
+            beam = [[seedProfile, partner]]
+        }
+        let size = store.data.rules.formats.first { $0.id == format }?.teamSize ?? 6
+
+        while (beam.first?.count ?? size) < size {
+            var next: [([Profile], Double)] = []
+            for partial in beam {
+                let used = Set(partial.map(\.dex))
+                var since = 0
+                for candidate in pool where !used.contains(candidate.dex) {
+                    let trial = partial + [candidate]
+                    next.append((trial, quickScore(trial, seed: seed, plan: plan,
+                                                   dualMega: dualMega)))
+                    since += 1
+                    if yielding, since % 120 == 0 { await breathe() }
+                }
+            }
+            var seen = Set<String>()
+            beam = next.sorted { $0.1 > $1.1 }.compactMap { entry -> [Profile]? in
+                let key = entry.0.map(\.form.id).sorted().joined(separator: "|")
+                return seen.insert(key).inserted ? entry.0 : nil
+            }
+            .prefix(beamWidth).map { $0 }
+            if beam.isEmpty { break }
+            if yielding { await breathe() }
+        }
+        return dualMega ? beam.filter { $0.filter(\.megaBuild).count == 2 } : beam
+    }
+
+    private func searchSync(seed: Form, plan: Archetype, pool: [Profile],
+                            dualMega: Bool = false, beamWidth: Int = 8) -> [[Profile]] {
+        guard let seedProfile = pool.first(where: { $0.form.id == seed.id })
+                ?? profiles(for: [seed]).first else { return [] }
+        var beam: [[Profile]] = [[seedProfile]]
+        // A second Mega chosen in the interview is a decision, not a
+        // suggestion: the search fills around it rather than reconsidering it.
+        if let chosen = brief?.secondMegaID, chosen != seed.id,
+           let partner = pool.first(where: { $0.form.id == chosen })
+            ?? profiles(for: [store.formsByID[chosen]].compactMap { $0 }).first {
+            beam = [[seedProfile, partner]]
+        }
         let size = store.data.rules.formats.first { $0.id == format }?.teamSize ?? 6
 
         while (beam.first?.count ?? size) < size {
@@ -533,9 +655,7 @@ struct TeamBuilder {
     }
 
     /// Speed numbers worth investing to beat, from the tracked field.
-    private var benchmarks: [Int] {
-        Forecast(store: store, format: format).speedLandscape.map(\.speed)
-    }
+    private var benchmarks: [Int] { store.speedBenchmarks(format: format) }
 
     /// The same numbers seen from under your own Tailwind.
     ///
@@ -813,7 +933,7 @@ struct TeamBuilder {
         var per: [String: Int] = [:]
         var total = 0.0, count = 0.0
         for meta in store.data.metaTeams where meta.format == team.format {
-            let theirs = TeamPaste.team(from: meta, store: store)
+            let theirs = store.opponentTeam(meta)
             let matchup = Matchup(mine: team, theirs: theirs, store: store,
                                   field: field(for: team, against: theirs),
                                   myTailwind: hasTailwind, theirTailwind: true,
@@ -900,23 +1020,45 @@ struct TeamBuilder {
 
     // MARK: Public entry point
 
-    /// Build several complete teams around `seed`, one per viable plan, each
-    /// fully evaluated against the bundled archetypes.
-    /// The same search, handing control back between plans so the interface
-    /// can draw and say where it has got to.
+    /// Build several complete teams around `seed`, one per viable plan.
+    ///
+    /// This is the path the interface uses, and it exists to let go of the main
+    /// thread: not between plans, which left three-quarters of a second in one
+    /// piece, but inside the beam, between finalists, and between the opponents
+    /// each finalist is scored against. Nothing here is faster for it; it is
+    /// interruptible, which is what a spinner needs to move.
     func blueprints(seed: Form, picks: [Forecast.Pick], perPlan: Int = 1,
                     dualMega: Bool = false,
                     progress: @escaping @MainActor (String, Double) -> Void) async -> [Blueprint] {
+        progress("Reading the field", 0)
+        var candidates = await profiles(picks: picks, yielding: true)
+        if !candidates.contains(where: { $0.form.id == seed.id }) {
+            candidates += profiles(for: [seed])
+        }
+
         let plans = self.plans(for: seed)
         var out: [Blueprint] = []
+        var seenTeams = Set<String>()
+
         for (index, plan) in plans.enumerated() {
-            progress("Searching the \(plan.rawValue) plan",
-                           Double(index) / Double(max(1, plans.count)))
-            await Task.yield()
-            out += blueprints(seed: seed, picks: picks, perPlan: perPlan,
-                              dualMega: dualMega, only: plan)
+            let base = Double(index) / Double(max(1, plans.count))
+            progress("Searching the \(plan.rawValue) plan", base)
+            await breathe()
+            let results = await search(seed: seed, plan: plan, pool: candidates,
+                                       dualMega: dualMega, yielding: true)
+            var taken = 0
+            for profileSet in results {
+                guard taken < perPlan else { break }
+                let key = profileSet.map(\.form.id).sorted().joined(separator: "|")
+                guard seenTeams.insert(key).inserted else { continue }
+                taken += 1
+                progress("Scoring a \(plan.rawValue) six",
+                         base + 0.6 / Double(max(1, plans.count)))
+                out.append(await finish(profileSet, seed: seed, plan: plan,
+                                        dualMega: dualMega, yielding: true))
+            }
         }
-        progress("Scoring the finalists", 1)
+        progress("Ranking them", 1)
         return out.sorted { $0.score.total > $1.score.total }
     }
 
@@ -932,8 +1074,8 @@ struct TeamBuilder {
         var seenTeams = Set<String>()
 
         for plan in plans(for: seed) where only == nil || plan == only {
-            let results = search(seed: seed, plan: plan, pool: candidates,
-                                 dualMega: dualMega)
+            let results = searchSync(seed: seed, plan: plan, pool: candidates,
+                                     dualMega: dualMega)
             var taken = 0
             for profileSet in results {
                 guard taken < perPlan else { break }
@@ -941,6 +1083,40 @@ struct TeamBuilder {
                 guard seenTeams.insert(key).inserted else { continue }
                 taken += 1
 
+                out.append(finishSync(profileSet, seed: seed, plan: plan, dualMega: dualMega))
+            }
+        }
+        return out.sorted { $0.score.total > $1.score.total }
+    }
+
+    private func finishSync(_ profileSet: [Profile], seed: Form, plan: Archetype,
+                            dualMega: Bool) -> Blueprint {
+        var usedItems = Set<String>()
+        var team = Team(name: "\(seed.formLabel) · \(plan.rawValue)", format: format)
+        let grounded = profileSet.filter { profile in
+            !profile.types.contains(.flying)
+                && profile.form.abilities.first?.name != "Levitate"
+        }.count
+        team.slots = profileSet.map {
+            let others = grounded - ((!$0.types.contains(.flying)
+                && $0.form.abilities.first?.name != "Levitate") ? 1 : 0)
+            return flesh($0.form, plan: plan, usedItems: &usedItems, allyGrounded: others)
+        }
+        team.locked = true
+        let scored = evaluate(team, plan: plan)
+        let lines = dualMega ? battlePlans(for: team, seed: seed) : []
+        return Blueprint(plan: plan, title: "\(seed.formLabel) · \(plan.rawValue)",
+                         rationale: lines.count == 2
+                            ? "Two Megas, two ways to play it. \(plan.advice)" : plan.advice,
+                         team: team, score: scored.0, perArchetype: scored.1,
+                         notes: TeamAdvisor(team: team, store: store).metaNotes.map(\.title),
+                         lines: lines,
+                         answers: GamePlanner(store: store, team: team, format: format).answers)
+    }
+
+    /// Turn a chosen six into a scored blueprint.
+    private func finish(_ profileSet: [Profile], seed: Form, plan: Archetype,
+                        dualMega: Bool, yielding: Bool = false) async -> Blueprint {
                 var usedItems = Set<String>()
                 var team = Team(name: "\(seed.formLabel) · \(plan.rawValue)", format: format)
                 // How many partners an ally-hitting spread move would catch.
@@ -955,23 +1131,26 @@ struct TeamBuilder {
                                  allyGrounded: others)
                 }
                 team.locked = true
-                let scored = evaluate(team, plan: plan)
+                if yielding { await breathe() }
+                let scored = await evaluate(team, plan: plan, yielding: yielding)
+                if yielding { await breathe() }
                 let lines = dualMega ? battlePlans(for: team, seed: seed) : []
-                out.append(Blueprint(plan: plan,
-                                     title: "\(seed.formLabel) · \(plan.rawValue)",
-                                     rationale: lines.count == 2
-                                        ? "Two Megas, two ways to play it. \(plan.advice)"
-                                        : plan.advice,
-                                     team: team, score: scored.0,
-                                     perArchetype: scored.1,
-                                     notes: TeamAdvisor(team: team, store: store)
-                                        .metaNotes.map(\.title),
-                                     lines: lines,
-                                     answers: GamePlanner(store: store, team: team,
-                                                          format: format).answers))
-            }
-        }
-        return out.sorted { $0.score.total > $1.score.total }
+                if yielding { await breathe() }
+                // Worked out before the blueprint rather than inside it, so
+                // there is somewhere to breathe first.
+                let answers = GamePlanner(store: store, team: team, format: format).answers
+                let notes = TeamAdvisor(team: team, store: store).metaNotes.map(\.title)
+                if yielding { await breathe() }
+                return Blueprint(plan: plan,
+                                 title: "\(seed.formLabel) · \(plan.rawValue)",
+                                 rationale: lines.count == 2
+                                    ? "Two Megas, two ways to play it. \(plan.advice)"
+                                    : plan.advice,
+                                 team: team, score: scored.0,
+                                 perArchetype: scored.1,
+                                 notes: notes,
+                                 lines: lines,
+                                 answers: answers)
     }
 
     /// The field a matchup between these two teams actually starts on.
@@ -1074,6 +1253,103 @@ struct TeamBuilder {
     /// `opponentLimit` trims the pool for search passes that need to score
     /// hundreds of candidate teams; the finalists are always re-scored against
     /// everything.
+    /// The same evaluation, breathing between opponents.
+    ///
+    /// Scoring a six against thirty-one teams is a third of a second in one
+    /// piece, which is twenty frames the interface cannot draw. An earlier
+    /// attempt at this only warmed the caches and then called the synchronous
+    /// version, so it changed nothing: the loop itself has to let go.
+    func evaluate(_ team: Team, plan: Archetype, yielding: Bool) async
+        -> (TeamScore, [(String, Int)]) {
+        guard yielding else { return evaluate(team, plan: plan) }
+        let advisor = TeamAdvisor(team: team, store: store)
+        let analysis = TeamAnalysis(team: team, store: store)
+        var score = TeamScore()
+        let held = advisor.rolesPresent
+        let hasTailwind = !(held[.tailwind]?.isEmpty ?? true)
+        let hasTrickRoom = !(held[.trickRoom]?.isEmpty ?? true)
+
+        // Building the pool is itself a chunk of work the first time, since
+        // every opponent is fleshed out from a team list. Breathe through it
+        // rather than in front of it.
+        let opponents = await opponentPoolYielding(for: team)
+        var perArchetype: [(String, Int)] = []
+        var total = 0.0, weight = 0.0
+        for (index, opponent) in opponents.enumerated() {
+            if index % 4 == 0 { await breathe() }
+            let theirs = opponent.team
+            let matchup = Matchup(mine: team, theirs: theirs, store: store,
+                                  field: field(for: team, against: theirs),
+                                  myTailwind: hasTailwind, theirTailwind: true,
+                                  myTrickRoom: hasTrickRoom)
+            let edge = matchup.verdict.score
+            perArchetype.append((opponent.name, edge))
+            total += Double(edge) * opponent.weight
+            weight += opponent.weight
+        }
+        score.matchup = weight > 0 ? total / weight : 0
+        await breathe()
+        finishScore(&score, team: team, plan: plan, advisor: advisor, analysis: analysis)
+        return (score, perArchetype)
+    }
+
+    /// The pool, built a few at a time.
+    private func opponentPoolYielding(for team: Team) async
+        -> [(name: String, team: Team, weight: Double)] {
+        let metas = store.data.metaTeams.filter { $0.format == team.format }
+        for (index, meta) in metas.enumerated() {
+            if index % 6 == 0 { await breathe() }
+            _ = store.opponentTeam(meta)
+        }
+        return opponentPool(for: team, limit: nil)
+    }
+
+    /// Who a team is scored against, in one place so both paths agree.
+    private func opponentPool(for team: Team, limit: Int?)
+        -> [(name: String, team: Team, weight: Double)] {
+        let written = store.data.metaTeams.filter { $0.format == team.format && $0.record == nil }
+        let played = store.data.metaTeams
+            .filter { $0.format == team.format && $0.record != nil }
+            .sorted { ($0.winRate ?? 0, $0.gamesPlayed) > ($1.winRate ?? 0, $1.gamesPlayed) }
+            .prefix(16)
+        var opponents: [(name: String, team: Team, weight: Double)] =
+            (written + played).map { ($0.name, store.opponentTeam($0), 1.0) }
+        for (sampled, share) in MetaModel(store: store, format: format).ladderTeams() {
+            opponents.append((sampled.name, sampled, max(0.5, share * 3)))
+        }
+        if let limit, opponents.count > limit {
+            opponents = Array(opponents.sorted { $0.weight > $1.weight }.prefix(limit))
+        }
+        return opponents
+    }
+
+    /// Everything after the matchups, which both paths share.
+    private func finishScore(_ score: inout TeamScore, team: Team, plan: Archetype,
+                             advisor: TeamAdvisor, analysis: TeamAnalysis) {
+        let held = advisor.rolesPresent
+        _ = held
+        let meta = MetaModel(store: store, format: format)
+        let structure = store.winningStructure(format: format)
+        var carried = 0.0, expected = 0.0
+        for (group, share) in structure {
+            expected += share
+            if !meta.fills(group, in: team).isEmpty { carried += share }
+        }
+        score.roles = expected > 0 ? carried / expected : 0
+        score.defence = 1 - min(1, Double(analysis.softSpots.count) / 8)
+        score.coverage = Double(analysis.coverage.filter { !$0.carriers.isEmpty }.count) / 18
+        let detected = advisor.archetypes
+        score.synergy = detected.contains { $0.archetype == plan && $0.isSupported } ? 1
+            : (detected.contains { $0.isSupported } ? 0.6 : 0.25)
+        score.disruption = disruption(of: team)
+        if team.slots.contains(where: { slot in
+            slot.moves.contains { store.move($0)?.name == "Revival Blessing" }
+        }) {
+            score.synergy = min(1, score.synergy + 0.25)
+        }
+        score.violations = team.violations(in: store)
+    }
+
     func evaluate(_ team: Team, plan: Archetype,
                   opponentLimit: Int? = nil) -> (TeamScore, [(String, Int)]) {
         let advisor = TeamAdvisor(team: team, store: store)
@@ -1103,9 +1379,7 @@ struct TeamBuilder {
             .sorted { ($0.winRate ?? 0, $0.gamesPlayed) > ($1.winRate ?? 0, $1.gamesPlayed) }
             .prefix(16)
         var opponents: [(name: String, team: Team, weight: Double)] =
-            (written + played).map {
-                ($0.name, TeamPaste.team(from: $0, store: store), 1.0)
-            }
+            (written + played).map { ($0.name, store.opponentTeam($0), 1.0) }
         for (sampled, share) in MetaModel(store: store, format: format).ladderTeams() {
             opponents.append((sampled.name, sampled, max(0.5, share * 3)))
         }

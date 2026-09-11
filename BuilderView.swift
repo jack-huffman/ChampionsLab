@@ -102,7 +102,7 @@ struct BuilderView: View {
         // froze the window for a second or two and drew nothing at all.
         job = Task { @MainActor in
             if picks.isEmpty {
-                await Task.yield()
+                await breathe()
                 picks = Forecast(store: store, format: format).picks(limit: 400)
             }
             guard !Task.isCancelled else { working = false; return }

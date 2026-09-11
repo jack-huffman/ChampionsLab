@@ -21,8 +21,10 @@ struct GuidedBuilderView: View {
     @State private var cachedFor = ""
     @State private var brief = BuildBrief()
     @State private var questionIndex = 0
+    @State private var picks: [Forecast.Pick] = []
+    @State private var megaOptions: [BuildInterview.MegaSuggestion] = []
 
-    enum Stage { case choose, briefing, interview }
+    enum Stage { case choose, briefing, interview, secondMega }
 
     init(seedID: Binding<String>, format: Binding<String>,
          initialStage: Stage = .choose, onBuild: @escaping (BuildBrief) -> Void) {
@@ -65,6 +67,8 @@ struct GuidedBuilderView: View {
                 if let seed { briefingPage(seed).frame(maxWidth: 820, alignment: .leading) }
             case .interview:
                 if let seed { interviewPage(seed).frame(maxWidth: 820, alignment: .leading) }
+            case .secondMega:
+                if let seed { secondMegaPage(seed) }
             }
             Spacer(minLength: 0)
         }
@@ -286,6 +290,14 @@ struct GuidedBuilderView: View {
                     Button("Next") { questionIndex += 1 }
                         .disabled(!answered)
                         .keyboardShortcut(.defaultAction)
+                } else if brief.dualMega {
+                    // The second Mega is too large a decision to make silently.
+                    Button("Choose the second Mega") {
+                        prepareMegaOptions(seed)
+                        stage = .secondMega
+                    }
+                    .disabled(!answered)
+                    .keyboardShortcut(.defaultAction)
                 } else {
                     Button("Build the team") { onBuild(brief) }
                         .disabled(!answered)
@@ -293,6 +305,98 @@ struct GuidedBuilderView: View {
                 }
             }
         })
+    }
+
+    // MARK: - Picking the second Mega
+
+    private func prepareMegaOptions(_ seed: Form) {
+        if picks.isEmpty {
+            picks = Forecast(store: store, format: format).picks(limit: 400)
+        }
+        megaOptions = BuildInterview(store: store, seed: seed, format: format)
+            .secondMegaOptions(picks: picks, limit: 12)
+    }
+
+    private func secondMegaPage(_ seed: Form) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            header(seed, step: "The second Mega")
+            Text("Only one can Mega Evolve per battle, so this is the other four you might bring — chosen to answer what \(seed.formLabel) cannot. Ranked by how much it covers, but it is your call.")
+                .font(.system(size: 12)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 820, alignment: .leading)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 12)], spacing: 12) {
+                ForEach(megaOptions) { option in
+                    megaChoice(option, seed: seed)
+                }
+            }
+
+            HStack {
+                Button("Back") { stage = .interview }
+                Spacer()
+                Button("Let the search decide") {
+                    brief.secondMegaID = nil
+                    brief.decisions.removeAll { $0.question.hasPrefix("Second Mega") }
+                    brief.decisions.append(("Second Mega", "whichever scores best"))
+                    onBuild(brief)
+                }
+                Button("Build with \(store.formsByID[brief.secondMegaID ?? ""]?.formLabel ?? "this")") {
+                    onBuild(brief)
+                }
+                .disabled(brief.secondMegaID == nil)
+                .keyboardShortcut(.defaultAction)
+            }
+            .frame(maxWidth: 820, alignment: .leading)
+        }
+    }
+
+    private func megaChoice(_ option: BuildInterview.MegaSuggestion, seed: Form) -> some View {
+        let chosen = brief.secondMegaID == option.form.id
+        return Button {
+            brief.secondMegaID = option.form.id
+            brief.decisions.removeAll { $0.question.hasPrefix("Second Mega") }
+            brief.decisions.append(("Second Mega", option.form.formLabel))
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    SpriteImage(form: option.form, side: 56)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(option.form.formLabel)
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            ForEach(option.form.pokeTypes) { TypeChip(type: $0, size: .small) }
+                        }
+                        Text(store.statRole(of: option.form).offence.rawValue)
+                            .font(.system(size: 10)).foregroundStyle(.tertiary)
+                    }
+                    Spacer(minLength: 0)
+                    if chosen {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(Palette.accent)
+                    }
+                }
+                if !option.covers.isEmpty {
+                    HStack(spacing: 3) {
+                        Text("covers").font(.system(size: 9)).foregroundStyle(.tertiary)
+                        ForEach(option.covers.prefix(4)) { TypeIcon(type: $0, side: 15) }
+                    }
+                }
+                Text(option.why)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 11)
+                .fill(chosen ? Palette.accent.opacity(0.14) : Palette.surface))
+            .overlay(RoundedRectangle(cornerRadius: 11)
+                .strokeBorder(chosen ? Palette.accent : Palette.hairline,
+                              lineWidth: chosen ? 2 : 1))
+        }
+        .buttonStyle(.plain)
     }
 
     private func progress(_ count: Int) -> some View {

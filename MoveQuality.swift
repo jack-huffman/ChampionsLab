@@ -82,7 +82,20 @@ extension Move {
         var doubleChance = 0.0
     }
 
+    /// Worked out once per move. The damage calculator reads this for
+    /// multi-hit, which put a dozen regular expressions inside every single
+    /// damage roll -- roughly 167,000 of them in one pass of the anti-meta
+    /// picks, which took that from a second to eighteen.
+    private static var drawbackCache: [String: Drawbacks] = [:]
+
     var drawbacks: Drawbacks {
+        if let hit = Move.drawbackCache[id] { return hit }
+        let made = computeDrawbacks()
+        Move.drawbackCache[id] = made
+        return made
+    }
+
+    private func computeDrawbacks() -> Drawbacks {
         var out = Drawbacks()
         let text = effect
 
@@ -282,8 +295,20 @@ extension Move {
 
     // MARK: - Regex helpers
 
+    /// Compiled patterns, kept. Building an NSRegularExpression is expensive
+    /// and these are a fixed handful, so rebuilding them per call cost far more
+    /// than the matching did.
+    private static let compiled = NSCache<NSString, NSRegularExpression>()
+
+    private static func regex(_ pattern: String) -> NSRegularExpression? {
+        if let hit = compiled.object(forKey: pattern as NSString) { return hit }
+        guard let made = try? NSRegularExpression(pattern: pattern) else { return nil }
+        compiled.setObject(made, forKey: pattern as NSString)
+        return made
+    }
+
     private static func match(_ pattern: String, in text: String) -> [String]? {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        guard let regex = regex(pattern) else { return nil }
         let source = text as NSString
         guard let hit = regex.firstMatch(
             in: text, range: NSRange(location: 0, length: source.length)) else { return nil }

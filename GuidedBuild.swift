@@ -17,6 +17,8 @@ import Foundation
 struct BuildBrief {
     var plan: Archetype = .balance
     var dualMega = false
+    /// The second Mega, when one was chosen rather than left to the search.
+    var secondMegaID: String?
     /// Types a partner must resist, because the seed folds to them.
     var mustResist: Set<PokeType> = []
     /// Threats the team is required to have an answer to.
@@ -104,6 +106,85 @@ struct BuildInterview {
             losesTo: profile.loses.prefix(4).map(\.name),
             beats: profile.beats.prefix(4).map(\.name),
             standing: profile.score)
+    }
+
+    // MARK: - Which second Mega
+
+    /// A Mega worth pairing with the seed, and why.
+    struct MegaSuggestion: Identifiable {
+        let form: Form
+        let score: Double
+        /// The case for it, in the terms that actually decided the ranking.
+        let why: String
+        /// Types it resists that the seed folds to.
+        let covers: [PokeType]
+        var id: String { form.id }
+    }
+
+    /// Megas ranked by how much they answer what the seed cannot.
+    ///
+    /// The search already scores this when it picks a second Mega on its own;
+    /// this exposes the same reasoning so the choice can be made rather than
+    /// assumed. Two Megas weak to the same thing is one Mega and a dead slot,
+    /// and that is what the ranking is mostly avoiding.
+    func secondMegaOptions(picks: [Forecast.Pick], limit: Int = 12) -> [MegaSuggestion] {
+        let standing = Dictionary(picks.map { ($0.form.id, $0.score) },
+                                  uniquingKeysWith: { a, _ in a })
+        let seedRole = store.statRole(of: seed)
+        let seedAbility = seed.abilities.first?.name
+
+        func taken(_ form: Form, _ type: PokeType) -> Double {
+            TypeChart.multiplier(type, into: form, ability: form.abilities.first?.name)
+        }
+
+        var out: [MegaSuggestion] = []
+        for candidate in store.data.forms where candidate.isMega {
+            guard candidate.dex != seed.dex else { continue }
+
+            var covers: [PokeType] = []
+            var shared: [PokeType] = []
+            for type in PokeType.allCases {
+                let mine = TypeChart.multiplier(type, into: seed, ability: seedAbility)
+                let theirs = taken(candidate, type)
+                if mine > 1 && theirs < 1 { covers.append(type) }
+                if mine > 1 && theirs > 1 { shared.append(type) }
+            }
+
+            let role = store.statRole(of: candidate)
+            let split = role.offence != seedRole.offence
+                && role.offence != .none && seedRole.offence != .none
+            let speedGap = abs(candidate.speed - seed.speed) >= 30
+
+            var score = Double(covers.count) * 2.0 - Double(shared.count) * 2.5
+            if split { score += 3 }
+            if speedGap { score += 2 }
+            score += (standing[candidate.id] ?? 0) * 6
+
+            // The case for it, in the order it was actually weighed.
+            var reasons: [String] = []
+            if !covers.isEmpty {
+                reasons.append("resists " + covers.prefix(3).map(\.rawValue)
+                    .joined(separator: ", ") + " where \(seed.formLabel) does not")
+            }
+            if split {
+                reasons.append("attacks \(role.offence == .special ? "specially" : "physically"), "
+                    + "so the same wall does not hold both")
+            }
+            if speedGap {
+                reasons.append(candidate.speed > seed.speed
+                               ? "much faster, for a different speed plan"
+                               : "much slower, which Trick Room can use")
+            }
+            if !shared.isEmpty {
+                reasons.append("but shares a \(shared.first!.rawValue) weakness")
+            }
+            out.append(MegaSuggestion(
+                form: candidate, score: score,
+                why: reasons.isEmpty ? "no strong interaction either way"
+                                     : reasons.joined(separator: "; "),
+                covers: covers))
+        }
+        return Array(out.sorted { $0.score > $1.score }.prefix(limit))
     }
 
     // MARK: - The questions
