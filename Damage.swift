@@ -139,6 +139,41 @@ enum DamageCalc {
         var moveType = PokeType(loose: move.type) ?? .normal
         var power = Double(move.power)
 
+        // -- moves whose type and power come from the field --------------------
+        // Weather Ball is 50 base Normal on paper and 100 base Water under rain,
+        // which is the entire reason a Drizzle team runs it. Reading the printed
+        // number undervalued it by half and gave it the wrong type as well.
+        if move.id == "weatherball", field.weather != .none {
+            power *= 2
+            switch field.weather {
+            case .sun:  moveType = .fire
+            case .rain: moveType = .water
+            case .snow: moveType = .ice
+            case .sand: moveType = .rock
+            case .none: break
+            }
+            notes.append("Weather Ball: \(moveType.rawValue) and double power in \(field.weather.rawValue)")
+        }
+        if move.id == "terrainpulse", field.terrain != .none {
+            power *= 2
+            switch field.terrain {
+            case .electric: moveType = .electric
+            case .grassy:   moveType = .grass
+            case .misty:    moveType = .fairy
+            case .psychic:  moveType = .psychic
+            case .none:     break
+            }
+            notes.append("Terrain Pulse: \(moveType.rawValue) and double power")
+        }
+        // Final Gambit deals the user's remaining health, not a base power of 1.
+        // It costs the user its life, which the worth model already charges for.
+        if move.id == "finalgambit" {
+            let dealt = attacker.stat(.hp)
+            return DamageResult(minDamage: dealt, maxDamage: dealt,
+                                targetHP: defender.maxHP, effectiveness: 1,
+                                notes: ["Final Gambit: deals \(dealt), equal to the user's HP, and the user faints"])
+        }
+
         // -- ability-driven type changes ------------------------------------
         // Aerilate is the reason Mega Salamence clicks Double-Edge: a Normal
         // move becomes Flying and gains 20% before anything else applies.
