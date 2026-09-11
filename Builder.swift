@@ -681,9 +681,9 @@ struct TeamBuilder {
         var per: [String: Int] = [:]
         var total = 0.0, count = 0.0
         for meta in store.data.metaTeams where meta.format == team.format {
-            let matchup = Matchup(mine: team, theirs: TeamPaste.team(from: meta, store: store),
-                                  store: store,
-                                  field: Field(isDoubles: team.format == "doubles"),
+            let theirs = TeamPaste.team(from: meta, store: store)
+            let matchup = Matchup(mine: team, theirs: theirs, store: store,
+                                  field: field(for: team, against: theirs),
                                   myTailwind: hasTailwind, theirTailwind: true,
                                   myTrickRoom: hasTrickRoom)
             let edge = matchup.verdict.score
@@ -824,6 +824,41 @@ struct TeamBuilder {
         return out.sorted { $0.score.total > $1.score.total }
     }
 
+    /// The field a matchup between these two teams actually starts on.
+    ///
+    /// Every matchup was scored on an empty field, which quietly deleted the
+    /// point of a weather team: a Golisopod side whose whole answer to its 4x
+    /// Fire weakness is Pelipper's Drizzle was being graded as though the rain
+    /// were never up. When both sides set something it is genuinely contested,
+    /// so that case stays neutral rather than guessing who wins the lead.
+    func field(for team: Team, against opponent: Team? = nil) -> Field {
+        func conditions(_ t: Team) -> (Weather, Terrain) {
+            var weather = Weather.none
+            var terrain = Terrain.none
+            for slot in t.slots {
+                guard let combatant = slot.combatant(in: store) else { continue }
+                switch combatant.ability {
+                case "Drizzle":       weather = .rain
+                case "Drought":       weather = .sun
+                case "Sand Stream":   weather = .sand
+                case "Snow Warning":  weather = .snow
+                case "Grassy Surge":  terrain = .grassy
+                case "Psychic Surge": terrain = .psychic
+                case "Electric Surge": terrain = .electric
+                case "Misty Surge":   terrain = .misty
+                default: break
+                }
+            }
+            return (weather, terrain)
+        }
+        let (myWeather, myTerrain) = conditions(team)
+        let (theirWeather, theirTerrain) = opponent.map(conditions) ?? (.none, .none)
+        return Field(
+            weather: theirWeather != .none && theirWeather != myWeather ? .none : myWeather,
+            terrain: theirTerrain != .none && theirTerrain != myTerrain ? .none : myTerrain,
+            isDoubles: team.format == "doubles")
+    }
+
     /// How much of the format's game plan this team can turn off.
     ///
     /// Weighted by how much of the field actually runs each tactic, so an answer
@@ -868,7 +903,7 @@ struct TeamBuilder {
             let theirs = TeamPaste.team(from: meta, store: store)
             // Opponents in this format nearly all carry Tailwind of their own.
             let matchup = Matchup(mine: team, theirs: theirs, store: store,
-                                  field: Field(isDoubles: team.format == "doubles"),
+                                  field: field(for: team, against: theirs),
                                   myTailwind: hasTailwind, theirTailwind: true,
                                   myTrickRoom: hasTrickRoom)
             let edge = matchup.verdict.score
