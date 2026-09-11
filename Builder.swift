@@ -118,6 +118,9 @@ struct Blueprint: Identifiable {
 struct TeamBuilder {
     let store: Store
     var format = "doubles"
+    /// What the interview established, where one was run. The search reads it
+    /// rather than being told a plan and left to guess the rest.
+    var brief: BuildBrief?
 
     /// Candidates worth considering. The whole roster is 349 forms and most are
     /// not competitively relevant; searching over all of them wastes the beam on
@@ -318,6 +321,36 @@ struct TeamBuilder {
                 value -= 8
             } else {
                 value += Double(min(3, fast)) * 1.5
+            }
+        }
+
+        // What the interview asked for. These are preferences with real weight,
+        // not filters: a six that answers the brief but falls apart is still a
+        // bad six, and the rest of the scoring still has to agree.
+        if let brief {
+            for type in brief.mustResist {
+                let resists = team.contains { ($0.taken[type] ?? 1) < 1 }
+                value += resists ? 7 : -7
+            }
+            for threat in brief.mustAnswer {
+                let answered = team.contains { profile in
+                    let multiplier = threat.pokeTypes.reduce(1.0) { running, type in
+                        running * TypeChart.multiplier(type, into: profile.form,
+                                                       ability: profile.form.abilities.first?.name)
+                    }
+                    // Beats it defensively, or simply outruns and outguns it.
+                    return multiplier < 1
+                        || (profile.speed > threat.speed
+                            && max(profile.form.attack, profile.form.spAttack) >= 110)
+                }
+                value += answered ? 6 : -4
+            }
+            let meta = MetaModel(store: store, format: format)
+            for name in brief.wantRoles {
+                guard let group = MetaModel.roleGroups.first(where: { $0.name == name })
+                else { continue }
+                let filled = !meta.fills(group, in: teamOf(team.map(\.form))).isEmpty
+                value += filled ? 5 : -3
             }
         }
 

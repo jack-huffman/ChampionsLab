@@ -101,6 +101,19 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
     render(BuilderView(preGenerated: generated, seedID: builderSeed?.id ?? ""),
            named: "builder-dark",
            size: CGSize(width: 1180, height: 900), dark: true)
+    render(GuidedBuilderView(seedID: .constant(""), format: .constant("doubles")) { _ in },
+           named: "guided-choose-dark",
+           size: CGSize(width: 1100, height: 1500), dark: true)
+    if let goli = store.data.forms.first(where: { $0.formLabel == "Mega Golisopod" }) {
+        render(GuidedBuilderView(seedID: .constant(goli.id), format: .constant("doubles"),
+                                 initialStage: .briefing) { _ in },
+               named: "guided-brief-dark",
+               size: CGSize(width: 1000, height: 800), dark: true)
+        render(GuidedBuilderView(seedID: .constant(goli.id), format: .constant("doubles"),
+                                 initialStage: .interview) { _ in },
+               named: "guided-interview-dark",
+               size: CGSize(width: 1000, height: 900), dark: true)
+    }
     render(ForecastView(), named: "forecast-dark",
            size: CGSize(width: 1180, height: 4200), dark: true)
     render(MatchupView(team: team, initialOpponent: "big-six"), named: "versus-dark",

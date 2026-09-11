@@ -18,6 +18,10 @@ struct BuilderView: View {
     /// wasted slot.
     @State private var dualMega = true
     @State private var fellBack = false
+    /// Guided by default: picking a Pokémon and pressing a button skips every
+    /// decision the engine could have talked you through.
+    @State private var guided = true
+    @State private var brief: BuildBrief?
 
     /// Pre-generated results, so tools/snapshot.sh can render the populated
     /// state — it has no view lifecycle to trigger a build from.
@@ -51,6 +55,10 @@ struct BuilderView: View {
             }
             .labelsHidden().frame(width: 150).controlSize(.small)
 
+            Toggle("Guided", isOn: $guided)
+                .toggleStyle(.checkbox).controlSize(.small)
+                .help("Walk through the decisions with the engine, instead of building in one shot.")
+
             Toggle("Two Megas", isOn: $dualMega)
                 .toggleStyle(.checkbox).controlSize(.small)
                 .help("Build around two Mega Evolutions. Only one can Mega Evolve per battle, so each defines its own four to bring — a primary line and an alternate.")
@@ -69,8 +77,9 @@ struct BuilderView: View {
         .onChange(of: store.usageVersion) { _ in picks = [] }
     }
 
-    private func generate() {
+    private func generate(with incoming: BuildBrief? = nil) {
         guard let seed else { return }
+        if let incoming { brief = incoming }
         working = true
         fellBack = false
         if picks.isEmpty {
@@ -78,7 +87,14 @@ struct BuilderView: View {
         }
         var builder = TeamBuilder(store: store)
         builder.format = format
+        builder.brief = brief
+        let plan = brief?.plan
         blueprints = builder.blueprints(seed: seed, picks: picks, dualMega: dualMega)
+        // The interview settled on a plan, so lead with it.
+        if let plan {
+            blueprints.sort { ($0.plan == plan ? 1 : 0, $0.score.total)
+                > ($1.plan == plan ? 1 : 0, $1.score.total) }
+        }
         // Not every seed can support a second Mega — a Trick Room plan built
         // around a slow wall often cannot. Say so rather than returning nothing.
         if dualMega && blueprints.isEmpty {
@@ -90,10 +106,43 @@ struct BuilderView: View {
     }
 
     @ViewBuilder private var content: some View {
-        if blueprints.isEmpty {
+        if blueprints.isEmpty && guided {
+            GuidedBuilderView(seedID: $seedID, format: $format) { finished in
+                brief = finished
+                dualMega = finished.dualMega
+                generate(with: finished)
+            }
+        } else if blueprints.isEmpty {
             intro
         } else {
             VStack(alignment: .leading, spacing: 16) {
+                if let brief, !brief.decisions.isEmpty {
+                    Card(padding: 12) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack {
+                                Text("BUILT TO THIS BRIEF")
+                                    .font(.system(size: 9, weight: .bold)).kerning(0.5)
+                                    .foregroundStyle(.tertiary)
+                                Spacer()
+                                Button("Start over") {
+                                    blueprints = []
+                                    self.brief = nil
+                                    guided = true
+                                }
+                                .controlSize(.small)
+                            }
+                            ForEach(brief.decisions, id: \.question) { decision in
+                                HStack(alignment: .top, spacing: 6) {
+                                    Text(decision.question)
+                                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                                    Text(decision.answer)
+                                        .font(.system(size: 11, weight: .semibold))
+                                    Spacer(minLength: 0)
+                                }
+                            }
+                        }
+                    }
+                }
                 if fellBack {
                     Label("No two-Mega six held together around this Pokémon, so these are single-Mega builds.",
                           systemImage: "info.circle")

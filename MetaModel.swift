@@ -399,6 +399,26 @@ struct MetaModel {
         return out
     }
 
+    /// Share of the tracked field carrying an attacking move of this type.
+    func attackingShare(of type: PokeType) -> Double {
+        let members = tracked
+        guard !members.isEmpty else { return 0 }
+        var none = 1.0
+        for member in members {
+            let carries = (member.entry.moveUsage ?? []).contains { share in
+                guard let move = store.data.moves.values.first(where: { $0.name == share.name })
+                else { return false }
+                return move.isDamaging && PokeType(loose: move.type) == type
+            } || member.entry.keyMoves.contains { name in
+                guard let move = store.data.moves.values.first(where: { $0.name == name })
+                else { return false }
+                return move.isDamaging && PokeType(loose: move.type) == type
+            }
+            if carries { none *= 1 - member.weight }
+        }
+        return 1 - none
+    }
+
     // MARK: - What winning teams are actually made of
 
     /// A job a team needs done, and the different ways of doing it.
