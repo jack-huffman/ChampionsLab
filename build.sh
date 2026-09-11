@@ -3,8 +3,9 @@
 #
 #  Produces a universal (arm64 + x86_64) bundle that depends only on system
 #  frameworks. The Regulation M-C dataset and its sprites are copied into
-#  Resources/ at build time, so the app never touches the network — refreshing
-#  the data is mkdata.py's job, not the app's.
+#  Resources/ at build time. The app can refresh the usage table over the
+#  network from the Usage & Meta screen; the dex itself — forms, learnsets,
+#  items, abilities — stays mkdata.py's job.
 #
 #  Re-signing at the end matters: writing anything into a bundle invalidates
 #  its signature, and macOS then refuses to launch it as "damaged".

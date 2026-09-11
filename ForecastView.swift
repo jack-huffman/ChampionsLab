@@ -23,6 +23,8 @@ struct ForecastView: View {
         }
         .onAppear(perform: recompute)
         .onChange(of: format) { _ in recompute() }
+        // A live usage refresh changes the field these are computed against.
+        .onChange(of: store.usageVersion) { _ in recompute() }
     }
 
     /// Computed once per format change and held, never recomputed in a body:

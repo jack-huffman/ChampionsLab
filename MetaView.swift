@@ -8,6 +8,7 @@ struct MetaView: View {
     @State private var format = "doubles"
     @State private var showProjected = true
     @State private var selection: String?
+    @State private var showRefresh = false
 
     private var entries: [UsageEntry] {
         store.data.usage
@@ -23,6 +24,19 @@ struct MetaView: View {
 
     private func tierRank(_ tier: String) -> Int {
         ["S": 0, "A": 1, "B": 2, "C": 3][tier] ?? 4
+    }
+
+    /// Where the numbers on screen came from, and when.
+    private var provenance: String {
+        if let live = store.liveUsage {
+            let stamp = DateFormatter.localizedString(
+                from: live.fetched, dateStyle: .medium, timeStyle: .short)
+            return "\(live.formatName) ladder, fetched \(stamp). Data from Pikalytics, \(live.license)."
+        }
+        if store.data.usage.contains(where: { $0.hasLiveData }) {
+            return "Measured ladder usage bundled with the app, built \(store.data.generated) by mkusage.py. Data from Pikalytics, CC BY-NC 4.0. Refresh to pull the current table."
+        }
+        return "No measured usage yet — rows marked “projected” are placed by their stats and abilities. Refresh to pull the live ladder."
     }
 
     var body: some View {
@@ -54,6 +68,7 @@ struct MetaView: View {
             }
             .frame(minWidth: 400)
         }
+        .sheet(isPresented: $showRefresh) { UsageRefreshSheet() }
     }
 
     private var controls: some View {
@@ -71,11 +86,16 @@ struct MetaView: View {
                 Spacer()
                 Text("\(entries.count) tracked")
                     .font(.system(size: 11)).foregroundStyle(.tertiary)
+                Button {
+                    showRefresh = true
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .controlSize(.small)
+                .help("Pull the current ladder table from Pikalytics")
             }
 
-            Text(store.data.usage.contains { $0.hasLiveData }
-                 ? "Measured Regulation M-C ladder usage, with the moves, items and abilities sets actually run. Data from Pikalytics, refreshed by mkusage.py."
-                 : "Regulation M-C has no usage history of its own yet, so rows marked “projected” are placed by their stats and abilities. Run ./mkusage.py to pull the live ladder.")
+            Text(provenance)
                 .font(.system(size: 10))
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)

@@ -15,6 +15,16 @@ final class Store: ObservableObject {
     @Published var teamWarning: String?
     /// Set when a team slot asks to be opened in the calculator.
     @Published var pendingCalculation: CalculatorPreload?
+    /// The live ladder table currently applied, if any.
+    @Published private(set) var liveUsage: UsageFeed.Snapshot?
+    /// Bumped whenever the usage table changes, so the views that compute
+    /// against it once — Forecast, Builder — know to redo the work.
+    @Published private(set) var usageVersion = 0
+
+    /// The table that shipped in champions.json, kept so a refresh always
+    /// merges its hand-written prose rather than the last refresh's generated
+    /// text, which would go stale as sets move.
+    private var bundledUsage: [UsageEntry] = []
 
     private var spriteCache: [String: NSImage] = [:]
 
@@ -29,8 +39,41 @@ final class Store: ObservableObject {
                            abilities: [:], generated: "—", sources: [])
             loadError = "\(error)"
         }
+        bundledUsage = data.usage
         teams = TeamStore.load()
         teamWarning = TeamStore.loadWarning
+        if let saved = UsageFeed.load() { apply(saved) }
+    }
+
+    // MARK: - Live usage
+
+    /// Everything a fetch needs to check its references, as plain values.
+    func usageIndex() -> UsageFeed.Index {
+        var index = UsageFeed.Index()
+        for form in data.forms {
+            index.formsByLabel[form.formLabel] = form
+            if form.suffix.isEmpty { index.formsByName[form.name] = form }
+        }
+        index.moveIDsByName = Dictionary(data.moves.values.map { ($0.name, $0.id) },
+                                         uniquingKeysWith: { a, _ in a })
+        index.itemNames = Set(data.items.map(\.name))
+        index.curated = Dictionary(bundledUsage.map { ($0.name, $0) },
+                                   uniquingKeysWith: { a, _ in a })
+        return index
+    }
+
+    func apply(_ snapshot: UsageFeed.Snapshot) {
+        data = data.replacingUsage(with: snapshot.entries)
+        liveUsage = snapshot
+        usageVersion += 1
+    }
+
+    /// Back to whatever mkdata.py baked in.
+    func revertToBundledUsage() {
+        UsageFeed.discard()
+        data = data.replacingUsage(with: bundledUsage)
+        liveUsage = nil
+        usageVersion += 1
     }
 
     private static func loadDataset() throws -> Dataset {

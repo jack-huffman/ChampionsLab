@@ -80,6 +80,8 @@ FORM_NAMES = {
     "squawkabilly:y": "%s (Yellow Plumage)",
 }
 
+overlay_usage_cache = []
+
 REFRESH = "--refresh" in sys.argv
 ONLY_ROSTER = "--only-roster" in sys.argv
 
@@ -673,6 +675,8 @@ def main():
     audit_abilities(abilities)
 
     # Real ladder usage, if mkusage.py has been run.
+    global overlay_usage_cache
+    overlay_usage_cache = overlay["usage"]
     live = load_live_usage(roster, moves, items)
     if live:
         overlay["usage"] = live
@@ -798,6 +802,64 @@ def pikalytics_label(slug):
     return slug.replace("-", " ")
 
 
+def describe(form, entry, moves_by_name):
+    """A factual one-liner for a Pokémon with no hand-written note.
+
+    Live data replaced the curated table wholesale at first, which blanked the
+    "Why it matters" text for everything. Curated prose is kept where it exists;
+    this fills the rest from what the ladder actually shows rather than leaving
+    an empty card.
+    """
+    bits = []
+    top = entry.get("moves") or []
+    items_used = entry.get("items") or []
+    abilities = entry.get("abilities") or []
+    if abilities:
+        bits.append("Runs %s on %.0f%% of sets" % (abilities[0]["name"], abilities[0]["percent"]))
+    if top:
+        names = ", ".join(m["name"] for m in top[:3])
+        bits.append("most common moves are %s" % names)
+    if items_used:
+        bits.append("usually holding %s (%.0f%%)"
+                    % (items_used[0]["name"], items_used[0]["percent"]))
+    text = "; ".join(bits)
+    if text:
+        text = text[0].upper() + text[1:] + "."
+    rate = entry.get("winrate")
+    if rate is not None:
+        verdict = ("It is winning more than it loses" if rate >= 51
+                   else ("It is close to even" if rate >= 49
+                         else "It loses slightly more than it wins"))
+        text += " %s at %.1f%% across %s recorded games." % (
+            verdict, rate,
+            (entry.get("wins") or 0) + (entry.get("losses") or 0))
+    mates = entry.get("teammates") or []
+    if mates:
+        text += " Most often seen alongside %s." % ", ".join(mates[:3])
+    return text.strip()
+
+
+def infer_role(form, entry, moves_by_name):
+    """A role label from what the Pokémon actually runs."""
+    names = {m["name"] for m in (entry.get("moves") or [])}
+    abilities = {a["name"] for a in (entry.get("abilities") or [])}
+    if names & {"Follow Me", "Rage Powder"}:
+        return "Redirection / support"
+    if "Trick Room" in names:
+        return "Trick Room setter"
+    if "Tailwind" in names:
+        return "Speed control"
+    if abilities & {"Grassy Surge", "Psychic Surge", "Electric Surge", "Misty Surge"}:
+        return "Terrain setter"
+    if abilities & {"Drizzle", "Drought", "Sand Stream", "Snow Warning"}:
+        return "Weather setter"
+    if "Intimidate" in abilities or names & {"Parting Shot", "U-turn", "Volt Switch"}:
+        return "Pivot / Intimidate"
+    if form["stats"][1] >= form["stats"][3]:
+        return "Physical attacker"
+    return "Special attacker"
+
+
 def load_live_usage(roster, moves, items):
     """Fold data/usage.json into the shape the app already expects.
 
@@ -815,6 +877,10 @@ def load_live_usage(roster, moves, items):
     by_name = {f["name"]: f for f in roster if not f["suffix"]}
     move_names = {m["name"]: m for m in moves.values()}
     item_names = {i["name"] for i in items}
+
+    # Anything already written by hand is kept; the live numbers go alongside it.
+    curated = {e["name"]: e for e in overlay_usage_cache}
+    move_lookup = {m["name"]: m for m in moves.values()}
 
     out, dropped = [], []
     for entry in payload.get("entries", []):
@@ -844,16 +910,23 @@ def load_live_usage(roster, moves, items):
 
         keep_items = [i for i in entry.get("items", []) if i["name"] in item_names]
 
+        previous = curated.get(form["form_label"]) or curated.get(form["name"]) or {}
+        entry_for_text = dict(entry)
+        entry_for_text["moves"] = keep_moves
+        entry_for_text["items"] = keep_items
+        entry_for_text["abilities"] = keep_abilities
+
         out.append({
             "name": form["form_label"],
             "tier": tier_for(entry["usage"]),
             "usage": entry["usage"],
             "projected": False,
-            "formats": ["doubles"],
-            "role": "",
+            "formats": previous.get("formats") or ["doubles"],
+            "role": previous.get("role") or infer_role(form, entry_for_text, move_lookup),
             "common_items": [i["name"] for i in keep_items][:3],
             "key_moves": [m["name"] for m in keep_moves][:4],
-            "why": "",
+            # Curated analysis wins; otherwise describe what the ladder shows.
+            "why": previous.get("why") or describe(form, entry_for_text, move_lookup),
             "winrate": entry.get("winrate"),
             "wins": entry.get("wins"),
             "losses": entry.get("losses"),

@@ -379,4 +379,12 @@ struct Dataset: Codable {
         case metaTeams = "meta_teams"
         case predictions
     }
+
+    /// A copy carrying a different usage table — how a live refresh lands.
+    func replacingUsage(with table: [UsageEntry]) -> Dataset {
+        Dataset(regulation: regulation, rules: rules, items: items, usage: table,
+                metaTeams: metaTeams, predictions: predictions, notes: notes,
+                forms: forms, moves: moves, abilities: abilities,
+                generated: generated, sources: sources)
+    }
 }

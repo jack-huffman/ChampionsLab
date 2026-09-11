@@ -56,6 +56,8 @@ struct BuilderView: View {
             }
         }
         .padding(12)
+        // Picks are cached across builds; a usage refresh invalidates them.
+        .onChange(of: store.usageVersion) { _ in picks = [] }
     }
 
     private func generate() {
