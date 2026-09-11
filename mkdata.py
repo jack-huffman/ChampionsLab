@@ -681,6 +681,13 @@ def main():
     if live:
         overlay["usage"] = live
 
+    # Real tournament results, appended to the hand-written archetypes.
+    usage_by_name = {e["name"]: e for e in overlay["usage"]}
+    tournaments = load_tournaments(roster, usage_by_name)
+    if tournaments:
+        overlay["meta_teams"] = [t for t in overlay["meta_teams"]
+                                 if not t.get("tournament")] + tournaments
+
     assign_stones(roster, items)
 
     out = {
@@ -796,8 +803,13 @@ def pikalytics_label(slug):
     if slug in PIKALYTICS_NAMES:
         return PIKALYTICS_NAMES[slug]
     parts = slug.split("-")
-    if len(parts) > 1 and parts[1] == "Mega":
-        tag = (" " + parts[2].upper()) if len(parts) > 2 else ""
+    # "Mega" is not always the second part: tournament data carries
+    # "Floette-Eternal-Mega", where the form tag comes first.
+    if "Mega" in parts[1:]:
+        index = parts.index("Mega", 1)
+        tag = ""
+        if len(parts) > index + 1 and len(parts[index + 1]) <= 2:
+            tag = " " + parts[index + 1].upper()
         return "Mega %s%s" % (parts[0], tag)
     return slug.replace("-", " ")
 
@@ -858,6 +870,62 @@ def infer_role(form, entry, moves_by_name):
     if form["stats"][1] >= form["stats"][3]:
         return "Physical attacker"
     return "Special attacker"
+
+
+def load_tournaments(roster, usage_by_name):
+    """Fold data/tournaments.json into meta teams the app can score against.
+
+    Written by mktournaments.py. Compositions and placements are real results;
+    sets are not published with them, so each member gets the ladder's most
+    common item, ability and moves. The note on every team says so.
+    """
+    path = os.path.join(HERE, "data", "tournaments.json")
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as fh:
+        payload = json.load(fh)
+
+    by_label = {f["form_label"]: f for f in roster}
+    by_name = {f["name"]: f for f in roster if not f["suffix"]}
+
+    out, dropped = [], []
+    for entry in payload.get("teams", []):
+        members = []
+        for raw in entry["members"]:
+            label = pikalytics_label(raw)
+            form = by_label.get(label) or by_name.get(label)
+            if form is None:
+                dropped.append("%s (%s)" % (raw, entry["player"]))
+                continue
+            measured = usage_by_name.get(form["form_label"]) or usage_by_name.get(form["name"]) or {}
+            members.append({
+                "form": form["form_label"],
+                "item": (measured.get("common_items") or [""])[0],
+                "ability": ((measured.get("ability_usage") or [{}])[0].get("name")
+                            or form["abilities"][0]["name"]),
+                "moves": (measured.get("key_moves") or [])[:4],
+            })
+        if len(members) < 4:
+            continue
+        placement = entry.get("placement") or ""
+        out.append({
+            "id": "tour-%d" % entry["rank"],
+            "name": "%s — %s" % (entry["player"], entry["event"][:40]),
+            "archetype": "Tournament result",
+            "projected": False,
+            "format": "doubles",
+            "note": ("Real result: %s at %s%s. Composition is theirs; the sets are "
+                     "the ladder's most common, not their actual spreads."
+                     % (entry.get("record") or "?", entry["event"],
+                        ", " + placement if placement else "")),
+            "members": members,
+            "source": entry.get("source", ""),
+            "tournament": True,
+        })
+    if dropped:
+        print("    tournament members not in the dex: %s" % ", ".join(dropped[:6]))
+    print("==> tournament teams: %d from %s" % (len(out), payload.get("generated")))
+    return out
 
 
 def load_live_usage(roster, moves, items):

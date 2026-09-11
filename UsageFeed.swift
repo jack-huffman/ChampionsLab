@@ -109,8 +109,13 @@ enum UsageFeed {
     static func pikalyticsLabel(_ slug: String) -> String {
         if let known = knownNames[slug] { return known }
         let parts = slug.split(separator: "-").map(String.init)
-        if parts.count > 1, parts[1] == "Mega" {
-            let tag = parts.count > 2 ? " " + parts[2].uppercased() : ""
+        // "Mega" is not always the second part: tournament results carry
+        // "Floette-Eternal-Mega", where the form tag comes before it.
+        if let index = parts.dropFirst().firstIndex(of: "Mega") {
+            var tag = ""
+            if parts.count > index + 1, parts[index + 1].count <= 2 {
+                tag = " " + parts[index + 1].uppercased()
+            }
             return "Mega \(parts[0])\(tag)"
         }
         return slug.replacingOccurrences(of: "-", with: " ")

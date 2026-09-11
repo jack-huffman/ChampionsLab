@@ -348,6 +348,41 @@ enum TeamPaste {
             slot.moves = member.moves.compactMap { name in
                 store.data.moves.values.first { $0.name == name }?.id
             }
+            // Tournament results publish the six, not the sets. Anything with no
+            // measured set on the ladder arrives empty, and an empty set scores
+            // as harmless — so give it the best four it could plausibly run,
+            // priced the same way the builder prices moves.
+            if slot.moves.isEmpty {
+                let learnable = store.moves(for: form)
+                var chosen: [String] = []
+                var usedTypes: Set<String> = []
+                let physicalAttacker = form.attack >= form.spAttack
+                let ranked = store.attackingMoves(for: form)
+                    .filter { physicalAttacker ? $0.category == "Physical" : $0.category == "Special" }
+                    .sorted {
+                        store.quality(of: $0).expectedPower
+                            * (form.types.contains($0.type) ? 1.5 : 1)
+                        > store.quality(of: $1).expectedPower
+                            * (form.types.contains($1.type) ? 1.5 : 1)
+                    }
+                for move in ranked where chosen.count < 3 {
+                    guard usedTypes.insert(move.type).inserted else { continue }
+                    chosen.append(move.id)
+                }
+                if let protect = learnable.first(where: { $0.name == "Protect" }) {
+                    chosen.append(protect.id)
+                }
+                slot.moves = chosen
+            }
+            // A Mega must be holding its stone; otherwise fall back to something
+            // ordinary rather than nothing, which would understate it.
+            if slot.item.isEmpty {
+                if form.isMega, !form.megaStone.isEmpty {
+                    slot.item = form.megaStone
+                } else {
+                    slot.item = form.attack >= form.spAttack ? "Life Orb" : "Life Orb"
+                }
+            }
             // Meta lists rarely publish spreads, so assume the standard
             // max-offence, max-speed shape rather than leaving them at zero,
             // which would make every matchup look winnable.
