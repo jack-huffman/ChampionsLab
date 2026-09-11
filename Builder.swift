@@ -319,7 +319,8 @@ struct TeamBuilder {
         slot.alignmentName = built.alignment
 
         slot.moves = chooseMoves(form, roles: roles, plan: plan, usage: usage,
-                                 item: slot.item, allyGrounded: allyGrounded)
+                                 ability: slot.ability, item: slot.item,
+                                 allyGrounded: allyGrounded)
         return slot
     }
 
@@ -413,7 +414,7 @@ struct TeamBuilder {
     ///
     /// `allyGrounded` is the count of partners an Earthquake would also hit.
     private func chooseMoves(_ form: Form, roles: Set<TeamRole>, plan: Archetype,
-                             usage: UsageEntry?, item: String,
+                             usage: UsageEntry?, ability: String, item: String,
                              allyGrounded: Int) -> [String] {
         var chosen: [String] = []
         var usedTypes = Set<String>()
@@ -449,10 +450,14 @@ struct TeamBuilder {
         let usesNormal = form.types.contains("Normal")
             || form.abilities.contains { ["Aerilate", "Pixilate", "Refrigerate",
                                           "Galvanize", "Normalize"].contains($0.name) }
+        // Worth, not base power. Steel Beam's 140 is not 140 when it costs half
+        // your HP, and Focus Blast's 120 is not 120 at 70% accuracy.
         func ranked(_ pool: [Move]) -> [Move] {
             pool.sorted { lhs, rhs in
-                let l = Double(lhs.power) * (form.types.contains(lhs.type) ? 1.5 : 1)
-                let r = Double(rhs.power) * (form.types.contains(rhs.type) ? 1.5 : 1)
+                let l = store.quality(of: lhs, ability: ability, item: item).expectedPower
+                    * (form.types.contains(lhs.type) ? 1.5 : 1)
+                let r = store.quality(of: rhs, ability: ability, item: item).expectedPower
+                    * (form.types.contains(rhs.type) ? 1.5 : 1)
                 return l > r
             }
         }

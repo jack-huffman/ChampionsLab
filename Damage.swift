@@ -27,6 +27,9 @@ struct Field {
     /// Reflect / Light Screen on the defending side.
     var screen = false
     var critical = false
+    /// The attacker's partner used Helping Hand on it this turn: +50% power,
+    /// and the single biggest reason a doubles support slot earns its place.
+    var helpingHand = false
 }
 
 // MARK: - Combatants
@@ -152,6 +155,13 @@ enum DamageCalc {
         case "Muscle Band" where move.category == "Physical": power *= 1.1
         case "Wise Glasses" where move.category == "Special": power *= 1.1
         default: break
+        }
+
+        // Helping Hand is a power modifier, applied before the stats are
+        // divided, so it compounds with everything above it.
+        if field.helpingHand {
+            power *= 1.5
+            notes.append("Helping Hand: +50%")
         }
 
         // Terrain boosts the grounded user's matching type.

@@ -181,6 +181,17 @@ final class Store: ObservableObject {
         return moves
     }
 
+    /// Move worth, cached: Forecast prices every move of every form.
+    private var qualityCache: [String: MoveQuality] = [:]
+
+    func quality(of move: Move, ability: String = "", item: String = "") -> MoveQuality {
+        let key = "\(move.id)|\(ability)|\(item)"
+        if let hit = qualityCache[key] { return hit }
+        let made = move.quality(ability: ability, item: item)
+        qualityCache[key] = made
+        return made
+    }
+
     private var moveOptionCache: [String: [LookupOption]] = [:]
 
     func moveOptions(for form: Form) -> [LookupOption] {

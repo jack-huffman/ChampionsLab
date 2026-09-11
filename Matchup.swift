@@ -22,8 +22,16 @@ struct Duel: Identifiable {
     let theirSpeed: Int
     let myBestMove: String
     let theirBestMove: String
+    /// How much of that damage you can count on — accuracy, and what the move
+    /// costs you to click. A 70% accurate "OHKO" is not an OHKO, and a Steel
+    /// Beam that halves your own HP is not the same trade as an Iron Head.
+    var myReliability: Double = 1
+    var theirReliability: Double = 1
 
     var id: String { "\(mine.id)-vs-\(theirs.id)" }
+
+    var effectiveOutgoing: Double { outgoing * myReliability }
+    var effectiveIncoming: Double { incoming * theirReliability }
 
     var iAmFaster: Bool { mySpeed > theirSpeed }
 
@@ -32,8 +40,8 @@ struct Duel: Identifiable {
     /// Speed decides ties: if we both OHKO, the faster one wins, which is why
     /// the base-151 Z Megas change so many of these cells.
     var outcome: Outcome {
-        let iKO = outgoing >= 1.0
-        let theyKO = incoming >= 1.0
+        let iKO = effectiveOutgoing >= 1.0
+        let theyKO = effectiveIncoming >= 1.0
         switch (iKO, theyKO) {
         case (true, true):
             // A genuine speed tie is a coin flip, not a loss. Scoring it as a
@@ -43,8 +51,8 @@ struct Duel: Identifiable {
         case (true, false):  return .win
         case (false, true):  return .loss
         case (false, false):
-            if outgoing >= incoming * 1.5 { return .favoured }
-            if incoming >= outgoing * 1.5 { return .against }
+            if effectiveOutgoing >= effectiveIncoming * 1.5 { return .favoured }
+            if effectiveIncoming >= effectiveOutgoing * 1.5 { return .against }
             return .neutral
         }
     }
@@ -163,7 +171,12 @@ struct Matchup {
         let learnable = store.moves(for: form).filter { $0.isDamaging && $0.power > 0 }
         let stab = learnable.filter { form.types.contains($0.type) }
         let pool = stab.isEmpty ? learnable : stab
-        return Array(pool.sorted { $0.power > $1.power }.prefix(3))
+        // Ranked on what the move is worth, not its base power: otherwise the
+        // fallback set is Giga Impact and Steel Beam every time.
+        return Array(pool.sorted {
+            store.quality(of: $0, ability: slot.ability, item: slot.item).expectedPower
+                > store.quality(of: $1, ability: slot.ability, item: slot.item).expectedPower
+        }.prefix(3))
     }
 
     private var myPairs: [(TeamSlot, Form)] {

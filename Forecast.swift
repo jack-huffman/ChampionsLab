@@ -140,16 +140,33 @@ struct Forecast {
     /// turn you want it. Ranking on raw base power alone handed every Pokémon a
     /// Giga Impact or a Focus Punch and scored it as though those were free.
     private func standardMoves(_ form: Form) -> [Move] {
-        let damaging = store.attackingMoves(for: form)
-        let ranked = damaging.sorted { lhs, rhs in
-            let lhsStab = form.types.contains(lhs.type) ? 1.5 : 1.0
-            let rhsStab = form.types.contains(rhs.type) ? 1.5 : 1.0
-            return Double(lhs.power) * lhsStab > Double(rhs.power) * rhsStab
+        let ability = form.abilities.first?.name ?? ""
+        // -ate abilities convert Normal moves and give them STAB, which is the
+        // whole reason Mega Salamence clicks Double-Edge rather than a Dragon
+        // move. Ranking on the printed type buries it under four Dragon attacks.
+        let converted: String? = {
+            switch ability {
+            case "Aerilate": return "Flying"
+            case "Pixilate": return "Fairy"
+            case "Refrigerate": return "Ice"
+            case "Galvanize": return "Electric"
+            default: return nil
+            }
+        }()
+        func effectiveType(_ move: Move) -> String {
+            move.type == "Normal" ? (converted ?? move.type) : move.type
         }
+        func worth(_ move: Move) -> Double {
+            let stab = form.types.contains(effectiveType(move)) ? 1.5 : 1.0
+            let ateBoost = move.type == "Normal" && converted != nil ? 1.2 : 1.0
+            return store.quality(of: move, ability: ability).expectedPower * stab * ateBoost
+        }
+        let ranked = store.attackingMoves(for: form).sorted { worth($0) > worth($1) }
+
         var seen = Set<String>()
         var out: [Move] = []
-        for move in ranked where !seen.contains(move.type) {
-            seen.insert(move.type)
+        for move in ranked where !seen.contains(effectiveType(move)) {
+            seen.insert(effectiveType(move))
             out.append(move)
             if out.count == 4 { break }
         }
@@ -186,20 +203,32 @@ struct Forecast {
             var bestSeen = 0.0
 
             for (them, theirMoves, weight, name) in threats {
+                // Best move by what it is worth once accuracy and self-inflicted
+                // costs are priced in, not by the biggest number on the roll.
                 var outgoing = 0.0
+                var outgoingReliability = 1.0
                 for move in myMoves {
                     let result = DamageCalc.calculate(attacker: me, defender: them,
                                                       move: move, field: context)
-                    if result.maxPercent / 100 > outgoing {
+                    let quality = store.quality(of: move, ability: me.ability)
+                    let worth = result.maxPercent / 100 * quality.reliability
+                    if worth > outgoing * outgoingReliability {
                         outgoing = result.maxPercent / 100
-                        if outgoing > bestSeen { bestSeen = outgoing; bestMove = move.name }
+                        outgoingReliability = quality.reliability
+                        if worth > bestSeen { bestSeen = worth; bestMove = move.name }
                     }
                 }
                 var incoming = 0.0
+                var incomingReliability = 1.0
                 for move in theirMoves {
                     let result = DamageCalc.calculate(attacker: them, defender: me,
                                                       move: move, field: context)
-                    incoming = max(incoming, result.maxPercent / 100)
+                    let quality = store.quality(of: move, ability: them.ability)
+                    let worth = result.maxPercent / 100 * quality.reliability
+                    if worth > incoming * incomingReliability {
+                        incoming = result.maxPercent / 100
+                        incomingReliability = quality.reliability
+                    }
                 }
 
                 let faster = me.stat(.speed) > them.stat(.speed)
@@ -208,7 +237,9 @@ struct Forecast {
                 let duel = Duel(mine: candidate, theirs: them.form,
                                 outgoing: outgoing, incoming: incoming,
                                 mySpeed: me.stat(.speed), theirSpeed: them.stat(.speed),
-                                myBestMove: bestMove, theirBestMove: "")
+                                myBestMove: bestMove, theirBestMove: "",
+                                myReliability: outgoingReliability,
+                                theirReliability: incomingReliability)
                 weighted += weight * duel.outcome.score
                 switch duel.outcome {
                 case .win: beats.append(name)

@@ -44,6 +44,7 @@ struct CalculatorView: View {
     @State private var doubles = true
     @State private var screen = false
     @State private var critical = false
+    @State private var helpingHand = false
 
     /// Everything the UI lets you set for one side.
     struct Side {
@@ -60,7 +61,7 @@ struct CalculatorView: View {
 
     private var field: Field {
         Field(weather: weather, terrain: terrain, isDoubles: doubles,
-              screen: screen, critical: critical)
+              screen: screen, critical: critical, helpingHand: helpingHand)
     }
 
     private func combatant(_ side: Side) -> Combatant? {
@@ -111,6 +112,9 @@ struct CalculatorView: View {
                     Toggle("Doubles", isOn: $doubles).controlSize(.small)
                     Toggle("Screen", isOn: $screen).controlSize(.small)
                     Toggle("Critical", isOn: $critical).controlSize(.small)
+                    Toggle("Helping Hand", isOn: $helpingHand)
+                        .controlSize(.small)
+                        .help("The attacker's partner used Helping Hand this turn: the move's power is increased by 50%.")
                     Toggle("Target used Glaive Rush", isOn: $defender.wideOpen)
                         .controlSize(.small)
                         .help("Glaive Rush leaves its user Wide Open until its next action: attacks against it cannot miss and deal double damage.")
@@ -160,6 +164,8 @@ struct CalculatorView: View {
                             .foregroundStyle(.secondary)
                     }
 
+                    reliabilityRow(move, result: result)
+
                     if !result.notes.isEmpty {
                         Divider()
                         VStack(alignment: .leading, spacing: 3) {
@@ -178,6 +184,31 @@ struct CalculatorView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 16)
             }
+        }
+    }
+
+    /// What the roll above does not say: how often it lands, and what clicking
+    /// it costs you. A guaranteed OHKO at 70% accuracy is a 70% OHKO.
+    @ViewBuilder
+    private func reliabilityRow(_ move: Move, result: DamageResult) -> some View {
+        let quality = store.quality(of: move, ability: attacker.ability,
+                                    item: attacker.item)
+        if !quality.isReliable, result.maxDamage > 0 {
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10)).foregroundStyle(Palette.warn)
+                VStack(alignment: .leading, spacing: 2) {
+                    if quality.hitChance < 1 {
+                        Text(String(format: "Lands %.0f%% of the time — %@ on a hit, nothing on a miss.",
+                                    quality.hitChance * 100, result.summary))
+                            .font(.system(size: 11)).foregroundStyle(Palette.warn)
+                    }
+                    Text(quality.summary)
+                        .font(.system(size: 10)).foregroundStyle(.tertiary)
+                }
+                Spacer(minLength: 0)
+            }
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 

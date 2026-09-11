@@ -193,5 +193,41 @@ let wideOpenRatio = Int((exposedMax / shutMax * 100).rounded())
 report("Ice Shard normal / Wide Open", "\(shut.maxDamage) / \(exposed.maxDamage)")
 checkNear("Wide Open doubles damage taken", wideOpenRatio, 200)
 
+// -- Helping Hand ---------------------------------------------------------
+var hhField = singles
+let unhelped = DamageCalc.calculate(attacker: boosted, defender: open,
+                                    move: movesByName["Ice Shard"]!, field: hhField)
+hhField.helpingHand = true
+let helped = DamageCalc.calculate(attacker: boosted, defender: open,
+                                  move: movesByName["Ice Shard"]!, field: hhField)
+report("Ice Shard alone / with Helping Hand",
+       "\(unhelped.maxDamage) / \(helped.maxDamage)")
+checkNear("Helping Hand is +50% power",
+          Int((Double(helped.maxDamage) / Double(unhelped.maxDamage) * 100).rounded()), 150,
+          tolerance: 3)
+
+// -- Move worth -----------------------------------------------------------
+//
+// Base power alone ranked Steel Beam over everything Gholdengo owns. These
+// pin the discounts that stopped it.
+func worth(_ name: String, ability: String = "", item: String = "") -> Int {
+    Int(movesByName[name]!.quality(ability: ability, item: item).expectedPower.rounded())
+}
+report("Steel Beam / Iron Head worth", "\(worth("Steel Beam")) / \(worth("Iron Head"))")
+check("Focus Blast is discounted for 70% accuracy", worth("Focus Blast"), 75)
+check("No Guard restores Focus Blast", worth("Focus Blast", ability: "No Guard"), 120)
+check("Rock Head cancels Head Smash recoil",
+      worth("Head Smash", ability: "Rock Head") > worth("Head Smash") ? 1 : 0, 1)
+check("Contrary turns Draco Meteor's drop into a gain",
+      worth("Draco Meteor", ability: "Contrary") > worth("Draco Meteor") ? 1 : 0, 1)
+check("Outrage is not worth its base power in doubles",
+      worth("Outrage") < worth("Dragon Claw") ? 1 : 0, 1)
+check("Triple Axel is worth more than its 20 BP",
+      worth("Triple Axel") > 80 ? 1 : 0, 1)
+check("Sucker Punch is discounted for failing on the wrong read",
+      movesByName["Sucker Punch"]!.quality().reliability < 0.8 ? 1 : 0, 1)
+check("A clean move takes no discount",
+      worth("Flamethrower"), movesByName["Flamethrower"]!.power)
+
 print("\n\(failures == 0 ? "ALL CHECKS PASSED" : "\(failures) CHECK(S) FAILED")")
 exit(failures == 0 ? 0 : 1)
