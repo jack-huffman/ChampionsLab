@@ -685,12 +685,9 @@ struct TeamBuilder {
         // Worth, not base power. Steel Beam's 140 is not 140 when it costs half
         // your HP, and Focus Blast's 120 is not 120 at 70% accuracy.
         func ranked(_ pool: [Move]) -> [Move] {
-            pool.sorted { lhs, rhs in
-                let l = store.quality(of: lhs, ability: ability, item: item).expectedPower
-                    * (form.types.contains(lhs.type) ? 1.5 : 1)
-                let r = store.quality(of: rhs, ability: ability, item: item).expectedPower
-                    * (form.types.contains(rhs.type) ? 1.5 : 1)
-                return l > r
+            pool.sorted {
+                store.moveValue($0, for: form, ability: ability, item: item)
+                    > store.moveValue($1, for: form, ability: ability, item: item)
             }
         }
         let attacks = ranked(store.attackingMoves(for: form)

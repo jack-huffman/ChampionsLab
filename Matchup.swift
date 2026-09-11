@@ -201,8 +201,8 @@ struct Matchup {
         // Ranked on what the move is worth, not its base power: otherwise the
         // fallback set is Giga Impact and Steel Beam every time.
         return Array(pool.sorted {
-            store.quality(of: $0, ability: slot.ability, item: slot.item).expectedPower
-                > store.quality(of: $1, ability: slot.ability, item: slot.item).expectedPower
+            store.moveValue($0, for: form, ability: slot.ability, item: slot.item)
+                > store.moveValue($1, for: form, ability: slot.ability, item: slot.item)
         }.prefix(3))
     }
 

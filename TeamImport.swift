@@ -360,10 +360,8 @@ enum TeamPaste {
                 let ranked = store.attackingMoves(for: form)
                     .filter { physicalAttacker ? $0.category == "Physical" : $0.category == "Special" }
                     .sorted {
-                        store.quality(of: $0).expectedPower
-                            * (form.types.contains($0.type) ? 1.5 : 1)
-                        > store.quality(of: $1).expectedPower
-                            * (form.types.contains($1.type) ? 1.5 : 1)
+                        store.moveValue($0, for: form, ability: member.ability)
+                            > store.moveValue($1, for: form, ability: member.ability)
                     }
                 for move in ranked where chosen.count < 3 {
                     guard usedTypes.insert(move.type).inserted else { continue }

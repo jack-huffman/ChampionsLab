@@ -157,7 +157,8 @@ struct TeamRefiner {
             let signature = team.slots[index].moves
                 .compactMap { store.move($0) }
                 .filter(\.isDamaging)
-                .max { store.quality(of: $0).expectedPower < store.quality(of: $1).expectedPower }?.id
+                .max { store.moveValue($0, for: form, ability: team.slots[index].ability)
+                     < store.moveValue($1, for: form, ability: team.slots[index].ability) }?.id
             for name in utility {
                 guard let move = learnable.first(where: { $0.name == name }),
                       !current.contains(move.id) else { continue }
@@ -169,8 +170,10 @@ struct TeamRefiner {
                               !TeamRefiner.notUnderstood.contains(m.name) else { return nil }
                         return (offset, m)
                     }
-                    .sorted { store.quality(of: $0.1).expectedPower
-                        < store.quality(of: $1.1).expectedPower }
+                    .sorted { store.moveValue($0.1, for: form,
+                                              ability: team.slots[index].ability)
+                        < store.moveValue($1.1, for: form,
+                                          ability: team.slots[index].ability) }
                 guard let (slotIndex, dropped) = ranked.first else { continue }
 
                 var trial = team

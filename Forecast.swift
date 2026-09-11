@@ -157,9 +157,7 @@ struct Forecast {
             move.type == "Normal" ? (converted ?? move.type) : move.type
         }
         func worth(_ move: Move) -> Double {
-            let stab = form.types.contains(effectiveType(move)) ? 1.5 : 1.0
-            let ateBoost = move.type == "Normal" && converted != nil ? 1.2 : 1.0
-            return store.quality(of: move, ability: ability).expectedPower * stab * ateBoost
+            store.moveValue(move, for: form, ability: ability)
         }
         let ranked = store.attackingMoves(for: form).sorted { worth($0) > worth($1) }
 

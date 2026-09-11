@@ -193,6 +193,56 @@ final class Store: ObservableObject {
         return made
     }
 
+    /// What a move is worth *to this Pokémon*: its own worth, its same-type
+    /// bonus, and any ability that changes its type.
+    ///
+    /// Six places ranked moves and only three of them applied STAB, which is
+    /// how Mega Baxcalibur — a Dragon/Ice Pokémon — had its best move reported
+    /// as Double-Edge. Normal at 120 beats Dragon at 106 until you remember the
+    /// Dragon one is multiplied by one and a half. The damage calculator always
+    /// had this right; the rankings feeding it did not, so it lives in one place
+    /// now and every caller uses it.
+    func moveValue(_ move: Move, for form: Form,
+                   ability: String = "", item: String = "") -> Double {
+        let resolved = ability.isEmpty ? (form.abilities.first?.name ?? "") : ability
+        // An -ate ability changes a Normal move's type, which changes whether
+        // it gets the bonus — this is why Mega Salamence clicks Double-Edge.
+        var type = move.type
+        var ateBoost = 1.0
+        if move.type == "Normal" {
+            switch resolved {
+            case "Aerilate":    type = "Flying";   ateBoost = 1.2
+            case "Pixilate":    type = "Fairy";    ateBoost = 1.2
+            case "Refrigerate": type = "Ice";      ateBoost = 1.2
+            case "Galvanize":   type = "Electric"; ateBoost = 1.2
+            case "Normalize":   ateBoost = 1.2
+            default: break
+            }
+        }
+        var stab = form.types.contains(type) ? 1.5 : 1.0
+        if resolved == "Adaptability", stab > 1 { stab = 2.0 }
+
+        // Whether it can actually throw the move. Ranking on power and STAB
+        // alone handed Mega Golisopod a Bug Buzz: 90 BP of Bug on a Pokémon
+        // with 150 Attack and 70 Sp. Atk, where the physical 100 BP it already
+        // had was worth twice as much.
+        let physical = move.category == "Physical"
+        let using = Double(physical ? form.attack : form.spAttack)
+        let best = Double(max(form.attack, form.spAttack))
+        let reach = best > 0 ? using / best : 1
+
+        return quality(of: move, ability: resolved, item: item).expectedPower
+            * stab * ateBoost * reach
+    }
+
+    /// The move this Pokémon is actually best at, by that measure.
+    func bestMove(for form: Form, ability: String = "", item: String = "") -> Move? {
+        attackingMoves(for: form).max {
+            moveValue($0, for: form, ability: ability, item: item)
+                < moveValue($1, for: form, ability: ability, item: item)
+        }
+    }
+
     /// Move worth, cached: Forecast prices every move of every form.
     private var qualityCache: [String: MoveQuality] = [:]
 

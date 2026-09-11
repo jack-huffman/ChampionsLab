@@ -95,9 +95,7 @@ struct BuildInterview {
             worstWeaknesses: Array(weaknesses.prefix(3)).map {
                 (type: $0.0, multiplier: $0.1, fieldShare: $0.2)
             },
-            bestMove: store.attackingMoves(for: seed)
-                .max { store.quality(of: $0).expectedPower < store.quality(of: $1).expectedPower }?
-                .name ?? "—",
+            bestMove: store.bestMove(for: seed)?.name ?? "—",
             speed: combatant.stat(.speed),
             outspeeds: profile.outspeeds,
             fieldSize: profile.fieldSize,

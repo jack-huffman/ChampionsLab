@@ -132,6 +132,37 @@ Ability: Regenerator
     print("  mirror edge: \(mirror.verdict.score)")
     check("mirror is even", abs(mirror.verdict.score) <= 5, "\(mirror.verdict.score)")
 
+    // -- same-type bonus in move ranking ---------------------------------
+    //
+    // Six places ranked moves and three of them ignored STAB, which reported a
+    // Dragon/Ice Pokemon's best move as Normal-type Double-Edge. One function
+    // does it now; these keep it honest.
+    print("\n== move valuation ==")
+    func form(_ name: String) -> Form { store.data.forms.first { $0.formLabel == name }! }
+    let bax = form("Mega Baxcalibur")
+    let baxBest = store.bestMove(for: bax)?.name ?? "-"
+    print("  Mega Baxcalibur's best move: \(baxBest)")
+    check("STAB decides Baxcalibur's best move", baxBest == "Glaive Rush", baxBest)
+
+    let goli = form("Mega Golisopod")
+    let goliBest = store.bestMove(for: goli)?.name ?? "-"
+    print("  Mega Golisopod's best move: \(goliBest)")
+    check("a physical attacker is not handed a special move",
+          store.data.moves.values.first { $0.name == goliBest }?.category == "Physical", goliBest)
+
+    // Aerilate makes a Normal move STAB Flying, which must survive the fix.
+    let mence = form("Mega Salamence")
+    let edge = store.data.moves.values.first { $0.name == "Double-Edge" }!
+    let claw = store.data.moves.values.first { $0.name == "Dragon Claw" }!
+    check("Aerilate keeps Double-Edge above a Dragon move",
+          store.moveValue(edge, for: mence, ability: "Aerilate")
+            > store.moveValue(claw, for: mence, ability: "Aerilate"), "no")
+
+    // And a move it gets no bonus for must rank below one it does.
+    let glaive = store.data.moves.values.first { $0.name == "Glaive Rush" }!
+    check("STAB Glaive Rush beats neutral Double-Edge on Baxcalibur",
+          store.moveValue(glaive, for: bax) > store.moveValue(edge, for: bax), "no")
+
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)
 }
