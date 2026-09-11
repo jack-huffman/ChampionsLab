@@ -264,6 +264,8 @@ struct GamePlanner {
                 // Only a move is "a slot away"; an ability it already has is not.
                 let suffix = answer.contains("could run") ? " — one move slot away." : "."
                 steps.append("\(entry.pressure.label) — up in about \(odds) of games. Nothing selected changes it, but \(answer)\(suffix)")
+            } else if let warning = entry.warning {
+                steps.append("\(entry.pressure.label) — up in about \(odds) of games. \(warning). You play those games on their field.")
             } else {
                 steps.append("\(entry.pressure.label) — up in about \(odds) of games, and nothing here changes it. You play those games on their field.")
             }

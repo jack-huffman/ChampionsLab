@@ -412,6 +412,36 @@ struct MetaModel {
         /// True when the answer is an ability it has or a move it has selected,
         /// rather than something it merely could run.
         let isSelected: Bool
+        /// Set when the proposed override would damage this team's own game
+        /// plan more than it costs the opponent.
+        let warning: String?
+    }
+
+    /// The team's own moves a terrain would turn off or halve.
+    ///
+    /// Overriding Grassy Terrain with Misty Terrain looks like an answer and
+    /// scores like one, right up until you notice Misty halves Dragon moves and
+    /// your win condition is a Dragon-type Glaive Rush. Psychic Terrain has the
+    /// same problem for a side built on priority: it blocks yours too.
+    func selfDefeating(_ terrain: Terrain, for team: Team) -> [String] {
+        var hurt: [String] = []
+        for slot in team.slots {
+            guard let form = slot.battleForm(in: store) else { continue }
+            for id in slot.moves {
+                guard let move = store.move(id), move.isDamaging else { continue }
+                switch terrain {
+                case .misty where move.type == "Dragon":
+                    hurt.append("\(form.formLabel)'s \(move.name)")
+                case .grassy where ["earthquake", "bulldoze", "magnitude"].contains(move.id):
+                    hurt.append("\(form.formLabel)'s \(move.name)")
+                case .psychic where move.priority > 0:
+                    hurt.append("\(form.formLabel)'s \(move.name)")
+                default:
+                    break
+                }
+            }
+        }
+        return hurt
     }
 
     /// Whether this team can change the field the format puts up, and how.
@@ -430,6 +460,7 @@ struct MetaModel {
         return fieldPressures.map { pressure in
             var confirmed: [String] = []
             var possible: [String] = []
+            var warning: String?
             for (form, running, learnset, chosen) in members {
                 let abilities = Set(form.abilities.map(\.name))
                 // Any other terrain displaces theirs; any other weather does too.
@@ -438,6 +469,17 @@ struct MetaModel {
                                                  (.electric, "Electric Surge", "Electric Terrain"),
                                                  (.misty, "Misty Surge", "Misty Terrain")]
                 where pressure.terrain != .none && terrain != pressure.terrain {
+                    // An override that halves your own attacks is not a fix —
+                    // but only worth mentioning when this team could set it.
+                    let canSet = abilities.contains(ability) || learnset.contains(move)
+                    let cost = canSet ? selfDefeating(terrain, for: team) : []
+                    guard cost.isEmpty else {
+                        if warning == nil {
+                            warning = "\(form.formLabel) could set \(terrain.rawValue) Terrain, but it would turn off "
+                                + cost.prefix(2).joined(separator: " and ")
+                        }
+                        continue
+                    }
                     if abilities.contains(ability) {
                         let line = "\(form.formLabel) overrides it with \(ability)"
                         if chosen == ability { confirmed.append(line) } else { possible.append(line) }
@@ -471,7 +513,8 @@ struct MetaModel {
             }
             return FieldAnswer(pressure: pressure,
                                answer: confirmed.first ?? possible.first,
-                               isSelected: !confirmed.isEmpty)
+                               isSelected: !confirmed.isEmpty,
+                               warning: (confirmed.isEmpty && possible.isEmpty) ? warning : nil)
         }
     }
 }

@@ -176,6 +176,7 @@ struct AdvisorView: View {
                                         .foregroundStyle(.tertiary)
                                 }
                                 Text(entry.answer
+                                     ?? entry.warning.map { $0 + " — you play the whole game under theirs." }
                                      ?? "Nothing here changes it — you play the whole game under theirs.")
                                     .font(.system(size: 10))
                                     .foregroundStyle(entry.isSelected ? Color.secondary

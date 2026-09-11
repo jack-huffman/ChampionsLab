@@ -679,6 +679,35 @@ struct MoveDetail: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
+
+            // Serebii names a status and stops there. "Gains the Wide Open
+            // status" says nothing about taking double damage, which is the
+            // whole reason Glaive Rush is a risk.
+            let statuses = Statuses.mentioned(in: move.effect)
+            if !statuses.isEmpty {
+                Divider().padding(.vertical, 2)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("WHAT THAT STATUS MEANS")
+                        .font(.system(size: 9, weight: .bold)).kerning(0.5)
+                        .foregroundStyle(.tertiary)
+                    ForEach(statuses, id: \.name) { status in
+                        HStack(alignment: .top, spacing: 7) {
+                            Image(systemName: "info.circle.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Palette.accent)
+                                .padding(.top, 1)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(status.name)
+                                    .font(.system(size: 11, weight: .semibold))
+                                Text(status.meaning)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

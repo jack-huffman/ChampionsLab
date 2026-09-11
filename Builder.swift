@@ -381,8 +381,8 @@ struct TeamBuilder {
     // MARK: Fleshing a team out
 
     /// Give a form the build it is actually used with, falling back to its role.
-    private func flesh(_ form: Form, plan: Archetype, usedItems: inout Set<String>,
-                       allyGrounded: Int = 0) -> TeamSlot {
+    func flesh(_ form: Form, plan: Archetype, usedItems: inout Set<String>,
+               allyGrounded: Int = 0) -> TeamSlot {
         var slot = TeamSlot(formID: form.id)
         let advisor = TeamAdvisor(team: Team(), store: store)
         let roles = advisor.potentialRoles(of: form)
@@ -600,7 +600,7 @@ struct TeamBuilder {
     /// four. Every combination of that Mega plus three partners is run against
     /// the bundled meta archetypes and the best four kept — which is the Team
     /// Preview decision, made in advance.
-    private func battlePlans(for team: Team, seed: Form) -> [BattlePlan] {
+    func battlePlans(for team: Team, seed: Form) -> [BattlePlan] {
         let bring = store.data.rules.formats.first { $0.id == format }?.bring ?? 4
         guard team.slots.count > bring, bring >= 2 else { return [] }
 
