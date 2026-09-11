@@ -911,19 +911,33 @@ struct TeamBuilder {
         let hasTailwind = !(held[.tailwind]?.isEmpty ?? true)
         let hasTrickRoom = !(held[.trickRoom]?.isEmpty ?? true)
         var perArchetype: [(String, Int)] = []
-        var total = 0.0, count = 0.0
-        for meta in store.data.metaTeams where meta.format == team.format {
-            let theirs = TeamPaste.team(from: meta, store: store)
+        var total = 0.0, weight = 0.0
+
+        // Hand-written archetypes describe strategies; teams sampled from the
+        // usage table describe what you will actually be queued against. Both
+        // count, with the measured ones weighted by how much of the ladder they
+        // represent, so the score no longer rests on seven of my opinions.
+        var opponents: [(name: String, team: Team, weight: Double)] =
+            store.data.metaTeams.filter { $0.format == team.format }.map {
+                ($0.name, TeamPaste.team(from: $0, store: store), 1.0)
+            }
+        for (sampled, share) in MetaModel(store: store, format: format).ladderTeams() {
+            opponents.append((sampled.name, sampled, max(0.5, share * 3)))
+        }
+
+        for opponent in opponents {
+            let theirs = opponent.team
             // Opponents in this format nearly all carry Tailwind of their own.
             let matchup = Matchup(mine: team, theirs: theirs, store: store,
                                   field: field(for: team, against: theirs),
                                   myTailwind: hasTailwind, theirTailwind: true,
                                   myTrickRoom: hasTrickRoom)
             let edge = matchup.verdict.score
-            perArchetype.append((meta.name, edge))
-            total += Double(edge); count += 1
+            perArchetype.append((opponent.name, edge))
+            total += Double(edge) * opponent.weight
+            weight += opponent.weight
         }
-        score.matchup = count > 0 ? total / count : 0
+        score.matchup = weight > 0 ? total / weight : 0
 
         let filled = TeamRole.essentials.filter { !(held[$0]?.isEmpty ?? true) }.count
         score.roles = Double(filled) / Double(TeamRole.essentials.count)

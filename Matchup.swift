@@ -272,6 +272,55 @@ struct Matchup {
         let unanswered: [Form]
         let deadWeight: [Form]
         let advice: [String]
+        /// Opponents two of yours can remove in a single turn together, and the
+        /// pair that does it. This is how knockouts actually happen in doubles;
+        /// scoring one attacker at a time misses most of them.
+        let focusKOs: [FocusKO]
+        /// The same thing done to you.
+        let focusedOnMe: [FocusKO]
+    }
+
+    struct FocusKO: Identifiable {
+        let target: Form
+        let first: Form
+        let second: Form
+        /// Combined share of the target's health, 0…1+.
+        let combined: Double
+        var id: String { target.id }
+    }
+
+    /// Every target two attackers can remove together in one turn.
+    ///
+    /// Doubles gives you two actions a turn, so the question is not "does any
+    /// one of mine beat that" but "can two of mine remove it before it acts".
+    /// A team of four that individually trade evenly but can focus down their
+    /// win condition is winning a game the one-on-one grid calls even.
+    private func focusFire(attackers: [Form], defenders: [Form],
+                           cells: [Duel], mineAttacking: Bool) -> [FocusKO] {
+        var out: [FocusKO] = []
+        for defender in defenders {
+            // Every attacker's single-turn share of this defender.
+            let shares: [(Form, Double)] = attackers.compactMap { attacker in
+                guard let cell = cells.first(where: {
+                    mineAttacking ? ($0.mine.id == attacker.id && $0.theirs.id == defender.id)
+                                  : ($0.theirs.id == attacker.id && $0.mine.id == defender.id)
+                }) else { return nil }
+                // Only damage available on the turn itself: a setup turn is not
+                // part of a focus.
+                let setup = mineAttacking ? cell.mySetupTurns : cell.theirSetupTurns
+                guard setup == 0 else { return (attacker, 0) }
+                let share = mineAttacking ? cell.effectiveOutgoing : cell.effectiveIncoming
+                return (attacker, share)
+            }
+            let ranked = shares.sorted { $0.1 > $1.1 }
+            guard ranked.count >= 2 else { continue }
+            let combined = ranked[0].1 + ranked[1].1
+            // Only interesting when neither could do it alone.
+            guard combined >= 1.0, ranked[0].1 < 1.0 else { continue }
+            out.append(FocusKO(target: defender, first: ranked[0].0,
+                               second: ranked[1].0, combined: combined))
+        }
+        return out.sorted { $0.combined > $1.combined }
     }
 
     var verdict: Verdict {
@@ -279,13 +328,28 @@ struct Matchup {
         guard !all.isEmpty else {
             return Verdict(score: 0, headline: "Pick two teams to compare.",
                            winCount: 0, lossCount: 0, totalCells: 0, speedEdge: 0,
-                           unanswered: [], deadWeight: [], advice: [])
+                           unanswered: [], deadWeight: [], advice: [],
+                           focusKOs: [], focusedOnMe: [])
         }
 
         let wins = all.filter { $0.outcome == .win }.count
         let losses = all.filter { $0.outcome == .loss }.count
         let raw = all.reduce(0.0) { $0 + $1.outcome.score } / Double(all.count)
-        let score = Int((raw * 100).rounded())
+
+        // Doubles gives both sides two actions a turn, so a target neither of
+        // yours beats alone can still be removed by two of them together. The
+        // one-on-one grid cannot see that, and it is how most knockouts happen.
+        let myForms = myPairs.map(\.1)
+        let theirForms = theirPairs.map(\.1)
+        let focusKOs = focusFire(attackers: myForms, defenders: theirForms,
+                                 cells: all, mineAttacking: true)
+        let focusedOnMe = focusFire(attackers: theirForms, defenders: myForms,
+                                    cells: all, mineAttacking: false)
+        // Worth a real but bounded amount: being able to remove two of their
+        // six by focusing is a genuine edge, not a rout.
+        let focusEdge = Double(focusKOs.count - focusedOnMe.count)
+            / Double(max(myForms.count, 1)) * 0.35
+        let score = Int(((raw + focusEdge) * 100).rounded().clamped(to: -100...100))
 
         let faster = all.filter(\.iAmFaster).count
         let speedEdge = Int((Double(faster) / Double(all.count) * 100).rounded())
@@ -306,6 +370,12 @@ struct Matchup {
         if let star = memberReports.max(by: { $0.score < $1.score }), star.wins > 0 {
             advice.append("\(star.form.formLabel) carries this matchup with \(star.wins) winning matchups.")
         }
+        for ko in focusKOs.prefix(2) {
+            advice.append("\(ko.first.formLabel) and \(ko.second.formLabel) together remove \(ko.target.formLabel) in one turn — neither does it alone.")
+        }
+        for ko in focusedOnMe.prefix(1) {
+            advice.append("They can focus \(ko.target.formLabel) down in a turn with \(ko.first.formLabel) and \(ko.second.formLabel). Do not lead it into both.")
+        }
         // Terrain and weather flip a lot of these cells, so say so once.
         if field.terrain == .none && theirPairs.contains(where: { form in
             form.1.abilities.contains { $0.name.hasSuffix("Surge") }
@@ -324,6 +394,14 @@ struct Matchup {
 
         return Verdict(score: score, headline: headline, winCount: wins,
                        lossCount: losses, totalCells: all.count, speedEdge: speedEdge,
-                       unanswered: unanswered, deadWeight: dead, advice: advice)
+                       unanswered: unanswered, deadWeight: dead, advice: advice,
+                       focusKOs: focusKOs, focusedOnMe: focusedOnMe)
+    }
+}
+
+
+private extension Comparable {
+    func clamped(to range: ClosedRange<Self>) -> Self {
+        min(max(self, range.lowerBound), range.upperBound)
     }
 }

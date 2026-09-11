@@ -326,6 +326,79 @@ struct MetaModel {
         return out.sorted { $0.share > $1.share }
     }
 
+    // MARK: - Opponents drawn from the ladder, not hand-written
+
+    /// Teams the format would actually put in front of you.
+    ///
+    /// A third of the team score used to rest on seven archetypes I wrote by
+    /// hand, while measured teammate data sat unused for nineteen of the twenty
+    /// tracked Pokémon. These are built from that instead: take a Pokémon with
+    /// real usage, add the partners it is actually seen with, and give each the
+    /// set the ladder runs. They are opinions about nothing — just what the
+    /// table says people bring.
+    func ladderTeams(limit: Int = 8) -> [(team: Team, weight: Double)] {
+        let tracked = self.tracked
+        guard tracked.count >= 4 else { return [] }
+        let byName = Dictionary(tracked.map { ($0.entry.name, $0) },
+                                uniquingKeysWith: { a, _ in a })
+
+        var out: [(Team, Double)] = []
+        var seenRosters: Set<String> = []
+        for seed in tracked.sorted(by: { $0.weight > $1.weight }) {
+            var picked: [Tracked] = [seed]
+            var usedDex: Set<Int> = [seed.form.dex]
+
+            // Its measured partners first, then the rest of the field by usage.
+            let partners = (seed.entry.teammates ?? []).compactMap { byName[$0] }
+                + tracked.sorted { $0.weight > $1.weight }
+            for candidate in partners where picked.count < 6 {
+                guard usedDex.insert(candidate.form.dex).inserted else { continue }
+                picked.append(candidate)
+            }
+            guard picked.count == 6 else { continue }
+
+            let key = picked.map(\.form.id).sorted().joined(separator: "|")
+            guard seenRosters.insert(key).inserted else { continue }
+
+            var team = Team(name: "\(seed.entry.name) core", format: format)
+            var usedItems: Set<String> = []
+            team.slots = picked.map { member in
+                var slot = TeamSlot(formID: member.form.id)
+                // The ability and item the ladder actually runs.
+                slot.ability = member.entry.abilityUsage?.first?.name
+                    ?? member.form.abilities.first?.name ?? ""
+                let item = (member.entry.itemUsage ?? [])
+                    .map(\.name).first { !usedItems.contains($0) }
+                    ?? member.entry.commonItems.first { !usedItems.contains($0) }
+                    ?? ""
+                slot.item = item
+                if !item.isEmpty { usedItems.insert(item) }
+                slot.moves = (member.entry.moveUsage ?? []).prefix(4).compactMap { share in
+                    member.form.moves.first { store.move($0)?.name == share.name }
+                }
+                if slot.moves.isEmpty {
+                    slot.moves = member.entry.keyMoves.prefix(4).compactMap { name in
+                        member.form.moves.first { store.move($0)?.name == name }
+                    }
+                }
+                // A representative spread: into its better attacking stat and
+                // Speed, which is what most measured sets look like.
+                let physical = member.form.attack >= member.form.spAttack
+                var sp = Array(repeating: 0, count: 6)
+                sp[physical ? Stat.attack.rawValue : Stat.spAttack.rawValue] = 32
+                sp[Stat.speed.rawValue] = 32
+                sp[Stat.hp.rawValue] = 2
+                slot.sp = sp
+                slot.alignmentName = physical ? "Adamant" : "Modest"
+                return slot
+            }
+            team.locked = true
+            out.append((team, seed.weight))
+            if out.count >= limit { break }
+        }
+        return out
+    }
+
     // MARK: - Does a team answer any of it?
 
     struct Coverage: Identifiable {
