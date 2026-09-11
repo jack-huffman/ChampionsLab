@@ -181,6 +181,18 @@ final class Store: ObservableObject {
         return moves
     }
 
+    /// What winning teams carry, worked out once. It depends only on the
+    /// dataset, and rebuilding forty-eight teams inside every team evaluation
+    /// took a score from 100ms to 390ms.
+    private var structureCache: [String: [(group: MetaModel.RoleGroup, share: Double)]] = [:]
+
+    func winningStructure(format: String) -> [(group: MetaModel.RoleGroup, share: Double)] {
+        if let hit = structureCache[format] { return hit }
+        let made = MetaModel(store: self, format: format).winningStructure()
+        structureCache[format] = made
+        return made
+    }
+
     /// Move worth, cached: Forecast prices every move of every form.
     private var qualityCache: [String: MoveQuality] = [:]
 

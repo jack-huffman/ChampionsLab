@@ -405,25 +405,81 @@ struct BuilderView: View {
             line.isPrimary ? Palette.accent.opacity(0.4) : Palette.hairline))
     }
 
+    /// A summary, not one chip per opponent.
+    ///
+    /// This was a tile for every archetype, which read fine against seven of
+    /// them. The pool is thirty-one now — written archetypes, ladder cores and
+    /// real tournament teams — and thirty-one tiles is a wall of two-digit
+    /// numbers over truncated names. What matters is the shape of the spread
+    /// and which few sit at each end.
     private func archetypeRow(_ blueprint: Blueprint) -> some View {
-        HStack(spacing: 6) {
-            ForEach(blueprint.perArchetype, id: \.name) { entry in
-                VStack(spacing: 1) {
-                    Text(entry.edge > 0 ? "+\(entry.edge)" : "\(entry.edge)")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(entry.edge >= 8 ? Palette.good
-                                         : (entry.edge <= -8 ? Palette.bad : Palette.dim))
-                    Text(entry.name)
-                        .font(.system(size: 8)).foregroundStyle(.tertiary)
-                        .lineLimit(1)
+        let entries = blueprint.perArchetype
+        let favourable = entries.filter { $0.edge >= 8 }
+        let even = entries.filter { $0.edge > -8 && $0.edge < 8 }
+        let against = entries.filter { $0.edge <= -8 }
+        let best = entries.sorted { $0.edge > $1.edge }.prefix(3)
+        let worst = entries.sorted { $0.edge < $1.edge }.prefix(3)
+
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 6) {
+                Text("ACROSS \(entries.count) OPPONENTS")
+                    .font(.system(size: 9, weight: .bold)).kerning(0.4)
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                tally(favourable.count, "favourable", Palette.good)
+                tally(even.count, "even", Palette.dim)
+                tally(against.count, "against", Palette.bad)
+            }
+
+            // One bar, proportioned — the shape of the spread at a glance.
+            GeometryReader { geo in
+                HStack(spacing: 2) {
+                    ForEach([(favourable.count, Palette.good), (even.count, Palette.hairline),
+                             (against.count, Palette.bad)], id: \.1.description) { count, colour in
+                        if count > 0 {
+                            Capsule().fill(colour)
+                                .frame(width: max(3, geo.size.width
+                                                  * Double(count) / Double(max(1, entries.count))))
+                        }
+                    }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
-                .background(Palette.surfaceRaised)
-                .clipShape(RoundedRectangle(cornerRadius: 5))
+            }
+            .frame(height: 6)
+
+            HStack(alignment: .top, spacing: 18) {
+                endOfTheRange("BEST INTO", Array(best), Palette.good)
+                endOfTheRange("WORST INTO", Array(worst), Palette.bad)
             }
         }
+    }
+
+    private func tally(_ count: Int, _ label: String, _ colour: Color) -> some View {
+        HStack(spacing: 3) {
+            Text("\(count)")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .monospacedDigit().foregroundStyle(colour)
+            Text(label).font(.system(size: 9)).foregroundStyle(.tertiary)
+        }
+    }
+
+    private func endOfTheRange(_ title: String, _ entries: [(name: String, edge: Int)],
+                               _ colour: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.system(size: 8, weight: .bold)).kerning(0.4)
+                .foregroundStyle(.tertiary)
+            ForEach(entries, id: \.name) { entry in
+                HStack(spacing: 5) {
+                    Text(entry.edge > 0 ? "+\(entry.edge)" : "\(entry.edge)")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .monospacedDigit().foregroundStyle(colour)
+                        .frame(width: 24, alignment: .trailing)
+                    Text(entry.name)
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.tail)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var methodology: some View {

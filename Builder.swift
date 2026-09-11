@@ -1069,8 +1069,18 @@ struct TeamBuilder {
         // usage table describe what you will actually be queued against. Both
         // count, with the measured ones weighted by how much of the ladder they
         // represent, so the score no longer rests on seven of my opinions.
+        // Every tournament team is kept in the dataset, because the weight
+        // calibration wants the largest sample it can get. Scoring against all
+        // of them is a different matter: it was sixty-three matchups per
+        // evaluation, and the extra forty said nothing the first sixteen had
+        // not. The best-performing ones are the ones worth answering.
+        let written = store.data.metaTeams.filter { $0.format == team.format && $0.record == nil }
+        let played = store.data.metaTeams
+            .filter { $0.format == team.format && $0.record != nil }
+            .sorted { ($0.winRate ?? 0, $0.gamesPlayed) > ($1.winRate ?? 0, $1.gamesPlayed) }
+            .prefix(16)
         var opponents: [(name: String, team: Team, weight: Double)] =
-            store.data.metaTeams.filter { $0.format == team.format }.map {
+            (written + played).map {
                 ($0.name, TeamPaste.team(from: $0, store: store), 1.0)
             }
         for (sampled, share) in MetaModel(store: store, format: format).ladderTeams() {
@@ -1099,7 +1109,7 @@ struct TeamBuilder {
         // Jobs a team needs done, weighted by how often teams that actually won
         // carry them, rather than a checklist of five categories I chose.
         let meta = MetaModel(store: store, format: format)
-        let structure = meta.winningStructure()
+        let structure = store.winningStructure(format: format)
         var carried = 0.0, expected = 0.0
         for (group, share) in structure {
             expected += share

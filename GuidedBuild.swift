@@ -42,7 +42,11 @@ struct BuildInterview {
     }
 
     struct Option: Identifiable {
-        let id = UUID()
+        /// Stable across regeneration. This was a fresh UUID, and since the
+        /// questions are rebuilt whenever the view redraws, the id stored when
+        /// you picked an option never matched the one being drawn a moment
+        /// later — so the radio button never filled in.
+        var id: String { label }
         let label: String
         /// The arithmetic that makes this a real choice, not a preference.
         let detail: String

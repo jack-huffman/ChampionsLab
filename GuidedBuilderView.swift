@@ -13,7 +13,12 @@ struct GuidedBuilderView: View {
 
     @State private var stage: Stage
     @State private var query = ""
-    @State private var answers: [String: UUID] = [:]
+    @State private var answers: [String: String] = [:]
+    /// Worked out once per Pokémon. Both of these run the whole field through
+    /// the damage calculator, and they were being recomputed on every redraw.
+    @State private var cachedBriefing: BuildInterview.Briefing?
+    @State private var cachedQuestions: [BuildInterview.Question] = []
+    @State private var cachedFor = ""
     @State private var brief = BuildBrief()
     @State private var questionIndex = 0
 
@@ -28,6 +33,25 @@ struct GuidedBuilderView: View {
     }
 
     private var seed: Form? { store.formsByID[seedID] }
+
+    private func prepare() {
+        guard let seed, cachedFor != seedID else { return }
+        let interview = BuildInterview(store: store, seed: seed, format: format)
+        cachedBriefing = interview.briefing()
+        cachedQuestions = interview.questions()
+        cachedFor = seedID
+    }
+
+    /// The cache where it has been filled, and a direct computation otherwise —
+    /// ImageRenderer never fires onAppear, so the snapshot path needs a way in.
+    private func interviewData(_ seed: Form)
+        -> (briefing: BuildInterview.Briefing, questions: [BuildInterview.Question]) {
+        if let cachedBriefing, !cachedQuestions.isEmpty, cachedFor == seedID {
+            return (cachedBriefing, cachedQuestions)
+        }
+        let interview = BuildInterview(store: store, seed: seed, format: format)
+        return (interview.briefing(), interview.questions())
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -46,6 +70,13 @@ struct GuidedBuilderView: View {
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(22)
+        .onAppear(perform: prepare)
+        .onChange(of: seedID) { _ in
+            answers = [:]
+            brief = BuildBrief()
+            questionIndex = 0
+            prepare()
+        }
     }
 
     // MARK: - Choosing
@@ -95,6 +126,7 @@ struct GuidedBuilderView: View {
                         PokemonTile(form: form, side: 76, isSelected: seedID == form.id,
                                     caption: caption(for: form)) {
                             seedID = form.id
+                            prepare()
                             stage = .briefing
                         }
                     }
@@ -131,7 +163,7 @@ struct GuidedBuilderView: View {
     // MARK: - What the engine already knows
 
     private func briefingPage(_ seed: Form) -> some View {
-        let brief = BuildInterview(store: store, seed: seed, format: format).briefing()
+        let brief = interviewData(seed).briefing
         return VStack(alignment: .leading, spacing: 16) {
             header(seed, step: "Before we start")
 
@@ -207,12 +239,12 @@ struct GuidedBuilderView: View {
     // MARK: - The interview
 
     private func interviewPage(_ seed: Form) -> some View {
-        let interview = BuildInterview(store: store, seed: seed, format: format)
-        let questions = interview.questions()
+        let questions = interviewData(seed).questions
+        guard !questions.isEmpty else { return AnyView(EmptyView()) }
         let question = questions[min(questionIndex, questions.count - 1)]
         let answered = answers[question.id] != nil
 
-        return VStack(alignment: .leading, spacing: 16) {
+        return AnyView(VStack(alignment: .leading, spacing: 16) {
             header(seed, step: "Question \(questionIndex + 1) of \(questions.count)")
             progress(questions.count)
 
@@ -257,7 +289,7 @@ struct GuidedBuilderView: View {
                         .keyboardShortcut(.defaultAction)
                 }
             }
-        }
+        })
     }
 
     private func progress(_ count: Int) -> some View {

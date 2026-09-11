@@ -23,6 +23,7 @@ import html
 import json
 import os
 import re
+import unicodedata
 import subprocess
 import sys
 import time
@@ -872,6 +873,67 @@ def infer_role(form, entry, moves_by_name):
     return "Special attacker"
 
 
+def clean_text(text):
+    """Strip decoration from anything scraped before it enters the dataset.
+
+    Community tournament names are full of emoji, hearts and modifier-letter
+    ornament -- "\u02dc\u02cb\u02cf Pomelo Late Night Tour", "Sitrus-Series" wrapped in
+    lemons. None of it belongs in a name the app prints, and it has to be
+    removed everywhere the text is used rather than in one place, which is how
+    it survived in the note after the title had been cleaned.
+    """
+    if not text:
+        return ""
+    out = []
+    for ch in unicodedata.normalize("NFKC", text):
+        category = unicodedata.category(ch)
+        # So, Sk and Cn cover emoji, symbol modifiers and unassigned points.
+        if category in ("So", "Sk", "Cn", "Cf"):
+            continue
+        # Spacing modifier letters are category Lm, so they survived the above
+        # and left "\u02cb\u02cf\u02ce\u02ca Pomelo Late Night Tour" on screen. They are only
+        # ever ornament in a tournament title.
+        if "\u02b0" <= ch <= "\u02ff":
+            continue
+        # Variation selectors and zero-width joiners are invisible but still
+        # occupy a slot, which is how a title ended up starting with a gap.
+        if "\ufe00" <= ch <= "\ufe0f" or ch in "\u200b\u200c\u200d\u2060":
+            continue
+        out.append(ch)
+    cleaned = "".join(out)
+    cleaned = re.sub(r"[|\u00b7\u2022]+", " - ", cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    return cleaned.strip(" -\u2013\u2014")
+
+
+def tidy_event(name):
+    """A tournament name short enough to print, cut at a word boundary.
+
+    Deliberately conservative: earlier versions used a trailing wildcard to
+    strip the regulation marker and swallowed the rest of the title with it,
+    turning "r/VGC Regulation M-C Kickoff Cup" into "r/VGC". Only the marker
+    itself goes, then the punctuation it leaves behind.
+    """
+    name = clean_text(name)
+    name = re.sub(r"\b(?:Regulation|Reg)\s*(?:Set\s*)?M-?C\b", "", name, flags=re.I)
+    name = re.sub(r"\$\s*\d+\s*(?:to\s*\w+|prize\s*pool)?", "", name, flags=re.I)
+    # Punctuation stranded by those removals.
+    name = re.sub(r"\(\s*[,;]\s*", "(", name)
+    name = re.sub(r"\(\s*\)", "", name)
+    name = re.sub(r"(\s*-\s*){2,}", " - ", name)
+    name = re.sub(r"\s{2,}", " ", name).strip(" -")
+
+    if len(name) > 40:
+        name = name[:40].rsplit(" ", 1)[0] or name[:40]
+    # Truncation can strand an open bracket or a trailing separator.
+    if name.count("(") > name.count(")"):
+        name = name[:name.rindex("(")]
+    while name.count(")") > name.count("("):
+        name = name.replace(")", "", 1)
+    name = re.sub(r"[\s\-,:;(]+$", "", name)
+    return name.strip() or "community tournament"
+
+
 def load_tournaments(roster, usage_by_name):
     """Fold data/tournaments.json into meta teams the app can score against.
 
@@ -910,14 +972,14 @@ def load_tournaments(roster, usage_by_name):
         placement = entry.get("placement") or ""
         out.append({
             "id": "tour-%d" % entry["rank"],
-            "name": "%s — %s" % (entry["player"], entry["event"][:40]),
+            "name": "%s — %s" % (clean_text(entry["player"]), tidy_event(entry["event"])),
             "archetype": "Tournament result",
             "projected": False,
             "format": "doubles",
             "note": ("Real result: %s at %s%s. Composition is theirs; the sets are "
                      "the ladder's most common, not their actual spreads."
-                     % (entry.get("record") or "?", entry["event"],
-                        ", " + placement if placement else "")),
+                     % (entry.get("record") or "?", tidy_event(entry["event"]),
+                        ", " + clean_text(placement) if placement else "")),
             "members": members,
             "source": entry.get("source", ""),
             "tournament": True,
