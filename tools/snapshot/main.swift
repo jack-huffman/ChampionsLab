@@ -121,6 +121,8 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
                                  fraction: 0.5) {}
            },
            named: "overlay-dark", size: CGSize(width: 700, height: 420), dark: true)
+    render(ForecastView(), named: "forecast-top-dark",
+           size: CGSize(width: 1180, height: 1150), dark: true)
     render(ForecastView(), named: "forecast-dark",
            size: CGSize(width: 1180, height: 4200), dark: true)
     render(MatchupView(team: team, initialOpponent: "big-six"), named: "versus-dark",

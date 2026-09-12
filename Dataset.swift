@@ -29,6 +29,9 @@ final class Store: ObservableObject {
     private var spriteCache: [String: NSImage] = [:]
     /// What each form's stats say it is for, worked out once.
     var roleCache: [String: StatRole] = [:]
+    /// The viability table, which needs the anti-meta run to be complete.
+    var viabilityCache: [Viability]?
+    var picksWereUsed = false
 
     private init() {
         do {

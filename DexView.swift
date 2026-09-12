@@ -305,6 +305,23 @@ struct FormDetail: View {
                     .foregroundStyle(.tertiary)
             }
             Spacer()
+            if let v = store.viability(of: form) {
+                HStack(spacing: 5) {
+                    Text(v.tier.name)
+                        .font(.system(size: 11, weight: .semibold))
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(Palette.surfaceRaised)
+                        .clipShape(Capsule())
+                    if v.trend != .steady {
+                        Label(v.trend.rawValue,
+                              systemImage: v.trend == .falling ? "arrow.down.right"
+                                : "arrow.up.right")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(v.trend == .falling ? Palette.bad : Palette.good)
+                    }
+                }
+                .help(v.summary)
+            }
         }
     }
 

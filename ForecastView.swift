@@ -54,6 +54,10 @@ struct ForecastView: View {
         if let report {
             VStack(alignment: .leading, spacing: 20) {
                 caveat(report)
+                trajectoryCard(report)
+                undervaluedCard(report)
+                cascadeCard(report)
+                tierCard(report)
                 fieldCard(report)
                 tacticsCard(report)
                 typeLandscape(report)
@@ -89,6 +93,177 @@ struct ForecastView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    // MARK: Where it is heading
+
+    private func trajectoryCard(_ report: Forecast.Report) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(
+                title: "Where the format is heading",
+                subtitle: "Tournament results run ahead of ladder usage. The gap between them is the only forward-looking signal there is.")
+            HStack(alignment: .top, spacing: 12) {
+                movers("CLIMBING", report.rising, Palette.good)
+                movers("SLIDING", report.falling, Palette.bad)
+            }
+            Text("Pikalytics publishes a top twenty, so anything below that cutoff reads as absent rather than rare — a climb measured from there is an upper bound, and says so.")
+                .font(.system(size: 10)).foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func movers(_ title: String, _ rows: [Trajectory.Movement],
+                        _ colour: Color) -> some View {
+        Card(padding: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title).font(.system(size: 10, weight: .bold)).kerning(0.5)
+                    .foregroundStyle(colour)
+                if rows.isEmpty {
+                    Text("Nothing moving much.")
+                        .font(.system(size: 11)).foregroundStyle(.tertiary)
+                }
+                ForEach(rows) { row in
+                    HStack(alignment: .top, spacing: 8) {
+                        SpriteImage(form: row.form, side: 30)
+                        VStack(alignment: .leading, spacing: 1) {
+                            HStack(spacing: 5) {
+                                Text(row.form.formLabel)
+                                    .font(.system(size: 12, weight: .medium))
+                                Text(String(format: "%+.0f", row.viability.movement))
+                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                                    .monospacedDigit().foregroundStyle(colour)
+                                if row.viability.movementIsUpperBound {
+                                    Text("at most")
+                                        .font(.system(size: 8)).foregroundStyle(.tertiary)
+                                }
+                            }
+                            Text(row.reading)
+                                .font(.system(size: 10)).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Strong and unplayed
+
+    private func undervaluedCard(_ report: Forecast.Report) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionHeader(
+                    title: "Strong, and nobody is playing it",
+                    subtitle: "The useful question is not what is good but what is good and absent. An answer at 40% usage is already in everyone's Team Preview.")
+                ForEach(report.undervalued) { pick in
+                    HStack(alignment: .top, spacing: 10) {
+                        SpriteImage(form: pick.form, side: 34)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(pick.form.formLabel)
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text(pick.tier.name)
+                                    .font(.system(size: 9, weight: .bold))
+                                    .padding(.horizontal, 5).padding(.vertical, 1)
+                                    .background(Palette.surfaceRaised)
+                                    .foregroundStyle(.secondary)
+                                    .clipShape(Capsule())
+                                Text(pick.exposure < 0.005 ? "unplayed"
+                                     : String(format: "%.0f%% played", pick.exposure * 100))
+                                    .font(.system(size: 10, design: .rounded))
+                                    .monospacedDigit().foregroundStyle(.tertiary)
+                            }
+                            if !pick.beats.isEmpty {
+                                Text("beats " + pick.beats.joined(separator: ", "))
+                                    .font(.system(size: 10)).foregroundStyle(Palette.good)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                        Text(String(format: "%+.2f", pick.standing))
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(Palette.grade(Int((pick.standing + 1) * 50)))
+                    }
+                    .padding(.vertical, 1)
+                }
+            }
+        }
+    }
+
+    // MARK: The cascade
+
+    private func cascadeCard(_ report: Forecast.Report) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "The format, its answers, and what beats those",
+                          subtitle: "Answering a metagame creates a new one. Each step is the same calculation run against the step before it.")
+            HStack(alignment: .top, spacing: 12) {
+                ForEach(Array(report.cascade.enumerated()), id: \.element.id) { index, wave in
+                    Card(padding: 14) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 5) {
+                                Text("\(index + 1)")
+                                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                                    .frame(width: 16, height: 16)
+                                    .background(Palette.accent.opacity(0.2))
+                                    .foregroundStyle(Palette.accent)
+                                    .clipShape(Circle())
+                                Text(wave.name)
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            Text(wave.explanation)
+                                .font(.system(size: 10)).foregroundStyle(.tertiary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            ForEach(wave.members, id: \.form.id) { member in
+                                HStack(alignment: .top, spacing: 6) {
+                                    SpriteImage(form: member.form, side: 26)
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Text(member.form.formLabel)
+                                            .font(.system(size: 11, weight: .medium))
+                                            .lineLimit(1)
+                                        Text(member.note)
+                                            .font(.system(size: 9))
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(2)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    // MARK: Tiers
+
+    private func tierCard(_ report: Forecast.Report) -> some View {
+        Card(padding: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionHeader(title: "Viability",
+                              subtitle: "Ranked on what people bring and win with. The builder fills roles from the top of this and drops a tier only as far as it must.")
+                ForEach(report.tiers, id: \.tier) { row in
+                    HStack(alignment: .center, spacing: 8) {
+                        Text(row.tier.name)
+                            .font(.system(size: 11, weight: .semibold))
+                            .frame(width: 84, alignment: .leading)
+                        Text("\(row.count)")
+                            .font(.system(size: 11, design: .rounded)).monospacedDigit()
+                            .foregroundStyle(.tertiary).frame(width: 26, alignment: .trailing)
+                        HStack(spacing: 3) {
+                            ForEach(row.examples) { form in
+                                SpriteImage(form: form, side: 26).help(form.formLabel)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
             }
         }
     }

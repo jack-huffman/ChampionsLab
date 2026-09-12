@@ -432,6 +432,14 @@ struct MetaModel {
     struct RoleGroup: Identifiable {
         let name: String
         let moves: Set<String>
+        /// The moves that define the job rather than merely touching it.
+        ///
+        /// Bulldoze lowers Speed and Rain Dance sets rain, so on a bare
+        /// learnset test Kingambit qualifies as a weather setter and Rillaboom
+        /// as speed control. Nobody runs either. Suggestions come from here;
+        /// the wider set is still what counts a team as covered, because a team
+        /// that happens to carry Bulldoze does have the effect available.
+        let core: Set<String>
         let abilities: Set<String>
         /// Satisfied by any spread move, any priority attack, and so on.
         let anySpread: Bool
@@ -439,9 +447,11 @@ struct MetaModel {
         let anySetup: Bool
         var id: String { name }
 
-        init(_ name: String, moves: Set<String> = [], abilities: Set<String> = [],
-             anySpread: Bool = false, anyPriority: Bool = false, anySetup: Bool = false) {
-            self.name = name; self.moves = moves; self.abilities = abilities
+        init(_ name: String, moves: Set<String> = [], core: Set<String>? = nil,
+             abilities: Set<String> = [], anySpread: Bool = false,
+             anyPriority: Bool = false, anySetup: Bool = false) {
+            self.name = name; self.moves = moves; self.core = core ?? moves
+            self.abilities = abilities
             self.anySpread = anySpread; self.anyPriority = anyPriority; self.anySetup = anySetup
         }
     }
@@ -451,11 +461,15 @@ struct MetaModel {
                   moves: ["Tailwind", "Trick Room", "Icy Wind", "Electroweb",
                           "Thunder Wave", "Glare", "Nuzzle", "Rock Tomb", "Bulldoze",
                           "Quash", "After You"],
+                  core: ["Tailwind", "Trick Room", "Icy Wind", "Electroweb",
+                         "Thunder Wave", "Glare", "Nuzzle"],
                   abilities: ["Swift Swim", "Chlorophyll", "Sand Rush", "Slush Rush",
                               "Unburden", "Prankster"]),
         RoleGroup("Buying a turn",
                   moves: ["Fake Out", "Follow Me", "Rage Powder", "Taunt", "Encore",
                           "Parting Shot", "Spore", "Hypnosis", "Revival Blessing"],
+                  core: ["Fake Out", "Follow Me", "Rage Powder", "Encore",
+                         "Parting Shot", "Spore", "Revival Blessing"],
                   abilities: ["Armor Tail", "Queenly Majesty", "Intimidate"]),
         RoleGroup("Blunting their damage",
                   moves: ["Will-O-Wisp", "Snarl", "Wide Guard", "Reflect",
@@ -468,6 +482,10 @@ struct MetaModel {
                   moves: ["Grassy Terrain", "Psychic Terrain", "Electric Terrain",
                           "Misty Terrain", "Sunny Day", "Rain Dance", "Sandstorm",
                           "Snowscape", "Steel Roller", "Defog"],
+                  // Half the roster learns Sunny Day; that is not what makes a
+                  // weather team. An ability is what makes one.
+                  core: ["Grassy Terrain", "Psychic Terrain", "Electric Terrain",
+                         "Misty Terrain", "Steel Roller"],
                   abilities: ["Grassy Surge", "Psychic Surge", "Electric Surge",
                               "Misty Surge", "Drizzle", "Drought", "Sand Stream",
                               "Snow Warning"]),
@@ -475,6 +493,8 @@ struct MetaModel {
                   moves: ["Recover", "Life Dew", "Strength Sap", "Roost", "Wish",
                           "Rest", "Leech Life", "Drain Punch", "Giga Drain",
                           "Matcha Gotcha", "Revival Blessing"],
+                  core: ["Recover", "Life Dew", "Strength Sap", "Roost", "Wish",
+                         "Matcha Gotcha", "Revival Blessing"],
                   abilities: ["Regenerator", "Poison Heal", "Hospitality"]),
     ]
 

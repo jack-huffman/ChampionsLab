@@ -415,16 +415,35 @@ struct Forecast {
         /// The tactics a measurable share of the field runs, and what stops them.
         let tactics: [MetaModel.TacticPressure]
         let states: [(label: String, weight: Double)]
+        /// Where the format appears to be heading.
+        let rising: [Trajectory.Movement]
+        let falling: [Trajectory.Movement]
+        let undervalued: [Trajectory.Undervalued]
+        let cascade: [Trajectory.Wave]
+        let tiers: [(tier: ViabilityTier, count: Int, examples: [Form])]
     }
 
     func report() -> Report {
         let attacking = attackingTypes
         let entries = field
         let meta = MetaModel(store: store, format: format)
+        let ranked = picks()
+        let trajectory = Trajectory(store: store, format: format, picks: ranked)
+        let movement = trajectory.movements(limit: 8)
+        let table = store.viabilityTable(picks: ranked)
+        var tierCounts: [(ViabilityTier, Int, [Form])] = []
+        for tier in ViabilityTier.allCases {
+            // One entry per species, so a base form and its Mega are not two.
+            var seen = Set<Int>()
+            let group = table.filter { $0.tier == tier }
+                .filter { seen.insert($0.form.dex).inserted }
+            guard !group.isEmpty else { continue }
+            tierCounts.append((tier, group.count, group.prefix(6).map(\.form)))
+        }
         return Report(
             attackingTypes: Array(attacking.prefix(6)),
             worstAttackingTypes: Array(attacking.suffix(4).reversed()),
-            picks: picks(),
+            picks: ranked,
             speedLandscape: Array(speedLandscape.prefix(16)),
             typeShare: Array(typeShare.prefix(8)),
             fieldSize: entries.count,
@@ -432,6 +451,10 @@ struct Forecast {
             measuredCount: entries.filter { !$0.entry.isProjected }.count,
             fieldPressures: meta.fieldPressures,
             tactics: meta.tactics,
-            states: meta.fieldStates.map { (label: $0.label, weight: $0.weight) })
+            states: meta.fieldStates.map { (label: $0.label, weight: $0.weight) },
+            rising: movement.rising, falling: movement.falling,
+            undervalued: trajectory.undervalued(limit: 10),
+            cascade: trajectory.cascade(),
+            tiers: tierCounts)
     }
 }

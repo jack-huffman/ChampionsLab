@@ -162,6 +162,28 @@ struct TeamBuilder {
     /// essential role, and everything in the usage table.
     func publicPool(picks: [Forecast.Pick]) -> [Form] { pool(picks: picks) }
 
+    /// Candidates ordered by how established they are, not merely filtered.
+    ///
+    /// The pool used to be a flat list on a loose threshold, so a role could be
+    /// filled by something nobody has played as readily as by what wins events.
+    /// Top-meta picks are top-meta for a reason: this hands the search the
+    /// established ones first and drops a tier only as far as it has to, which
+    /// is how a person shops for a partner.
+    func tieredPool(picks: [Forecast.Pick]) -> [Form] {
+        let table = store.viabilityTable(picks: picks)
+        let ranked = Dictionary(table.map { ($0.form.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return pool(picks: picks).sorted { first, second in
+            let a = ranked[first.id], b = ranked[second.id]
+            let tierA = a?.tier ?? .unproven, tierB = b?.tier ?? .unproven
+            if tierA != tierB { return tierA < tierB }
+            // Within a tier, what is played more and doing better goes first.
+            let playA = max(a?.ladder ?? 0, a?.tournament ?? 0)
+            let playB = max(b?.ladder ?? 0, b?.tournament ?? 0)
+            if abs(playA - playB) > 0.01 { return playA > playB }
+            return (a?.standing ?? 0) > (b?.standing ?? 0)
+        }
+    }
+
     private func pool(picks: [Forecast.Pick]) -> [Form] {
         let standing = Dictionary(picks.map { ($0.form.id, $0.score) },
                                   uniquingKeysWith: { a, _ in a })
@@ -208,6 +230,8 @@ struct TeamBuilder {
         let usage: Double
         /// Measured winrate, where the ladder has one.
         let winrate: Double?
+        /// Credit for being established in the format, 0…4.
+        let proven: Double
         /// Fights as a Mega. Champions registers the base Pokémon holding its
         /// stone, so Salamence carrying a Salamencite is a Mega for every
         /// purpose that matters here even though the form is not named one.
@@ -224,7 +248,7 @@ struct TeamBuilder {
                                   uniquingKeysWith: { a, _ in a })
         let advisor = TeamAdvisor(team: Team(), store: store)
         var out: [Profile] = []
-        for (index, form) in pool(picks: picks).enumerated() {
+        for (index, form) in tieredPool(picks: picks).enumerated() {
             if yielding, index % 25 == 0 { await breathe() }
             out.append(profile(of: form, standing: standing, advisor: advisor))
         }
@@ -248,16 +272,28 @@ struct TeamBuilder {
                        usage: (measured?.isProjected == false ? measured?.usage : nil)
                             .map { $0 / 100 } ?? 0,
                        winrate: measured?.winrate,
+                       proven: provenCredit(form),
                        megaBuild: buildsAsMega(form, usage: measured), speed: form.speed,
                        physical: form.attack >= form.spAttack,
                        taken: taken)
+    }
+
+    /// Being established is worth something, and not very much.
+    private func provenCredit(_ form: Form) -> Double {
+        switch store.viability(of: form)?.tier ?? .unproven {
+        case .established: return 4
+        case .strong:      return 2.5
+        case .playable:    return 1.2
+        case .fringe:      return 0
+        case .unproven:    return -1
+        }
     }
 
     func profiles(picks: [Forecast.Pick]) -> [Profile] {
         let standing = Dictionary(picks.map { ($0.form.id, $0.score) },
                                   uniquingKeysWith: { a, _ in a })
         let advisor = TeamAdvisor(team: Team(), store: store)
-        return pool(picks: picks).map { form in
+        return tieredPool(picks: picks).map { form in
             var taken: [PokeType: Double] = [:]
             for type in PokeType.allCases {
                 taken[type] = TypeChart.multiplier(type, into: form,
@@ -272,6 +308,7 @@ struct TeamBuilder {
                            standing: standing[form.id] ?? 0,
                            usage: (measured?.isProjected == false ? measured?.usage : nil).map { $0 / 100 } ?? 0,
                            winrate: measured?.winrate,
+                           proven: provenCredit(form),
                            megaBuild: buildsAsMega(form, usage: measured), speed: form.speed,
                            physical: form.attack >= form.spAttack,
                            taken: taken)
@@ -288,14 +325,16 @@ struct TeamBuilder {
 
         value += team.reduce(0.0) { $0 + $1.standing } / Double(team.count) * 22
 
-        // What the ladder has already proved. A trade model on its own reaches
+        // What the format has already proved. A trade model on its own reaches
         // for whatever happens to score well against the tracked field, which is
-        // how a six ends up with Torterra in it. Pokémon people actually win
-        // with get a prior — deliberately a modest one, so it nudges the search
-        // rather than just rebuilding the usage list.
+        // how a six ends up with Torterra in it. Established Pokémon get a
+        // prior — deliberately a modest one, so it nudges the search rather
+        // than just rebuilding the usage list, and a genuinely better fringe
+        // pick can still win the slot.
         for member in team {
             value += min(3.5, member.usage * 9)
             if let winrate = member.winrate { value += (winrate - 50) * 0.25 }
+            value += member.proven
         }
 
         // Roles. The first holder of an essential role is worth a lot; the
@@ -592,6 +631,7 @@ struct TeamBuilder {
             return Profile(form: form, dex: form.dex,
                            roles: advisor.potentialRoles(of: form),
                            types: form.pokeTypes, standing: 0, usage: 0, winrate: nil,
+                           proven: provenCredit(form),
                            megaBuild: form.isMega, speed: form.speed,
                            physical: form.attack >= form.spAttack, taken: taken)
         }
