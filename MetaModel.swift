@@ -528,19 +528,24 @@ struct MetaModel {
             // Not enough evidence: treat every job as equally expected.
             return MetaModel.roleGroups.map { ($0, 1.0) }
         }
-        var out: [(RoleGroup, Double)] = []
-        for group in MetaModel.roleGroups {
-            var carried = 0.0, total = 0.0
-            for meta in winners {
-                let weight = Double(meta.gamesPlayed) * (meta.winRate ?? 0)
-                total += weight
-                if !fills(group, in: TeamPaste.team(from: meta, store: store)).isEmpty {
-                    carried += weight
-                }
-            }
-            out.append((group, total > 0 ? carried / total : 0))
+        // Each list is built once, not once per job.
+        //
+        // This rebuilt every winning team from its paste inside the loop over
+        // role groups, so answering ten questions constructed a thousand teams.
+        // It cost 340ms of unbroken main thread the first time anything asked,
+        // which was the largest single stall left in a build. Going through the
+        // store's cache also means the pool the evaluation already warmed is
+        // reused rather than rebuilt.
+        let built = winners.map {
+            (weight: Double($0.gamesPlayed) * ($0.winRate ?? 0), team: store.opponentTeam($0))
         }
-        return out
+        let total = built.reduce(0) { $0 + $1.weight }
+        return MetaModel.roleGroups.map { group in
+            let carried = built.reduce(0.0) { running, entry in
+                fills(group, in: entry.team).isEmpty ? running : running + entry.weight
+            }
+            return (group, total > 0 ? carried / total : 0)
+        }
     }
 
     // MARK: - Does a team answer any of it?

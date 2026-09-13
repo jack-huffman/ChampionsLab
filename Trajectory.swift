@@ -133,7 +133,6 @@ struct Trajectory {
     /// previous step and keep what wins — so the second wave is what the format
     /// turns into if the first wave is adopted.
     func cascade() -> [Wave] {
-        let forecast = Forecast(store: store, format: format)
         let table = store.viabilityTable(picks: picks)
 
         // Step one: what the format is now, by evidence rather than opinion.
@@ -172,7 +171,6 @@ struct Trajectory {
                  explanation: "If those answers are adopted, this is the field they create. Two steps out is as far as this is worth taking.",
                  members: counters.prefix(6).map { ($0.0, $0.2) }),
         ]
-        _ = forecast
     }
 
     // MARK: - Role shopping, from the top down
