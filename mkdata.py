@@ -684,7 +684,8 @@ def main():
 
     # Real tournament results, appended to the hand-written archetypes.
     usage_by_name = {e["name"]: e for e in overlay["usage"]}
-    tournaments = load_tournaments(roster, usage_by_name)
+    tournaments = load_tournaments(roster, usage_by_name, moves, items)
+    harvest_items(tournaments, items, roster)
     if tournaments:
         overlay["meta_teams"] = [t for t in overlay["meta_teams"]
                                  if not t.get("tournament")] + tournaments
@@ -780,7 +781,7 @@ def assign_stones(roster, items):
 PIKALYTICS_NAMES = {
     "Indeedee-F": "Indeedee (Female)",
     "Indeedee-M": "Indeedee",
-    "Floette-Eternal": "Floette (Eternal)",
+    "Floette-Eternal": "Floette",
     "Basculegion-F": "Basculegion (Female)",
     "Tauros-Paldea-Aqua": "Paldean Tauros (Aqua)",
     "Tauros-Paldea-Blaze": "Paldean Tauros (Blaze)",
@@ -934,7 +935,110 @@ def tidy_event(name):
     return name.strip() or "community tournament"
 
 
-def load_tournaments(roster, usage_by_name):
+# How the events spell things against how Serebii does.
+TOURNAMENT_ALIASES = {
+    "Eternal Flower Floette": "Floette",
+    "Indeedee \u2640": "Indeedee (Female)",
+    "Basculegion \u2640": "Basculegion (Female)",
+    "Lycanroc Dusk": "Lycanroc (Dusk)",
+    "Lycanroc Midnight": "Lycanroc (Midnight)",
+    "Heat Rotom": "Rotom (Heat)",
+    "Wash Rotom": "Rotom (Wash)",
+    "Mow Rotom": "Rotom (Mow)",
+    "Fan Rotom": "Rotom (Fan)",
+    "Frost Rotom": "Rotom (Frost)",
+    "Hisuian Arcanine": "Hisuian Arcanine",
+    "Alolan Ninetales": "Alolan Ninetales",
+}
+
+
+def edit_distance(a, b):
+    """Levenshtein, bounded by the shorter string."""
+    if abs(len(a) - len(b)) > 1:
+        return 2
+    previous = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        current = [i]
+        for j, cb in enumerate(b, 1):
+            current.append(min(previous[j] + 1, current[j - 1] + 1,
+                               previous[j - 1] + (ca != cb)))
+        previous = current
+    return previous[-1]
+
+
+def harvest_items(tournaments, items, roster):
+    """Add items the events name that Serebii has not published yet.
+
+    Team lists carry Mega Stones for forms whose stone Serebii still lists as
+    blank -- thirty-one of the eighty-one Megas -- along with resist berries
+    missing from the item index. They are real by virtue of somebody having
+    registered and played them, and they are marked as coming from results
+    rather than from the dex.
+    """
+    known = {i["name"] for i in items}
+    by_species = {}
+    for form in roster:
+        if form["form_label"].startswith("Mega "):
+            by_species.setdefault(form["species"], form)
+
+    def near_duplicate(name):
+        """An existing item spelled slightly differently.
+
+        Serebii writes Floettite and the team lists write Floetite. Adding both
+        gives two items for one stone and makes the item clause wrong.
+        """
+        squashed = re.sub(r"[^a-z]", "", name.lower())
+        for existing in known:
+            other = re.sub(r"[^a-z]", "", existing.lower())
+            if other == squashed:
+                return existing
+            # One letter different, on names long enough for that to be a typo
+            # rather than a different item.
+            # One character apart, on names long enough for that to be a
+            # spelling difference rather than a different item. A prefix test
+            # was not enough: Floetite and Floettite differ in the middle.
+            if len(squashed) >= 7 and edit_distance(other, squashed) <= 1:
+                return existing
+        return None
+
+    added = []
+    for team in tournaments:
+        for member in team["members"]:
+            name = member.get("item") or ""
+            if not name or name in known:
+                continue
+            if (existing := near_duplicate(name)) is not None:
+                member["item"] = existing
+                continue
+            known.add(name)
+            stone_for = None
+            for species, form in by_species.items():
+                if name.lower().startswith(species.lower()[:5]):
+                    stone_for = form
+                    break
+            described = ("Mega Evolves %s. Named in tournament team lists; Serebii "
+                         "has not published it." % stone_for["species"]) if stone_for \
+                        else "Named in tournament team lists but not in Serebii's index."
+            entry = {
+                "name": name,
+                "slug": re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-"),
+                "effect": described,
+                "short": described,
+                "fling": 0,
+                "category": "Mega Stone" if stone_for else "Held item",
+                "from_results": True,
+            }
+            items.append(entry)
+            added.append(name)
+            if stone_for and not stone_for.get("stone"):
+                stone_for["stone"] = name
+    if added:
+        print("==> items named only in results: %d (%s)"
+              % (len(added), ", ".join(sorted(added)[:6])))
+    return added
+
+
+def load_tournaments(roster, usage_by_name, moves, items):
     """Fold data/tournaments.json into meta teams the app can score against.
 
     Written by mktournaments.py. Compositions and placements are real results;
@@ -949,15 +1053,43 @@ def load_tournaments(roster, usage_by_name):
 
     by_label = {f["form_label"]: f for f in roster}
     by_name = {f["name"]: f for f in roster if not f["suffix"]}
+    move_names = {m["name"].lower(): m["name"] for m in moves.values()}
+    item_names = {i["name"].lower(): i["name"] for i in items}
+
+    def resolve(raw):
+        """A team-list name to one of ours."""
+        label = TOURNAMENT_ALIASES.get(raw) or pikalytics_label(raw)
+        return by_label.get(label) or by_name.get(label) \
+            or by_label.get(raw) or by_name.get(raw)
 
     out, dropped = [], []
     for entry in payload.get("teams", []):
+        # Only this regulation. Community series run several at once.
+        if re.search(r"\bM-?B\b", entry.get("event", ""), re.I):
+            continue
+        published = {s["name"]: s for s in entry.get("sets", [])}
         members = []
         for raw in entry["members"]:
-            label = pikalytics_label(raw)
-            form = by_label.get(label) or by_name.get(label)
+            form = resolve(raw)
             if form is None:
                 dropped.append("%s (%s)" % (raw, entry["player"]))
+                continue
+            given = published.get(raw)
+            if given:
+                # What they actually ran. Spelling is theirs, so moves and items
+                # are matched without regard to case.
+                real_moves = [move_names.get(m.lower(), m) for m in given["moves"]]
+                item = item_names.get(given["item"].lower(), given["item"])
+                ability = given["ability"] if any(
+                    a["name"] == given["ability"] for a in form["abilities"]
+                ) else form["abilities"][0]["name"]
+                members.append({
+                    "form": form["form_label"],
+                    "item": item,
+                    "ability": ability,
+                    "moves": [m for m in real_moves if m][:4],
+                    "nature": given.get("nature") or "",
+                })
                 continue
             measured = usage_by_name.get(form["form_label"]) or usage_by_name.get(form["name"]) or {}
             members.append({
@@ -966,6 +1098,7 @@ def load_tournaments(roster, usage_by_name):
                 "ability": ((measured.get("ability_usage") or [{}])[0].get("name")
                             or form["abilities"][0]["name"]),
                 "moves": (measured.get("key_moves") or [])[:4],
+                "nature": "",
             })
         if len(members) < 4:
             continue
@@ -976,8 +1109,8 @@ def load_tournaments(roster, usage_by_name):
             "archetype": "Tournament result",
             "projected": False,
             "format": "doubles",
-            "note": ("Real result: %s at %s%s. Composition is theirs; the sets are "
-                     "the ladder's most common, not their actual spreads."
+            "note": ("Real result: %s at %s%s. This is their published team list; "
+                     "only the Stat Points are inferred, since nobody publishes those."
                      % (entry.get("record") or "?", tidy_event(entry["event"]),
                         ", " + clean_text(placement) if placement else "")),
             "members": members,

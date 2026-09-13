@@ -360,6 +360,9 @@ struct MetaTeam: Codable, Identifiable, Hashable {
         let item: String
         let ability: String
         let moves: [String]
+        /// The Stat Alignment they registered, where the team list published
+        /// one. Spreads are never published; this is.
+        let nature: String?
     }
 }
 

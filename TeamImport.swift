@@ -399,7 +399,16 @@ enum TeamPaste {
                                        support: support, plan: .balance,
                                        tailwind: roles.contains(.tailwind))
             slot.sp = built.sp
-            slot.alignmentName = built.alignment
+            // Their alignment where the team list published one, which it now
+            // does for every member of a real result. Only the Stat Points are
+            // guesswork, and overriding a published nature with a guess threw
+            // away the one piece of the spread that is actually known.
+            if let nature = member.nature, !nature.isEmpty,
+               Alignment.all.contains(where: { $0.name == nature }) {
+                slot.alignmentName = nature
+            } else {
+                slot.alignmentName = built.alignment
+            }
             team.slots.append(slot)
         }
         return team
