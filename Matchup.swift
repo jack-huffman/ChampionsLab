@@ -30,6 +30,16 @@ struct Duel: Identifiable {
     /// Turns spent setting up or applying status before attacking starts.
     var mySetupTurns: Int = 0
     var theirSetupTurns: Int = 0
+    /// A selected move that leaves the field after acting — U-turn, Volt
+    /// Switch, Flip Turn, Parting Shot, Baton Pass. Leaving is free either way,
+    /// but a pivot leaves having done something.
+    var myPivot: String?
+    var theirPivot: String?
+    /// Shadow Tag on the other side. In Regulation M-C that is Mega Gengar and
+    /// nothing else: no other Pokémon in the dex has a trapping ability, and no
+    /// move in it traps at all.
+    var iAmTrapped = false
+    var theyAreTrapped = false
 
     var id: String { "\(mine.id)-vs-\(theirs.id)" }
 
@@ -47,7 +57,42 @@ struct Duel: Identifiable {
         effectiveIncoming > 0 ? theirSetupTurns + Int(ceil(1 / effectiveIncoming)) : 99
     }
 
+    /// How a side gets out of a cell it is losing.
+    ///
+    /// Switching resolves before any move is used, so leaving always works —
+    /// the question is what it costs, not whether it is possible. That makes a
+    /// lost one-on-one normally a lost turn rather than a lost Pokémon, which
+    /// is the single biggest thing this grid used to get wrong: it scored every
+    /// bad cell as though you were nailed to the floor in it.
+    enum Exit {
+        /// Winning it; nothing to escape from.
+        case notNeeded
+        /// A pivot move: out on your own terms, having done something first.
+        case pivot
+        /// Out, but the turn is spent and the switch-in takes the hit.
+        case switchOut
+        /// Shadow Tag. You are in this cell until one of you faints.
+        case trapped
+    }
+
+    var myExit: Exit {
+        if outcome == .win || outcome == .favoured { return .notNeeded }
+        if iAmTrapped { return .trapped }
+        return myPivot != nil ? .pivot : .switchOut
+    }
+
+    var theirExit: Exit {
+        if outcome == .loss || outcome == .against { return .notNeeded }
+        if theyAreTrapped { return .trapped }
+        return theirPivot != nil ? .pivot : .switchOut
+    }
+
     /// Rough 1v1 verdict, respecting who moves first.
+    ///
+    /// This stays the pure one-on-one answer — "would this lose if the two were
+    /// left alone" — and says nothing about switching. What leaving is worth is
+    /// applied when cells are added up, so that the grid on screen still reads
+    /// as the honest matchup rather than a matchup already discounted.
     ///
     /// Speed is not just a tie-break. It used to be consulted only when both
     /// sides scored a one-hit knockout; every other cell — which is most of
@@ -375,6 +420,92 @@ struct Matchup {
         return out.sorted { $0.combined > $1.combined }
     }
 
+    /// Where a member in trouble goes, and what gets it there.
+    ///
+    /// The grid says a cell is lost. In doubles that is usually not the end of
+    /// it — you leave, because switching resolves before any move. The question
+    /// the grid cannot answer on its own is whether there is anything to leave
+    /// *to*: a lost cell with a good switch-in costs a turn, and a lost cell
+    /// with nowhere to go costs the Pokémon.
+    struct Retreat: Identifiable {
+        let from: Form
+        let against: Form
+        /// A member that beats what you are running from and is not knocked out
+        /// coming in. Nil when the team has no such answer.
+        let into: Form?
+        /// The move that gets you out having done something, if you have one.
+        let pivot: String?
+        let trapped: Bool
+        var id: String { "\(from.id)-from-\(against.id)" }
+    }
+
+    /// Who can come in on each of theirs: beats it, and survives the hit it
+    /// takes on the way in. Winning the cell is not enough — a switch-in that
+    /// is removed as it lands is not a switch-in.
+    private func refuge(mineForms: [Form], theirForms: [Form]) -> [String: Form] {
+        var out: [String: Form] = [:]
+        for their in theirForms {
+            out[their.id] = mineForms.first { candidate in
+                guard let c = cell(mine: candidate, theirs: their) else { return false }
+                return c.outcome == .win && c.effectiveIncoming < 1
+            }
+        }
+        return out
+    }
+
+    /// The same thing the other way: which of theirs can come in on mine.
+    private func theirRefuge(mineForms: [Form], theirForms: [Form]) -> [String: Form] {
+        var out: [String: Form] = [:]
+        for mine in mineForms {
+            out[mine.id] = theirForms.first { candidate in
+                guard let c = cell(mine: mine, theirs: candidate) else { return false }
+                return c.outcome == .loss && c.effectiveOutgoing < 1
+            }
+        }
+        return out
+    }
+
+    /// Every losing cell, with the way out of it.
+    func retreats(bringing forms: [Form]? = nil) -> [Retreat] {
+        let mineForms = forms ?? myForms
+        let ids = Set(mineForms.map(\.id))
+        let safe = refuge(mineForms: mineForms, theirForms: theirForms)
+        return duels
+            .filter { ids.contains($0.mine.id) && $0.outcome == .loss }
+            .map { cell in
+                let into = safe[cell.theirs.id]
+                return Retreat(from: cell.mine, against: cell.theirs,
+                               into: into?.id == cell.mine.id ? nil : into,
+                               pivot: cell.myPivot, trapped: cell.iAmTrapped)
+            }
+    }
+
+    /// What a cell is really worth once leaving is accounted for.
+    ///
+    /// A lost one-on-one that you can walk out of into something that beats the
+    /// thing you ran from is a lost turn, not a lost Pokémon, and scoring it as
+    /// the latter is why bad matchups read as catastrophes. The same discount
+    /// applies to cells you win, because the opponent leaves too — doing it
+    /// only on your own losses would inflate every score on the screen.
+    ///
+    /// These multipliers are judgment rather than measurement, and they are
+    /// deliberately mild: the cell is still lost, it just does not cost what
+    /// being stuck in it costs.
+    private func exitFactor(_ cell: Duel, mine: [String: Form],
+                            theirs: [String: Form]) -> Double {
+        if cell.outcome.score < 0 {
+            if cell.iAmTrapped { return 1.3 }
+            guard mine[cell.theirs.id] != nil else { return 1.0 }
+            return cell.myPivot != nil ? 0.6 : 0.8
+        }
+        if cell.outcome.score > 0 {
+            if cell.theyAreTrapped { return 1.3 }
+            guard theirs[cell.mine.id] != nil else { return 1.0 }
+            return cell.theirPivot != nil ? 0.6 : 0.8
+        }
+        return 1
+    }
+
     /// The edge for any subset of either side, read off the grid already built,
     /// together with the focus knockouts each way.
     ///
@@ -394,10 +525,14 @@ struct Matchup {
         }
         guard !cells.isEmpty else { return (0, [], []) }
 
+        let safe = refuge(mineForms: mineForms, theirForms: theirForms)
+        let theirSafe = theirRefuge(mineForms: mineForms, theirForms: theirForms)
         var total = 0.0, weighed = 0.0
         for cell in cells {
             let weight = weights[cell.theirs.id] ?? 1
-            total += cell.outcome.score * weight
+            let value = cell.outcome.score
+                * exitFactor(cell, mine: safe, theirs: theirSafe)
+            total += max(-1, min(1, value)) * weight
             weighed += weight
         }
         let raw = weighed > 0 ? total / weighed : 0
@@ -457,6 +592,24 @@ struct Matchup {
         }
         for ko in focusedOnMe.prefix(1) {
             advice.append("They can focus \(ko.target.formLabel) down in a turn with \(ko.first.formLabel) and \(ko.second.formLabel). Do not lead it into both.")
+        }
+
+        // Losing a cell and being stuck in it are different problems, and the
+        // grid on its own cannot tell them apart.
+        let ways = retreats()
+        if let caught = ways.first(where: \.trapped) {
+            advice.append("\(caught.against.formLabel) traps with Shadow Tag, so whichever of yours it catches is in that fight to the end. \(caught.from.formLabel) is one of them.")
+        }
+        if let clean = ways.first(where: { $0.pivot != nil && $0.into != nil }) {
+            advice.append("\(clean.from.formLabel) loses to \(clean.against.formLabel), but \(clean.pivot!) takes it out into \(clean.into!.formLabel), which beats it. That is a lost turn, not a lost Pokémon.")
+        }
+        // The ones with nowhere to go are the real holes: you can always leave,
+        // but leaving into something that also loses is not an answer.
+        let stranded = Dictionary(grouping: ways.filter { $0.into == nil },
+                                  by: { $0.against.id })
+        if let worst = stranded.values.max(by: { $0.count < $1.count }), worst.count >= 2,
+           let sample = worst.first {
+            advice.append("Nothing here can come in on \(sample.against.formLabel) — \(worst.count) of yours lose to it and none of the rest beats it, so switching only changes who is standing in front of it.")
         }
         // Terrain and weather flip a lot of these cells, so say so once.
         if field.terrain == .none && theirPairs.contains(where: { form in

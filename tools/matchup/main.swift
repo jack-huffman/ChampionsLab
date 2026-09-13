@@ -278,6 +278,62 @@ Ability: Regenerator
         }
     }
 
+    // -- leaving a cell you are losing -------------------------------------
+    //
+    // Switching resolves before any move, so a lost one-on-one is normally a
+    // lost turn rather than a lost Pokemon. The grid scored every bad cell as
+    // though both sides were nailed to the floor.
+    print("\n== switching ==")
+    let uturn = store.data.moves.values.first { $0.name == "U-turn" }!
+    let shot = store.data.moves.values.first { $0.name == "Parting Shot" }!
+    let claw2 = store.data.moves.values.first { $0.name == "Dragon Claw" }!
+    check("a damaging pivot is recognised", DuelEngine.pivot(in: [claw2, uturn])?.name == "U-turn")
+    check("so is a status one", DuelEngine.pivot(in: [shot])?.name == "Parting Shot")
+    check("and an ordinary attack is not", DuelEngine.pivot(in: [claw2]) == nil)
+
+    // The paste's Incineroar runs Parting Shot, so its losing cells have a way
+    // out that the grid can name.
+    let switchGrid = Matchup(mine: result.team, theirs: theirs, store: store,
+                             field: Field(isDoubles: true))
+    let ways = switchGrid.retreats()
+    print("  losing cells: \(ways.count)")
+    let withPivot = ways.filter { $0.pivot != nil }
+    print("  of those, \(withPivot.count) leave on a pivot move")
+    check("a slot running Parting Shot has it read as its way out",
+          withPivot.contains { $0.from.formLabel == "Incineroar" && $0.pivot == "Parting Shot" })
+    if let best = ways.first(where: { $0.pivot != nil && $0.into != nil }) {
+        print("  e.g. \(best.from.formLabel) loses to \(best.against.formLabel) -> \(best.pivot!) into \(best.into!.formLabel)")
+    }
+    check("no retreat sends a Pokemon into itself",
+          ways.allSatisfy { $0.into?.id != $0.from.id })
+
+    // Mega Gengar is the only trapping ability in Regulation M-C, so it should
+    // be the only thing that turns a lost cell into a lost Pokemon.
+    var gengarTeam = Team(); gengarTeam.format = "doubles"
+    var gengarSlot = TeamSlot(formID: form("Gengar").id)
+    gengarSlot.item = "Gengarite"
+    gengarTeam.slots = [gengarSlot]
+    let trapGrid = Matchup(mine: result.team, theirs: gengarTeam, store: store,
+                           field: Field(isDoubles: true))
+    print("  versus Gengar + Gengarite: fights as \(trapGrid.theirForms.first?.formLabel ?? "-"), ability \(trapGrid.theirForms.first?.abilities.first?.name ?? "-")")
+    check("Shadow Tag traps every cell it is in",
+          trapGrid.duels.allSatisfy(\.iAmTrapped), "\(trapGrid.duels.filter(\.iAmTrapped).count)/\(trapGrid.duels.count)")
+    check("and nothing else does",
+          switchGrid.duels.allSatisfy { !$0.iAmTrapped })
+
+    // The discount is applied to both sides, so a team against itself is still
+    // level. Softening only your own losses would lift every score on screen.
+    let selfGrid = Matchup(mine: result.team, theirs: result.team, store: store,
+                           field: Field(isDoubles: true))
+    print("  mirror edge with switching modelled: \(selfGrid.verdict.score)")
+    check("leaving is worth the same to both sides", abs(selfGrid.verdict.score) <= 5,
+          "\(selfGrid.verdict.score)")
+
+    for line in switchGrid.verdict.advice where line.contains("switch") || line.contains("come in")
+        || line.contains("lost turn") || line.contains("traps") {
+        print("  advice: \(line)")
+    }
+
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)
 }

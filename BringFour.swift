@@ -314,6 +314,22 @@ struct BringFour {
                        + "\(ko.target.formLabel) in a turn; neither does it alone.")
         }
 
+        // What the back two are actually for. A four is not four Pokémon that
+        // each beat something; it is two that start and two that come in when
+        // the first pair runs into the wrong thing.
+        let ways = matchup.retreats(bringing: four)
+            .filter { retreat in likely.contains { $0.id == retreat.against.id } }
+        if let escape = ways.first(where: { $0.pivot != nil && $0.into != nil }),
+           let into = escape.into, let pivot = escape.pivot {
+            out.append("If \(escape.from.formLabel) is caught by their "
+                       + "\(escape.against.formLabel), \(pivot) takes it out into "
+                       + "\(into.formLabel), which beats it.")
+        } else if let escape = ways.first(where: { $0.into != nil }),
+                  let into = escape.into {
+            out.append("\(escape.from.formLabel) loses to their \(escape.against.formLabel), "
+                       + "but \(into.formLabel) can come in on it — a turn, not a Pokémon.")
+        }
+
         // Why the two at home are at home. A four is chosen by what it leaves
         // out as much as by what it takes.
         for form in benched {
@@ -361,6 +377,14 @@ struct BringFour {
                 ? "Nothing in this four beats their \(threat.formLabel)."
                 : "Nothing in this four beats their \(threat.formLabel) — "
                   + "\(athome[0].formLabel), which does, is one of the two you left home.")
+        }
+        // Shadow Tag is the one thing that makes a lost cell a lost Pokémon,
+        // and it is the only trapping ability in the format.
+        for retreat in matchup.retreats(bringing: four)
+            where retreat.trapped && likely.contains(where: { $0.id == retreat.against.id }) {
+            out.append("Their \(retreat.against.formLabel) traps with Shadow Tag: "
+                       + "\(retreat.from.formLabel) cannot switch away from it once they meet.")
+            break
         }
         for ko in focusedOnMe.prefix(1) {
             out.append("They can focus \(ko.target.formLabel) down in one turn with "

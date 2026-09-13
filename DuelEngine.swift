@@ -20,9 +20,16 @@
 //      is usually better than attacking, and a setup sweeper was being scored
 //      as though it never set up.
 //
+//    · Leaving. Switching resolves before any move, so a side that is losing a
+//      cell normally walks out of it — and whether it walks out having done
+//      something (U-turn, Parting Shot) or merely spent a turn is most of what
+//      separates a bad matchup from a lost Pokémon. Only Mega Gengar's Shadow
+//      Tag stops it, and it is the only trapping ability in the format.
+//
 //  It is still a one-turn-at-a-time race rather than a game tree. Each side
 //  picks the line that wins the race soonest and the two are compared; nobody
-//  switches, and nobody predicts.
+//  predicts, and what a side switches *to* is a question about the team rather
+//  than the cell, so Matchup answers that one.
 
 import Foundation
 
@@ -60,6 +67,16 @@ enum DuelEngine {
 
     // MARK: - Entry point
 
+    /// A selected move that leaves the field after acting.
+    ///
+    /// Matched on what the move says it does rather than a list of names, so
+    /// U-turn, Volt Switch, Flip Turn, Parting Shot, Baton Pass, Chilly
+    /// Reception and Shed Tail are all found, and anything added to the dex
+    /// later is found without an edit here.
+    static func pivot(in moves: [Move]) -> Move? {
+        moves.first { $0.effect.contains("switches out of battle to be replaced") }
+    }
+
     static func duel(mine: Side, theirs: Side, field: Field, store: Store) -> Duel {
         let myAttack = bestAttack(mine, into: theirs, field: field, store: store)
         let theirAttack = bestAttack(theirs, into: mine, field: field, store: store)
@@ -91,7 +108,11 @@ enum DuelEngine {
                     myReliability: myPlan.reliability,
                     theirReliability: theirPlan.reliability,
                     mySetupTurns: myPlan.setupTurns,
-                    theirSetupTurns: theirPlan.setupTurns)
+                    theirSetupTurns: theirPlan.setupTurns,
+                    myPivot: pivot(in: mine.moves)?.name,
+                    theirPivot: pivot(in: theirs.moves)?.name,
+                    iAmTrapped: theirs.combatant.ability == "Shadow Tag",
+                    theyAreTrapped: mine.combatant.ability == "Shadow Tag")
     }
 
     // MARK: - Attacking
