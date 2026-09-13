@@ -193,7 +193,7 @@ struct TeamAnalysis {
                 alignment: Alignment(name: "x",
                                      up: physical ? .attack : .spAttack, down: .hp))
 
-            let threatSpeed = threatCombatant.stat(.speed)
+            let threatSpeed = threatCombatant.speed(in: field)
             // Their whole measured set, status included: a threat that carries
             // Will-O-Wisp is a different problem from one that does not.
             let threatMoves = entry.keyMoves.compactMap { name in
@@ -213,7 +213,7 @@ struct TeamAnalysis {
                 attacker.ability = member.slot.ability.isEmpty
                     ? (member.form.abilities.first?.name ?? "") : member.slot.ability
 
-                if attacker.stat(.speed) > threatSpeed { outspeeds += 1 }
+                if attacker.speed(in: field) > threatSpeed { outspeeds += 1 }
 
                 let ourMoves = member.slot.moves.compactMap { store.move($0) }
                 let duel = DuelEngine.duel(

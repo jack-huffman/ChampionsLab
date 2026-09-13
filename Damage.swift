@@ -62,6 +62,37 @@ struct Combatant {
         ChampionsStats.staged(self.stat(stat), stage: boosts[stat.rawValue])
     }
 
+    /// Speed as it actually is on the field, which is not the stat.
+    ///
+    /// None of this was applied anywhere. Every screen that asked who moves
+    /// first read the raw number, so the grid raced a Choice Scarf Garchomp at
+    /// its base Speed — the most common speed item in the format, worth half
+    /// again — and raced a rain team's Swift Swim sweeper at half the Speed it
+    /// actually moves at. Swift Swim, Chlorophyll, Sand Rush and Slush Rush are
+    /// the entire point of a weather team, and they were read as team-building
+    /// labels and never as Speed.
+    ///
+    /// Paralysis is not here: it is applied where it is worked out, because
+    /// whether it lands is a fact about the duel rather than about the Pokémon.
+    func speed(in field: Field) -> Int {
+        var speed = Double(stagedStat(.speed))
+        switch item {
+        case "Choice Scarf":                    speed *= 1.5
+        case "Iron Ball", "Macho Brace":        speed *= 0.5
+        default: break
+        }
+        switch ability {
+        case "Swift Swim"   where field.weather == .rain:      speed *= 2
+        case "Chlorophyll"  where field.weather == .sun:       speed *= 2
+        case "Sand Rush"    where field.weather == .sand:      speed *= 2
+        case "Slush Rush"   where field.weather == .snow:      speed *= 2
+        case "Surge Surfer" where field.terrain == .electric:  speed *= 2
+        case "Unburden" where itemSpent && !item.isEmpty:      speed *= 2
+        default: break
+        }
+        return Int(speed)
+    }
+
     var effectiveTypes: [PokeType] { form.pokeTypes }
 
     var maxHP: Int { stat(.hp) }

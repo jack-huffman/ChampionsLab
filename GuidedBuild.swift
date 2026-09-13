@@ -100,7 +100,7 @@ struct BuildInterview {
             },
             bestMove: store.bestMove(for: seed)?.name ?? "—",
             role: store.statRole(of: seed),
-            speed: combatant.stat(.speed),
+            speed: combatant.speed(in: Field(isDoubles: true)),
             outspeeds: profile.outspeeds,
             fieldSize: profile.fieldSize,
             losesTo: profile.loses.prefix(4).map(\.name),
@@ -205,7 +205,7 @@ struct BuildInterview {
                                   item: seed.megaStone)
         combatant.sp = [2, 32, 0, 0, 0, 32]
         combatant.alignment = Alignment.named(seed.attack >= seed.spAttack ? "Jolly" : "Timid")
-        let flat = combatant.stat(.speed)
+        let flat = combatant.speed(in: Field(isDoubles: true))
         let underTailwind = marks.filter { flat * 2 > $0.speed }.count
         let underTrickRoom = marks.filter { flat < $0.speed }.count
         let unaided = marks.filter { flat > $0.speed }.count

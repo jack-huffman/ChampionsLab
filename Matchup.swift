@@ -307,7 +307,7 @@ struct Matchup {
                 let them = combatant(theirSlot, form: theirForm)
                 let theirMoves = moves(theirSlot, form: theirForm, ability: them.ability)
 
-                let speeds = order(mine: me.stat(.speed), theirs: them.stat(.speed))
+                let speeds = order(mine: me.speed(in: field), theirs: them.speed(in: field))
                 out.append(DuelEngine.duel(
                     mine: DuelEngine.Side(combatant: me, moves: myMoves, speed: speeds.0),
                     theirs: DuelEngine.Side(combatant: them, moves: theirMoves, speed: speeds.1),

@@ -58,6 +58,29 @@ struct GamePlanner {
         let speed: Int
     }
 
+    /// The field this six puts up itself, so its own Swift Swim and Chlorophyll
+    /// are read at the Speed they actually move at rather than half of it.
+    private var ownField: Field {
+        var out = Field(isDoubles: true)
+        for slot in team.slots {
+            let ability = slot.megaEvolution(in: store)?.abilities.first?.name
+                ?? (slot.ability.isEmpty
+                    ? slot.battleForm(in: store)?.abilities.first?.name ?? "" : slot.ability)
+            switch ability {
+            case "Drought":       out.weather = .sun
+            case "Drizzle":       out.weather = .rain
+            case "Sand Stream":   out.weather = .sand
+            case "Snow Warning":  out.weather = .snow
+            case "Electric Surge": out.terrain = .electric
+            case "Grassy Surge":   out.terrain = .grassy
+            case "Misty Surge":    out.terrain = .misty
+            case "Psychic Surge":  out.terrain = .psychic
+            default: break
+            }
+        }
+        return out
+    }
+
     private var members: [Member] {
         team.slots.compactMap { slot in
             guard let form = slot.battleForm(in: store),
@@ -66,7 +89,7 @@ struct GamePlanner {
                           moves: Set(slot.moves.compactMap { store.move($0)?.name }),
                           learnable: Set(form.moves.compactMap { store.move($0)?.name }),
                           ability: combatant.ability,
-                          speed: combatant.stat(.speed))
+                          speed: combatant.speed(in: ownField))
         }
     }
 

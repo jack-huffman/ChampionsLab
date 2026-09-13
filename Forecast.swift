@@ -192,6 +192,11 @@ struct Forecast {
         }
 
         var out: [Pick] = []
+        // Speed is judged in the field most likely to be up: Swift Swim and
+        // Chlorophyll double it under their own weather, so "does this outspeed
+        // that" has a different answer per state and the common one is the
+        // honest summary.
+        let likeliest = states.max { $0.1 < $1.1 }?.0 ?? Field(isDoubles: format == "doubles")
         for candidate in store.data.forms {
             let me = standardBuild(candidate)
             let myMoves = standardMoves(candidate)
@@ -205,7 +210,7 @@ struct Forecast {
             var bestSeen = 0.0
 
             for (them, theirMoves, weight, name) in threats {
-                let faster = me.stat(.speed) > them.stat(.speed)
+                let faster = me.speed(in: likeliest) > them.speed(in: likeliest)
                 if faster { outspeeds += 1 }
 
                 // The same duel, run once per field state and averaged. A pick
@@ -246,7 +251,7 @@ struct Forecast {
 
                     let duel = Duel(mine: candidate, theirs: them.form,
                                     outgoing: outgoing, incoming: incoming,
-                                    mySpeed: me.stat(.speed), theirSpeed: them.stat(.speed),
+                                    mySpeed: me.speed(in: context), theirSpeed: them.speed(in: context),
                                     myBestMove: bestMove, theirBestMove: "",
                                     myReliability: outgoingReliability,
                                     theirReliability: incomingReliability)
@@ -300,6 +305,7 @@ struct Forecast {
     func profile(of candidate: Form) -> FormProfile {
         let entries = self.field
         let states = MetaModel(store: store, format: format).fieldStates
+        let likeliest = states.max { $0.1 < $1.1 }?.0 ?? Field(isDoubles: format == "doubles")
         let me = standardBuild(candidate)
         let myMoves = standardMoves(candidate)
         var rows: [FormProfile.Row] = []
@@ -308,7 +314,7 @@ struct Forecast {
         for entry in entries {
             let them = standardBuild(entry.form)
             let theirMoves = standardMoves(entry.form)
-            let faster = me.stat(.speed) > them.stat(.speed)
+            let faster = me.speed(in: likeliest) > them.speed(in: likeliest)
             if faster { outspeeds += 1 }
 
             var duelScore = 0.0
@@ -347,7 +353,7 @@ struct Forecast {
                 }
                 let duel = Duel(mine: candidate, theirs: them.form,
                                 outgoing: outgoing, incoming: incoming,
-                                mySpeed: me.stat(.speed), theirSpeed: them.stat(.speed),
+                                mySpeed: me.speed(in: context), theirSpeed: them.speed(in: context),
                                 myBestMove: bestOutName, theirBestMove: bestInName,
                                 myReliability: outgoingReliability,
                                 theirReliability: incomingReliability)

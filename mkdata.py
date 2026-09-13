@@ -691,6 +691,7 @@ def main():
                                  if not t.get("tournament")] + tournaments
 
     assign_stones(roster, items)
+    mark_attested(items, overlay["meta_teams"], overlay["usage"], roster)
 
     out = {
         "regulation": overlay["regulation"],
@@ -732,6 +733,73 @@ def main():
         print("      " + ", ".join(absent))
 
     audit_overlay(overlay, roster, moves, items)
+
+
+def mark_attested(items, meta_teams, usage, roster):
+    """Flag which items have actually been seen in Pokemon Champions.
+
+    Serebii has no Champions item list — its Champions hub links straight to the
+    general itemdex — so what gets scraped is every hold item in the main series,
+    and a good number of those are not in this game. Assault Vest is the clearest
+    case: a VGC staple, and it appears in none of the registered team lists while
+    Choice Scarf appears in twenty-two of them. Choice Band and Choice Specs are
+    absent too, which is a plausible shape for a new game with a partial item set.
+
+    Three things count as evidence, all of them real play:
+
+      · an item somebody registered on a published tournament team
+      · an item the measured ladder reports people holding
+      · a Mega Stone belonging to a Mega that exists in this dex, since a Mega
+        cannot evolve without it
+
+    Absence is evidence, not proof: a legal but unpopular item would look the
+    same as one that is not in the game. So the flag says what it actually knows
+    — that nobody has been seen holding it — and the app words it that way and
+    keeps the item usable in the calculator.
+    """
+    seen, why = set(), {}
+
+    def note(name, reason):
+        if not name:
+            return
+        seen.add(name)
+        why.setdefault(name, reason)
+
+    lists = 0
+    for team in meta_teams:
+        # Only lists somebody actually registered. Our own written archetypes
+        # are guesses, and they are exactly what put Assault Vest in here.
+        if not team.get("record"):
+            continue
+        lists += 1
+        for member in team.get("members", []):
+            note(member.get("item"), "registered on a tournament team")
+    for entry in usage:
+        for row in (entry.get("item_usage") or []):
+            note(row.get("name"), "held on the measured ladder")
+        for name in (entry.get("common_items") or []):
+            note(name, "held on the measured ladder")
+    for form in roster:
+        if form.get("stone"):
+            note(form["stone"], "the stone a Mega in this dex needs")
+    # The placeholder a Mega gets when Serebii has not published its stone's
+    # name. The stone certainly exists — the Mega cannot evolve without one —
+    # so it must not be gated; only its name is unknown.
+    note("Mega Stone", "the unnamed stone a Mega in this dex needs")
+
+    for item in items:
+        item["attested"] = item["name"] in seen
+        item["attestation"] = why.get(item["name"], "")
+
+    missing = sorted(i["name"] for i in items if not i["attested"])
+    print("==> items seen in Champions: %d of %d (from %d registered lists, "
+          "the ladder, and the stones)" % (len(items) - len(missing), len(items), lists))
+    notable = [n for n in missing if n in (
+        "Assault Vest", "Choice Band", "Choice Specs", "Covert Cloak", "Clear Amulet",
+        "Flame Orb", "Toxic Orb", "Damp Rock", "Heat Rock", "Terrain Extender",
+        "Safety Goggles", "Eviolite", "Weakness Policy", "Throat Spray")]
+    if notable:
+        print("    main-series staples never seen here: %s" % ", ".join(notable))
 
 
 def assign_stones(roster, items):

@@ -219,6 +219,99 @@ Ability: Regenerator
     check("moves are ranked under the Mega's ability", menceMove == "Double-Edge", menceMove)
 
     // -- which four, and which two lead -----------------------------------
+    // -- items that are actually in this game -------------------------------
+    //
+    // The item list is scraped from Serebii's main-series itemdex, because
+    // Serebii publishes no Champions one, and a good part of it is not in this
+    // game. Assault Vest is the clearest case: a VGC staple on none of the 105
+    // registered lists, while Choice Scarf is on twenty-two of them.
+    print("\n== items in the game ==")
+    let seen = store.data.items.filter(\.seenInGame)
+    print("  \(seen.count) of \(store.data.items.count) items have been seen in Champions")
+    check("the gate keeps a real, useful share of the list",
+          seen.count > 60 && seen.count < store.data.items.count, "\(seen.count)")
+    for name in ["Choice Scarf", "Sitrus Berry", "Life Orb", "Focus Sash", "Rocky Helmet"] {
+        check("\(name) is in the game", store.item(named: name)?.seenInGame == true)
+    }
+    for name in ["Assault Vest", "Choice Band", "Choice Specs", "Covert Cloak"] {
+        check("\(name) is gated", store.item(named: name)?.seenInGame == false)
+    }
+    // A Mega cannot evolve without its stone, so every stone must be allowed.
+    let stonesGated = store.data.forms.filter(\.isMega).compactMap { form -> String? in
+        let stone = form.megaStone.isEmpty ? "Mega Stone" : form.megaStone
+        return store.item(named: stone)?.seenInGame == false ? form.formLabel : nil
+    }
+    check("no Mega has its own stone gated", stonesGated.isEmpty,
+          stonesGated.prefix(3).joined(separator: ", "))
+    // And nothing the app scores against may hold one.
+    var holders: [String] = []
+    for meta in store.data.metaTeams {
+        for member in meta.members where !member.item.isEmpty {
+            if store.item(named: member.item)?.seenInGame == false {
+                holders.append("\(meta.name): \(member.form) @ \(member.item)")
+            }
+        }
+    }
+    check("no bundled team holds an item that is not in the game",
+          holders.isEmpty, holders.prefix(3).joined(separator: "; "))
+    // Nor may the builder reach for one.
+    var builder = TeamBuilder(store: store, format: "doubles")
+    var usedItems = Set<String>()
+    var builtItems: [String] = []
+    for form in store.data.forms.prefix(60) {
+        let slot = builder.flesh(form, plan: .balance, usedItems: &usedItems)
+        if !slot.item.isEmpty, store.item(named: slot.item)?.seenInGame == false {
+            builtItems.append("\(form.formLabel) @ \(slot.item)")
+        }
+    }
+    check("the builder never assigns one", builtItems.isEmpty,
+          builtItems.prefix(3).joined(separator: "; "))
+
+    // -- what actually moves first ----------------------------------------
+    //
+    // Every screen that asked about turn order read the raw Speed stat. A
+    // Choice Scarf is the most common speed item in the format and was worth
+    // nothing; Swift Swim, Chlorophyll, Sand Rush and Surge Surfer are the
+    // entire point of the teams that run them and were read as team-building
+    // labels rather than as Speed.
+    print("\n== speed on the field ==")
+    func runner(_ name: String, item: String, ability: String? = nil) -> Combatant {
+        let f = form(name)
+        var sp = Array(repeating: 0, count: 6); sp[Stat.speed.rawValue] = 32
+        return Combatant(form: f, ability: ability ?? f.abilities.first?.name ?? "",
+                         item: item, sp: sp, alignment: Alignment.named("Jolly"))
+    }
+    let plainField = Field(isDoubles: true)
+    let rainField = Field(weather: .rain, isDoubles: true)
+    let chomp = runner("Garchomp", item: "Choice Scarf")
+    print("  Choice Scarf Garchomp: \(chomp.stat(.speed)) raw, \(chomp.speed(in: plainField)) on the field")
+    check("a Choice Scarf is worth half again",
+          chomp.speed(in: plainField) == Int(Double(chomp.stat(.speed)) * 1.5),
+          "\(chomp.speed(in: plainField))")
+    let orbChomp = runner("Garchomp", item: "Life Orb")
+    check("and an item that does nothing to Speed does nothing",
+          orbChomp.speed(in: plainField) == orbChomp.stat(.speed))
+
+    let swimmer = runner("Basculegion", item: "Life Orb", ability: "Swift Swim")
+    print("  Swift Swim Basculegion: \(swimmer.speed(in: plainField)) dry, \(swimmer.speed(in: rainField)) in rain")
+    check("Swift Swim doubles Speed in rain",
+          swimmer.speed(in: rainField) == swimmer.stat(.speed) * 2,
+          "\(swimmer.speed(in: rainField))")
+    check("and does nothing without it",
+          swimmer.speed(in: plainField) == swimmer.stat(.speed))
+    let surfer = runner("Mega Raichu Y", item: "Raichunite Y", ability: "Surge Surfer")
+    check("Surge Surfer doubles Speed on Electric Terrain",
+          surfer.speed(in: Field(terrain: .electric, isDoubles: true)) == surfer.stat(.speed) * 2)
+
+    // A Choice item locks you into the first move, and an Assault Vest forbids
+    // status outright, so neither can spend a turn setting up.
+    check("a Choice item cannot spend a turn setting up",
+          !DuelEngine.canSpendATurn(runner("Garchomp", item: "Choice Band")))
+    check("nor can an Assault Vest",
+          !DuelEngine.canSpendATurn(runner("Garchomp", item: "Assault Vest")))
+    check("but anything else can",
+          DuelEngine.canSpendATurn(runner("Garchomp", item: "Life Orb")))
+
     // -- every team is its own team ---------------------------------------
     //
     // Meta team ids were "tour-<placing>", and placing repeats across events,

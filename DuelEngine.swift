@@ -91,9 +91,12 @@ enum DuelEngine {
         let myDamage = myPlan.damage
         let theirDamage = theirPlan.damage * myPlan.opposingDamageFactor
 
-        let mySpeed = Int(Double(mine.speed ?? mine.combatant.stat(.speed))
+        // The caller may already have worked out the order — Tailwind, Trick
+        // Room — in which case that wins. Otherwise ask the Pokémon, which
+        // knows about its own Scarf and its own weather.
+        let mySpeed = Int(Double(mine.speed ?? mine.combatant.speed(in: field))
                           * theirPlan.opposingSpeedFactor)
-        let theirSpeed = Int(Double(theirs.speed ?? theirs.combatant.stat(.speed))
+        let theirSpeed = Int(Double(theirs.speed ?? theirs.combatant.speed(in: field))
                              * myPlan.opposingSpeedFactor)
 
         var label = myPlan.moveName
@@ -142,10 +145,24 @@ enum DuelEngine {
 
     // MARK: - Setup and status
 
+    /// Items that decide what a Pokémon is allowed to do with its turn.
+    ///
+    /// A Choice item locks you into the first move you pick, so a Choice
+    /// attacker cannot Swords Dance and then attack — clicking the setup move
+    /// means clicking it for the rest of the fight. An Assault Vest forbids
+    /// status moves outright. Both were modelled only as stat multipliers, so a
+    /// Choice Band sweeper was being credited with setup turns it can never
+    /// take, and an Assault Vest wall with a Will-O-Wisp it cannot use.
+    static func canSpendATurn(_ combatant: Combatant) -> Bool {
+        !["Choice Band", "Choice Specs", "Choice Scarf", "Assault Vest"]
+            .contains(combatant.item)
+    }
+
     /// Whether spending a turn first beats attacking straight away.
     static func bestPlan(_ side: Side, into target: Side, attacking: Plan,
                          incoming: Plan, field: Field, store: Store) -> Plan {
         var best = attacking
+        guard canSpendATurn(side.combatant) else { return best }
         // Turns it needs if it just attacks, and whether it lives to do more.
         let survivesAHit = incoming.damage * incoming.reliability < 1.0
         let baseTurns = attacking.turns(toRemove: target.combatant.effectiveHP)

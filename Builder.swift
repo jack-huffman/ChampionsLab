@@ -678,8 +678,16 @@ struct TeamBuilder {
             : (physicalAttacker
                ? ["Life Orb", "Choice Band", "Assault Vest", "Sitrus Berry", "Leftovers"]
                : ["Life Orb", "Choice Specs", "Assault Vest", "Sitrus Berry", "Leftovers"])
-        slot.item = wanted.first { store.item(named: $0) != nil && !usedItems.contains($0) }
-            ?? "Leftovers"
+        // Only things people have actually been seen holding in Champions. The
+        // item list comes from the main-series itemdex, and half of it is not in
+        // this game — Assault Vest, Choice Band, Choice Specs and Covert Cloak
+        // are all on that list and all appear on none of the registered teams.
+        // Building a six around an item that does not exist is worse than any
+        // scoring error, because none of it can be played.
+        slot.item = wanted.first {
+            guard let item = store.item(named: $0) else { return false }
+            return item.seenInGame && !usedItems.contains($0)
+        } ?? "Leftovers"
         usedItems.insert(slot.item)
 
         // Spread and alignment, built to a benchmark rather than to a habit.

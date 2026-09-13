@@ -175,6 +175,17 @@ struct Team: Codable, Identifiable, Hashable {
             out.append("Only one Pokémon can Mega Evolve per battle — you have \(megas.count) Megas. That is legal to register, but only one can be used.")
         }
 
+        // Items nobody has been seen holding in Champions. The item list is
+        // scraped from the main-series itemdex — Serebii publishes no Champions
+        // one — so it carries a good number of things this game does not have.
+        // Worded as what it is: absence across 105 registered lists and the
+        // measured ladder, which is evidence rather than proof.
+        for slot in slots {
+            guard let item = store.item(named: slot.item), !item.seenInGame,
+                  let form = slot.form(in: store) else { continue }
+            out.append("\(form.formLabel) is holding \(item.name), which has not been seen in Champions — it is in the main-series item list but on none of the registered teams or the measured ladder.")
+        }
+
         for slot in slots {
             guard let form = slot.form(in: store) else { continue }
             if slot.spUsed > ChampionsStats.spTotal {

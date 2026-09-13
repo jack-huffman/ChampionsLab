@@ -180,13 +180,33 @@ struct Item: Codable, Identifiable, Hashable {
     let category: String?
     let note: String?
     let short: String?
+    /// Whether anybody has actually been seen holding it in Champions.
+    ///
+    /// The item list is scraped from Serebii's main-series itemdex, because
+    /// Serebii has no Champions one — its Champions hub links straight to the
+    /// general list. A good number of those items are not in this game: Assault
+    /// Vest appears on none of the 105 registered team lists while Choice Scarf
+    /// appears on twenty-two, and Choice Band, Choice Specs, Covert Cloak,
+    /// Eviolite and Weakness Policy are all absent too.
+    ///
+    /// Optional so that a dataset built before this existed still decodes. A
+    /// non-optional field added here once took the whole file down.
+    let attested: Bool?
+    /// Where it was seen, for the tooltip that explains the gate.
+    let attestation: String?
 
     var id: String { slug }
     var addedInMC: Bool { isNew == true }
     var blurb: String { short ?? effect }
 
+    /// Absence of evidence, stated as such. A legal but unpopular item looks
+    /// exactly like one that is not in the game, so nothing here claims an item
+    /// is illegal — only that nobody has been seen holding it. The calculator
+    /// still supports it; the builder will not reach for it.
+    var seenInGame: Bool { attested ?? true }
+
     enum CodingKeys: String, CodingKey {
-        case name, slug, effect, fling, category, note, short
+        case name, slug, effect, fling, category, note, short, attested, attestation
         case isNew = "new"
     }
 }

@@ -109,10 +109,12 @@ struct ItemDexView: View {
     @EnvironmentObject private var store: Store
     @State private var query = ""
     @State private var newOnly = false
+    @State private var seenOnly = true
 
     private var items: [Item] {
         var all = store.data.items
         if newOnly { all = all.filter(\.addedInMC) }
+        if seenOnly { all = all.filter(\.seenInGame) }
         if !query.isEmpty {
             let needle = query.lowercased()
             all = all.filter {
@@ -128,6 +130,8 @@ struct ItemDexView: View {
                 Image(systemName: "magnifyingglass").foregroundStyle(.tertiary)
                 TextField("Item name or effect", text: $query).textFieldStyle(.plain)
                 Toggle("New in M-C", isOn: $newOnly).toggleStyle(.button).controlSize(.small)
+                Toggle("In Champions", isOn: $seenOnly).toggleStyle(.button).controlSize(.small)
+                    .help("The item list comes from the main-series itemdex, because Serebii publishes no Champions one. Turn this off to see items nobody has been seen holding here.")
                 Text("\(items.count)").font(.system(size: 11)).foregroundStyle(.tertiary)
             }
             .padding(12)
@@ -143,6 +147,14 @@ struct ItemDexView: View {
                                     HStack(spacing: 5) {
                                         Text(item.name).font(.system(size: 13, weight: .semibold))
                                         if item.addedInMC { NewBadge() }
+                                        if !item.seenInGame {
+                                            Text("NOT IN CHAMPIONS YET")
+                                                .font(.system(size: 8, weight: .bold)).kerning(0.4)
+                                                .padding(.horizontal, 4).padding(.vertical, 1)
+                                                .background(Palette.warn.opacity(0.18))
+                                                .foregroundStyle(Palette.warn)
+                                                .clipShape(Capsule())
+                                        }
                                     }
                                     Text(item.effect)
                                         .font(.system(size: 11))

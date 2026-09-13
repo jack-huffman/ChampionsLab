@@ -160,9 +160,22 @@ final class Store: ObservableObject {
     // Pickers — a macOS Picker materialises every row into an NSMenu as soon as
     // the view appears, and the slot editor was doing that for ~3,400 rows.
 
-    lazy var itemOptions: [LookupOption] = data.items.map {
-        LookupOption(id: $0.name, name: $0.name, subtitle: $0.category)
-    }
+    /// Items in the slot picker, the ones people actually hold first.
+    ///
+    /// Everything stays selectable — the calculator can model an item that is
+    /// not in the game yet, and it will be right the day it arrives — but the
+    /// ones nobody has been seen holding sort to the bottom and say so, rather
+    /// than sitting in the list looking like a normal choice.
+    lazy var itemOptions: [LookupOption] = data.items
+        .sorted { first, second in
+            if first.seenInGame != second.seenInGame { return first.seenInGame }
+            return first.name < second.name
+        }
+        .map {
+            LookupOption(id: $0.name, name: $0.name,
+                         subtitle: $0.seenInGame ? ($0.category ?? "")
+                                                 : "Not seen in Champions yet")
+        }
 
     lazy var formOptions: [LookupOption] = data.forms.map {
         LookupOption(id: $0.id, name: $0.formLabel,
