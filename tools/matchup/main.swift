@@ -158,6 +158,14 @@ Ability: Regenerator
           store.moveValue(edge, for: mence, ability: "Aerilate")
             > store.moveValue(claw, for: mence, ability: "Aerilate"), "no")
 
+    // A recharge turn is the same complaint as Steel Beam's recoil: 150 base
+    // power that only fires every second turn is worth less than 120 that fires
+    // every turn. Unpriced, it made Giga Impact Mega Salamence's best move.
+    let giga = store.data.moves.values.first { $0.name == "Giga Impact" }!
+    check("a recharge turn is priced in",
+          store.moveValue(edge, for: mence, ability: "Aerilate")
+            > store.moveValue(giga, for: mence, ability: "Aerilate"), "no")
+
     // And a move it gets no bonus for must rank below one it does.
     let glaive = store.data.moves.values.first { $0.name == "Glaive Rush" }!
     check("STAB Glaive Rush beats neutral Double-Edge on Baxcalibur",
@@ -184,6 +192,91 @@ Ability: Regenerator
     check("and frail", gengar.defence == .frail, gengar.defence.rawValue)
     let whim = store.statRole(of: form("Whimsicott"))
     check("Whimsicott is not an attacker", whim.offence == .none, whim.offence.rawValue)
+
+    // -- the form that actually fights ------------------------------------
+    //
+    // Champions registers the base Pokemon holding its stone, so a list reads
+    // "Salamence @ Salamencite" and a Mega Salamence walks out. The versus grid
+    // read the registered form, which duelled 186 of the 192 stone-holders in
+    // the bundled lists as their unevolved selves.
+    print("\n== megas fight as megas ==")
+    var menceTeam = Team(); menceTeam.format = "doubles"
+    var menceSlot = TeamSlot(formID: form("Salamence").id)
+    menceSlot.item = "Salamencite"
+    menceTeam.slots = [menceSlot]
+    let menceGrid = Matchup(mine: menceTeam, theirs: menceTeam, store: store,
+                            field: Field(isDoubles: true))
+    let fighting = menceGrid.myForms.first?.formLabel ?? "-"
+    print("  Salamence @ Salamencite fights as: \(fighting)")
+    check("a base form holding its stone duels as the Mega",
+          fighting == "Mega Salamence", fighting)
+    // And it has to fight with the Mega's ability, not the base form's. Ranking
+    // its moves under Intimidate rather than Aerilate picks a Dragon move,
+    // because the thing that makes Double-Edge its best attack is missing.
+    let menceCell = menceGrid.cell(mine: menceGrid.myForms[0], theirs: menceGrid.myForms[0])
+    let menceMove = menceCell?.myBestMove ?? "-"
+    print("  and its best move reads: \(menceMove)")
+    check("moves are ranked under the Mega's ability", menceMove == "Double-Edge", menceMove)
+
+    // -- which four, and which two lead -----------------------------------
+    print("\n== bring four ==")
+    let sixes = store.data.metaTeams.filter { $0.members.count == 6 && $0.format == "doubles" }
+    check("two full six-Pokemon lists to work with", sixes.count >= 2, "\(sixes.count)")
+    if sixes.count >= 2 {
+        let mineTeam = store.opponentTeam(sixes[0])
+        let theirTeam = store.opponentTeam(sixes[1])
+        let grid = Matchup(mine: mineTeam, theirs: theirTeam, store: store,
+                           field: Field(isDoubles: true))
+        let picker = BringFour(matchup: grid, store: store)
+
+        print("  mine:   \(sixes[0].name)")
+        print("  theirs: \(sixes[1].name)")
+        let likely = picker.theirLikelyFour
+        print("  they most likely bring: \(likely.map(\.formLabel).joined(separator: ", "))")
+        check("they bring four", likely.count == 4, "\(likely.count)")
+
+        let plans = picker.plans
+        let megaCount = grid.myForms.filter(\.isMega).count
+        // C(6,4) is fifteen, less any four holding two Megas: a second Mega
+        // cannot evolve, so it is a slot spent on an unusable item.
+        print("  fours offered: \(plans.count) (team carries \(megaCount) Mega\(megaCount == 1 ? "" : "s"))")
+        check("every legal four is considered",
+              plans.count == (megaCount >= 2 ? 9 : 15), "\(plans.count)")
+        check("no four carries two Megas",
+              plans.allSatisfy { $0.bring.filter(\.isMega).count <= 1 })
+        check("each plan brings four", plans.allSatisfy { $0.bring.count == 4 })
+        check("and benches the other two", plans.allSatisfy { $0.benched.count == 2 })
+        check("leads come from the four", plans.allSatisfy { plan in
+            plan.leads.allSatisfy { lead in plan.bring.contains { $0.id == lead.id } } })
+        check("nobody is both brought and benched", plans.allSatisfy { plan in
+            Set(plan.bring.map(\.id)).isDisjoint(with: Set(plan.benched.map(\.id))) })
+        check("scores stay on the -100...100 scale",
+              plans.allSatisfy { (-100...100).contains($0.score) })
+        check("ranked best first", zip(plans, plans.dropFirst()).allSatisfy { $0.score >= $1.score })
+
+        // The whole point is that the choice matters. If the best four and the
+        // worst four score the same, this is an expensive way to print a list.
+        if let best = plans.first, let worst = plans.last {
+            print("  best four scores \(best.score), worst \(worst.score)")
+            check("the choice of four actually changes the matchup",
+                  best.score > worst.score, "\(best.score) vs \(worst.score)")
+        }
+
+        // Scoring a subset has to agree with scoring the whole team, or two
+        // screens will disagree about the same six.
+        check("rating the whole six matches the verdict",
+              grid.rate(bringing: grid.myForms, against: grid.theirForms).score
+                == grid.verdict.score,
+              "\(grid.rate(bringing: grid.myForms, against: grid.theirForms).score) vs \(grid.verdict.score)")
+
+        for plan in plans.prefix(2) {
+            print("  --")
+            print("  bring \(plan.bring.map(\.formLabel).joined(separator: ", "))")
+            print("    leads \(plan.leads.map(\.formLabel).joined(separator: " + ")) | score \(plan.score) (grid \(plan.edge), turn one \(String(format: "%+.2f", plan.turnOne.value)))")
+            for line in plan.reasons { print("    · \(line)") }
+            for line in plan.warnings { print("    ! \(line)") }
+        }
+    }
 
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)

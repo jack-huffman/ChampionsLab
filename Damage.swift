@@ -177,21 +177,13 @@ enum DamageCalc {
         // -- ability-driven type changes ------------------------------------
         // Aerilate is the reason Mega Salamence clicks Double-Edge: a Normal
         // move becomes Flying and gains 20% before anything else applies.
-        if attacker.ability == "Aerilate", moveType == .normal {
-            moveType = .flying
-            power *= 1.2
-            notes.append("Aerilate: Normal → Flying, +20%")
-        } else if attacker.ability == "Pixilate", moveType == .normal {
-            moveType = .fairy; power *= 1.2
-            notes.append("Pixilate: Normal → Fairy, +20%")
-        } else if attacker.ability == "Refrigerate", moveType == .normal {
-            moveType = .ice; power *= 1.2
-            notes.append("Refrigerate: Normal → Ice, +20%")
-        } else if attacker.ability == "Galvanize", moveType == .normal {
-            moveType = .electric; power *= 1.2
-            notes.append("Galvanize: Normal → Electric, +20%")
-        } else if attacker.ability == "Normalize" {
-            moveType = .normal; power *= 1.2
+        let ate = AteAbility.resolve(type: moveType, ability: attacker.ability)
+        if ate.boost > 1 {
+            if ate.type != moveType {
+                notes.append("\(attacker.ability): \(moveType.rawValue) → \(ate.type.rawValue), +20%")
+            }
+            moveType = ate.type
+            power *= ate.boost
         }
 
         // -- power modifiers -------------------------------------------------

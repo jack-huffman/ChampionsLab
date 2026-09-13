@@ -12,6 +12,8 @@ struct MatchupView: View {
     var initialOpponent: String? = nil
     @State private var weather: Weather = .none
     @State private var terrain: Terrain = .none
+    /// Which of the fours the reader is looking at. Nil means the best one.
+    @State private var selectedPlan: String?
     @Environment(\.snapshotMode) private var snapshotMode
 
     /// Meta archetypes first, then the user's other saved teams.
@@ -53,6 +55,12 @@ struct MatchupView: View {
         .onAppear {
             if let initialOpponent, opponentID.isEmpty { opponentID = initialOpponent }
         }
+        // A four chosen against one opponent means nothing against the next, and
+        // the same four can exist in both — so the selection is cleared rather
+        // than left to match by accident.
+        .onChange(of: opponentID) { _ in selectedPlan = nil }
+        .onChange(of: weather) { _ in selectedPlan = nil }
+        .onChange(of: terrain) { _ in selectedPlan = nil }
     }
 
     // MARK: Controls
@@ -96,6 +104,7 @@ struct MatchupView: View {
     private func content(_ matchup: Matchup) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             verdictCard(matchup)
+            bringFourCard(matchup)
             if let metaNote { provenance(metaNote) }
             gridCard(matchup)
             opposingCard(matchup)
@@ -158,6 +167,188 @@ struct MatchupView: View {
                 }
             }
         }
+    }
+
+    // MARK: Bring four
+
+    /// Six are registered and four are brought, so this is the decision the
+    /// screen exists to help with. Everything here is read off the same grid
+    /// the verdict above is read off.
+    @ViewBuilder
+    private func bringFourCard(_ matchup: Matchup) -> some View {
+        let size = store.data.rules.formats.first { $0.id == team.format }?.bring ?? 4
+        let picker = BringFour(matchup: matchup, store: store, bring: size)
+        let plans = picker.plans
+        let chosen = plans.first { $0.id == selectedPlan } ?? plans.first
+
+        if let chosen, team.slots.count > size {
+            Card(padding: 18) {
+                VStack(alignment: .leading, spacing: 14) {
+                    SectionHeader(
+                        title: "Bring \(size)",
+                        subtitle: "Which \(size) to take into this matchup, and which two to lead")
+
+                    theirLikely(picker.theirLikelyFour)
+                    Divider()
+                    chosenFour(chosen)
+
+                    if plans.count > 1 {
+                        Divider()
+                        alternates(plans, chosen: chosen)
+                    }
+                }
+            }
+        }
+    }
+
+    private func theirLikely(_ forms: [Form]) -> some View {
+        HStack(spacing: 8) {
+            Text("They will most likely bring")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            ForEach(forms) { form in
+                HStack(spacing: 4) {
+                    SpriteImage(form: form, side: 26)
+                    Text(form.formLabel).font(.system(size: 11)).foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 5).padding(.vertical, 2)
+                .background(Palette.hairline.opacity(0.45))
+                .clipShape(Capsule())
+            }
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private func chosenFour(_ plan: BringFour.Plan) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 14) {
+                ForEach(plan.leads) { bringSlot($0, badge: "Lead", accent: Palette.accent) }
+                if !plan.back.isEmpty {
+                    Rectangle().fill(Palette.hairline).frame(width: 1, height: 62)
+                    ForEach(plan.back) { bringSlot($0, badge: "Back", accent: Palette.dim) }
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(plan.score > 0 ? "+\(plan.score)" : "\(plan.score)")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Palette.grade((plan.score + 100) / 2))
+                    // Not "edge": the verdict above already owns that word for
+                    // the whole six, and two different numbers under one label
+                    // is worse than no label.
+                    Text("THIS \(plan.bring.count)")
+                        .font(.system(size: 9, weight: .semibold)).kerning(0.4)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            HStack(alignment: .top, spacing: 7) {
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Palette.accent)
+                    .padding(.top, 2)
+                Text(plan.turnOne.line)
+                    .font(.system(size: 12, weight: .medium))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(plan.reasons.prefix(5), id: \.self) { line in
+                    noteRow(line, symbol: "arrow.turn.down.right", colour: .secondary)
+                }
+                ForEach(plan.warnings, id: \.self) { line in
+                    noteRow(line, symbol: "exclamationmark.triangle.fill", colour: Palette.warn)
+                }
+            }
+        }
+    }
+
+    private func noteRow(_ text: String, symbol: String,
+                         colour: Color) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: symbol)
+                .font(.system(size: 9))
+                .foregroundStyle(colour == .secondary ? AnyShapeStyle(.tertiary)
+                                                      : AnyShapeStyle(colour))
+                .padding(.top, 2)
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundStyle(colour == .secondary ? AnyShapeStyle(.secondary)
+                                                      : AnyShapeStyle(colour))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func bringSlot(_ form: Form, badge: String, accent: Color) -> some View {
+        VStack(spacing: 3) {
+            SpriteImage(form: form, side: 44)
+            Text(badge.uppercased())
+                .font(.system(size: 8, weight: .bold)).kerning(0.5)
+                .padding(.horizontal, 5).padding(.vertical, 1)
+                .background(accent.opacity(0.18))
+                .foregroundStyle(accent)
+                .clipShape(Capsule())
+            Text(form.formLabel)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(width: 92)
+    }
+
+    /// The other fours, so the call stays the reader's. Each says what it is
+    /// worth, which is the only way to tell whether the top one is a clear
+    /// choice or a coin flip.
+    private func alternates(_ plans: [BringFour.Plan],
+                            chosen: BringFour.Plan) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            // Whether the decision is worth making at all. A two-point spread
+            // means bring whoever you like; a thirty-point one means this is
+            // the game.
+            let spread = (plans.first?.score ?? 0) - (plans.last?.score ?? 0)
+            HStack(spacing: 6) {
+                Text("Other ways to bring \(chosen.bring.count)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text(spread >= 8
+                     ? "· best to worst is \(spread) points, so this choice decides a lot"
+                     : "· only \(spread) points between best and worst, so bring what you like")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+            // A grid rather than a horizontal scroller: six of these fit the
+            // card at any sensible width, and anything that has to be scrolled
+            // sideways to be found may as well not be on the screen.
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 168), spacing: 8)],
+                      alignment: .leading, spacing: 8) {
+                ForEach(plans.prefix(6)) { plan in
+                    Button { selectedPlan = plan.id } label: {
+                        planChip(plan, isSelected: plan.id == chosen.id)
+                    }
+                    .buttonStyle(.plain)
+                    .help(plan.bring.map(\.formLabel).joined(separator: ", "))
+                }
+            }
+        }
+    }
+
+    private func planChip(_ plan: BringFour.Plan, isSelected: Bool) -> some View {
+        HStack(spacing: 3) {
+            ForEach(plan.bring) { SpriteImage(form: $0, side: 24) }
+            Text(plan.score > 0 ? "+\(plan.score)" : "\(plan.score)")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Palette.grade((plan.score + 100) / 2))
+                .padding(.leading, 2)
+        }
+        .padding(.horizontal, 7).padding(.vertical, 4)
+        .background(isSelected ? Palette.accent.opacity(0.16) : Palette.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8)
+            .strokeBorder(isSelected ? Palette.accent.opacity(0.55) : Palette.hairline,
+                          lineWidth: 1))
     }
 
     private func tally(_ label: String, _ value: Int, _ colour: Color,

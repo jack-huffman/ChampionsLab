@@ -74,6 +74,10 @@ extension Move {
         /// Outrage and Thrash: locked in for two or three turns, confused after.
         /// Far worse in doubles, where the target you were aimed at leaves.
         var rampaging = false
+        /// Hyper Beam and Giga Impact: the turn after is spent doing nothing.
+        /// A move that attacks every other turn is worth about half its number,
+        /// and the spare turn is a free one for the other side.
+        var recharges = false
         /// (minimum, maximum) strikes, and whether a miss ends the sequence.
         var hits: (min: Int, max: Int, stopsOnMiss: Bool)?
         /// Triple Axel's 20/40/60 ramp.
@@ -117,6 +121,7 @@ extension Move {
             out.conditional = true
         }
         if text.contains("Rampaging status") { out.rampaging = true }
+        if text.contains("Recharging status") { out.recharges = true }
 
         // "Lowers the user's Sp. Atk stat by 2 stages."
         if let phrase = Move.match(#"Lowers the user's ([A-Za-z. ,]+?) stats? by (\d+) stage"#, in: text),
@@ -234,6 +239,13 @@ extension Move {
             cost *= 0.55
             notes.append("locks you in, then confuses you")
         }
+        if costs.recharges {
+            // One attack every two turns, and the idle turn is a free one for
+            // them. Half is the arithmetic; it is not rounded up, because the
+            // turn you spend recharging is also a turn you take damage in.
+            cost *= 0.50
+            notes.append("spends the next turn recharging, so it attacks every other turn")
+        }
 
         // -- how much power actually lands -----------------------------------
         var raw = Double(power)
@@ -323,5 +335,37 @@ extension Move {
         let parts = phrase[1].split(separator: "/").compactMap { Double($0) }
         guard parts.count == 2, parts[1] != 0 else { return nil }
         return parts[0] / parts[1]
+    }
+}
+
+/// The -ate abilities, in one place.
+///
+/// A Normal move becomes another type and gains 20%, which is the whole reason
+/// Mega Salamence clicks Double-Edge. Three places worked this out separately —
+/// the damage calculator, the move ranker, and the versus grid's fallback move
+/// pool — and the third of them did not, so Double-Edge was filtered out of
+/// Salamence's own STAB pool before the ranker could price it and the grid
+/// handed it a Dragon move instead.
+enum AteAbility {
+    /// What each ability turns a Normal move into.
+    static let converts: [String: String] = [
+        "Aerilate": "Flying", "Pixilate": "Fairy",
+        "Refrigerate": "Ice", "Galvanize": "Electric",
+    ]
+    static let boost = 1.2
+
+    /// The type a move actually lands as, and the multiplier that comes with it.
+    ///
+    /// Normalize is the other way round — it converts everything *to* Normal,
+    /// whatever the move started as.
+    static func resolve(type: String, ability: String) -> (type: String, boost: Double) {
+        if ability == "Normalize" { return ("Normal", boost) }
+        guard type == "Normal", let into = converts[ability] else { return (type, 1) }
+        return (into, boost)
+    }
+
+    static func resolve(type: PokeType, ability: String) -> (type: PokeType, boost: Double) {
+        let out = resolve(type: type.rawValue, ability: ability)
+        return (PokeType(rawValue: out.type) ?? type, out.boost)
     }
 }

@@ -236,18 +236,8 @@ final class Store: ObservableObject {
         let resolved = ability.isEmpty ? (form.abilities.first?.name ?? "") : ability
         // An -ate ability changes a Normal move's type, which changes whether
         // it gets the bonus — this is why Mega Salamence clicks Double-Edge.
-        var type = move.type
-        var ateBoost = 1.0
-        if move.type == "Normal" {
-            switch resolved {
-            case "Aerilate":    type = "Flying";   ateBoost = 1.2
-            case "Pixilate":    type = "Fairy";    ateBoost = 1.2
-            case "Refrigerate": type = "Ice";      ateBoost = 1.2
-            case "Galvanize":   type = "Electric"; ateBoost = 1.2
-            case "Normalize":   ateBoost = 1.2
-            default: break
-            }
-        }
+        let ate = AteAbility.resolve(type: move.type, ability: resolved)
+        let type = ate.type, ateBoost = ate.boost
         var stab = form.types.contains(type) ? 1.5 : 1.0
         if resolved == "Adaptability", stab > 1 { stab = 2.0 }
 

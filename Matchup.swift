@@ -148,6 +148,10 @@ struct Matchup {
     /// initialised self to run — it is never written again after init.
     private(set) var duels: [Duel] = []
 
+    /// The grid by cell id, because the bring-four search reads single cells
+    /// several hundred times and a linear scan of thirty-six is not free.
+    private var byCell: [String: Duel] = [:]
+
     init(mine: Team, theirs: Team, store: Store, field: Field = Field(),
          myTailwind: Bool = false, theirTailwind: Bool = false,
          myTrickRoom: Bool = false) {
@@ -159,7 +163,11 @@ struct Matchup {
         self.theirTailwind = theirTailwind
         self.myTrickRoom = myTrickRoom
         self.duels = buildDuels()
+        self.byCell = Dictionary(duels.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
+
+    /// One cell of the grid: how mine fares against theirs.
+    func cell(mine: Form, theirs: Form) -> Duel? { byCell["\(mine.id)-vs-\(theirs.id)"] }
 
     /// Effective Speed for the comparison that decides who moves first.
     /// Trick Room inverts the order, so it is expressed by negating both sides.
@@ -173,12 +181,13 @@ struct Matchup {
     /// blank gets the obvious default rather than zero, so an unspecified team
     /// does not read as harmless.
     private func combatant(_ slot: TeamSlot, form: Form) -> Combatant {
-        var c = Combatant(form: form,
-                          ability: slot.ability.isEmpty
-                            ? (form.abilities.first?.name ?? "") : slot.ability,
-                          item: slot.item,
-                          sp: slot.sp,
-                          alignment: slot.alignment)
+        // A Mega fights with its own ability, which is most of the reason to
+        // evolve: Salamence's Intimidate becomes Aerilate, and that changes
+        // what its moves are as well as how hard they hit.
+        let ability = slot.megaEvolution(in: store)?.abilities.first?.name
+            ?? (slot.ability.isEmpty ? (form.abilities.first?.name ?? "") : slot.ability)
+        var c = Combatant(form: form, ability: ability, item: slot.item,
+                          sp: slot.sp, alignment: slot.alignment)
         if slot.sp.allSatisfy({ $0 == 0 }) {
             let physical = form.attack >= form.spAttack
             var sp = Array(repeating: 0, count: 6)
@@ -192,31 +201,50 @@ struct Matchup {
     /// The slot's whole set, falling back to the form's best STAB when it has
     /// nothing selected. Status and setup moves are included deliberately —
     /// filtering to damage is what made Will-O-Wisp and Swords Dance worth zero.
-    private func moves(_ slot: TeamSlot, form: Form) -> [Move] {
+    /// `ability` is the one the Pokémon fights with, which is not always the
+    /// one on the slot: a Mega brings its own, and an -ate ability changes both
+    /// the type and the power of half the moves being ranked. Passing the
+    /// slot's ability here handed Mega Salamence a Dragon move, because
+    /// Aerilate was not in the room when Double-Edge was priced.
+    private func moves(_ slot: TeamSlot, form: Form, ability: String) -> [Move] {
         let chosen = slot.moves.compactMap { store.move($0) }
         if chosen.contains(where: \.isDamaging) { return chosen }
         let learnable = store.moves(for: form).filter { $0.isDamaging && $0.power > 0 }
-        let stab = learnable.filter { form.types.contains($0.type) }
+        // Under the effective type, not the printed one: filtering on the
+        // printed type drops every -ate move out of its own user's STAB pool.
+        let stab = learnable.filter {
+            form.types.contains(AteAbility.resolve(type: $0.type, ability: ability).type)
+        }
         let pool = stab.isEmpty ? learnable : stab
         // Ranked on what the move is worth, not its base power: otherwise the
         // fallback set is Giga Impact and Steel Beam every time.
         return Array(pool.sorted {
-            store.moveValue($0, for: form, ability: slot.ability, item: slot.item)
-                > store.moveValue($1, for: form, ability: slot.ability, item: slot.item)
+            store.moveValue($0, for: form, ability: ability, item: slot.item)
+                > store.moveValue($1, for: form, ability: ability, item: slot.item)
         }.prefix(3))
     }
 
-    private var myPairs: [(TeamSlot, Form)] {
+    /// The form each slot fights as, not the one it is registered as.
+    ///
+    /// Champions registers the base Pokémon holding its stone, so a team list
+    /// says "Salamence @ Salamencite" and a Mega Salamence walks out. This grid
+    /// read the registered form, which meant 186 of the 192 stone-holders in the
+    /// bundled team lists were duelled as their unevolved selves — Salamence at
+    /// 600 base stats with Intimidate rather than 700 with Aerilate.
+    var myPairs: [(TeamSlot, Form)] {
         mine.slots.compactMap { slot in
-            slot.form(in: store).map { (slot, $0) }
+            slot.battleForm(in: store).map { (slot, $0) }
         }
     }
 
-    private var theirPairs: [(TeamSlot, Form)] {
+    var theirPairs: [(TeamSlot, Form)] {
         theirs.slots.compactMap { slot in
-            slot.form(in: store).map { (slot, $0) }
+            slot.battleForm(in: store).map { (slot, $0) }
         }
     }
+
+    var myForms: [Form] { myPairs.map(\.1) }
+    var theirForms: [Form] { theirPairs.map(\.1) }
 
     // MARK: - Grid
 
@@ -229,10 +257,10 @@ struct Matchup {
         var out: [Duel] = []
         for (mySlot, myForm) in myPairs {
             let me = combatant(mySlot, form: myForm)
-            let myMoves = moves(mySlot, form: myForm)
+            let myMoves = moves(mySlot, form: myForm, ability: me.ability)
             for (theirSlot, theirForm) in theirPairs {
                 let them = combatant(theirSlot, form: theirForm)
-                let theirMoves = moves(theirSlot, form: theirForm)
+                let theirMoves = moves(theirSlot, form: theirForm, ability: them.ability)
 
                 let speeds = order(mine: me.stat(.speed), theirs: them.stat(.speed))
                 out.append(DuelEngine.duel(
@@ -295,16 +323,24 @@ struct Matchup {
     /// one of mine beat that" but "can two of mine remove it before it acts".
     /// A team of four that individually trade evenly but can focus down their
     /// win condition is winning a game the one-on-one grid calls even.
-    private func focusFire(attackers: [Form], defenders: [Form],
-                           cells: [Duel], mineAttacking: Bool) -> [FocusKO] {
+    /// Members of a side running Helping Hand or Coaching.
+    private func boosterIDs(_ pairs: [(TeamSlot, Form)]) -> Set<String> {
+        Set(pairs.filter { slot, _ in
+            slot.moves.contains { ["Helping Hand", "Coaching"].contains(store.move($0)?.name) }
+        }.map(\.1.id))
+    }
+
+    private func focusFire(attackers: [Form], defenders: [Form], cells: [Duel],
+                           mineAttacking: Bool, boosterSet: Set<String>) -> [FocusKO] {
         var out: [FocusKO] = []
         // Helping Hand and Coaching are the other way two Pokémon remove one
         // target: instead of both attacking, one boosts and the other hits for
         // half again as much. They did nothing in this model before, because
         // they deal no damage on the turn they are used.
-        let boosters = (mineAttacking ? myPairs : theirPairs).filter { slot, _ in
-            slot.moves.contains { ["Helping Hand", "Coaching"].contains(store.move($0)?.name) }
-        }.map(\.1)
+        //
+        // Only boosters among `attackers` count — a four that left the Helping
+        // Hand user at home must not be credited with the boost.
+        let boosters = attackers.filter { boosterSet.contains($0.id) }
         let boost = boosters.isEmpty ? 1.0 : 1.5
         for defender in defenders {
             // Every attacker's single-turn share of this defender.
@@ -339,6 +375,45 @@ struct Matchup {
         return out.sorted { $0.combined > $1.combined }
     }
 
+    /// The edge for any subset of either side, read off the grid already built,
+    /// together with the focus knockouts each way.
+    ///
+    /// `verdict` is this over the whole six; the bring-four search is this over
+    /// each of the fifteen fours. Sharing the arithmetic is the point — a four
+    /// scored here and the same four entered as its own team have to agree.
+    ///
+    /// `weights` scales each of theirs by how likely it is to be brought. Only
+    /// four of their six will appear, and beating the two they leave at home is
+    /// worth nothing.
+    func rate(bringing mineForms: [Form], against theirForms: [Form],
+              weights: [String: Double] = [:])
+        -> (score: Int, focusKOs: [FocusKO], focusedOnMe: [FocusKO]) {
+        let mineIDs = Set(mineForms.map(\.id)), theirIDs = Set(theirForms.map(\.id))
+        let cells = duels.filter {
+            mineIDs.contains($0.mine.id) && theirIDs.contains($0.theirs.id)
+        }
+        guard !cells.isEmpty else { return (0, [], []) }
+
+        var total = 0.0, weighed = 0.0
+        for cell in cells {
+            let weight = weights[cell.theirs.id] ?? 1
+            total += cell.outcome.score * weight
+            weighed += weight
+        }
+        let raw = weighed > 0 ? total / weighed : 0
+
+        let focusKOs = focusFire(attackers: mineForms, defenders: theirForms, cells: cells,
+                                 mineAttacking: true, boosterSet: boosterIDs(myPairs))
+        let focusedOnMe = focusFire(attackers: theirForms, defenders: mineForms, cells: cells,
+                                    mineAttacking: false, boosterSet: boosterIDs(theirPairs))
+        // Worth a real but bounded amount: being able to remove two of theirs
+        // by focusing is a genuine edge, not a rout.
+        let focusEdge = Double(focusKOs.count - focusedOnMe.count)
+            / Double(max(mineForms.count, 1)) * 0.35
+        return (Int(((raw + focusEdge) * 100).rounded().clamped(to: -100...100)),
+                focusKOs, focusedOnMe)
+    }
+
     var verdict: Verdict {
         let all = duels
         guard !all.isEmpty else {
@@ -350,22 +425,13 @@ struct Matchup {
 
         let wins = all.filter { $0.outcome == .win }.count
         let losses = all.filter { $0.outcome == .loss }.count
-        let raw = all.reduce(0.0) { $0 + $1.outcome.score } / Double(all.count)
 
         // Doubles gives both sides two actions a turn, so a target neither of
         // yours beats alone can still be removed by two of them together. The
         // one-on-one grid cannot see that, and it is how most knockouts happen.
-        let myForms = myPairs.map(\.1)
-        let theirForms = theirPairs.map(\.1)
-        let focusKOs = focusFire(attackers: myForms, defenders: theirForms,
-                                 cells: all, mineAttacking: true)
-        let focusedOnMe = focusFire(attackers: theirForms, defenders: myForms,
-                                    cells: all, mineAttacking: false)
-        // Worth a real but bounded amount: being able to remove two of their
-        // six by focusing is a genuine edge, not a rout.
-        let focusEdge = Double(focusKOs.count - focusedOnMe.count)
-            / Double(max(myForms.count, 1)) * 0.35
-        let score = Int(((raw + focusEdge) * 100).rounded().clamped(to: -100...100))
+        let rated = rate(bringing: myForms, against: theirForms)
+        let score = rated.score
+        let focusKOs = rated.focusKOs, focusedOnMe = rated.focusedOnMe
 
         let faster = all.filter(\.iAmFaster).count
         let speedEdge = Int((Double(faster) / Double(all.count) * 100).rounded())
