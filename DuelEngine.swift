@@ -77,6 +77,19 @@ enum DuelEngine {
         moves.first { $0.effect.contains("switches out of battle to be replaced") }
     }
 
+    /// The self-protecting moves. Named rather than matched on text, because
+    /// the family is small, closed and easy to get wrong: Wide Guard and Quick
+    /// Guard read almost identically and do something else entirely, and Endure
+    /// leaves you on one health point rather than untouched.
+    static let protectMoves: Set<String> = [
+        "Protect", "Detect", "Spiky Shield", "Baneful Bunker",
+        "Burning Bulwark", "Silk Trap", "Obstruct", "King's Shield",
+    ]
+
+    static func protects(in moves: [Move]) -> Move? {
+        moves.first { protectMoves.contains($0.name) }
+    }
+
     static func duel(mine: Side, theirs: Side, field: Field, store: Store) -> Duel {
         let myAttack = bestAttack(mine, into: theirs, field: field, store: store)
         let theirAttack = bestAttack(theirs, into: mine, field: field, store: store)
@@ -114,6 +127,8 @@ enum DuelEngine {
                     theirSetupTurns: theirPlan.setupTurns,
                     myPivot: pivot(in: mine.moves)?.name,
                     theirPivot: pivot(in: theirs.moves)?.name,
+                    myProtect: protects(in: mine.moves)?.name,
+                    theirProtect: protects(in: theirs.moves)?.name,
                     iAmTrapped: theirs.combatant.ability == "Shadow Tag",
                     theyAreTrapped: mine.combatant.ability == "Shadow Tag")
     }

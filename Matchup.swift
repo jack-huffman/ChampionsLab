@@ -35,6 +35,11 @@ struct Duel: Identifiable {
     /// but a pivot leaves having done something.
     var myPivot: String?
     var theirPivot: String?
+    /// Protect, or one of its family. Most VGC sets carry one and the model had
+    /// never heard of it: a turn of damage refused is a turn added to whatever
+    /// clock the other side is racing, and it is the answer to being focused.
+    var myProtect: String?
+    var theirProtect: String?
     /// Shadow Tag on the other side. In Regulation M-C that is Mega Gengar and
     /// nothing else: no other Pokémon in the dex has a trapping ability, and no
     /// move in it traps at all.
@@ -50,11 +55,19 @@ struct Duel: Identifiable {
 
     /// Turns this side needs to knock the other out, on the high roll,
     /// including any spent setting up or applying status first.
+    ///
+    /// A Protect on the far side adds one: it refuses a turn of damage, so
+    /// whatever clock you are racing gets a turn longer. Counted once, because
+    /// using it twice in a row mostly fails, and not modelled as the prediction
+    /// game it really is — a Protect clicked on the wrong turn does nothing,
+    /// and nothing here is choosing turns.
     var myTurnsToKO: Int {
-        effectiveOutgoing > 0 ? mySetupTurns + Int(ceil(1 / effectiveOutgoing)) : 99
+        guard effectiveOutgoing > 0 else { return 99 }
+        return mySetupTurns + Int(ceil(1 / effectiveOutgoing)) + (theirProtect != nil ? 1 : 0)
     }
     var theirTurnsToKO: Int {
-        effectiveIncoming > 0 ? theirSetupTurns + Int(ceil(1 / effectiveIncoming)) : 99
+        guard effectiveIncoming > 0 else { return 99 }
+        return theirSetupTurns + Int(ceil(1 / effectiveIncoming)) + (myProtect != nil ? 1 : 0)
     }
 
     /// How a side gets out of a cell it is losing.
@@ -288,6 +301,8 @@ struct Matchup {
         }
     }
 
+    private var mineTeamFormat: String { mine.format }
+
     var myForms: [Form] { myPairs.map(\.1) }
     var theirForms: [Form] { theirPairs.map(\.1) }
 
@@ -359,6 +374,9 @@ struct Matchup {
         let second: Form
         /// Combined share of the target's health, 0…1+.
         let combined: Double
+        /// The target is running Protect, so this is a read rather than a
+        /// knockout — the most common thing Protect is actually for.
+        var refusedBy: String?
         var id: String { target.id }
     }
 
@@ -414,8 +432,17 @@ struct Matchup {
             let partner = boosted > bothAttack
                 ? (boosters.first { $0.id != ranked[0].0.id } ?? ranked[1].0)
                 : ranked[1].0
+            // Whether the target can simply refuse it. Focusing something with
+            // Protect up is the single most common way a "guaranteed" knockout
+            // does not happen, so it is worth saying rather than scoring a
+            // certainty that is a coin flip.
+            let cell = cells.first {
+                mineAttacking ? $0.theirs.id == defender.id : $0.mine.id == defender.id
+            }
+            let refusedBy = mineAttacking ? cell?.theirProtect : cell?.myProtect
             out.append(FocusKO(target: defender, first: ranked[0].0,
-                               second: partner, combined: combined))
+                               second: partner, combined: combined,
+                               refusedBy: refusedBy))
         }
         return out.sorted { $0.combined > $1.combined }
     }
@@ -506,6 +533,91 @@ struct Matchup {
         return 1
     }
 
+    /// A speed control move and the window it buys.
+    ///
+    /// Tailwind is four turns and Trick Room is five, and those numbers are the
+    /// whole plan on the teams that run them: the question is not whether you
+    /// are faster but whether you can finish inside the window. The engine
+    /// could say "you have Tailwind" and could say "this takes three turns to
+    /// knock out", and never put the two together.
+    ///
+    /// Durations come out of the move text rather than a table here, so a
+    /// change to the game is picked up by re-running mkdata.py.
+    struct Window {
+        let tactic: String
+        let turns: Int
+        /// Attacking actions the window actually gives you. Doubles hands you
+        /// two a turn, and counting each target's knockout separately -- as
+        /// though the whole team could attack it at once -- said every team
+        /// closes every game, which is not a useful thing to be told.
+        let actions: Int
+        /// Actions needed to remove the four you have to remove to win, worst
+        /// case: they choose which four they bring, so this assumes the four
+        /// that cost you most.
+        let needed: Int
+        /// What each of those costs, dearest first.
+        let cost: [(them: Form, mine: Form?, turns: Int)]
+
+        var closes: Bool { needed <= actions }
+        var shortfall: Int { max(0, needed - actions) }
+    }
+
+    /// How many turns a speed control move lasts, read from what it says.
+    static func duration(of move: Move) -> Int? {
+        guard let match = Matchup.durationPattern.firstMatch(
+            in: move.effect, range: NSRange(move.effect.startIndex..., in: move.effect)),
+              let range = Range(match.range(at: 1), in: move.effect) else { return nil }
+        return Int(move.effect[range])
+    }
+
+    private static let durationPattern = try! NSRegularExpression(
+        pattern: #"for (\d+) turns"#)
+
+    /// The window this side's own speed control buys, and what fits inside it.
+    func window(bringing mineForms: [Form]? = nil,
+                against theirForms: [Form]? = nil) -> Window? {
+        let mine = mineForms ?? myForms
+        let theirs = theirForms ?? self.theirForms
+        let mineIDs = Set(mine.map(\.id))
+
+        // The speed control this six is actually running, not what it could.
+        var best: (name: String, turns: Int)?
+        for (slot, form) in myPairs where mineIDs.contains(form.id) {
+            for move in slot.moves.compactMap({ store.move($0) })
+            where ["Tailwind", "Trick Room"].contains(move.name) {
+                guard let turns = Matchup.duration(of: move) else { continue }
+                if best == nil || turns < best!.turns { best = (move.name, turns) }
+            }
+        }
+        guard let control = best else { return nil }
+
+        // What removing each of theirs costs in attacking turns, using the
+        // best answer among the ones you brought. Optimistic on two counts --
+        // it is the high damage roll, and it assumes the right answer is the
+        // one standing there -- so a team that cannot close on these numbers
+        // certainly cannot close in a game.
+        var cost: [(Form, Form?, Int)] = []
+        for their in theirs {
+            let quickest = mine.compactMap { form -> (Form, Int)? in
+                guard let cell = cell(mine: form, theirs: their) else { return nil }
+                return cell.myTurnsToKO < 99 ? (form, cell.myTurnsToKO) : nil
+            }.min { $0.1 < $1.1 }
+            // Nothing removes it at all: count it as the whole window, since
+            // that is what it does to the clock.
+            cost.append((their, quickest?.0, quickest?.1 ?? (control.turns * 2 + 1)))
+        }
+        cost.sort { $0.2 > $1.2 }
+
+        let bring = store.data.rules.formats.first { $0.id == mineTeamFormat }?.bring ?? 4
+        let mustRemove = min(bring, cost.count)
+        let needed = cost.prefix(mustRemove).reduce(0) { $0 + $1.2 }
+        let actions = control.turns * (field.isDoubles ? 2 : 1)
+
+        return Window(tactic: control.name, turns: control.turns,
+                      actions: actions, needed: needed,
+                      cost: cost.map { (them: $0.0, mine: $0.1, turns: $0.2) })
+    }
+
     /// The edge for any subset of either side, read off the grid already built,
     /// together with the focus knockouts each way.
     ///
@@ -542,8 +654,12 @@ struct Matchup {
         let focusedOnMe = focusFire(attackers: theirForms, defenders: mineForms, cells: cells,
                                     mineAttacking: false, boosterSet: boosterIDs(theirPairs))
         // Worth a real but bounded amount: being able to remove two of theirs
-        // by focusing is a genuine edge, not a rout.
-        let focusEdge = Double(focusKOs.count - focusedOnMe.count)
+        // by focusing is a genuine edge, not a rout. One the target can refuse
+        // with Protect is worth about half, since it becomes a read.
+        func weight(_ kos: [FocusKO]) -> Double {
+            kos.reduce(0) { $0 + ($1.refusedBy == nil ? 1.0 : 0.5) }
+        }
+        let focusEdge = (weight(focusKOs) - weight(focusedOnMe))
             / Double(max(mineForms.count, 1)) * 0.35
         return (Int(((raw + focusEdge) * 100).rounded().clamped(to: -100...100)),
                 focusKOs, focusedOnMe)
@@ -588,7 +704,9 @@ struct Matchup {
             advice.append("\(star.form.formLabel) carries this matchup with \(star.wins) winning matchups.")
         }
         for ko in focusKOs.prefix(2) {
-            advice.append("\(ko.first.formLabel) and \(ko.second.formLabel) together remove \(ko.target.formLabel) in one turn — neither does it alone.")
+            advice.append(ko.refusedBy.map {
+                "\(ko.first.formLabel) and \(ko.second.formLabel) together remove \(ko.target.formLabel) in one turn, but it runs \($0) — so it is a read, not a certainty."
+            } ?? "\(ko.first.formLabel) and \(ko.second.formLabel) together remove \(ko.target.formLabel) in one turn — neither does it alone.")
         }
         for ko in focusedOnMe.prefix(1) {
             advice.append("They can focus \(ko.target.formLabel) down in a turn with \(ko.first.formLabel) and \(ko.second.formLabel). Do not lead it into both.")
@@ -611,6 +729,18 @@ struct Matchup {
            let sample = worst.first {
             advice.append("Nothing here can come in on \(sample.against.formLabel) — \(worst.count) of yours lose to it and none of the rest beats it, so switching only changes who is standing in front of it.")
         }
+        // Speed control is a clock, not a state. Being faster for four turns
+        // only wins if four turns is enough.
+        if let window = window() {
+            let dearest = window.cost.prefix(2)
+                .map { "\($0.them.formLabel) costs \($0.turns)" }.joined(separator: " and ")
+            if window.closes {
+                advice.append("\(window.tactic) runs \(window.turns) turns, which is \(window.actions) attacking turns in doubles. Removing the four that cost you most takes about \(window.needed), so the plan closes inside its own clock — \(dearest).")
+            } else {
+                advice.append("\(window.tactic) runs \(window.turns) turns, which is \(window.actions) attacking turns in doubles, and removing the four that cost you most takes about \(window.needed). You are \(window.shortfall) short, so this wins on the turns after it ends rather than during it — \(dearest).")
+            }
+        }
+
         // Terrain and weather flip a lot of these cells, so say so once.
         if field.terrain == .none && theirPairs.contains(where: { form in
             form.1.abilities.contains { $0.name.hasSuffix("Surge") }

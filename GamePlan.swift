@@ -186,6 +186,16 @@ struct GamePlanner {
         if !denial.isEmpty {
             steps.append("\(list(denial)) \(verb(denial, "takes", "take")) their first turn away while you set up.")
         }
+        // What the speed control is actually for. Four turns of Tailwind is a
+        // clock, and "are we faster" is the wrong question if the answer to
+        // "can we finish in four" is no.
+        for (member, name) in tailwind + trickRoom {
+            guard let move = store.data.moves.values.first(where: { $0.name == name }),
+                  let turns = Matchup.duration(of: move) else { continue }
+            steps.append("\(name) from \(member.form.formLabel) runs for \(turns) turns, so the plan has to close inside \(turns). Check that against the threats on the versus screen, which counts how many of a given six you remove in that time.")
+            break
+        }
+
         if bar > 0 {
             steps.append(aboveBar == 0
                 ? "Nothing on this six reaches \(bar), the fifth-fastest number in the format, so you are behind on raw stats in most games."

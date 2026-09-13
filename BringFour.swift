@@ -310,8 +310,11 @@ struct BringFour {
             // When nothing in the four beats the target one-on-one, the warning
             // says this already and says it better — it adds "keep both alive".
             guard !answers(ko.target, within: four).isEmpty else { continue }
-            out.append("\(ko.first.formLabel) and \(ko.second.formLabel) together remove "
-                       + "\(ko.target.formLabel) in a turn; neither does it alone.")
+            out.append(ko.refusedBy.map {
+                "\(ko.first.formLabel) and \(ko.second.formLabel) together remove "
+                + "\(ko.target.formLabel) in a turn, though it runs \($0) and can refuse."
+            } ?? "\(ko.first.formLabel) and \(ko.second.formLabel) together remove "
+                + "\(ko.target.formLabel) in a turn; neither does it alone.")
         }
 
         // What the back two are actually for. A four is not four Pokémon that

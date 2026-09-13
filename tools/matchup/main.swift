@@ -255,7 +255,7 @@ Ability: Regenerator
     check("no bundled team holds an item that is not in the game",
           holders.isEmpty, holders.prefix(3).joined(separator: "; "))
     // Nor may the builder reach for one.
-    var builder = TeamBuilder(store: store, format: "doubles")
+    let builder = TeamBuilder(store: store, format: "doubles")
     var usedItems = Set<String>()
     var builtItems: [String] = []
     for form in store.data.forms.prefix(60) {
@@ -311,6 +311,70 @@ Ability: Regenerator
           !DuelEngine.canSpendATurn(runner("Garchomp", item: "Assault Vest")))
     check("but anything else can",
           DuelEngine.canSpendATurn(runner("Garchomp", item: "Life Orb")))
+
+    // -- Protect, and the clock speed control runs on ------------------------
+    //
+    // Most VGC sets carry a Protect and the battle model had never heard of it.
+    // A turn of damage refused is a turn added to whatever clock the other side
+    // is racing, and it is the answer to being focused down.
+    print("\n== protect ==")
+    func move(_ n: String) -> Move { store.data.moves.values.first { $0.name == n }! }
+    check("Protect is recognised", DuelEngine.protects(in: [move("Protect")]) != nil)
+    check("so are its relatives",
+          DuelEngine.protects(in: [move("Spiky Shield")]) != nil
+            && DuelEngine.protects(in: [move("Baneful Bunker")]) != nil)
+    check("Wide Guard is not one of them, it does something else",
+          DuelEngine.protects(in: [move("Wide Guard")]) == nil)
+    check("nor is Endure, which leaves you on one health point",
+          DuelEngine.protects(in: [move("Endure")]) == nil)
+
+    // It has to cost the attacker a turn, both ways round.
+    let plain = Duel(mine: form("Garchomp"), theirs: form("Incineroar"),
+                     outgoing: 0.5, incoming: 0.5, mySpeed: 200, theirSpeed: 100,
+                     myBestMove: "-", theirBestMove: "-")
+    var guarded = plain
+    guarded.theirProtect = "Protect"
+    print("  two hits to knock out: \(plain.myTurnsToKO) turns, \(guarded.myTurnsToKO) against a Protect")
+    check("a Protect on the far side adds a turn to your clock",
+          guarded.myTurnsToKO == plain.myTurnsToKO + 1,
+          "\(guarded.myTurnsToKO) vs \(plain.myTurnsToKO)")
+    var guardedMe = plain
+    guardedMe.myProtect = "Protect"
+    check("and one on yours adds a turn to theirs",
+          guardedMe.theirTurnsToKO == plain.theirTurnsToKO + 1)
+    check("a Protect nobody is running changes nothing",
+          plain.myTurnsToKO == 2 && plain.theirTurnsToKO == 2,
+          "\(plain.myTurnsToKO)/\(plain.theirTurnsToKO)")
+
+    // Durations come out of the move text, not a table in the code.
+    print("\n== the clock ==")
+    check("Tailwind reads as four turns", Matchup.duration(of: move("Tailwind")) == 4,
+          "\(Matchup.duration(of: move("Tailwind")) ?? -1)")
+    check("Trick Room reads as five", Matchup.duration(of: move("Trick Room")) == 5,
+          "\(Matchup.duration(of: move("Trick Room")) ?? -1)")
+    check("and a move with no duration reads as none",
+          Matchup.duration(of: move("Protect")) == nil)
+
+    if let opponent = store.data.metaTeams.first(where: { $0.name == "Big Six" }) {
+        let theirSix = store.opponentTeam(opponent)
+        var windows = 0
+        for saved in store.teams {
+            let grid = Matchup(mine: saved, theirs: theirSix, store: store,
+                               field: Field(isDoubles: true))
+            guard let w = grid.window() else { continue }
+            windows += 1
+            let verdictText = w.closes ? "closes" : "\(w.shortfall) short"
+            let padded = saved.name.padding(toLength: max(saved.name.count, 24),
+                                            withPad: " ", startingAt: 0)
+            print("  \(padded) \(w.tactic) \(w.turns) turns = \(w.actions) actions, "
+                  + "needs \(w.needed) -> \(verdictText)")
+            check("\(saved.name): doubles gives two attacking turns a turn",
+                  w.actions == w.turns * 2, "\(w.actions)")
+            check("\(saved.name): the cost of the four that matter is what is counted",
+                  w.needed == w.cost.prefix(4).reduce(0) { $0 + $1.turns })
+        }
+        check("speed control was found on the saved teams", windows > 0, "\(windows)")
+    }
 
     // -- every team is its own team ---------------------------------------
     //
