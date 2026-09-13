@@ -210,6 +210,23 @@ final class Store: ObservableObject {
         return made
     }
 
+    /// Whether it is already built. The asynchronous pool warms these a few at
+    /// a time and breathes in between, which is worth doing exactly once — after
+    /// that the loop is pure sleeping, and the refiner walks it thousands of
+    /// times.
+    func hasOpponentTeam(_ meta: MetaTeam) -> Bool { opponentCache[meta.id] != nil }
+
+    /// Teams sampled from the usage table, which describe what you will
+    /// actually be queued against. Rebuilt inside every evaluation before this.
+    private var ladderCache: [String: [(team: Team, weight: Double)]] = [:]
+
+    func ladderTeams(format: String) -> [(team: Team, weight: Double)] {
+        if let hit = ladderCache[format] { return hit }
+        let made = MetaModel(store: self, format: format).ladderTeams()
+        ladderCache[format] = made
+        return made
+    }
+
     /// What winning teams carry, worked out once. It depends only on the
     /// dataset, and rebuilding forty-eight teams inside every team evaluation
     /// took a score from 100ms to 390ms.

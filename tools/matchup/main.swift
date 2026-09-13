@@ -219,6 +219,27 @@ Ability: Regenerator
     check("moves are ranked under the Mega's ability", menceMove == "Double-Edge", menceMove)
 
     // -- which four, and which two lead -----------------------------------
+    // -- every team is its own team ---------------------------------------
+    //
+    // Meta team ids were "tour-<placing>", and placing repeats across events,
+    // so 112 teams shared 17 ids. Everything keyed on the id -- the built-team
+    // cache, the opponent pool, the versus picker -- collapsed them onto
+    // whichever arrived first, and 95 of the published lists were never scored.
+    print("\n== meta team identity ==")
+    let metaIDs = store.data.metaTeams.map(\.id)
+    print("  \(metaIDs.count) teams, \(Set(metaIDs).count) distinct ids")
+    check("every meta team has its own id", Set(metaIDs).count == metaIDs.count,
+          "\(metaIDs.count - Set(metaIDs).count) collisions")
+    // And the cache keyed on it hands back distinct teams.
+    let firstFew = store.data.metaTeams.filter { $0.record != nil }.prefix(8)
+    let builtIDs = firstFew.map { meta in
+        store.opponentTeam(meta).slots.compactMap { $0.form(in: store)?.formLabel }
+            .sorted().joined(separator: ",")
+    }
+    check("and the built-team cache does not alias them",
+          Set(builtIDs).count == builtIDs.count,
+          "\(builtIDs.count - Set(builtIDs).count) aliased")
+
     print("\n== bring four ==")
     let sixes = store.data.metaTeams.filter { $0.members.count == 6 && $0.format == "doubles" }
     check("two full six-Pokemon lists to work with", sixes.count >= 2, "\(sixes.count)")

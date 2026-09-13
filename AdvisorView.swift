@@ -143,7 +143,7 @@ struct AdvisorView: View {
                         Text(refineStep).font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                 } else if refined && refinements.isEmpty {
-                    Label("Nothing single beats what is already here. The next gain needs more than one change.",
+                    Label("Nothing beats what is already here, on its own or in pairs. The next gain is in the spreads, or in a direction this search does not look.",
                           systemImage: "checkmark.seal")
                         .font(.system(size: 11)).foregroundStyle(Palette.good)
                         .fixedSize(horizontal: false, vertical: true)
@@ -163,8 +163,11 @@ struct AdvisorView: View {
                                         .background(Palette.accent.opacity(0.16))
                                         .foregroundStyle(Palette.accent)
                                         .clipShape(Capsule())
+                                    // A pair names two changes, so this has to
+                                    // wrap rather than trail off mid-Pokémon.
                                     Text(suggestion.headline)
                                         .font(.system(size: 12, weight: .medium))
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                                 Text(suggestion.reason)
                                     .font(.system(size: 10)).foregroundStyle(.secondary)
@@ -178,7 +181,7 @@ struct AdvisorView: View {
                         .padding(.vertical, 2)
                     }
                     if !refinements.isEmpty {
-                        Text("Each is scored on its own against the same opponents the team score uses — the archetypes, the ladder cores and the tournament results. Anything that buys a role by giving up real matchup is left out.")
+                        Text("Each is scored against the same opponents the team score uses — the archetypes, the ladder cores and the tournament results. Anything that buys a role by giving up real matchup is left out. A pair is only listed when the two together beat either of them alone, so it is never one good change with a harmless one attached.")
                             .font(.system(size: 10)).foregroundStyle(.tertiary)
                             .fixedSize(horizontal: false, vertical: true)
                     }

@@ -1170,6 +1170,10 @@ struct TeamBuilder {
         // one stall of a third of a second with the spinner already turning; it
         // is cheap now, and taken here it lands before anything is animating.
         await breathe("start")
+        // Build the opponent lists first, breathing through them, so that
+        // working out what winning teams carry is only the arithmetic and not
+        // a hundred team constructions in one piece.
+        await warmOpponentTeams(format: format)
         _ = store.winningStructure(format: format)
         await breathe("warm the structure")
         var candidates = await profiles(picks: picks, yielding: true)
@@ -1401,9 +1405,11 @@ struct TeamBuilder {
     /// piece, which is twenty frames the interface cannot draw. An earlier
     /// attempt at this only warmed the caches and then called the synchronous
     /// version, so it changed nothing: the loop itself has to let go.
-    func evaluate(_ team: Team, plan: Archetype, yielding: Bool) async
-        -> (TeamScore, [(String, Int)]) {
-        guard yielding else { return evaluate(team, plan: plan) }
+    func evaluate(_ team: Team, plan: Archetype, yielding: Bool,
+                  opponentLimit: Int? = nil) async -> (TeamScore, [(String, Int)]) {
+        guard yielding else {
+            return evaluate(team, plan: plan, opponentLimit: opponentLimit)
+        }
         let advisor = TeamAdvisor(team: team, store: store)
         let analysis = TeamAnalysis(team: team, store: store)
         var score = TeamScore()
@@ -1414,7 +1420,7 @@ struct TeamBuilder {
         // Building the pool is itself a chunk of work the first time, since
         // every opponent is fleshed out from a team list. Breathe through it
         // rather than in front of it.
-        let opponents = await opponentPoolYielding(for: team)
+        let opponents = await opponentPoolYielding(for: team, limit: opponentLimit)
         var perArchetype: [(String, Int)] = []
         var total = 0.0, weight = 0.0
         for (index, opponent) in opponents.enumerated() {
@@ -1436,14 +1442,26 @@ struct TeamBuilder {
     }
 
     /// The pool, built a few at a time.
-    private func opponentPoolYielding(for team: Team) async
+    private func opponentPoolYielding(for team: Team, limit: Int? = nil) async
         -> [(name: String, team: Team, weight: Double)] {
-        let metas = store.data.metaTeams.filter { $0.format == team.format }
-        for (index, meta) in metas.enumerated() {
-            if index % 6 == 0 { await breathe("opponent pool") }
+        await warmOpponentTeams(format: team.format)
+        return opponentPool(for: team, limit: limit)
+    }
+
+    /// Build every opponent team the search will need, a few at a time.
+    ///
+    /// Only breathes where there is something to breathe through. Once these
+    /// are built the loop is nothing but sleeping, and the refiner asks for the
+    /// pool a few thousand times: it was spending 45ms per evaluation
+    /// suspending over an entirely warm cache.
+    private func warmOpponentTeams(format: String) async {
+        var built = 0
+        for meta in store.data.metaTeams
+        where meta.format == format && !store.hasOpponentTeam(meta) {
+            if built % 6 == 0 { await breathe("opponent pool") }
             _ = store.opponentTeam(meta)
+            built += 1
         }
-        return opponentPool(for: team, limit: nil)
     }
 
     /// Who a team is scored against, in one place so both paths agree.
@@ -1456,7 +1474,7 @@ struct TeamBuilder {
             .prefix(16)
         var opponents: [(name: String, team: Team, weight: Double)] =
             (written + played).map { ($0.name, store.opponentTeam($0), 1.0) }
-        for (sampled, share) in MetaModel(store: store, format: format).ladderTeams() {
+        for (sampled, share) in store.ladderTeams(format: format) {
             opponents.append((sampled.name, sampled, max(0.5, share * 3)))
         }
         if let limit, opponents.count > limit {
@@ -1522,7 +1540,7 @@ struct TeamBuilder {
             .prefix(16)
         var opponents: [(name: String, team: Team, weight: Double)] =
             (written + played).map { ($0.name, store.opponentTeam($0), 1.0) }
-        for (sampled, share) in MetaModel(store: store, format: format).ladderTeams() {
+        for (sampled, share) in store.ladderTeams(format: format) {
             opponents.append((sampled.name, sampled, max(0.5, share * 3)))
         }
         if let limit = opponentLimit, opponents.count > limit {

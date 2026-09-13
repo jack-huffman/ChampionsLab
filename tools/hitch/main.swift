@@ -19,6 +19,21 @@ import AppKit
 
 let frame = 1.0 / 60
 
+/// Moves that are only weak until the team's own field is up, and the ability
+/// that puts it up. Mirrors the refiner's own table.
+let fieldMoveNeeds: [String: Set<String>] = [
+    "Grassy Glide": ["Grassy Surge"],
+    "Expanding Force": ["Psychic Surge"],
+    "Rising Voltage": ["Electric Surge"],
+    "Psyblade": ["Electric Surge"],
+    "Misty Explosion": ["Misty Surge"],
+    "Terrain Pulse": ["Grassy Surge", "Psychic Surge", "Electric Surge", "Misty Surge"],
+    "Weather Ball": ["Drought", "Drizzle", "Sand Stream", "Snow Warning"],
+    "Solar Beam": ["Drought"], "Solar Blade": ["Drought"],
+    "Thunder": ["Drizzle"], "Hurricane": ["Drizzle"],
+    "Aurora Veil": ["Snow Warning"],
+]
+
 @MainActor func run() async {
     let store = Store.shared
     var fails = 0
@@ -72,6 +87,53 @@ let frame = 1.0 / 60
     print(String(format: "\n  winning structure, re-asked after a build: %.2f ms", reaskedMS))
     check("the winning structure is not rebuilt per evaluation", reaskedMS < 1,
           String(format: "%.2f ms", reaskedMS))
+
+    // -- what the refiner will and will not suggest -------------------------
+    //
+    // The move ranker prices a move on its own, which is wrong twice over: it
+    // cannot see that a move is the team's last copy of a job, and it cannot
+    // see that a move is only weak until the team's own field goes up. Both
+    // produced advice that gives games away, so both are guarded here.
+    print("\n== what the refiner will not suggest ==")
+    var refineFails = 0
+    var checked = 0
+    for team in store.teams where team.slots.count >= 4 {
+        var refiner = TeamRefiner(store: store, team: team, format: team.format)
+        refiner.plan = TeamAdvisor(team: team, store: store).archetypes.first?.archetype ?? .balance
+        let started = Date()
+        let found = await refiner.suggestions(picks: picks, budget: 12, limit: 6) { _, _ in }
+        let took = Date().timeIntervalSince(started) * 1000
+        checked += 1
+
+        // Everything the six is running, and what it would be giving up.
+        let abilities = Set(team.slots.compactMap { slot -> String? in
+            if let mega = slot.megaEvolution(in: store) { return mega.abilities.first?.name }
+            return slot.ability.isEmpty
+                ? slot.battleForm(in: store)?.abilities.first?.name : slot.ability
+        })
+        let protectedNames: Set<String> = ["Tailwind", "Trick Room", "Follow Me",
+                                           "Rage Powder", "Revival Blessing"]
+        for suggestion in found where suggestion.kind == .move {
+            // "Pelipper: Tailwind -> Icy Wind"
+            guard let arrow = suggestion.headline.range(of: " → "),
+                  let colon = suggestion.headline.range(of: ": ") else { continue }
+            let dropped = String(suggestion.headline[colon.upperBound..<arrow.lowerBound])
+            let soleHolders = team.slots.filter { $0.moves.contains { store.move($0)?.name == dropped } }
+            if protectedNames.contains(dropped), soleHolders.count <= 1 {
+                print("  FAIL  would drop the team's only \(dropped): \(suggestion.headline)")
+                refineFails += 1
+            }
+            if let needs = fieldMoveNeeds[dropped], !needs.isDisjoint(with: abilities) {
+                print("  FAIL  would drop \(dropped), which this team's own field powers: \(suggestion.headline)")
+                refineFails += 1
+            }
+        }
+        print(String(format: "  %-24s %5.0f ms, %d suggestions",
+                     (team.name as NSString).utf8String!, took, found.count))
+    }
+    check("the refiner ran on every saved team", checked > 0, "\(checked)")
+    check("it never offers to drop a job the team has one copy of, or a move its own field powers",
+          refineFails == 0, "\(refineFails) bad suggestions")
 
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)

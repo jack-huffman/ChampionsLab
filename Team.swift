@@ -166,7 +166,11 @@ struct Team: Codable, Identifiable, Hashable {
             out.append("Item clause: \(count) Pokémon are holding \(item)")
         }
 
-        let megas = slots.compactMap { $0.form(in: store) }.filter(\.isMega)
+        // Counted by what each slot *fights* as, not what it is registered as.
+        // Champions registers the base Pokémon holding its stone, so reading the
+        // registered form found zero Megas on a team carrying two of them and
+        // this warning never fired for any normally built team.
+        let megas = slots.compactMap { $0.battleForm(in: store) }.filter(\.isMega)
         if megas.count > 1 {
             out.append("Only one Pokémon can Mega Evolve per battle — you have \(megas.count) Megas. That is legal to register, but only one can be used.")
         }

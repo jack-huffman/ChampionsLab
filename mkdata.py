@@ -1063,6 +1063,8 @@ def load_tournaments(roster, usage_by_name, moves, items):
             or by_label.get(raw) or by_name.get(raw)
 
     out, dropped = [], []
+
+    seen_ids = set()
     for entry in payload.get("teams", []):
         # Only this regulation. Community series run several at once.
         if re.search(r"\bM-?B\b", entry.get("event", ""), re.I):
@@ -1103,8 +1105,22 @@ def load_tournaments(roster, usage_by_name, moves, items):
         if len(members) < 4:
             continue
         placement = entry.get("placement") or ""
+        # Unique per team, not per placing.
+        #
+        # This was "tour-<rank>", and rank is the placing *within* an event, so
+        # the eighth-place team at twenty different events all shared one id.
+        # 112 teams carried 17 distinct ids between them, and everything keyed
+        # on the id -- the built-team cache, the opponent pool, the picker in
+        # the versus screen -- silently collapsed them onto whichever arrived
+        # first. Ninety-five of the published lists were never scored at all.
+        slug = re.sub(r"[^a-z0-9]+", "-",
+                      ("%s-%s-%d" % (entry["player"], entry["event"],
+                                     entry["rank"])).lower()).strip("-")[:78]
+        while slug in seen_ids:
+            slug += "-x"
+        seen_ids.add(slug)
         out.append({
-            "id": "tour-%d" % entry["rank"],
+            "id": slug,
             "name": "%s — %s" % (clean_text(entry["player"]), tidy_event(entry["event"])),
             "archetype": "Tournament result",
             "projected": False,
