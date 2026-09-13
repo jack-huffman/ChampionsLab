@@ -74,8 +74,11 @@ let fieldMoveNeeds: [String: Set<String>] = [
     // visibly freezes in, which is the thing being guarded against.
     check("no stretch runs past four frames", worst < frame * 4,
           String(format: "%.0f ms", worst * 1000))
+    // A build now searches three plans rather than two, so there is more of
+    // everything; this guards against a stall coming back, not against a busy
+    // machine, and the number it is really watching is the one above.
     check("at most a handful of dropped frames in a whole build",
-          stalls.count <= 6, "\(stalls.count)")
+          stalls.count <= 10, "\(stalls.count)")
 
     // What winning teams carry cost 340ms the first time anything asked, in one
     // piece, in the middle of a search, because it rebuilt every team list once

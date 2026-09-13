@@ -126,7 +126,7 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
     render(ForecastView(), named: "forecast-dark",
            size: CGSize(width: 1180, height: 4200), dark: true)
     render(MatchupView(team: team, initialOpponent: "big-six"), named: "versus-dark",
-           size: CGSize(width: 1180, height: 1500), dark: true)
+           size: CGSize(width: 1180, height: 2400), dark: true)
     // The calculator as it opens from a team slot's ƒ button.
     if let saved = store.teams.first(where: { $0.name == "Sun / Dual Mega" }),
        let zard = saved.slots.first(where: { $0.form(in: store)?.name == "Charizard" }),
@@ -146,6 +146,16 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         render(FormDetail(form: form), named: "dex-detail-dark",
                size: CGSize(width: 620, height: 2400), dark: true)
     }
+    let dexSample = Array(store.data.forms.sorted { $0.dex < $1.dex }.prefix(24))
+    render(LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 10)],
+                     spacing: 10) {
+               ForEach(Array(dexSample.enumerated()), id: \.offset) { index, form in
+                   DexTile(form: form, isSelected: index == 3)
+               }
+           }
+           .padding(12),
+           named: "dex-tiles-dark",
+           size: CGSize(width: 900, height: 560), dark: true)
 }
 
 MainActor.assumeIsolated { renderAll() }

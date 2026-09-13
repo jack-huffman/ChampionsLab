@@ -257,7 +257,7 @@ struct TeamBuilder {
         let advisor = TeamAdvisor(team: Team(), store: store)
         var out: [Profile] = []
         for (index, form) in tieredPool(picks: picks).enumerated() {
-            if yielding, index % 12 == 0 { await breathe("profiles") }
+            if yielding, index % 8 == 0 { await breathe("profiles") }
             out.append(profile(of: form, standing: standing, advisor: advisor))
         }
         return out
@@ -402,8 +402,18 @@ struct TeamBuilder {
         if let enabler = plan.enabler {
             let sets = team.contains { $0.form.abilities.contains { $0.name == enabler } }
             let payoff = team.filter { benefits(from: plan, $0.form) }.count
-            if sets && payoff >= 2 { value += 10 }
-            else if sets && payoff == 0 { value -= 6 }
+            if brief?.plan == plan {
+                // It was asked for. A six that does not put the weather up has
+                // not answered the question, whatever else it scores, and one
+                // that does has answered it even if nothing abuses it — halving
+                // an incoming type is a reason to set weather all by itself.
+                value += sets ? 14 : -25
+                if sets && payoff >= 2 { value += 6 }
+            } else if sets && payoff >= 2 {
+                value += 10
+            } else if sets && payoff == 0 {
+                value -= 6
+            }
         }
         if plan == .trickRoom {
             value += Double(team.filter { $0.speed <= 65 }.count) * 2.5
@@ -499,8 +509,10 @@ struct TeamBuilder {
     private func benefits(from plan: Archetype, _ form: Form) -> Bool {
         let ability = form.abilities.first?.name ?? ""
         switch plan {
-        case .sun:   return ["Chlorophyll", "Solar Power"].contains(ability) || form.types.contains("Fire")
-        case .rain:  return ["Swift Swim", "Dry Skin", "Rain Dish"].contains(ability) || form.types.contains("Water")
+        case .sun:   return ["Chlorophyll", "Solar Power"].contains(ability)
+            || form.types.contains("Fire") || WeatherShield.shields(.sun, form)
+        case .rain:  return ["Swift Swim", "Dry Skin", "Rain Dish"].contains(ability)
+            || form.types.contains("Water") || WeatherShield.shields(.rain, form)
         case .sand:  return ["Sand Rush", "Sand Force"].contains(ability) || form.types.contains("Rock")
         case .snow:  return ["Slush Rush", "Ice Body"].contains(ability) || form.types.contains("Ice")
         case .grassy: return form.types.contains("Grass")
@@ -519,6 +531,18 @@ struct TeamBuilder {
     /// the builder should not pretend it is either.
     func plans(for seed: Form) -> [Archetype] {
         var out: [Archetype] = [.balance]
+        // A plan the interview settled on is built whatever the seed's own
+        // stats suggest.
+        //
+        // This is the single worst thing the builder can do and it was doing
+        // it: the chosen plan was used to *sort* the finished blueprints rather
+        // than to generate them, so when nothing of that shape had been built
+        // there was nothing for the sort to find. Asking for rain around Mega
+        // Golisopod produced a sand team, because Mega Golisopod is Bug/Steel
+        // and so never qualified for a rain plan on its own typing — even
+        // though halving the Fire moves that hit it for four times damage is
+        // exactly why someone would ask for rain.
+        if let chosen = brief?.plan, chosen != .balance { out.append(chosen) }
         if seed.speed <= 70 { out.append(.trickRoom) }
         if seed.speed >= 85 { out.append(.tailwind) }
         for plan: Archetype in [.sun, .rain, .sand, .snow, .grassy, .psychicTerrain, .electric] {
@@ -1432,7 +1456,7 @@ struct TeamBuilder {
         var perArchetype: [(String, Int)] = []
         var total = 0.0, weight = 0.0
         for (index, opponent) in opponents.enumerated() {
-            if index % 4 == 0 { await breathe("matchups") }
+            if index % 2 == 0 { await breathe("matchups") }
             let theirs = opponent.team
             let matchup = Matchup(mine: team, theirs: theirs, store: store,
                                   field: field(for: team, against: theirs),

@@ -129,67 +129,75 @@ struct DexView: View {
 
     // MARK: List
 
+    /// Tiles rather than rows.
+    ///
+    /// A dex is something you browse by sight — you are looking for the one you
+    /// half-remember the shape of, not reading six stat columns. The row laid
+    /// every number out beside a forty-point sprite, which is the wrong way
+    /// round: the sprite is what you are scanning and the numbers are what you
+    /// want once you have found it, which is what the detail panel is for.
     private var list: some View {
         ScrollView {
-            LazyVStack(spacing: 2) {
+            // Wide enough that a dual type fits without either chip truncating,
+            // which is most of the dex.
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 10)],
+                      spacing: 10) {
                 ForEach(results) { form in
-                    DexRow(form: form, isSelected: selection == form.id)
-                        .contentShape(Rectangle())
-                        .onTapGesture { selection = form.id }
+                    Button { selection = form.id } label: {
+                        DexTile(form: form, isSelected: selection == form.id)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .padding(8)
+            .padding(12)
         }
     }
 }
 
-// MARK: - Row
+// MARK: - Tile
 
-private struct DexRow: View {
+struct DexTile: View {
     let form: Form
     let isSelected: Bool
+    @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 10) {
-            SpriteImage(form: form, side: 40)
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
-                    Text(form.formLabel)
-                        .font(.system(size: 13, weight: .medium))
-                        .lineLimit(1)
-                    if form.isZMega {
-                        Text("Z").font(.system(size: 9, weight: .bold))
-                            .padding(.horizontal, 4).padding(.vertical, 1)
-                            .background(Palette.accent).foregroundStyle(.white)
-                            .clipShape(Capsule())
-                    }
-                }
-                HStack(spacing: 3) {
-                    ForEach(form.pokeTypes) { TypeChip(type: $0, size: .small) }
-                }
-            }
-
-            Spacer()
-
-            HStack(spacing: 6) {
-                ForEach(Stat.allCases) { stat in
-                    Text("\(form.stats[stat.rawValue])")
-                        .font(.system(size: 11, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(form.stats[stat.rawValue] >= 130 ? Palette.good : Palette.dim)
-                        .frame(width: 24, alignment: .trailing)
-                }
-                Text("\(form.bst)")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .frame(width: 32, alignment: .trailing)
+        VStack(spacing: 5) {
+            SpriteImage(form: form, side: 84)
+                .scaleEffect(hovering ? 1.06 : 1)
+                .animation(.easeOut(duration: 0.12), value: hovering)
+            Text(form.formLabel)
+                .font(.system(size: 11, weight: .medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .multilineTextAlignment(.center)
+            HStack(spacing: 3) {
+                ForEach(form.pokeTypes) { TypeChip(type: $0, size: .small) }
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(isSelected ? Palette.accent.opacity(0.16) : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 6)
+        .background(isSelected ? Palette.accent.opacity(0.18)
+                               : (hovering ? Palette.hairline.opacity(0.5) : Palette.surface))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(isSelected ? Palette.accent.opacity(0.6) : Palette.hairline,
+                              lineWidth: isSelected ? 1.5 : 1))
+        .overlay(alignment: .topTrailing) {
+            if form.isZMega {
+                Text("Z").font(.system(size: 9, weight: .bold))
+                    .padding(.horizontal, 4).padding(.vertical, 1)
+                    .background(Palette.accent).foregroundStyle(.white)
+                    .clipShape(Capsule())
+                    .padding(5)
+            }
+        }
+        .onHover { hovering = $0 }
+        .help("\(form.formLabel) · BST \(form.bst) · "
+              + Stat.allCases.map { "\($0.short) \(form.stats[$0.rawValue])" }
+                  .joined(separator: " "))
     }
 }
 

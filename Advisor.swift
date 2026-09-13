@@ -428,8 +428,10 @@ struct TeamAdvisor {
     private func beneficiaryOf(_ archetype: Archetype, _ form: Form) -> Bool {
         let ability = form.abilities.first?.name ?? ""
         switch archetype {
-        case .sun:   return ["Chlorophyll", "Solar Power"].contains(ability) || form.types.contains("Fire")
-        case .rain:  return ["Swift Swim", "Dry Skin"].contains(ability) || form.types.contains("Water")
+        case .sun:   return ["Chlorophyll", "Solar Power"].contains(ability)
+            || form.types.contains("Fire") || WeatherShield.shields(.sun, form)
+        case .rain:  return ["Swift Swim", "Dry Skin"].contains(ability)
+            || form.types.contains("Water") || WeatherShield.shields(.rain, form)
         case .sand:  return ["Sand Rush", "Sand Force"].contains(ability)
         case .snow:  return ["Slush Rush", "Ice Body"].contains(ability)
         case .grassy: return form.types.contains("Grass")
@@ -494,5 +496,22 @@ struct TeamAdvisor {
                 options: []))
         }
         return out
+    }
+}
+
+/// Weather that halves a whole attacking type, and the type it halves.
+///
+/// Rain halves Fire and sun halves Water, which is a reason to set weather that
+/// has nothing to do with Swift Swim or Chlorophyll. Mega Golisopod is the case
+/// that makes it obvious: Bug/Steel takes four times from Fire, and putting up
+/// rain turns that into double for the whole game. Judging a rain plan purely
+/// on who abuses the rain missed it entirely.
+enum WeatherShield {
+    static let halves: [Archetype: PokeType] = [.rain: .fire, .sun: .water]
+
+    /// Whether this weather blunts the type that hits this Pokémon hardest.
+    static func shields(_ plan: Archetype, _ form: Form) -> Bool {
+        guard let softened = halves[plan] else { return false }
+        return TypeChart.multiplier(softened, into: form) >= 2
     }
 }

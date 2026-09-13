@@ -14,6 +14,10 @@ struct MatchupView: View {
     @State private var terrain: Terrain = .none
     /// Which of the fours the reader is looking at. Nil means the best one.
     @State private var selectedPlan: String?
+    /// The Pokémon whose build is open in the lineup.
+    @State private var inspecting: String?
+    @State private var choosing = false
+    @State private var opponentSearch = ""
     @Environment(\.snapshotMode) private var snapshotMode
 
     /// Meta archetypes first, then the user's other saved teams.
@@ -61,30 +65,147 @@ struct MatchupView: View {
         .onChange(of: opponentID) { _ in selectedPlan = nil }
         .onChange(of: weather) { _ in selectedPlan = nil }
         .onChange(of: terrain) { _ in selectedPlan = nil }
+        .sheet(isPresented: $choosing) { opponentPicker }
     }
 
     // MARK: Controls
 
-    private var picker: some View {
-        HStack(spacing: 12) {
-            Text("Versus").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
-            Picker("", selection: $opponentID) {
-                Text("Choose…").tag("")
-                SwiftUI.Section("Meta archetypes") {
-                    ForEach(store.data.metaTeams.filter { $0.format == team.format }) { meta in
-                        Text(meta.projected ? "\(meta.name) (projected)" : meta.name)
-                            .tag(meta.id)
+    /// Every six you could line up against, with what it is made of.
+    private struct Candidate: Identifiable {
+        let id: String
+        let name: String
+        let tag: String
+        let group: String
+        let forms: [Form?]
+    }
+
+    private var candidates: [Candidate] {
+        var out: [Candidate] = []
+        for meta in store.data.metaTeams where meta.format == team.format {
+            out.append(Candidate(
+                id: meta.id,
+                name: meta.name,
+                tag: meta.projected ? "projected"
+                    : (meta.record.map { "\($0)\(meta.placement.map { p in " · \(p)" } ?? "")" }
+                       ?? meta.archetype),
+                group: meta.record == nil ? "Meta archetypes" : "Tournament results",
+                forms: meta.members.map { store.form(named: $0.form) }))
+        }
+        for saved in store.teams where saved.id != team.id {
+            out.append(Candidate(id: saved.id.uuidString, name: saved.name,
+                                 tag: "\(saved.slots.count) Pokémon", group: "My teams",
+                                 forms: saved.slots.map { $0.battleForm(in: store) }))
+        }
+        guard !opponentSearch.isEmpty else { return out }
+        let needle = opponentSearch.lowercased()
+        return out.filter { candidate in
+            candidate.name.lowercased().contains(needle)
+                || candidate.forms.contains { ($0?.formLabel.lowercased().contains(needle)) == true }
+        }
+    }
+
+    private var chosen: Candidate? { candidates.first { $0.id == opponentID } }
+
+    /// A sheet of six-sprite cards rather than a menu of names.
+    ///
+    /// The menu said "MiggleVGC — Thavorian Trials 8", which tells you nothing
+    /// about what you are about to play against. What you want while choosing
+    /// is the same thing you want at Team Preview: the six.
+    private var opponentPicker: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.tertiary)
+                TextField("Team, player or a Pokémon on it", text: $opponentSearch)
+                    .textFieldStyle(.plain)
+                Text("\(candidates.count)").font(.system(size: 11)).foregroundStyle(.tertiary)
+                Button("Done") { choosing = false }.controlSize(.small)
+            }
+            .padding(12)
+            Divider()
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    ForEach(["My teams", "Meta archetypes", "Tournament results"], id: \.self) {
+                        group in
+                        let rows = candidates.filter { $0.group == group }
+                        if !rows.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(group.uppercased())
+                                    .font(.system(size: 10, weight: .semibold)).kerning(0.6)
+                                    .foregroundStyle(.tertiary)
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 8)],
+                                          alignment: .leading, spacing: 8) {
+                                    ForEach(rows) { candidate in
+                                        Button {
+                                            opponentID = candidate.id
+                                            choosing = false
+                                        } label: { candidateCard(candidate) }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-                SwiftUI.Section("My teams") {
-                    ForEach(store.teams.filter { $0.id != team.id }) { saved in
-                        Text(saved.name).tag(saved.id.uuidString)
+                .padding(14)
+            }
+        }
+        .frame(width: 900, height: 640)
+    }
+
+    private func candidateCard(_ candidate: Candidate) -> some View {
+        let selected = candidate.id == opponentID
+        return VStack(alignment: .leading, spacing: 5) {
+            Text(candidate.name)
+                .font(.system(size: 12, weight: .medium))
+                .lineLimit(1)
+            Text(candidate.tag)
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+            HStack(spacing: 2) {
+                ForEach(Array(candidate.forms.enumerated()), id: \.offset) { _, form in
+                    if let form {
+                        SpriteImage(form: form, side: 32)
+                            .help(form.formLabel)
+                    } else {
+                        Image(systemName: "questionmark.square.dashed")
+                            .frame(width: 32, height: 32).foregroundStyle(.quaternary)
                     }
                 }
             }
-            .labelsHidden()
-            .frame(width: 260)
-            .controlSize(.small)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(selected ? Palette.accent.opacity(0.16) : Palette.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10)
+            .strokeBorder(selected ? Palette.accent.opacity(0.55) : Palette.hairline, lineWidth: 1))
+    }
+
+    private var picker: some View {
+        HStack(spacing: 12) {
+            Text("Versus").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+            Button { choosing = true } label: {
+                HStack(spacing: 6) {
+                    if let chosen {
+                        ForEach(Array(chosen.forms.prefix(6).enumerated()), id: \.offset) { _, f in
+                            if let f { SpriteImage(form: f, side: 24) }
+                        }
+                        Text(chosen.name).font(.system(size: 12)).lineLimit(1)
+                    } else {
+                        Image(systemName: "person.2.badge.plus")
+                        Text("Choose an opponent").font(.system(size: 12))
+                    }
+                    Image(systemName: "chevron.down").font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(Palette.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(Palette.hairline, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
 
             Divider().frame(height: 18)
 
@@ -103,6 +224,7 @@ struct MatchupView: View {
 
     private func content(_ matchup: Matchup) -> some View {
         VStack(alignment: .leading, spacing: 16) {
+            lineupCard(matchup)
             verdictCard(matchup)
             bringFourCard(matchup)
             if let metaNote { provenance(metaNote) }
@@ -167,6 +289,155 @@ struct MatchupView: View {
                 }
             }
         }
+    }
+
+    // MARK: Lineup
+
+    /// The two sixes, face to face.
+    ///
+    /// The opponent picker says "MiggleVGC — Thavorian Trials 8", which tells
+    /// you nothing about what you are about to play against. What you want at
+    /// the top of this screen is the thing you see at Team Preview: their six
+    /// beside yours, and one click to see what any of them is carrying.
+    private func lineupCard(_ matchup: Matchup) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(team.name)
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                    Text("versus")
+                        .font(.system(size: 10, weight: .semibold))
+                        .kerning(0.6)
+                        .foregroundStyle(.tertiary)
+                    Spacer()
+                    Text(opponent?.name ?? "—")
+                        .font(.system(size: 13, weight: .semibold))
+                        .multilineTextAlignment(.trailing)
+                }
+                Divider()
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(spacing: 6) {
+                        ForEach(Array(team.slots.enumerated()), id: \.offset) { index, slot in
+                            lineupRow(slot, side: "mine", index: index, trailing: false)
+                        }
+                    }
+                    Rectangle().fill(Palette.hairline).frame(width: 1)
+                    VStack(spacing: 6) {
+                        ForEach(Array((opponent?.slots ?? []).enumerated()), id: \.offset) {
+                            index, slot in
+                            lineupRow(slot, side: "theirs", index: index, trailing: true)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func lineupRow(_ slot: TeamSlot, side: String, index: Int,
+                           trailing: Bool) -> some View {
+        let key = "\(side)-\(index)"
+        let open = inspecting == key
+        let form = slot.battleForm(in: store)
+        VStack(alignment: trailing ? .trailing : .leading, spacing: 5) {
+            Button {
+                inspecting = open ? nil : key
+            } label: {
+                HStack(spacing: 8) {
+                    if trailing { Spacer(minLength: 0) }
+                    if !trailing, let form { SpriteImage(form: form, side: 34) }
+                    VStack(alignment: trailing ? .trailing : .leading, spacing: 1) {
+                        Text(form?.formLabel ?? slot.formID)
+                            .font(.system(size: 12, weight: .medium))
+                            .lineLimit(1)
+                        HStack(spacing: 4) {
+                            if !slot.item.isEmpty {
+                                ItemIcon(name: slot.item, side: 13)
+                                Text(slot.item)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            } else {
+                                Text("no item")
+                                    .font(.system(size: 10)).foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                    if trailing, let form { SpriteImage(form: form, side: 34) }
+                    if !trailing { Spacer(minLength: 0) }
+                }
+                .padding(.horizontal, 7).padding(.vertical, 5)
+                .frame(maxWidth: .infinity)
+                .background(open ? Palette.accent.opacity(0.14) : Palette.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(open ? Palette.accent.opacity(0.5) : Palette.hairline,
+                                  lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+
+            if open { buildDetail(slot, form: form, trailing: trailing) }
+        }
+    }
+
+    /// What the slot is actually carrying, which is the reason to click it.
+    @ViewBuilder
+    private func buildDetail(_ slot: TeamSlot, form: Form?, trailing: Bool) -> some View {
+        let combatant = slot.combatant(in: store)
+        VStack(alignment: trailing ? .trailing : .leading, spacing: 4) {
+            if let form {
+                HStack(spacing: 4) {
+                    if trailing { Spacer(minLength: 0) }
+                    ForEach(form.pokeTypes) { TypeChip(type: $0, size: .small) }
+                    if !trailing { Spacer(minLength: 0) }
+                }
+            }
+            let ability = slot.megaEvolution(in: store)?.abilities.first?.name
+                ?? (slot.ability.isEmpty ? form?.abilities.first?.name ?? "" : slot.ability)
+            if !ability.isEmpty {
+                Text(ability).font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Palette.accent)
+            }
+            ForEach(slot.moves, id: \.self) { id in
+                if let move = store.move(id) {
+                    HStack(spacing: 5) {
+                        if trailing { Spacer(minLength: 0) }
+                        TypeChip(type: PokeType(loose: move.type) ?? .normal, size: .small)
+                        Text(move.name).font(.system(size: 11))
+                        if move.power > 0 {
+                            Text("\(move.power)")
+                                .font(.system(size: 10, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(.tertiary)
+                        }
+                        if !trailing { Spacer(minLength: 0) }
+                    }
+                }
+            }
+            if slot.moves.isEmpty {
+                Text("no moves set").font(.system(size: 10)).foregroundStyle(.tertiary)
+            }
+            // The spread, and what it actually comes out as.
+            let spelled = Stat.allCases.filter { slot.sp[$0.rawValue] > 0 }
+                .map { "\($0.short) \(slot.sp[$0.rawValue])" }.joined(separator: " / ")
+            Text(spelled.isEmpty ? "\(slot.alignmentName), no points spent"
+                                 : "\(slot.alignmentName) · \(spelled)")
+                .font(.system(size: 10, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+            if let combatant {
+                Text(Stat.allCases.map { "\($0.short) \(combatant.stat($0))" }
+                        .joined(separator: "  "))
+                    .font(.system(size: 10, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: trailing ? .trailing : .leading)
+        .background(Palette.hairline.opacity(0.35))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     // MARK: Bring four
