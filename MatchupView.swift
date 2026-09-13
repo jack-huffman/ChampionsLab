@@ -18,6 +18,10 @@ struct MatchupView: View {
     @State private var inspecting: String?
     @State private var choosing = false
     @State private var opponentSearch = ""
+    @State private var turnRead: [String] = []
+    @State private var turnLines: [TurnGame.Solution.Line] = []
+    @State private var turnLabels: [String: String] = [:]
+    @State private var solvingTurn = false
     @Environment(\.snapshotMode) private var snapshotMode
 
     /// Meta archetypes first, then the user's other saved teams.
@@ -62,7 +66,10 @@ struct MatchupView: View {
         // A four chosen against one opponent means nothing against the next, and
         // the same four can exist in both — so the selection is cleared rather
         // than left to match by accident.
-        .onChange(of: opponentID) { _ in selectedPlan = nil }
+        .onChange(of: opponentID) { _ in
+            selectedPlan = nil
+            turnRead = []; turnLines = []; turnLabels = [:]
+        }
         .onChange(of: weather) { _ in selectedPlan = nil }
         .onChange(of: terrain) { _ in selectedPlan = nil }
         .sheet(isPresented: $choosing) { opponentPicker }
@@ -227,6 +234,7 @@ struct MatchupView: View {
             lineupCard(matchup)
             verdictCard(matchup)
             bringFourCard(matchup)
+            turnCard(matchup)
             if let metaNote { provenance(metaNote) }
             gridCard(matchup)
             opposingCard(matchup)
@@ -438,6 +446,99 @@ struct MatchupView: View {
         .frame(maxWidth: .infinity, alignment: trailing ? .trailing : .leading)
         .background(Palette.hairline.opacity(0.35))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    // MARK: The first turn
+
+    /// The opening turn, solved as the simultaneous game it is.
+    ///
+    /// Everything above this reasons about matchups, which is the right frame
+    /// for building a team and the wrong one for playing it: both sides lock in
+    /// two choices knowing nothing about the other's. That is a matrix game,
+    /// and what players call reading an opponent is a mixed strategy — there is
+    /// no single best move, there is a distribution, and someone who always
+    /// picks the same one can be beaten every time.
+    @ViewBuilder
+    private func turnCard(_ matchup: Matchup) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(
+                    title: "The first turn",
+                    subtitle: "Both sides choose blind, so there is a mix rather than a move",
+                    accessory: AnyView(
+                        Button(solvingTurn ? "Solving…" : "Solve the turn") {
+                            solveTurn(matchup)
+                        }
+                        .controlSize(.small)
+                        .disabled(solvingTurn || opponent == nil)))
+
+                if turnRead.isEmpty {
+                    Text("Leads come from the four above. Every pair of your choices is played against every pair of theirs, and the result is solved for the mix that cannot be read — plus what each line is worth when they guess right, and when they guess wrong.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    VStack(alignment: .leading, spacing: 5) {
+                        ForEach(turnRead, id: \.self) { line in
+                            noteRow(line, symbol: "arrow.turn.down.right", colour: .secondary)
+                        }
+                    }
+                    if !turnLines.isEmpty {
+                        Divider()
+                        ForEach(turnLines.prefix(4)) { line in
+                            HStack(spacing: 10) {
+                                Text(String(format: "%.0f%%", line.weight * 100))
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .monospacedDigit()
+                                    .foregroundStyle(Palette.accent)
+                                    .frame(width: 38, alignment: .trailing)
+                                Text(turnLabels[line.id] ?? "—")
+                                    .font(.system(size: 12))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
+                                // The gap between these two is what "greedy"
+                                // means, and it is the whole decision.
+                                Text(String(format: "%+.2f", line.worst))
+                                    .font(.system(size: 11, design: .rounded)).monospacedDigit()
+                                    .foregroundStyle(line.worst < 0 ? Palette.bad : Palette.dim)
+                                Text("to").font(.system(size: 9)).foregroundStyle(.tertiary)
+                                Text(String(format: "%+.2f", line.best))
+                                    .font(.system(size: 11, design: .rounded)).monospacedDigit()
+                                    .foregroundStyle(Palette.good)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func solveTurn(_ matchup: Matchup) {
+        guard let opponent else { return }
+        solvingTurn = true
+        Task { @MainActor in
+            await breathe("turn")
+            // The leads the bring-four search settled on, so the two screens
+            // agree about which turn is being solved.
+            let size = store.data.rules.formats.first { $0.id == team.format }?.bring ?? 4
+            let picker = BringFour(matchup: matchup, store: store, bring: size)
+            let plan = picker.plans.first
+            await breathe("turn leads")
+            let board = Board(mine: team, theirs: opponent, store: store,
+                              myLeads: plan?.leads.map(\.id) ?? [],
+                              theirLeads: Array(picker.theirLikelyFour.prefix(2).map(\.id)),
+                              field: Field(weather: weather, terrain: terrain,
+                                           isDoubles: team.isDoubles))
+            await breathe("turn board")
+            let game = TurnGame(board: board, store: store)
+            let solution = await game.solveYielding()
+            turnRead = game.read(solution)
+            turnLines = solution.lines.filter { $0.weight > 0.01 }
+            turnLabels = Dictionary(
+                solution.lines.map { ($0.id, game.describe($0.play, mine: true)) },
+                uniquingKeysWith: { first, _ in first })
+            solvingTurn = false
+        }
     }
 
     // MARK: Bring four

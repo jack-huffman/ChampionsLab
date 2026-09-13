@@ -565,6 +565,96 @@ Ability: Regenerator
     let probe = planner.speedBenchmarks().first
     check("benchmark threats are built inside the Stat Point rules", probe != nil)
 
+    // -- the turn as the game it actually is --------------------------------
+    //
+    // Both sides lock in two choices knowing nothing about the other's. That is
+    // a matrix game, and what players call reading an opponent is what game
+    // theory calls a mixed strategy.
+    print("\n== the solver ==")
+    func mix(_ m: [[Double]]) -> (row: [Double], column: [Double], value: Double) {
+        TurnGame.equilibrium(m, iterations: 20000)
+    }
+    let pennies = mix([[1, -1], [-1, 1]])
+    print("  matching pennies: \(pennies.row.map { String(format: "%.2f", $0) }.joined(separator: "/"))")
+    check("matching pennies is a coin flip",
+          pennies.row.allSatisfy { abs($0 - 0.5) < 0.02 } && abs(pennies.value) < 0.02)
+    let rps = mix([[0, -1, 1], [1, 0, -1], [-1, 1, 0]])
+    print("  rock paper scissors: \(rps.row.map { String(format: "%.2f", $0) }.joined(separator: "/"))")
+    check("rock paper scissors is even thirds",
+          rps.row.allSatisfy { abs($0 - 1.0 / 3) < 0.02 } && abs(rps.value) < 0.02)
+    let dominant = mix([[2, 3], [0, 1]])
+    check("a dominant option is taken every time",
+          dominant.row[0] > 0.98 && abs(dominant.value - 2) < 0.05,
+          "\(dominant.row[0])")
+    let saddle = mix([[4, 2], [3, 1]])
+    check("a saddle point is a pure strategy both ways",
+          saddle.row[0] > 0.98 && saddle.column[1] > 0.98 && abs(saddle.value - 2) < 0.05)
+    check("an empty matrix does not crash", TurnGame.equilibrium([]).value == 0)
+
+    print("\n== a turn played out ==")
+    if let opponent = store.data.metaTeams.first(where: { $0.name == "Big Six" }),
+       let mineTeam = store.teams.first(where: { $0.slots.count >= 4 }) {
+        let start = Board(mine: mineTeam, theirs: store.opponentTeam(opponent), store: store)
+        check("both sides have two out and the rest behind",
+              start.mine.count >= 2 && start.theirs.count >= 2)
+        check("everyone starts at full health",
+              start.mine.allSatisfy { $0.hp == $0.maxHP })
+
+        // Protect has to actually refuse the damage.
+        let attackers = start.theirs.prefix(2)
+        if let hitIndex = start.mine[0].moves.firstIndex(where: \.isDamaging),
+           let guardIndex = start.theirs[0].moves.firstIndex(where: {
+               DuelEngine.protectMoves.contains($0.name) }) {
+            let openTurn = TurnModel.resolve(
+                start, mine: Play(left: .attack(move: hitIndex, target: 0),
+                                  right: .attack(move: hitIndex, target: 0)),
+                theirs: Play(left: .attack(move: 0, target: 0), right: .attack(move: 0, target: 0)),
+                store: store)
+            let guardedTurn = TurnModel.resolve(
+                start, mine: Play(left: .attack(move: hitIndex, target: 0),
+                                  right: .attack(move: hitIndex, target: 0)),
+                theirs: Play(left: .protectSelf(move: guardIndex),
+                             right: .attack(move: 0, target: 0)), store: store)
+            print("  their lead takes \(start.theirs[0].maxHP - openTurn.theirs[0].hp) open, "
+                  + "\(start.theirs[0].maxHP - guardedTurn.theirs[0].hp) behind Protect")
+            check("Protect refuses the damage",
+                  guardedTurn.theirs[0].hp > openTurn.theirs[0].hp
+                    || openTurn.theirs[0].hp == start.theirs[0].maxHP,
+                  "\(guardedTurn.theirs[0].hp) vs \(openTurn.theirs[0].hp)")
+        }
+        _ = attackers
+
+        let game = TurnGame(board: start, store: store)
+        let started = Date()
+        let solution = game.solve()
+        let took = Date().timeIntervalSince(started) * 1000
+        print(String(format: "  %d x %d matrix in %.0f ms, turn worth %+.3f",
+                     solution.myPlays.count, solution.theirPlays.count, took, solution.value))
+        check("the matrix is the size the play lists say",
+              solution.payoff.count == solution.myPlays.count
+                && solution.payoff.allSatisfy { $0.count == solution.theirPlays.count })
+        check("every payoff is a real number",
+              solution.payoff.allSatisfy { $0.allSatisfy { $0.isFinite } })
+        check("both mixes are probabilities",
+              abs(solution.myMix.reduce(0, +) - 1) < 0.01
+                && abs(solution.theirMix.reduce(0, +) - 1) < 0.01)
+        check("solving a turn is quick enough to do while someone waits", took < 400,
+              String(format: "%.0f ms", took))
+
+        // A one-turn model left alone tells both sides to double-protect for
+        // ever, because declining to attack costs nothing inside one turn.
+        var doubleProtect = 0.0
+        for (index, play) in solution.theirPlays.enumerated()
+        where play.left.isProtect && play.right.isProtect {
+            doubleProtect += solution.theirMix[index]
+        }
+        print(String(format: "  they double-protect %.0f%% of the time", doubleProtect * 100))
+        check("giving up the turn is priced, so double Protect is not a free win",
+              doubleProtect < 0.6, String(format: "%.0f%%", doubleProtect * 100))
+
+        for line in game.read(solution).prefix(4) { print("  · \(line)") }
+    }
+
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)
 }
