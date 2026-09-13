@@ -200,7 +200,15 @@ struct TeamEditor: View {
                     updated.notes = team.notes
                     store.save(updated)
                 })
-            case .analysis: TeamAnalysisView(team: team)
+            case .analysis:
+                TeamAnalysisView(team: team,
+                                 onReplace: team.locked ? nil : { updated in
+                                     var out = updated
+                                     out.id = team.id
+                                     out.name = team.name
+                                     out.notes = team.notes
+                                     store.save(out)
+                                 })
             case .threats:  ThreatMatrixView(team: team)
             case .versus:   MatchupView(team: team)
             }

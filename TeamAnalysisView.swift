@@ -6,8 +6,143 @@ import SwiftUI
 struct TeamAnalysisView: View {
     @EnvironmentObject private var store: Store
     let team: Team
+    /// Hand back a team with a planned spread applied, when the screen that
+    /// owns the team can save it.
+    var onReplace: ((Team) -> Void)? = nil
+
+    @State private var spreads: [Int: SpreadPlanner.Plan] = [:]
+    @State private var planning = false
 
     private var analysis: TeamAnalysis { TeamAnalysis(team: team, store: store) }
+
+    /// The field this team puts up itself, so a rain team's benchmarks are
+    /// judged in rain.
+    private var ownField: Field {
+        var out = Field(isDoubles: team.isDoubles)
+        for slot in team.slots {
+            let ability = slot.megaEvolution(in: store)?.abilities.first?.name
+                ?? (slot.ability.isEmpty
+                    ? slot.battleForm(in: store)?.abilities.first?.name ?? "" : slot.ability)
+            switch ability {
+            case "Drought":        out.weather = .sun
+            case "Drizzle":        out.weather = .rain
+            case "Sand Stream":    out.weather = .sand
+            case "Snow Warning":   out.weather = .snow
+            case "Electric Surge": out.terrain = .electric
+            case "Grassy Surge":   out.terrain = .grassy
+            case "Misty Surge":    out.terrain = .misty
+            case "Psychic Surge":  out.terrain = .psychic
+            default: break
+            }
+        }
+        return out
+    }
+
+    /// Stat Points planned against the numbers the format presents, rather than
+    /// poured into two stats out of habit.
+    ///
+    /// Worked out on demand rather than as the screen draws: each Pokémon is
+    /// about twenty milliseconds, which is nothing to ask for and too much to
+    /// spend on every redraw of six of them.
+    private var spreadCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(
+                    title: "Spreads",
+                    subtitle: "What 66 points buy against the numbers people actually bring",
+                    accessory: AnyView(
+                        Button(planning ? "Working…" : "Plan spreads") { planSpreads() }
+                            .controlSize(.small)
+                            .disabled(planning || team.slots.isEmpty)))
+
+                if spreads.isEmpty {
+                    Text("A spread is a set of thresholds — outspeed this, survive that — and below a threshold the points bought nothing. This works out the cheapest way to clear the ones worth clearing and puts the rest into attack.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ForEach(team.slots.indices, id: \.self) { index in
+                        if let plan = spreads[index],
+                           let form = team.slots[index].battleForm(in: store) {
+                            spreadRow(index: index, form: form, plan: plan)
+                            if index != team.slots.indices.last { Divider() }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func spreadRow(index: Int, form: Form,
+                           plan: SpreadPlanner.Plan) -> some View {
+        let current = team.slots[index]
+        let same = current.sp == plan.sp && current.alignmentName == plan.alignment.name
+        let spelled = Stat.allCases
+            .filter { plan.sp[$0.rawValue] > 0 }
+            .map { "\($0.short) \(plan.sp[$0.rawValue])" }
+            .joined(separator: " / ")
+        return HStack(alignment: .top, spacing: 10) {
+            SpriteImage(form: form, side: 34)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(form.formLabel).font(.system(size: 12, weight: .medium))
+                    Text("\(plan.alignment.name) · \(spelled)")
+                        .font(.system(size: 11, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    Text(String(format: "clears %.0f%%", plan.cover * 100))
+                        .font(.system(size: 10, weight: .semibold))
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Palette.grade(Int(plan.cover * 100)).opacity(0.18))
+                        .foregroundStyle(Palette.grade(Int(plan.cover * 100)))
+                        .clipShape(Capsule())
+                }
+                ForEach(plan.lines, id: \.self) { line in
+                    Text(line)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
+            if let onReplace, !same {
+                Button("Apply") {
+                    var updated = team
+                    updated.slots[index].sp = plan.sp
+                    updated.slots[index].alignmentName = plan.alignment.name
+                    onReplace(updated)
+                }
+                .controlSize(.small)
+            } else if same {
+                Text("in use").font(.system(size: 10)).foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func planSpreads() {
+        planning = true
+        Task { @MainActor in
+            var planner = SpreadPlanner(store: store, format: team.format)
+            planner.field = ownField
+            var made: [Int: SpreadPlanner.Plan] = [:]
+            let advisor = TeamAdvisor(team: team, store: store)
+            for index in team.slots.indices {
+                guard let form = team.slots[index].battleForm(in: store) else { continue }
+                await breathe("spread")
+                let roles = advisor.potentialRoles(of: form)
+                // A redirection or speed-control slot is not spending points on
+                // an attacking stat, so it is not planned as though it were.
+                let support = roles.contains(.redirection) || roles.contains(.tailwind)
+                    || roles.contains(.trickRoom)
+                made[index] = planner.plan(for: form,
+                                           ability: team.slots[index].ability,
+                                           item: team.slots[index].item,
+                                           attacker: !support)
+            }
+            spreads = made
+            planning = false
+        }
+    }
 
     @Environment(\.snapshotMode) private var snapshotMode
 
@@ -24,6 +159,7 @@ struct TeamAnalysisView: View {
                         .frame(height: 300)
                 } else {
                     gradeCard
+                    spreadCard
                     defensiveCard
                     coverageCard
                     speedCard

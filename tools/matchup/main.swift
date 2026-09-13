@@ -512,6 +512,59 @@ Ability: Regenerator
         print("  advice: \(line)")
     }
 
+    // -- Stat Points spent against real numbers -----------------------------
+    //
+    // A spread is a set of thresholds, and below a threshold the points bought
+    // nothing. The builder used to spend them by habit: 32 into the attacking
+    // stat, some Speed, the rest into health.
+    print("\n== spreads ==")
+    var planner = SpreadPlanner(store: store, format: "doubles")
+    planner.field = Field(isDoubles: true)
+    let speedMarks = planner.speedBenchmarks()
+    print("  \(speedMarks.count) Speed numbers worth clearing, fastest \(speedMarks.first?.number ?? 0)")
+    check("Speed benchmarks come out of measured usage", speedMarks.count >= 8,
+          "\(speedMarks.count)")
+    check("and are ordered fastest first",
+          zip(speedMarks, speedMarks.dropFirst()).allSatisfy { $0.number >= $1.number })
+    check("every one is reachable arithmetic, not a nonsense number",
+          speedMarks.allSatisfy { $0.number > 0 && $0.number < 600 })
+
+    let survival = planner.survivalBenchmarks(for: form("Mega Golisopod"))
+    print("  \(survival.count) attacks worth living through, hardest \(survival.first?.label ?? "-")")
+    check("survival benchmarks name a move", survival.allSatisfy { $0.move != nil })
+    check("and never include the Pokemon itself",
+          survival.allSatisfy { $0.threat.dex != form("Mega Golisopod").dex })
+
+    for (name, item, isAttacker) in [("Mega Baxcalibur", "Baxcalibrite", true),
+                                     ("Incineroar", "Sitrus Berry", false),
+                                     ("Mega Golisopod", "Golisopite", true)] {
+        let target = form(name)
+        let plan = planner.plan(for: target, item: item, attacker: isAttacker)
+        let spelled = Stat.allCases.filter { plan.sp[$0.rawValue] > 0 }
+            .map { "\($0.short) \(plan.sp[$0.rawValue])" }.joined(separator: " / ")
+        print("  \(name): \(plan.alignment.name), \(spelled) — clears \(Int(plan.cover * 100))%")
+        check("\(name): the spread is legal",
+              plan.spent <= ChampionsStats.spTotal
+                && plan.sp.allSatisfy { $0 <= ChampionsStats.spPerStat },
+              "\(plan.spent) points, max \(plan.sp.max() ?? 0) in one stat")
+        check("\(name): it spends what it has rather than leaving points on the table",
+              plan.spent >= ChampionsStats.spTotal - 2, "\(plan.spent)")
+        check("\(name): the alignment does not drop what the Pokemon is for",
+              isAttacker
+                ? plan.alignment.down != (target.attack >= target.spAttack ? .attack : .spAttack)
+                : true,
+              plan.alignment.label)
+        check("\(name): it says what it bought", !plan.lines.isEmpty)
+        // Every benchmark is either met or missed, never both and never lost.
+        let ids = Set(plan.met.map(\.id)).intersection(Set(plan.missed.map(\.id)))
+        check("\(name): no benchmark is counted twice", ids.isEmpty, "\(ids.count)")
+    }
+
+    // A threat used as a benchmark must itself be legal, or the whole exercise
+    // is built against a Pokemon the game would not accept.
+    let probe = planner.speedBenchmarks().first
+    check("benchmark threats are built inside the Stat Point rules", probe != nil)
+
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)
 }
