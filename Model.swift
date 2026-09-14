@@ -129,6 +129,39 @@ struct Move: Codable, Identifiable, Hashable {
 
     /// Stages this move gives its own user, read from the effect text —
     /// "Boosts the user's Attack and Speed stats by 1 stage."
+    /// Stages this move takes off whatever it is aimed at.
+    ///
+    /// "Lowers targets' Speed stats by 1 stage" is Icy Wind, which is most of
+    /// what speed control looks like outside Tailwind, and "Lowers the target's
+    /// Attack and Sp. Atk stats by 1 stage" is Parting Shot. Read from the same
+    /// sentence the boosts are, because it is written the same way.
+    var targetDrops: [Stat: Int] {
+        guard let match = effect.range(
+            of: #"Lowers (?:the )?targets?'? .+? stats? by \d+ stage"#,
+            options: .regularExpression) else { return [:] }
+        let phrase = String(effect[match])
+        guard let amount = phrase.range(of: #"\d+"#, options: [.regularExpression, .backwards])
+            .flatMap({ Int(phrase[$0]) }) else { return [:] }
+        let statsPart = phrase
+            .replacingOccurrences(of: #"^Lowers (?:the )?targets?'? "#, with: "",
+                                  options: .regularExpression)
+            .replacingOccurrences(of: #" stats? by \d+ stage"#, with: "",
+                                  options: .regularExpression)
+        var out: [Stat: Int] = [:]
+        for piece in statsPart.components(separatedBy: CharacterSet(charactersIn: ","))
+            .flatMap({ $0.components(separatedBy: " and ") }) {
+            switch piece.trimmingCharacters(in: .whitespaces) {
+            case "Attack":  out[.attack] = amount
+            case "Defense": out[.defense] = amount
+            case "Sp. Atk": out[.spAttack] = amount
+            case "Sp. Def": out[.spDefense] = amount
+            case "Speed":   out[.speed] = amount
+            default: break
+            }
+        }
+        return out
+    }
+
     var selfBoosts: [Stat: Int] {
         guard let match = effect.range(of: #"Boosts the user's .+? stats? by \d+ stage"#,
                                        options: .regularExpression) else { return [:] }

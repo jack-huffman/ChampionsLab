@@ -45,6 +45,10 @@ struct BattleView: View {
     /// Who took a hit on the last turn, so they can flinch on screen.
     @State private var struck: Set<Int> = []
     @State private var struckTheirs: Set<Int> = []
+    /// Every board so far, so a turn can be taken back and tried again.
+    @State private var history: [(board: Board, log: [String], turn: Int)] = []
+    /// What the engine wanted, against what was actually played.
+    @State private var grade: String?
 
     /// Seeded state, so tools/snapshot.sh can render a screen nobody has
     /// clicked into. Done through init rather than onAppear, which an
@@ -307,6 +311,7 @@ struct BattleView: View {
         stage = .battle
         turn = 1
         finished = nil
+        history = []; grade = nil
         leftPick = nil; rightPick = nil; megaSlot = nil
         log = ["Both sides send out their leads. Neither knows what the other is holding, nor which four came."]
         think()
@@ -537,6 +542,48 @@ struct BattleView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
+    /// What a move would actually do, on the button that would do it.
+    ///
+    /// This is a simulator, so there is no reason to make somebody guess at
+    /// arithmetic the app can already do: the range, as a share of the target,
+    /// and how many of them it takes. Against their side it is worked out with
+    /// the item nobody has seen left off, for the same reason their Speed is.
+    private func preview(_ board: Board, fighter: Fighter,
+                         choice: Choice) -> (text: String, tint: Color)? {
+        guard case .attack(let index, let target) = choice,
+              fighter.moves.indices.contains(index) else { return nil }
+        let move = fighter.moves[index]
+        guard move.isDamaging else { return nil }
+        let aimed: [Int] = move.isSpread
+            ? Array(0..<min(board.activeCount, board.theirs.count)) : [target]
+        var low = 0, high = 0, best = 1.0
+        var hp = 1
+        for slot in aimed {
+            guard board.theirs.indices.contains(slot), !board.theirs[slot].fainted
+            else { continue }
+            var defender = board.theirs[slot].build
+            defender.item = ""            // not something you can see
+            defender.atFullHP = board.theirs[slot].hp == board.theirs[slot].maxHP
+            var field = board.field
+            field.screen = board.theirScreens.blunt(move)
+            let result = DamageCalc.calculate(attacker: fighter.build, defender: defender,
+                                              move: move, field: field)
+            if result.maxDamage > high {
+                low = result.minDamage; high = result.maxDamage
+                best = result.effectiveness
+                hp = board.theirs[slot].hp
+            }
+        }
+        guard high > 0, hp > 0 else { return nil }
+        let lowShare = Int((Double(low) / Double(hp) * 100).rounded())
+        let highShare = Int((Double(high) / Double(hp) * 100).rounded())
+        let hits = Int(ceil(Double(hp) / Double(max(1, high))))
+        let knockout = low >= hp ? "KO" : (high >= hp ? "may KO" : "\(hits)HKO")
+        let tint: Color = best > 1 ? Palette.good
+            : (best < 1 && best > 0 ? Palette.dim : Palette.accent)
+        return ("\(lowShare)–\(highShare)% · \(knockout)", tint)
+    }
+
     /// Their Speed as far as anybody could know it: the stat, without the item
     /// nobody has seen yet.
     private func visibleSpeed(_ fighter: Fighter, mine: Bool, field: Field) -> Int {
@@ -574,7 +621,17 @@ struct BattleView: View {
                     if !searchNote.isEmpty {
                         Text(searchNote).font(.system(size: 10)).foregroundStyle(.tertiary)
                     }
+                    if !history.isEmpty {
+                        Button("Take back") { undo() }.controlSize(.small)
+                    }
                     Spacer()
+                    if let grade {
+                        Text(grade)
+                            .font(.system(size: 10))
+                            .foregroundStyle(grade.hasPrefix("That is")
+                                             ? AnyShapeStyle(Palette.good)
+                                             : AnyShapeStyle(Palette.warn))
+                    }
                     Button("Play the turn") { playTurn() }
                         .controlSize(.small)
                         .keyboardShortcut(.defaultAction)
@@ -708,9 +765,11 @@ struct BattleView: View {
                                               foes: Array(board.theirs.prefix(board.activeCount)),
                                               team: board.mine)
                     let chosen = picked == choice
+                    let reading = preview(board, fighter: fighter, choice: choice)
                     ActionButton(label: label.isEmpty ? "do nothing" : label,
                                  symbol: choice.isSwap ? "arrow.left.arrow.right"
                                     : (choice.isProtect ? "shield.lefthalf.filled" : "bolt.fill"),
+                                 detail: reading?.text, tint: reading?.tint,
                                  chosen: chosen) {
                         if slot == 0 { leftPick = choice } else { rightPick = choice }
                     }
@@ -757,7 +816,7 @@ struct BattleView: View {
         thinking = true
         Task { @MainActor in
             await breathe("battle think")
-            var engine = BattleEngine(store: store, budget: 0.5)
+            let engine = BattleEngine(store: store, budget: 0.5)
             let result = engine.think(board)
             var game = TurnGame(board: board, store: store)
             game.width = engine.beam + 2
@@ -826,7 +885,7 @@ struct BattleView: View {
     }
 
     private func playTurn() {
-        guard var current = board, let left = leftPick else { return }
+        guard let current = board, let left = leftPick else { return }
         var game = TurnGame(board: current, store: store)
         game.width = 10
         let solved = game.solve()
@@ -843,54 +902,49 @@ struct BattleView: View {
         let mine = Play(left: left,
                         right: current.activeCount > 1 ? (rightPick ?? .pass) : .pass,
                         megaSlot: megaSlot)
-        let before = current
-        current = TurnModel.resolve(current, mine: mine, theirs: theirPlay, store: store)
-        current.fillGaps()
 
-        var entry = "Turn \(turn): you \(game.describe(mine, mine: true)); "
-            + "they \(game.describe(theirPlay, mine: false))."
-        // Mega Evolution is the first thing that happens, so it is the first
-        // thing reported.
-        for (index, fighter) in current.mine.enumerated() where index < before.mine.count {
-            if before.mine[index].pendingMega != nil && fighter.pendingMega == nil {
-                entry += " Your \(fighter.build.form.formLabel) Mega Evolved."
+        // What the engine would have done, so the turn can be marked. Both
+        // numbers are against their mix, which is the only fair comparison:
+        // judging a choice against what they actually did rewards luck.
+        func worth(_ play: Play) -> Double? {
+            guard let row = solved.myPlays.firstIndex(of: play) else { return nil }
+            return zip(solved.payoff[row], solved.theirMix).reduce(0) { $0 + $1.0 * $1.1 }
+        }
+        if let best = solved.lines.first, let played = worth(mine) {
+            let gap = played - best.expected
+            if solved.myPlays.firstIndex(of: mine) == nil {
+                grade = nil
+            } else if gap >= -0.02 {
+                grade = "That is the line the engine wanted."
+            } else {
+                grade = String(format: "The engine preferred %@ — %.2f better.",
+                               game.describe(best.play, mine: true), -gap)
             }
+        } else {
+            grade = nil
         }
-        for (index, fighter) in current.theirs.enumerated() where index < before.theirs.count {
-            if before.theirs[index].pendingMega != nil && fighter.pendingMega == nil {
-                entry += " Their \(fighter.build.form.formLabel) Mega Evolved."
-            }
-        }
-        if current.field.weather != before.field.weather {
-            entry += " The weather turned to \(current.field.weather.rawValue)."
-        }
-        if current.field.terrain != before.field.terrain {
-            entry += " \(current.field.terrain.rawValue) Terrain went up."
-        }
-        for (index, fighter) in current.theirs.enumerated() where index < before.theirs.count {
-            let lost = before.theirs[index].hp - fighter.hp
-            if lost > 0 { entry += " \(fighter.build.form.formLabel) took \(lost)." }
-            if fighter.fainted && !before.theirs[index].fainted {
-                entry += " \(fighter.build.form.formLabel) fainted."
-            }
-        }
-        for (index, fighter) in current.mine.enumerated() where index < before.mine.count {
-            let lost = before.mine[index].hp - fighter.hp
-            if lost > 0 { entry += " Your \(fighter.build.form.formLabel) took \(lost)." }
-            if fighter.fainted && !before.mine[index].fainted {
-                entry += " Your \(fighter.build.form.formLabel) fainted."
-            }
-        }
-        log.append(entry)
 
-        // Light up whatever took a hit, then let it settle.
+        // Everything needed to take the turn back.
+        history.append((board: current, log: log, turn: turn))
+
+        // A battle rolls. The search does not, which is deliberate: it wants
+        // the average and a player wants the dice.
+        var next = TurnModel.resolve(current, mine: mine, theirs: theirPlay,
+                                     store: store, rolling: true)
+        let told = next.story
+        next.fillGaps()
+
+        log.append("Turn \(turn) — you \(game.describe(mine, mine: true)); "
+                   + "they \(game.describe(theirPlay, mine: false)).")
+        log.append(contentsOf: told)
+
         var hitMine: Set<Int> = [], hitTheirs: Set<Int> = []
-        for index in current.mine.indices where index < before.mine.count
-            && current.mine[index].hp < before.mine[index].hp { hitMine.insert(index) }
-        for index in current.theirs.indices where index < before.theirs.count
-            && current.theirs[index].hp < before.theirs[index].hp { hitTheirs.insert(index) }
+        for index in next.mine.indices where index < current.mine.count
+            && next.mine[index].hp < current.mine[index].hp { hitMine.insert(index) }
+        for index in next.theirs.indices where index < current.theirs.count
+            && next.theirs[index].hp < current.theirs[index].hp { hitTheirs.insert(index) }
 
-        board = current
+        board = next
         turn += 1
         leftPick = nil; rightPick = nil; megaSlot = nil
         struck = hitMine; struckTheirs = hitTheirs
@@ -898,9 +952,22 @@ struct BattleView: View {
             try? await Task.sleep(nanoseconds: 450_000_000)
             struck = []; struckTheirs = []
         }
-        if current.isOut(mine: false) { finished = "They have nothing left. You win." }
-        else if current.isOut(mine: true) { finished = "You have nothing left. They win." }
+        if next.isOut(mine: false) { finished = "They have nothing left. You win." }
+        else if next.isOut(mine: true) { finished = "You have nothing left. They win." }
         else { think() }
+    }
+
+    /// Put the last turn back, so a line can be tried a different way.
+    private func undo() {
+        guard let last = history.popLast() else { return }
+        board = last.board
+        log = last.log
+        turn = last.turn
+        finished = nil
+        leftPick = nil; rightPick = nil; megaSlot = nil
+        struck = []; struckTheirs = []
+        grade = nil
+        think()
     }
 }
 
@@ -908,6 +975,8 @@ struct BattleView: View {
 private struct ActionButton: View {
     let label: String
     let symbol: String
+    var detail: String? = nil
+    var tint: Color? = nil
     let chosen: Bool
     let act: () -> Void
     @State private var hovering = false
@@ -919,9 +988,17 @@ private struct ActionButton: View {
                     .font(.system(size: 9))
                     .foregroundStyle(chosen ? AnyShapeStyle(Palette.accent)
                                             : AnyShapeStyle(.tertiary))
-                Text(label)
-                    .font(.system(size: 11, weight: chosen ? .semibold : .regular))
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(label)
+                        .font(.system(size: 11, weight: chosen ? .semibold : .regular))
+                        .lineLimit(1)
+                    if let detail {
+                        Text(detail)
+                            .font(.system(size: 9, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(tint ?? Palette.dim)
+                    }
+                }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 9).padding(.vertical, 6)

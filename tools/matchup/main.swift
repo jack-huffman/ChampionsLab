@@ -883,6 +883,139 @@ Ability: Regenerator
     check("no bundled team registers a Mega directly", stillMega.isEmpty,
           "\(stillMega.count)")
 
+    // -- the rest of a turn --------------------------------------------------
+    //
+    // Eleven per cent of the move slots on real team lists used to land in the
+    // battle loop and do nothing at all -- Follow Me, Rage Powder, Wide Guard,
+    // Swords Dance, Will-O-Wisp, the screens -- and nothing happened between
+    // turns either: no weather chip, no burn, no berry, no Leftovers.
+    print("\n== the rest of a turn ==")
+    func fighters(_ rows: [(String, String, [String])]) -> Team {
+        var out = Team(); out.format = "doubles"
+        out.slots = rows.map { name, item, moveNames in
+            var slot = TeamSlot(formID: form(name).id)
+            slot.item = item
+            slot.ability = form(name).abilities.first?.name ?? ""
+            slot.moves = moveNames.compactMap { n in
+                store.data.moves.values.first { $0.name == n }?.id }
+            var sp = Array(repeating: 0, count: 6)
+            sp[Stat.attack.rawValue] = 32; sp[Stat.speed.rawValue] = 32
+            sp[Stat.hp.rawValue] = 2
+            slot.sp = sp; slot.alignmentName = "Adamant"
+            return slot
+        }
+        return out
+    }
+    let supporters = fighters([
+        ("Incineroar", "Sitrus Berry", ["Will-O-Wisp", "Fake Out", "Flare Blitz", "Protect"]),
+        ("Indeedee (Female)", "Leftovers", ["Follow Me", "Protect", "Dazzling Gleam"]),
+        ("Garchomp", "Life Orb", ["Earthquake", "Protect"])])
+    let aggressors = fighters([
+        ("Garchomp", "Focus Sash", ["Earthquake", "Swords Dance", "Rock Slide", "Protect"]),
+        ("Rillaboom", "Life Orb", ["Wood Hammer", "Fake Out", "Protect"]),
+        ("Kingambit", "Chople Berry", ["Iron Head", "Protect"])])
+    let opening = Board(mine: supporters, theirs: aggressors, store: store,
+                        field: Field(isDoubles: true), alreadyEvolved: false)
+    func at(_ fighter: Fighter, _ name: String) -> Int {
+        fighter.moves.firstIndex { $0.name == name } ?? 0
+    }
+
+    let firstTurn = TurnModel.resolve(
+        opening,
+        mine: Play(left: .attack(move: at(opening.mine[0], "Will-O-Wisp"), target: 0),
+                   right: .attack(move: at(opening.mine[1], "Follow Me"), target: 0)),
+        theirs: Play(left: .attack(move: at(opening.theirs[0], "Swords Dance"), target: 0),
+                     right: .attack(move: at(opening.theirs[1], "Wood Hammer"), target: 1)),
+        store: store)
+    print("  the turn, in order:")
+    for line in firstTurn.story.prefix(7) { print("    \(line)") }
+    check("Will-O-Wisp actually burns something",
+          firstTurn.theirs[0].status == .burn, firstTurn.theirs[0].status.rawValue)
+    check("a burn then costs health between turns",
+          firstTurn.theirs[0].hp < firstTurn.theirs[0].maxHP)
+    check("Swords Dance actually raises Attack",
+          firstTurn.theirs[0].build.boosts[Stat.attack.rawValue] == 2,
+          "\(firstTurn.theirs[0].build.boosts[Stat.attack.rawValue])")
+    // Follow Me was aimed away from Indeedee, so redirection has to have moved it.
+    check("Follow Me pulls a single-target move onto itself",
+          firstTurn.mine[1].hp < firstTurn.mine[1].maxHP
+            || firstTurn.mine[1].fainted,
+          "\(firstTurn.mine[1].hp)/\(firstTurn.mine[1].maxHP)")
+    check("and the turn reads as a sequence rather than one line",
+          firstTurn.story.count >= 5, "\(firstTurn.story.count)")
+
+    // Protect, however it was chosen.
+    var settled = firstTurn
+    settled.fillGaps()
+    let behindProtect = TurnModel.resolve(
+        settled,
+        mine: Play(left: .attack(move: at(settled.mine[0], "Protect"), target: 0),
+                   right: .protectSelf(move: at(settled.mine[1], "Protect"))),
+        theirs: Play(left: .attack(move: at(settled.theirs[0], "Earthquake"), target: 0),
+                     right: .attack(move: at(settled.theirs[1], "Wood Hammer"), target: 0)),
+        store: store)
+    check("Protect picked as a move still protects",
+          behindProtect.mine[0].hp == settled.mine[0].hp,
+          "\(behindProtect.mine[0].hp) vs \(settled.mine[0].hp)")
+
+    // Screens, redirection of spread moves, and Wide Guard.
+    let screened = fighters([("Whimsicott", "Focus Sash", ["Light Screen", "Protect"]),
+                             ("Incineroar", "Sitrus Berry", ["Wide Guard", "Protect"]),
+                             ("Garchomp", "Life Orb", ["Earthquake", "Protect"])])
+    let wide = Board(mine: screened, theirs: aggressors, store: store,
+                     field: Field(isDoubles: true), alreadyEvolved: false)
+    let blocked = TurnModel.resolve(
+        wide,
+        mine: Play(left: .attack(move: at(wide.mine[0], "Protect"), target: 0),
+                   right: .attack(move: at(wide.mine[1], "Wide Guard"), target: 0)),
+        theirs: Play(left: .attack(move: at(wide.theirs[0], "Earthquake"), target: 0),
+                     right: .attack(move: at(wide.theirs[1], "Protect"), target: 0)),
+        store: store)
+    check("Wide Guard turns a spread move away from the whole side",
+          blocked.mine[1].hp == wide.mine[1].maxHP,
+          "\(blocked.mine[1].hp)/\(wide.mine[1].maxHP)")
+
+    let lit = TurnModel.resolve(
+        wide,
+        mine: Play(left: .attack(move: at(wide.mine[0], "Light Screen"), target: 0),
+                   right: .attack(move: at(wide.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(wide.theirs[0], "Protect"), target: 0),
+                     right: .attack(move: at(wide.theirs[1], "Protect"), target: 0)),
+        store: store)
+    check("Light Screen goes up and stays up", lit.myScreens.lightScreen > 0,
+          "\(lit.myScreens.lightScreen)")
+
+    // Rolling is what separates a battle from an evaluation.
+    var rolls = Set<Int>()
+    for _ in 0..<40 {
+        let rolled = TurnModel.resolve(
+            opening,
+            mine: Play(left: .attack(move: at(opening.mine[0], "Flare Blitz"), target: 0),
+                       right: .protectSelf(move: at(opening.mine[1], "Protect"))),
+            theirs: Play(left: .attack(move: at(opening.theirs[0], "Swords Dance"), target: 0),
+                         right: .attack(move: at(opening.theirs[1], "Fake Out"), target: 1)),
+            store: store, rolling: true)
+        rolls.insert(rolled.theirs[0].hp)
+    }
+    print("  the same attack, rolled forty times: \(rolls.count) different results")
+    check("a played turn rolls the damage", rolls.count > 1, "\(rolls.count)")
+    let averaged = TurnModel.resolve(
+        opening,
+        mine: Play(left: .attack(move: at(opening.mine[0], "Flare Blitz"), target: 0),
+                   right: .protectSelf(move: at(opening.mine[1], "Protect"))),
+        theirs: Play(left: .attack(move: at(opening.theirs[0], "Swords Dance"), target: 0),
+                     right: .attack(move: at(opening.theirs[1], "Fake Out"), target: 1)),
+        store: store)
+    let again = TurnModel.resolve(
+        opening,
+        mine: Play(left: .attack(move: at(opening.mine[0], "Flare Blitz"), target: 0),
+                   right: .protectSelf(move: at(opening.mine[1], "Protect"))),
+        theirs: Play(left: .attack(move: at(opening.theirs[0], "Swords Dance"), target: 0),
+                     right: .attack(move: at(opening.theirs[1], "Fake Out"), target: 1)),
+        store: store)
+    check("while the search still gets the same answer every time",
+          averaged.theirs[0].hp == again.theirs[0].hp)
+
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)
 }
