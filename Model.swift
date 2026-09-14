@@ -66,6 +66,17 @@ struct AbilityEntry: Codable, Identifiable, Hashable {
 
 // MARK: - Moves
 
+/// A lasting condition. Burn halves what a physical attacker does and chips
+/// it every turn; paralysis halves Speed and costs a turn now and then.
+enum Ailment: String {
+    case none = "", burn = "burned", paralysis = "paralysed", poison = "poisoned"
+    case badPoison = "badly poisoned", sleep = "asleep", freeze = "frozen"
+
+    /// Whether it stops a physical attacker being one.
+    var halvesPhysical: Bool { self == .burn }
+    var halvesSpeed: Bool { self == .paralysis }
+}
+
 struct Move: Codable, Identifiable, Hashable {
     let id: String
     let name: String
@@ -280,6 +291,68 @@ struct Move: Codable, Identifiable, Hashable {
         let numbers = effect[match].split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
         guard numbers.count == 2, numbers[1] > 0 else { return nil }
         return Double(numbers[0]) / Double(numbers[1])
+    }
+
+    /// What a hit does besides damage, and how often: Scald's burn three times
+    /// in ten, Nuzzle's paralysis every time, Rock Slide's flinch, a chance of
+    /// a stage off the target. Read from the text, which is regular about it.
+    struct Secondary {
+        enum Kind {
+            case status(Ailment)
+            case flinch
+            case drops([Stat: Int])
+        }
+        let chance: Int
+        let kind: Kind
+    }
+
+    var secondary: Secondary? {
+        let text = effect
+        func ailment(_ verb: String) -> Ailment? {
+            switch verb {
+            case "burning", "burns": return .burn
+            case "paralyzing", "paralyzes": return .paralysis
+            case "poisoning", "poisons": return .poison
+            case "badly poisoning", "badly poisons": return .badPoison
+            case "freezing", "freezes": return .freeze
+            default: return nil
+            }
+        }
+        if let match = text.range(of: #"Has a (\d+)% chance of (badly poisoning|burning|paralyzing|poisoning|freezing) the target"#,
+                                  options: .regularExpression) {
+            let phrase = String(text[match])
+            let chance = Int(phrase.split(separator: " ")[2].dropLast()) ?? 0
+            let verb = phrase.replacingOccurrences(of: #"^Has a \d+% chance of "#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: " the target", with: "")
+            if let ailment = ailment(verb) { return Secondary(chance: chance, kind: .status(ailment)) }
+        }
+        if let match = text.range(of: #"Has a (\d+)% chance of making (?:the )?targets? flinch"#,
+                                  options: .regularExpression) {
+            let chance = Int(String(text[match]).split(separator: " ")[2].dropLast()) ?? 0
+            return Secondary(chance: chance, kind: .flinch)
+        }
+        if let match = text.range(of: #"Has a (\d+)% chance of lowering (?:the )?targets?'? (.+?) stats? by (\d+) stage"#,
+                                  options: .regularExpression) {
+            let phrase = String(text[match])
+            let chance = Int(phrase.split(separator: " ")[2].dropLast()) ?? 0
+            let amount = phrase.range(of: #"\d+ stage"#, options: .regularExpression)
+                .flatMap { Int(phrase[$0].split(separator: " ")[0]) } ?? 1
+            let statName = phrase
+                .replacingOccurrences(of: #"^Has a \d+% chance of lowering (?:the )?targets?'? "#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #" stats? by \d+ stage"#, with: "", options: .regularExpression)
+            let stat: Stat? = ["Attack": .attack, "Defense": .defense, "Sp. Atk": .spAttack,
+                               "Sp. Def": .spDefense, "Speed": .speed][statName]
+            if let stat { return Secondary(chance: chance, kind: .drops([stat: amount])) }
+            return nil   // accuracy and evasion are not stats this model keeps
+        }
+        // The certain ones: "Paralyzes the target." — but not Fake Out's
+        // flinch, which the turn handles itself.
+        for (verb, ailment) in [("Paralyzes the target", Ailment.paralysis), ("Burns the target", .burn),
+                                ("Poisons the target", .poison), ("Badly poisons the target", .badPoison)]
+        where text.hasPrefix(verb) || text.contains(". \(verb)") {
+            return Secondary(chance: 100, kind: .status(ailment))
+        }
+        return nil
     }
 
     /// Stomping Tantrum: twice the power after a turn the user's move missed,

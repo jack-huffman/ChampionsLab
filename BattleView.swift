@@ -1434,6 +1434,39 @@ struct BattleView: View {
         }
     }
 
+    /// What a Pokémon is carrying in stages and condition, on its card: the
+    /// Swords Dance, the Intimidate, the burn. Nothing shows when nothing is.
+    @ViewBuilder
+    private func stages(_ fighter: Fighter) -> some View {
+        let changed = Stat.allCases.filter { fighter.build.boosts.indices.contains($0.rawValue)
+            && fighter.build.boosts[$0.rawValue] != 0 }
+        if !changed.isEmpty || fighter.status != .none {
+            HStack(spacing: 3) {
+                ForEach(changed, id: \.rawValue) { stat in
+                    let stage = fighter.build.boosts[stat.rawValue]
+                    Text("\(stat.short) \(stage > 0 ? "+" : "−")\(abs(stage))")
+                        .font(.system(size: 8, weight: .heavy, design: .rounded)).monospacedDigit()
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4).padding(.vertical, 1)
+                        .background(Capsule().fill(stage > 0 ? Palette.good : Palette.bad))
+                        .help("\(stat.short) \(stage > 0 ? "raised" : "lowered") by \(abs(stage)) stage\(abs(stage) == 1 ? "" : "s") — ×\(String(format: "%.2f", stageMultiplier(stage)))")
+                }
+                if fighter.status != .none {
+                    Text(fighter.status.rawValue.uppercased())
+                        .font(.system(size: 8, weight: .heavy)).kerning(0.3)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4).padding(.vertical, 1)
+                        .background(Capsule().fill(Palette.warn))
+                }
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    private func stageMultiplier(_ stage: Int) -> Double {
+        stage >= 0 ? Double(2 + stage) / 2 : 2 / Double(2 - stage)
+    }
+
     /// The board as it stood at one step of the turn.
     private func rewound(_ board: Board, to step: Board.Step) -> Board {
         var out = board
@@ -1443,6 +1476,8 @@ struct BattleView: View {
                form.id != out.mine[index].build.form.id {
                 out.mine[index].build.form = form
             }
+            if index < step.myBoosts.count { out.mine[index].build.boosts = step.myBoosts[index] }
+            if index < step.myStatus.count { out.mine[index].status = step.myStatus[index] }
         }
         for index in out.theirs.indices where index < step.theirHP.count {
             out.theirs[index].hp = step.theirHP[index]
@@ -1450,6 +1485,8 @@ struct BattleView: View {
                form.id != out.theirs[index].build.form.id {
                 out.theirs[index].build.form = form
             }
+            if index < step.theirBoosts.count { out.theirs[index].build.boosts = step.theirBoosts[index] }
+            if index < step.theirStatus.count { out.theirs[index].status = step.theirStatus[index] }
         }
         out.field = step.field
         out.myTailwind = step.myTailwind
@@ -1588,6 +1625,7 @@ struct BattleView: View {
                 .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(Palette.accent.opacity(0.85))
                 .lineLimit(1).minimumScaleFactor(0.7)
+            stages(fighter)
         }
         .frame(width: 118)
         .padding(.vertical, 8).padding(.horizontal, 4)

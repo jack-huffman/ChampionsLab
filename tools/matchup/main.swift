@@ -1409,6 +1409,21 @@ Ability: Regenerator
     check("Intimidate into Defiant hands over two stages of Attack",
           startBoard.theirs[1].build.boosts[Stat.attack.rawValue] == 1,
           "\(startBoard.theirs[1].build.boosts[Stat.attack.rawValue])")
+    // And into Competitive: the Attack goes, two stages of Special Attack come.
+    var competitive = Board(mine: weatherLeads,
+                            theirs: fighters([("Milotic", "Leftovers", ["Muddy Water", "Protect"]),
+                                              ("Kingambit", "Chople Berry", ["Iron Head", "Protect"])]),
+                            store: store, field: Field(isDoubles: true), alreadyEvolved: false)
+    competitive.mine[1].build.ability = "Intimidate"
+    competitive.theirs[0].build.ability = "Competitive"
+    competitive.activeCount = 2
+    competitive.sendOutLeads()
+    for line in competitive.story where line.contains("Competitive") { print("    \(line)") }
+    check("Intimidate into Competitive costs Attack and gives two stages of Special Attack",
+          competitive.theirs[0].build.boosts[Stat.attack.rawValue] == -1
+            && competitive.theirs[0].build.boosts[Stat.spAttack.rawValue] == 2,
+          "\(competitive.theirs[0].build.boosts)")
+    print("  a Milotic with nothing registered fights with: \(Board(mine: weatherLeads, theirs: fighters([("Milotic", "Leftovers", ["Protect"])]), store: store, field: Field(isDoubles: true), alreadyEvolved: false).theirs[0].build.ability)")
 
     // Both sides lose a Pokémon; both send in at once, faster first.
     var fallen = startBoard
@@ -1930,6 +1945,59 @@ Ability: Regenerator
     check("and in a played turn the fallen are counted", took2 > took1 * 2, "\(took1) vs \(took2)")
     let pixie = AteAbility.resolve(type: PokeType.normal, ability: "Pixilate")
     check("Pixilate turns a Normal move Fairy", pixie.type == .fairy && pixie.boost > 1)
+
+    print("\n== what a hit does besides damage ==")
+    let icy = fighters([("Whimsicott", "Focus Sash", ["Icy Wind", "Protect"]),
+                        ("Milotic", "Leftovers", ["Scald", "Protect"])])
+    let chilled = fighters([("Garchomp", "Life Orb", ["Swords Dance", "Protect"]),
+                            ("Kingambit", "Chople Berry", ["Swords Dance", "Protect"])])
+    let icyBoard = Board(mine: icy, theirs: chilled, store: store,
+                         field: Field(isDoubles: true), alreadyEvolved: false)
+    let windy = TurnModel.resolve(icyBoard,
+        mine: Play(left: .attack(move: at(icyBoard.mine[0], "Icy Wind"), target: 0),
+                   right: .attack(move: at(icyBoard.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(icyBoard.theirs[0], "Swords Dance"), target: 0),
+                     right: .attack(move: at(icyBoard.theirs[1], "Swords Dance"), target: 0)),
+        store: store)
+    for line in windy.story where line.contains("Spe") { print("    \(line)") }
+    check("Icy Wind takes a stage of Speed off both",
+          windy.theirs[0].build.boosts[Stat.speed.rawValue] == -1 && windy.theirs[1].build.boosts[Stat.speed.rawValue] == -1,
+          "\(windy.theirs[0].build.boosts[Stat.speed.rawValue]) / \(windy.theirs[1].build.boosts[Stat.speed.rawValue])")
+    let scald = store.data.moves.values.first { $0.name == "Scald" }!
+    let nuzzle = store.data.moves.values.first { $0.name == "Nuzzle" }!
+    let slide = store.data.moves.values.first { $0.name == "Rock Slide" }!
+    check("secondary effects are read from the text",
+          scald.secondary?.chance == 30 && nuzzle.secondary?.chance == 100 && slide.secondary?.chance == 30)
+    var burns = 0
+    for _ in 0..<300 {
+        let rolled = TurnModel.resolve(icyBoard,
+            mine: Play(left: .attack(move: at(icyBoard.mine[0], "Protect"), target: 0),
+                       right: .attack(move: at(icyBoard.mine[1], "Scald"), target: 0)),
+            theirs: Play(left: .attack(move: at(icyBoard.theirs[0], "Swords Dance"), target: 0),
+                         right: .attack(move: at(icyBoard.theirs[1], "Swords Dance"), target: 0)),
+            store: store, rolling: true)
+        if rolled.theirs[0].status == .burn { burns += 1 }
+    }
+    print("  300 Scalds: \(burns) burns (about 90 expected)")
+    check("Scald burns about three times in ten", burns > 55 && burns < 130, "\(burns)")
+    let averaged2 = TurnModel.resolve(icyBoard,
+        mine: Play(left: .attack(move: at(icyBoard.mine[0], "Protect"), target: 0),
+                   right: .attack(move: at(icyBoard.mine[1], "Scald"), target: 0)),
+        theirs: Play(left: .attack(move: at(icyBoard.theirs[0], "Swords Dance"), target: 0),
+                     right: .attack(move: at(icyBoard.theirs[1], "Swords Dance"), target: 0)),
+        store: store)
+    check("and the search does not count on it", averaged2.theirs[0].status == .none)
+    var nuzzleBoard = icyBoard
+    nuzzleBoard.mine[0].moves = [nuzzle] + nuzzleBoard.mine[0].moves
+    // Into Kingambit: Garchomp is Ground and Nuzzle would not touch it.
+    let zapped = TurnModel.resolve(nuzzleBoard,
+        mine: Play(left: .attack(move: 0, target: 1),
+                   right: .attack(move: at(nuzzleBoard.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(nuzzleBoard.theirs[0], "Swords Dance"), target: 0),
+                     right: .attack(move: at(nuzzleBoard.theirs[1], "Swords Dance"), target: 0)),
+        store: store)
+    check("Nuzzle paralyses every time, even for the search", zapped.theirs[1].status == .paralysis,
+          "\(zapped.theirs[1].status)")
 
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)

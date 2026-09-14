@@ -95,14 +95,6 @@ struct Fighter {
 }
 
 /// Something that sticks to a Pokémon rather than to the turn.
-enum Ailment: String {
-    case none = "", burn = "burned", paralysis = "paralysed", poison = "poisoned"
-    case badPoison = "badly poisoned", sleep = "asleep", freeze = "frozen"
-
-    /// Whether it stops a physical attacker being one.
-    var halvesPhysical: Bool { self == .burn }
-    var halvesSpeed: Bool { self == .paralysis }
-}
 
 /// Screens on one side of the field, in turns remaining.
 struct Screens {
@@ -208,6 +200,12 @@ struct Board {
         let myTailwind: Int
         let theirTailwind: Int
         let trickRoom: Int
+        /// Stages and conditions as they stood, so a card read mid-turn shows
+        /// the Intimidate that has landed and not the Swords Dance that has yet to.
+        var myBoosts: [[Int]] = []
+        var theirBoosts: [[Int]] = []
+        var myStatus: [Ailment] = []
+        var theirStatus: [Ailment] = []
     }
 
     /// Turns of weather and terrain left. Five when something sets them; zero
@@ -259,7 +257,9 @@ struct Board {
              myForms: mine.map(\.build.form.id),
              theirForms: theirs.map(\.build.form.id),
              field: field, myTailwind: myTailwind,
-             theirTailwind: theirTailwind, trickRoom: trickRoom)
+             theirTailwind: theirTailwind, trickRoom: trickRoom,
+             myBoosts: mine.map(\.build.boosts), theirBoosts: theirs.map(\.build.boosts),
+             myStatus: mine.map(\.status), theirStatus: theirs.map(\.status))
     }
 
     /// Say what happened, and remember what the board looked like when it did.
@@ -1403,6 +1403,8 @@ enum TurnModel {
                     else { board.theirs[index].build.itemSpent = true }
                 }
                 applyDrops(move.targetDrops, toMine: hitMine, slot: index, board: &board)
+                secondary(of: move, byMine: byMine, hitMine: hitMine, slot: slot, hit: index,
+                          rolling: rolling, board: &board)
                 let after = hitMine ? board.mine[index] : board.theirs[index]
                 if after.hp == 0 { board.note("\(hitName) fainted.") }
             }
@@ -1639,6 +1641,56 @@ enum TurnModel {
     /// fails or a turn goes by without one. A played turn rolls it; the search
     /// takes anything under even as a miss, so it never counts on a second
     /// Protect in a row — which is exactly the read a good player makes.
+    /// What a hit does besides damage. A played turn rolls the chance; the
+    /// search, which averages, applies only what is certain — Nuzzle's
+    /// paralysis, not Scald's three-in-ten burn — the way it treats Flame
+    /// Body. Serene Grace doubles the odds; Sheer Force trades them away.
+    private static func secondary(of move: Move, byMine: Bool, hitMine: Bool, slot: Int, hit: Int,
+                                  rolling: Bool, board: inout Board) {
+        guard let effect = move.secondary else { return }
+        let attackerTeam = byMine ? board.mine : board.theirs
+        let defenderTeam = hitMine ? board.mine : board.theirs
+        guard attackerTeam.indices.contains(slot), defenderTeam.indices.contains(hit),
+              !defenderTeam[hit].fainted else { return }
+        let attacker = attackerTeam[slot], defender = defenderTeam[hit]
+        if attacker.build.ability == "Sheer Force" { return }
+        var chance = effect.chance
+        if attacker.build.ability == "Serene Grace" { chance = Swift.min(100, chance * 2) }
+        let happens = rolling ? Double.random(in: 0..<100) < Double(chance) : chance >= 100
+        guard happens else { return }
+        let name = defender.build.form.formLabel
+        switch effect.kind {
+        case .status(let ailment):
+            guard defender.status == .none else { return }
+            let types = defender.build.form.pokeTypes
+            let immune: Bool
+            switch ailment {
+            case .burn: immune = types.contains(.fire) || defender.build.ability == "Thermal Exchange"
+                || defender.build.ability == "Water Veil" || defender.build.ability == "Water Bubble"
+            case .paralysis: immune = types.contains(.electric) || defender.build.ability == "Limber"
+            case .poison, .badPoison: immune = types.contains(where: { [.poison, .steel].contains($0) })
+                || defender.build.ability == "Immunity"
+            case .freeze: immune = types.contains(.ice)
+            case .sleep, .none: immune = true
+            }
+            if immune { return }
+            if board.field.terrain == .misty, !types.contains(.flying), defender.build.ability != "Levitate" {
+                board.note("The mist kept \(name) from being \(ailment.rawValue).")
+                return
+            }
+            if hitMine { board.mine[hit].status = ailment } else { board.theirs[hit].status = ailment }
+            board.note("\(name) was \(ailment.rawValue)" + (chance < 100 ? " — the \(chance)% came up." : "."))
+        case .flinch:
+            // Only matters if it has yet to move this turn; the flag clears at
+            // the turn's start either way.
+            guard defender.build.ability != "Inner Focus" else { return }
+            if hitMine { board.mine[hit].flinched = true } else { board.theirs[hit].flinched = true }
+            board.note("\(name) flinched" + (chance < 100 ? " — the \(chance)% came up." : "."))
+        case .drops(let drops):
+            applyDrops(drops, toMine: hitMine, slot: hit, board: &board)
+        }
+    }
+
     /// Whether a Pokémon's last move came off, for Stomping Tantrum.
     private static func markFailed(byMine: Bool, slot: Int, board: inout Board, failed: Bool) {
         if byMine, board.mine.indices.contains(slot) { board.mine[slot].lastMoveFailed = failed }

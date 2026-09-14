@@ -184,6 +184,10 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         // Weather and terrain with their clocks running, so the field shows them.
         if board.field.weather == .none { board.field.weather = .rain; board.weatherTurns = 4 }
         if board.field.terrain == .none { board.field.terrain = .grassy; board.terrainTurns = 3 }
+        // And stages on both sides, so the cards show what they carry.
+        board.mine[0].build.boosts[Stat.spAttack.rawValue] = 2
+        board.theirs[0].build.boosts[Stat.attack.rawValue] = -1
+        board.theirs[1].status = .burn
         render(BattleView(playing: board), named: "battle-dark",
                size: CGSize(width: 1280, height: 860), dark: true)
         // And the Fight grid, which is what most turns are spent looking at.
