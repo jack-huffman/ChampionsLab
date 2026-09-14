@@ -92,9 +92,15 @@ final class Store: ObservableObject {
 
     /// Running straight out of the source tree during development.
     private static func developmentURL(named name: String) -> URL? {
-        let here = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        let candidate = here.appendingPathComponent("data/\(name)")
-        return FileManager.default.fileExists(atPath: candidate.path) ? candidate : nil
+        // Walk up from this file to the repository root, wherever this file
+        // has been filed: the data directory sits beside Package.swift.
+        var here = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        for _ in 0..<6 {
+            let candidate = here.appendingPathComponent("data/\(name)")
+            if FileManager.default.fileExists(atPath: candidate.path) { return candidate }
+            here.deleteLastPathComponent()
+        }
+        return nil
     }
 
     enum DataError: LocalizedError {

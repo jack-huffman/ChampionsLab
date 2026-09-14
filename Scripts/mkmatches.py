@@ -33,7 +33,7 @@ import time
 import mkdata
 import mktournaments as src
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the repository root
 OUT = os.path.join(HERE, "data", "matches.json")
 
 LIMIT_EVENTS = None

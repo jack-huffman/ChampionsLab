@@ -10,12 +10,20 @@ a team against the format and tells you what it loses to.
 It links only against system frameworks and ships its dataset inside the bundle,
 so there is nothing to install alongside it and it never touches the network.
 
+## Layout
+
+A Swift package: `Sources/ChampionsLab` is the library (model, engine,
+interface), `Sources/ChampionsLabApp` the one-line executable,
+`Tests/ChampionsLabTests` the suite, `Tools/` the render/timing/accuracy
+executables, `Scripts/` the build and data scripts. `ARCHITECTURE.md` explains
+the layering and the invariants; `make` lists what to run.
+
 ## Build
 
 ```sh
-./build.sh                  # → ~/Applications/ChampionsLab.app
-./build.sh /Applications    # or anywhere else
-./make-dmg.sh               # → build/ChampionsLab-<version>.dmg
+./Scripts/build.sh          # → ~/Applications/ChampionsLab.app   (or: make app)
+./Scripts/build.sh /Applications    # or anywhere else
+./Scripts/make-dmg.sh       # → build/ChampionsLab-<version>.dmg  (or: make dmg)
 ```
 
 Universal (arm64 + x86_64), macOS 13+. Bump `VERSION` to re-version. The icon is
@@ -115,9 +123,9 @@ importer drops them.
 `mkdata.py` scrapes Serebii's Champions-specific Pokédex and Attackdex:
 
 ```sh
-./mkdata.py                # incremental, uses .cache/
-./mkdata.py --refresh      # re-fetch everything
-./mkdata.py --only-roster  # skip the slow move pass
+./Scripts/mkdata.py        # incremental, uses .cache/   (or: make data)
+./Scripts/mkdata.py --refresh      # re-fetch everything
+./Scripts/mkdata.py --only-roster  # skip the slow move pass
 ```
 
 Serebii is the right source because it is Champions-specific — PokéAPI has no idea
@@ -189,9 +197,10 @@ Champions Pokémon learns.
 ## Verifying it
 
 ```sh
-./tools/verify.sh     # stat and damage maths against hand-computed values
-./tools/matchup.sh    # importer, EV<->SP conversion, and the versus engine
-./tools/snapshot.sh   # render the screens to build/shots/*.png
+swift test --filter StatsAndDamageTests   # stat and damage maths against hand-computed values
+swift test --filter TurnHarnessTests      # importer, conversion, the versus engine, every rule of a turn
+./Tools/snapshot.sh                       # render the screens to build/shots/*.png
+make test / make hitch / make check       # the same, from the front door
 ```
 
 Battle stages matter more than almost anything else the calculator exposes — a
@@ -203,7 +212,7 @@ Setup moves are parsed out of the effect text ("Boosts the user's Attack and Spe
 stats by 1 stage"), so the shortcut row is generated rather than hand-kept — 28
 moves across the dex.
 
-`verify.sh` checks the Champions stat formulas, the type chart (including
+`StatsAndDamageTests` checks the Champions stat formulas, the type chart (including
 ability-driven immunities like Levitate), the doubles spread penalty, Grassy
 Terrain halving Earthquake, Tough Claws, Aura Guard, Tera STAB stacking, and the
 EV↔SP conversion both ways.
@@ -221,7 +230,7 @@ exactly that once, and `try?` turned it into an empty team list with no message.
 Loading now salvages per element, keeps a `teams.backup.json` generation, and
 surfaces anything it had to skip.
 
-`matchup.sh` imports a real Showdown list, round-trips it back out, and runs the
+`TurnHarnessTests` imports a real Showdown list, round-trips it back out, and runs the
 versus engine against a bundled archetype. It also checks that a team against
 *itself* scores exactly zero — which is how the speed-tie handling got fixed, since
 scoring ties as losses made every mirror match read negative.
@@ -287,7 +296,7 @@ now use `LookupField`, a button that opens a searchable popover and builds only
 the rows it shows. Locked: 0 rows. Unlocked: 144. The calculator went from 1,460
 to 42.
 
-`snapshot.sh` renders screens without launching the app, which is useful for
+`Tools/snapshot.sh` renders screens without launching the app, which is useful for
 checking both palettes at once. Two known limits of `ImageRenderer`: it produces
 an empty image for a `ScrollView` (screens expose a `content` property and an
 `\.snapshotMode` environment flag to work around it), and it draws AppKit controls

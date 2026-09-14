@@ -1,13 +1,20 @@
-//  ChampionsLab.swift
-//  App entry point and the sidebar that holds the whole thing together.
+//  RootView.swift
+//  The scene that holds the whole app together, and the sidebar inside it.
+//
+//  The executable target is a single line that shows this scene; everything
+//  else — the window, the menu commands, the sections — lives here in the
+//  library, where the tests and the tools can reach it.
 
 import SwiftUI
 
-@main
-struct ChampionsLabApp: App {
+/// The one window, with its menu commands. Public because the executable
+/// target, which is the only thing outside this module, has to name it.
+public struct ChampionsLabScene: Scene {
     @StateObject private var store = Store.shared
 
-    var body: some Scene {
+    public init() {}
+
+    public var body: some Scene {
         Window("ChampionsLab", id: "main") {
             RootView()
                 .environmentObject(store)

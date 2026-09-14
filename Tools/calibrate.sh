@@ -7,5 +7,5 @@ mkdir -p build
 swiftc -O -swift-version 5 -parse-as-library \
 	-target arm64-apple-macosx13.0 -sdk "$SDK" \
 	-o build/calibrate \
-	$(ls ./*.swift | grep -v ChampionsLab.swift) tools/calibrate/main.swift
+	$(find Sources/ChampionsLab -name '*.swift') Tools/calibrate/main.swift
 ./build/calibrate

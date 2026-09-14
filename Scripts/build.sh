@@ -10,12 +10,12 @@
 #  Re-signing at the end matters: writing anything into a bundle invalidates
 #  its signature, and macOS then refuses to launch it as "damaged".
 #
-#  Usage:  ./build.sh                 # build/reinstall into ~/Applications
-#          ./build.sh /Applications   # or anywhere else
-#          DEST=stage ./build.sh      # used by make-dmg.sh
+#  Usage:  ./Scripts/build.sh                 # build/reinstall into ~/Applications
+#          ./Scripts/build.sh /Applications   # or anywhere else
+#          DEST=stage ./Scripts/build.sh      # used by make-dmg.sh
 set -euo pipefail
 
-SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DEST_DIR="${1:-${DEST:-$HOME/Applications}}"
 APP="$DEST_DIR/ChampionsLab.app"
 VERSION="$(cat "$SRC_DIR/VERSION")"
@@ -23,14 +23,14 @@ MIN_MACOS="13.0"
 BUILD="$SRC_DIR/build"
 
 if [ ! -f "$SRC_DIR/data/champions.json" ]; then
-	echo "error: data/champions.json is missing. Run ./mkdata.py first." >&2
+	echo "error: data/champions.json is missing. Run ./Scripts/mkdata.py first." >&2
 	exit 1
 fi
 
 # Regenerate the icon if it's missing.
 if [ ! -f "$SRC_DIR/AppIcon.icns" ]; then
 	echo "==> generating icon"
-	( cd "$SRC_DIR" && /usr/bin/python3 mkicon.py )
+	( cd "$SRC_DIR" && /usr/bin/python3 Scripts/mkicon.py )
 	rm -rf "$SRC_DIR/icon.iconset"; mkdir "$SRC_DIR/icon.iconset"
 	for sz in 16 32 128 256 512; do
 		sips -z $sz $sz "$SRC_DIR/icon-1024.png" \
@@ -44,15 +44,17 @@ fi
 
 echo "==> compiling (universal, macOS $MIN_MACOS+)"
 mkdir -p "$BUILD"
-SDK="$(xcrun --show-sdk-path --sdk macosx)"
-for arch in arm64 x86_64; do
-	# -parse-as-library: @main lives in a file that isn't main.swift.
-	swiftc -O -swift-version 5 -parse-as-library \
-		-target "${arch}-apple-macosx${MIN_MACOS}" -sdk "$SDK" \
-		-o "$BUILD/ChampionsLab-$arch" "$SRC_DIR"/*.swift
-done
-lipo -create -output "$BUILD/ChampionsLab" \
-	"$BUILD/ChampionsLab-arm64" "$BUILD/ChampionsLab-x86_64"
+# The package builds the binary: the library and the one-line executable
+# that imports it, for both architectures in one go. This script only
+# wraps the result in a bundle.
+( cd "$SRC_DIR" && swift build -c release --arch arm64 --arch x86_64 \
+	--product ChampionsLabApp 2>&1 | grep -E "error|warning: unre|Build complete" ) || true
+BINARY="$SRC_DIR/.build/apple/Products/Release/ChampionsLabApp"
+if [ ! -x "$BINARY" ]; then
+	echo "error: swift build did not produce $BINARY" >&2
+	exit 1
+fi
+cp "$BINARY" "$BUILD/ChampionsLab"
 
 echo "==> assembling bundle"
 mkdir -p "$DEST_DIR"

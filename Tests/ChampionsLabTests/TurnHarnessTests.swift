@@ -1,11 +1,13 @@
-//  tools/matchup/main.swift
-//  Checks the paste importer, the EV<->SP conversion and the versus engine
-//  against a real Showdown list and a bundled meta archetype.
+//  TurnHarnessTests.swift
+//  The turn model, the search, the hidden information and every rule of a
+//  played turn, checked against boards built by hand. One long test on
+//  purpose for now: the sections share fixtures, and splitting them apart
+//  is the next piece of work on this suite.
 //
-//      ./tools/matchup.sh
+//      swift test --filter TurnHarnessTests
 
-import AppKit
-import SwiftUI
+import XCTest
+@testable import ChampionsLab
 
 let paste = """
 Incineroar @ Assault Vest
@@ -49,12 +51,14 @@ Ability: Regenerator
 - Rage Powder
 """
 
-@MainActor func run() {
+final class TurnHarnessTests: XCTestCase {
+    @MainActor func testTheHarness() throws {
     let store = Store.shared
     var fails = 0
-    func check(_ label: String, _ ok: Bool, _ detail: String = "") {
+    func check(_ label: String, _ ok: Bool, _ detail: String = "", file: StaticString = #filePath, line: UInt = #line) {
         if !ok { fails += 1 }
         print("  \(ok ? "PASS" : "FAIL")  \(label)\(detail.isEmpty ? "" : ": \(detail)")")
+        XCTAssertTrue(ok, "\(label)\(detail.isEmpty ? "" : ": \(detail)")", file: file, line: line)
     }
 
     print("== EV <-> SP conversion ==")
@@ -2140,6 +2144,5 @@ Ability: Regenerator
           shrugged.theirs[1].encoredFor == 0 && shrugged.story.contains { $0.contains("Dark type") })
 
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
-    exit(fails == 0 ? 0 : 1)
+    }
 }
-MainActor.assumeIsolated { run() }

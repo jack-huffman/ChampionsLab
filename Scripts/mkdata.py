@@ -29,7 +29,7 @@ import sys
 import time
 
 BASE = "https://www.serebii.net"
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the repository root
 CACHE = os.path.join(HERE, ".cache")
 OUT = os.path.join(HERE, "data", "champions.json")
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "

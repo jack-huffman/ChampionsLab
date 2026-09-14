@@ -12,7 +12,7 @@
 #  Usage:  ./make-dmg.sh
 set -euo pipefail
 
-SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="$(cat "$SRC_DIR/VERSION")"
 BUILD="$SRC_DIR/build"
 STAGE="$BUILD/dmg-stage"
@@ -30,7 +30,7 @@ trap cleanup EXIT
 echo "==> building a fresh app into the staging area"
 rm -rf "$STAGE" "$RW_DMG" "$DMG"
 mkdir -p "$STAGE"
-"$SRC_DIR/build.sh" "$STAGE" >/dev/null
+"$SRC_DIR/Scripts/build.sh" "$STAGE" >/dev/null
 # build.sh registers whatever it builds with LaunchServices; re-point that at
 # the installed copy rather than the throwaway staging one.
 if [ -d "$HOME/Applications/ChampionsLab.app" ]; then
