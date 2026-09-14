@@ -29,6 +29,9 @@ struct BattleView: View {
 
     /// The four being brought, in order. The first two lead.
     @State private var bringing: [String] = []
+    /// Whose matchups their side is showing. The one just picked, unless
+    /// another of yours is clicked.
+    @State private var focused: String?
 
     @State private var board: Board?
     @State private var log: [String] = []
@@ -49,6 +52,13 @@ struct BattleView: View {
     @State private var history: [(board: Board, log: [String], turn: Int)] = []
     /// What the engine wanted, against what was actually played.
     @State private var grade: String?
+    /// The turn being walked through, and how far into it we are.
+    @State private var replay: [Board.Step] = []
+    @State private var at = 0
+    /// The board the steps were recorded against, before anything fainted was
+    /// replaced. Stepping through the finished board would map the health of a
+    /// Pokémon that fainted onto the one that came in for it.
+    @State private var replayBoard: Board?
 
     /// Seeded state, so tools/snapshot.sh can render a screen nobody has
     /// clicked into. Done through init rather than onAppear, which an
@@ -154,39 +164,59 @@ struct BattleView: View {
     }
 
     private func reset() {
-        stage = .setup; bringing = []; board = nil; finished = nil
+        stage = .setup; bringing = []; focused = nil; board = nil; finished = nil
         log = []; mySide = []; theirSide = []
     }
 
     // MARK: Team Preview
 
     private var previewBoard: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             Card {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
                     SectionHeader(
                         title: "Team Preview",
                         subtitle: "Choose the \(bringCount) you bring, in order. "
                             + (singles ? "The first leads."
-                                       : "The first two lead; the others come in behind."))
-                    if let mine = myTeam {
-                        HStack(spacing: 8) {
-                            ForEach(Array(mine.slots.enumerated()), id: \.offset) { _, slot in
-                                previewTile(slot)
+                                       : "The first two lead; the others come in behind.")
+                            + " Their side shows how the one you just picked fares against each.")
+                    HStack(alignment: .top, spacing: 18) {
+                        // Yours down the left, theirs down the right, which is
+                        // where the game puts them.
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("YOURS").font(.system(size: 9, weight: .bold)).kerning(0.6)
+                                .foregroundStyle(.tertiary)
+                            ForEach(Array((myTeam?.slots ?? []).enumerated()), id: \.offset) {
+                                _, slot in
+                                previewRow(slot)
                             }
-                            Spacer(minLength: 0)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Rectangle().fill(Palette.hairline).frame(width: 1)
+
+                        VStack(alignment: .trailing, spacing: 6) {
+                            Text("THEIRS").font(.system(size: 9, weight: .bold)).kerning(0.6)
+                                .foregroundStyle(.tertiary)
+                            ForEach(Array((theirTeam?.slots ?? []).enumerated()), id: \.offset) {
+                                _, slot in
+                                opposingRow(slot)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                     }
+                    Divider()
                     HStack(spacing: 10) {
                         Text(bringing.isEmpty
                              ? "Nothing chosen yet."
                              : "Bringing: " + bringing.enumerated().map { index, id in
                                 "\(index + 1). \(label(id))" }.joined(separator: "   "))
                             .font(.system(size: 11))
-                            .foregroundStyle(bringing.isEmpty ? .tertiary : .secondary)
+                            .foregroundStyle(bringing.isEmpty ? AnyShapeStyle(.tertiary)
+                                                              : AnyShapeStyle(.secondary))
                         Spacer()
                         Button("Suggest") { autoPick() }.controlSize(.small)
-                        Button("Clear") { bringing = [] }.controlSize(.small)
+                        Button("Clear") { bringing = []; focused = nil }.controlSize(.small)
                         Button("Start the battle") { begin() }
                             .controlSize(.small)
                             .keyboardShortcut(.defaultAction)
@@ -194,75 +224,140 @@ struct BattleView: View {
                     }
                 }
             }
-            Card {
-                VStack(alignment: .leading, spacing: 10) {
-                    SectionHeader(title: "What they registered",
-                                  subtitle: "They choose their own four, and you do not get to see which")
-                    if let theirs = theirTeam {
-                        HStack(spacing: 8) {
-                            ForEach(Array(theirs.slots.enumerated()), id: \.offset) { _, slot in
-                                if let form = slot.battleForm(in: store) {
-                                    VStack(spacing: 3) {
-                                        SpriteImage(form: form, side: 52)
-                                        Text(form.formLabel).font(.system(size: 10))
-                                            .lineLimit(1).minimumScaleFactor(0.7)
-                                        Text(likelyItem(form)).font(.system(size: 9))
-                                            .foregroundStyle(Palette.warn.opacity(0.8))
-                                            .lineLimit(1)
-                                    }
-                                    .frame(width: 86)
-                                }
-                            }
-                            Spacer(minLength: 0)
-                        }
-                    }
-                }
-            }
         }
         .padding(20)
     }
 
-    private func previewTile(_ slot: TeamSlot) -> some View {
+    /// One of mine, in the order it is being brought.
+    private func previewRow(_ slot: TeamSlot) -> some View {
         let form = slot.battleForm(in: store)
         let id = slot.formID
         let order = bringing.firstIndex(of: id).map { $0 + 1 }
+        let isFocus = focused == id || (focused == nil && bringing.last == id)
         return Button {
-            if let at = bringing.firstIndex(of: id) { bringing.remove(at: at) }
-            else if bringing.count < bringCount { bringing.append(id) }
+            if let at = bringing.firstIndex(of: id) {
+                bringing.remove(at: at)
+                focused = bringing.last
+            } else if bringing.count < bringCount {
+                bringing.append(id)
+                focused = id
+            } else {
+                focused = bringing.contains(id) ? id : focused
+            }
         } label: {
-            VStack(spacing: 3) {
-                ZStack(alignment: .topTrailing) {
-                    if let form { SpriteImage(form: form, side: 62) }
-                    if let order {
-                        Text("\(order)")
-                            .font(.system(size: 10, weight: .bold))
-                            .frame(width: 17, height: 17)
-                            .background(order <= leadCount ? Palette.accent : Palette.dim)
-                            .foregroundStyle(.white)
-                            .clipShape(Circle())
+            HStack(spacing: 9) {
+                ZStack {
+                    Circle()
+                        .fill(order == nil ? Palette.hairline
+                              : (order! <= leadCount ? Palette.accent : Palette.dim))
+                        .frame(width: 20, height: 20)
+                    Text(order.map(String.init) ?? "")
+                        .font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
+                }
+                if let form { SpriteImage(form: form, side: 42) }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(form?.formLabel ?? id)
+                        .font(.system(size: 12, weight: order == nil ? .regular : .semibold))
+                        .lineLimit(1)
+                    HStack(spacing: 3) {
+                        ForEach(form?.pokeTypes ?? []) { TypeChip(type: $0, size: .small) }
+                        if let order, order <= leadCount {
+                            Text("LEADS").font(.system(size: 8, weight: .bold)).kerning(0.4)
+                                .foregroundStyle(Palette.accent)
+                        }
                     }
                 }
-                Text(form?.formLabel ?? slot.formID)
-                    .font(.system(size: 10)).lineLimit(1).minimumScaleFactor(0.7)
-                Text(order.map { $0 <= leadCount ? "leads" : "in the back" } ?? " ")
-                    .font(.system(size: 9))
-                    .foregroundStyle(order != nil && order! <= leadCount
-                                     ? AnyShapeStyle(Palette.accent)
-                                     : AnyShapeStyle(.tertiary))
+                Spacer(minLength: 0)
+                if isFocus, order != nil {
+                    Image(systemName: "eye.fill").font(.system(size: 9))
+                        .foregroundStyle(Palette.accent)
+                        .help("Their side is showing how this one fares")
+                }
             }
-            .frame(width: 96)
-            .padding(.vertical, 8)
-            .background(order != nil ? Palette.accent.opacity(0.14) : Palette.surface)
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .background(order != nil ? Palette.accent.opacity(isFocus ? 0.18 : 0.10)
+                                     : Palette.surface)
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(
-                order != nil ? Palette.accent.opacity(0.6) : Palette.hairline, lineWidth: 1))
+                isFocus && order != nil ? Palette.accent.opacity(0.7) : Palette.hairline,
+                lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
 
-    /// What it is called on the field, not what it is called on the list: a
-    /// slot registered as Charizard holding a Charizardite is a Mega Charizard
-    /// Y, and the tiles above already say so.
+    /// One of theirs, marked with how the Pokémon in focus fares against it.
+    private func opposingRow(_ slot: TeamSlot) -> some View {
+        let form = slot.battleForm(in: store)
+        let reading = matchupMark(against: slot)
+        return HStack(spacing: 9) {
+            if let reading {
+                HStack(spacing: 2) {
+                    Image(systemName: reading.symbol)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(reading.tint)
+                    if reading.shock {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Palette.bad)
+                    }
+                }
+                .help(reading.note)
+                .frame(width: 34, alignment: .leading)
+            } else {
+                Color.clear.frame(width: 34, height: 1)
+            }
+            Spacer(minLength: 0)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(form?.formLabel ?? slot.formID)
+                    .font(.system(size: 12)).lineLimit(1)
+                HStack(spacing: 3) {
+                    ForEach(form?.pokeTypes ?? []) { TypeChip(type: $0, size: .small) }
+                }
+            }
+            if let form { SpriteImage(form: form, side: 42) }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 5)
+        .background(Palette.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10)
+            .strokeBorder(reading?.tint.opacity(0.35) ?? Palette.hairline, lineWidth: 1))
+    }
+
+    /// How the Pokémon in focus fares against one of theirs.
+    ///
+    /// Read off the versus grid rather than off the type chart, so it knows
+    /// that a Pokémon resisting your attack still loses if it cannot hurt you
+    /// back. Nothing shows until something is picked, because there is nothing
+    /// to compare against yet.
+    private func matchupMark(against theirs: TeamSlot)
+        -> (symbol: String, tint: Color, shock: Bool, note: String)? {
+        guard let mine = myTeam, let theirTeam,
+              let focusID = focused ?? bringing.last,
+              let mineSlot = mine.slots.first(where: { $0.formID == focusID }),
+              let mineForm = mineSlot.battleForm(in: store),
+              let theirForm = theirs.battleForm(in: store) else { return nil }
+        let grid = Matchup(mine: mine, theirs: theirTeam, store: store,
+                           field: Field(isDoubles: !singles))
+        guard let cell = grid.cell(mine: mineForm, theirs: theirForm) else { return nil }
+        let against = "\(mineForm.formLabel) against \(theirForm.formLabel)"
+        switch cell.outcome {
+        case .win:
+            return ("arrow.up.circle.fill", Palette.good, false,
+                    "\(against): \(mineForm.formLabel) wins this one.")
+        case .favoured:
+            return ("arrow.up", Palette.good, false,
+                    "\(against): the better side of it.")
+        case .neutral:
+            return ("minus", Palette.dim, false, "\(against): even.")
+        case .against:
+            return ("arrow.down", Palette.warn, false,
+                    "\(against): the worse side of it.")
+        case .loss:
+            return ("arrow.down.circle.fill", Palette.bad, true,
+                    "\(against): \(mineForm.formLabel) loses this badly. Bring an answer.")
+        }
+    }
+
     private func label(_ formID: String) -> String {
         if let slot = myTeam?.slots.first(where: { $0.formID == formID }),
            let form = slot.battleForm(in: store) {
@@ -311,7 +406,7 @@ struct BattleView: View {
         stage = .battle
         turn = 1
         finished = nil
-        history = []; grade = nil
+        history = []; grade = nil; replay = []; at = 0; replayBoard = nil
         leftPick = nil; rightPick = nil; megaSlot = nil
         log = ["Both sides send out their leads. Neither knows what the other is holding, nor which four came."]
         think()
@@ -319,14 +414,19 @@ struct BattleView: View {
 
     // MARK: The field
 
-    private func field(_ board: Board) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private func field(_ live: Board) -> some View {
+        // Mid-replay the field shows the moment being described, not where the
+        // turn ended up.
+        let board = replay.indices.contains(at)
+            ? rewound(replayBoard ?? live, to: replay[at]) : live
+        return VStack(alignment: .leading, spacing: 14) {
             if let finished {
                 Card { Label(finished, systemImage: "flag.checkered")
                     .font(.system(size: 14, weight: .semibold)) }
             }
             arena(board)
-            if finished == nil { choices(board) }
+            if !replay.isEmpty { stepper() }
+            if finished == nil && replay.isEmpty { choices(board) }
             analysisPanels()
             if !log.isEmpty {
                 Card {
@@ -399,6 +499,30 @@ struct BattleView: View {
             .strokeBorder(tint.opacity(lit ? 0.45 : 0.18), lineWidth: 1))
         .animation(.easeInOut(duration: 0.4), value: board.field.weather)
         .animation(.easeInOut(duration: 0.4), value: board.field.terrain)
+    }
+
+    /// The board as it stood at one step of the turn.
+    private func rewound(_ board: Board, to step: Board.Step) -> Board {
+        var out = board
+        for index in out.mine.indices where index < step.myHP.count {
+            out.mine[index].hp = step.myHP[index]
+            if let form = store.formsByID[step.myForms[index]],
+               form.id != out.mine[index].build.form.id {
+                out.mine[index].build.form = form
+            }
+        }
+        for index in out.theirs.indices where index < step.theirHP.count {
+            out.theirs[index].hp = step.theirHP[index]
+            if let form = store.formsByID[step.theirForms[index]],
+               form.id != out.theirs[index].build.form.id {
+                out.theirs[index].build.form = form
+            }
+        }
+        out.field = step.field
+        out.myTailwind = step.myTailwind
+        out.theirTailwind = step.theirTailwind
+        out.trickRoom = step.trickRoom
+        return out
     }
 
     @ViewBuilder
@@ -602,6 +726,51 @@ struct BattleView: View {
     }
 
     // MARK: Choosing
+
+    /// A turn arrives as a sequence, so it is shown as one.
+    ///
+    /// Everything lands at once otherwise: four actions, the residuals and two
+    /// faints in a single jump, with no way to see what caused what. Stepping
+    /// through it is how you learn why a turn went the way it did, which is the
+    /// entire reason to play one out rather than read a score.
+    private func stepper() -> some View {
+        let step = replay.indices.contains(at) ? replay[at] : nil
+        return Card {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionHeader(title: "Turn \(turn - 1), step \(at + 1) of \(replay.count)")
+                if let step {
+                    Text(step.text)
+                        .font(.system(size: 13, weight: .medium))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(replay.prefix(at).enumerated().reversed()), id: \.offset) {
+                        _, earlier in
+                        Text(earlier.text)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                HStack(spacing: 8) {
+                    Button("Back") { at = max(0, at - 1) }
+                        .controlSize(.small).disabled(at == 0)
+                    Button(at + 1 >= replay.count ? "Done" : "Next") {
+                        if at + 1 >= replay.count { replay = []; at = 0 } else { at += 1 }
+                    }
+                    .controlSize(.small)
+                    .keyboardShortcut(.defaultAction)
+                    Button("Skip to the end") { replay = []; at = 0 }.controlSize(.small)
+                    Spacer()
+                    if let grade {
+                        Text(grade).font(.system(size: 10))
+                            .foregroundStyle(grade.hasPrefix("That is")
+                                             ? AnyShapeStyle(Palette.good)
+                                             : AnyShapeStyle(Palette.warn))
+                    }
+                }
+            }
+        }
+    }
 
     @ViewBuilder
     private func choices(_ board: Board) -> some View {
@@ -932,6 +1101,7 @@ struct BattleView: View {
         var next = TurnModel.resolve(current, mine: mine, theirs: theirPlay,
                                      store: store, rolling: true)
         let told = next.story
+        let recorded = next
         next.fillGaps()
 
         log.append("Turn \(turn) — you \(game.describe(mine, mine: true)); "
@@ -946,6 +1116,9 @@ struct BattleView: View {
 
         board = next
         turn += 1
+        replay = told.isEmpty ? [] : recorded.steps
+        replayBoard = recorded
+        at = 0
         leftPick = nil; rightPick = nil; megaSlot = nil
         struck = hitMine; struckTheirs = hitTheirs
         Task { @MainActor in
@@ -966,7 +1139,7 @@ struct BattleView: View {
         finished = nil
         leftPick = nil; rightPick = nil; megaSlot = nil
         struck = []; struckTheirs = []
-        grade = nil
+        grade = nil; replay = []; at = 0; replayBoard = nil
         think()
     }
 }

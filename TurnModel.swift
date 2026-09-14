@@ -121,6 +121,34 @@ struct Board {
     var theirScreens = Screens()
     /// What happened this turn, in the order it happened.
     var story: [String] = []
+    /// The same, with the board as it stood at each line, so a turn can be
+    /// walked through rather than landing all at once.
+    var steps: [Step] = []
+
+    /// A moment inside a turn.
+    struct Step: Identifiable {
+        let id = UUID()
+        let text: String
+        let myHP: [Int]
+        let theirHP: [Int]
+        let myForms: [String]
+        let theirForms: [String]
+        let field: Field
+        let myTailwind: Int
+        let theirTailwind: Int
+        let trickRoom: Int
+    }
+
+    /// Say what happened, and remember what the board looked like when it did.
+    mutating func note(_ text: String) {
+        story.append(text)
+        steps.append(Step(text: text,
+                          myHP: mine.map(\.hp), theirHP: theirs.map(\.hp),
+                          myForms: mine.map(\.build.form.id),
+                          theirForms: theirs.map(\.build.form.id),
+                          field: field, myTailwind: myTailwind,
+                          theirTailwind: theirTailwind, trickRoom: trickRoom))
+    }
 
     var myActive: ArraySlice<Fighter> { mine.prefix(activeCount) }
     var theirActive: ArraySlice<Fighter> { theirs.prefix(activeCount) }
@@ -270,25 +298,6 @@ enum TurnModel {
         return out
     }
 
-    /// The order the four actions resolve in.
-    ///
-    /// Priority first, then Speed, and Trick Room inverts the Speed half only.
-    /// Switching is not in here: it happens before any of it.
-    private static func order(_ entries: [(mine: Bool, slot: Int, choice: Choice,
-                                           priority: Int, speed: Int)],
-                              trickRoom: Bool) -> [(mine: Bool, slot: Int, choice: Choice)] {
-        entries.sorted { first, second in
-            if first.priority != second.priority { return first.priority > second.priority }
-            if first.speed != second.speed {
-                return trickRoom ? first.speed < second.speed : first.speed > second.speed
-            }
-            // A genuine tie is a coin flip in the game. Resolved consistently
-            // here so the matrix is deterministic, and noted as a limit.
-            return first.mine && !second.mine
-        }
-        .map { (mine: $0.mine, slot: $0.slot, choice: $0.choice) }
-    }
-
     private static func priority(of choice: Choice, for fighter: Fighter) -> Int {
         switch choice {
         case .pass: return -99
@@ -310,6 +319,7 @@ enum TurnModel {
                         rolling: Bool = false) -> Board {
         var out = board
         out.story = []
+        out.steps = []
         for index in out.mine.indices { out.mine[index].isProtected = false
                                         out.mine[index].flinched = false
                                         out.mine[index].drawingFire = false }
@@ -380,7 +390,29 @@ enum TurnModel {
                             speed(of: out.theirs[slot], tailwind: out.theirTailwind > 0, board: out)))
         }
 
-        for entry in order(entries, trickRoom: out.trickRoom > 0) {
+        // Chosen one at a time rather than sorted once, because Speed is
+        // re-checked before every action and things change mid-turn. A
+        // Prankster Whimsicott putting up Tailwind goes first on priority, and
+        // its partner — who has not moved yet — is twice as fast from that
+        // moment, which can move it ahead of something it was behind. Sorting
+        // the whole turn up front makes that impossible.
+        var pending = entries
+        while !pending.isEmpty {
+            let inverted = out.trickRoom > 0
+            var choice = 0
+            for index in pending.indices.dropFirst() {
+                let a = pending[index], b = pending[choice]
+                if a.priority != b.priority { if a.priority > b.priority { choice = index }; continue }
+                let aSpeed = current(a, board: out), bSpeed = current(b, board: out)
+                if aSpeed != bSpeed {
+                    if inverted ? aSpeed < bSpeed : aSpeed > bSpeed { choice = index }
+                    continue
+                }
+                // A genuine tie is a coin flip in the game. Resolved the same
+                // way every time here so a search is reproducible.
+                if a.mine && !b.mine { choice = index }
+            }
+            let entry = pending.remove(at: choice)
             apply(entry.choice, byMine: entry.mine, slot: entry.slot, to: &out,
                   store: store, rolling: rolling)
         }
@@ -397,53 +429,65 @@ enum TurnModel {
     /// Sitrus Berry never healed, a Focus Sash worked every turn for ever
     /// because nothing ever marked it as used.
     private static func endOfTurn(_ board: inout Board, rolling: Bool) {
-        func settle(_ team: inout [Fighter], active: Int, mine: Bool) {
-            for index in 0..<min(active, team.count) where !team[index].fainted {
-                let name = team[index].build.form.formLabel
-                let max = team[index].maxHP
-                let types = team[index].build.form.pokeTypes
+        // Written against the board rather than against a borrowed array: the
+        // running commentary needs the whole board to snapshot it, and Swift
+        // will not lend out one of its arrays while that is happening.
+        func settle(mine: Bool) {
+            let count = Swift.min(board.activeCount, (mine ? board.mine : board.theirs).count)
+            for index in 0..<count {
+                guard !(mine ? board.mine[index] : board.theirs[index]).fainted else { continue }
+                let who = mine ? board.mine[index] : board.theirs[index]
+                let name = who.build.form.formLabel
+                let maxHP = who.maxHP
+                let types = who.build.form.pokeTypes
+                var hp = who.hp
 
-                // Weather, which only some types stand in.
                 if board.field.weather == .sand,
                    !types.contains(where: { [.rock, .ground, .steel].contains($0) }) {
-                    team[index].hp -= Swift.max(1, max / 16)
-                    board.story.append("The sandstorm buffets \(name).")
+                    hp -= Swift.max(1, maxHP / 16)
+                    if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
+                    board.note("The sandstorm buffets \(name).")
                 }
-                // Grassy Terrain heals whatever is standing on the ground.
                 if board.field.terrain == .grassy, !types.contains(.flying),
-                   team[index].build.ability != "Levitate", team[index].hp < max {
-                    team[index].hp = Swift.min(max, team[index].hp + Swift.max(1, max / 16))
-                    board.story.append("Grassy Terrain tops \(name) up.")
+                   who.build.ability != "Levitate", hp < maxHP, hp > 0 {
+                    hp = Swift.min(maxHP, hp + Swift.max(1, maxHP / 16))
+                    if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
+                    board.note("Grassy Terrain tops \(name) up.")
                 }
-                switch team[index].status {
+                switch who.status {
                 case .burn:
-                    team[index].hp -= Swift.max(1, max / 16)
-                    board.story.append("\(name) is hurt by its burn.")
-                case .poison:
-                    team[index].hp -= Swift.max(1, max / 8)
-                    board.story.append("\(name) is hurt by poison.")
+                    hp -= Swift.max(1, maxHP / 16)
+                    if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
+                    board.note("\(name) is hurt by its burn.")
+                case .poison, .badPoison:
+                    hp -= Swift.max(1, maxHP / 8)
+                    if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
+                    board.note("\(name) is hurt by poison.")
                 default: break
                 }
-                // Items that fire on their own.
-                if team[index].build.item == "Leftovers", team[index].hp < max,
-                   team[index].hp > 0 {
-                    team[index].hp = Swift.min(max, team[index].hp + Swift.max(1, max / 16))
-                    board.story.append("\(name) restores a little with its Leftovers.")
+                if who.build.item == "Leftovers", hp < maxHP, hp > 0 {
+                    hp = Swift.min(maxHP, hp + Swift.max(1, maxHP / 16))
+                    if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
+                    board.note("\(name) restores a little with its Leftovers.")
                 }
-                if team[index].build.item == "Sitrus Berry", !team[index].build.itemSpent,
-                   team[index].hp > 0, team[index].hp <= max / 2 {
-                    team[index].hp = Swift.min(max, team[index].hp + max / 4)
-                    team[index].build.itemSpent = true
-                    board.story.append("\(name) eats its Sitrus Berry.")
+                if who.build.item == "Sitrus Berry", !who.build.itemSpent,
+                   hp > 0, hp <= maxHP / 2 {
+                    hp = Swift.min(maxHP, hp + maxHP / 4)
+                    if mine {
+                        board.mine[index].hp = hp; board.mine[index].build.itemSpent = true
+                    } else {
+                        board.theirs[index].hp = hp; board.theirs[index].build.itemSpent = true
+                    }
+                    board.note("\(name) eats its Sitrus Berry.")
                 }
-                if team[index].hp <= 0 {
-                    team[index].hp = 0
-                    board.story.append("\(name) fainted.")
+                if hp <= 0 {
+                    if mine { board.mine[index].hp = 0 } else { board.theirs[index].hp = 0 }
+                    board.note("\(name) fainted.")
                 }
             }
         }
-        settle(&board.mine, active: board.activeCount, mine: true)
-        settle(&board.theirs, active: board.activeCount, mine: false)
+        settle(mine: true)
+        settle(mine: false)
 
         board.myTailwind = Swift.max(0, board.myTailwind - 1)
         board.theirTailwind = Swift.max(0, board.theirTailwind - 1)
@@ -514,6 +558,19 @@ enum TurnModel {
         }
     }
 
+    /// One pending action's Speed, as the board stands right now.
+    private static func current(_ entry: (mine: Bool, slot: Int, choice: Choice,
+                                          priority: Int, speed: Int),
+                                board: Board) -> Int {
+        let team = entry.mine ? board.mine : board.theirs
+        guard team.indices.contains(entry.slot) else { return entry.speed }
+        var value = speed(of: team[entry.slot],
+                          tailwind: (entry.mine ? board.myTailwind : board.theirTailwind) > 0,
+                          board: board)
+        if team[entry.slot].status.halvesSpeed { value /= 2 }
+        return value
+    }
+
     private static func speed(of fighter: Fighter, tailwind: Bool, board: Board) -> Int {
         let base = fighter.build.speed(in: board.field)
         return tailwind ? base * 2 : base
@@ -547,17 +604,17 @@ enum TurnModel {
         guard !actor.fainted else { return }
         let name = actor.build.form.formLabel
         if actor.flinched {
-            board.story.append("\(name) flinched and could not move.")
+            board.note("\(name) flinched and could not move.")
             return
         }
         // Sleep and paralysis cost turns, which is the whole reason they are
         // worth a move slot.
         if actor.status == .sleep {
-            board.story.append("\(name) is fast asleep.")
+            board.note("\(name) is fast asleep.")
             return
         }
         if actor.status == .paralysis, rolling, Double.random(in: 0...1) < 0.25 {
-            board.story.append("\(name) is paralysed and cannot move.")
+            board.note("\(name) is paralysed and cannot move.")
             return
         }
 
@@ -570,21 +627,22 @@ enum TurnModel {
             let label = actor.moves.indices.contains(index) ? actor.moves[index].name : "Protect"
             if byMine { board.mine[slot].isProtected = true }
             else { board.theirs[slot].isProtected = true }
-            board.story.append("\(name) used \(label) and braced.")
+            board.note("\(name) used \(label) and braced.")
         case .attack(let moveIndex, let target):
             guard actor.moves.indices.contains(moveIndex) else { return }
             let move = actor.moves[moveIndex]
             guard move.isDamaging else {
                 support(move, byMine: byMine, slot: slot, target: target,
                         to: &board, rolling: rolling)
+                selfKO(move, byMine: byMine, slot: slot, board: &board)
                 return
             }
-            board.story.append("\(name) used \(move.name).")
+            board.note("\(name) used \(move.name).")
 
             // Wide Guard turns a spread move away from the whole side.
             let theirScreens = byMine ? board.theirScreens : board.myScreens
             if move.isSpread, theirScreens.wideGuard {
-                board.story.append("Wide Guard blocked it.")
+                board.note("Wide Guard blocked it.")
                 return
             }
             // Redirection: a single-target move goes where the powder is.
@@ -594,22 +652,23 @@ enum TurnModel {
                 if let pulled = (0..<Swift.min(board.activeCount, defenders.count)).first(where: {
                     defenders[$0].drawingFire && !defenders[$0].fainted }), pulled != target {
                     aimed = [pulled]
-                    board.story.append("It was drawn to \(defenders[pulled].build.form.formLabel).")
+                    board.note("It was drawn to \(defenders[pulled].build.form.formLabel).")
                 }
             }
 
             if rolling, !move.neverMisses, move.accuracy > 0,
                Double.random(in: 0...100) > Double(move.accuracy) {
-                board.story.append("It missed.")
+                board.note("It missed.")
                 return
             }
 
+            var totalDealt = 0
             for index in aimed {
                 let defending = byMine ? board.theirs : board.mine
                 guard defending.indices.contains(index), !defending[index].fainted else { continue }
                 let hitName = defending[index].build.form.formLabel
                 if defending[index].isProtected, move.isProtectable {
-                    board.story.append("\(hitName) protected itself.")
+                    board.note("\(hitName) protected itself.")
                     continue
                 }
                 var defender = defending[index].build
@@ -642,36 +701,83 @@ enum TurnModel {
                     landed = defending[index].hp - 1
                     spent = true
                 }
+                totalDealt += landed
                 if byMine {
                     board.theirs[index].hp = Swift.max(0, board.theirs[index].hp - landed)
                     if spent {
                         board.theirs[index].build.itemSpent = true
-                        board.story.append("\(hitName) hung on with its Focus Sash.")
+                        board.note("\(hitName) hung on with its Focus Sash.")
                     }
                 } else {
                     board.mine[index].hp = Swift.max(0, board.mine[index].hp - landed)
                     if spent {
                         board.mine[index].build.itemSpent = true
-                        board.story.append("\(hitName) hung on with its Focus Sash.")
+                        board.note("\(hitName) hung on with its Focus Sash.")
                     }
                 }
                 if result.effectiveness > 1 {
-                    board.story.append("It is super effective on \(hitName) — \(landed).")
+                    board.note("It is super effective on \(hitName) — \(landed).")
                 } else if result.effectiveness < 1 && result.effectiveness > 0 {
-                    board.story.append("\(hitName) resists it — \(landed).")
+                    board.note("\(hitName) resists it — \(landed).")
                 } else {
-                    board.story.append("\(hitName) took \(landed).")
+                    board.note("\(hitName) took \(landed).")
                 }
                 if move.name == "Fake Out" {
                     if byMine { board.theirs[index].flinched = true }
                     else { board.mine[index].flinched = true }
-                    board.story.append("\(hitName) flinched.")
+                    board.note("\(hitName) flinched.")
                 }
                 // Anything the move takes off the target.
                 applyDrops(move.targetDrops, toMine: !byMine, slot: index, board: &board)
             }
             // And anything it does to the user.
             applySelf(move.selfBoosts, toMine: byMine, slot: slot, board: &board)
+            cost(of: move, dealt: totalDealt, byMine: byMine, slot: slot, board: &board)
+        }
+    }
+
+    /// What using the move costs the Pokémon that used it.
+    ///
+    /// None of this was applied: Final Gambit did its damage and left the user
+    /// standing, Flare Blitz and Wood Hammer were free, Steel Beam cost
+    /// nothing, and a Life Orb was pure profit. The move ranker has priced all
+    /// of these for a long time — it is why Steel Beam ranks below Iron Head —
+    /// and the battle simply never charged them.
+    private static func cost(of move: Move, dealt: Int, byMine: Bool, slot: Int,
+                             board: inout Board) {
+        let team = byMine ? board.mine : board.theirs
+        guard team.indices.contains(slot), !team[slot].fainted else { return }
+        let name = team[slot].build.form.formLabel
+        let maxHP = team[slot].maxHP
+        var lost = 0
+
+        // Moves that end the user's game outright.
+        if move.effect.contains("The user faints") {
+            lost = team[slot].hp
+            board.note("\(name) fainted using \(move.name).")
+        } else {
+            let costs = move.drawbacks
+            if costs.recoil > 0, dealt > 0 {
+                lost += Swift.max(1, Int(Double(dealt) * costs.recoil))
+                board.note("\(name) is hurt by the recoil.")
+            }
+            if costs.selfDamage > 0 {
+                lost += Swift.max(1, Int(Double(maxHP) * costs.selfDamage))
+                board.note("\(name) pays for \(move.name) with its own health.")
+            }
+            // A Life Orb takes a tenth of maximum every time it lands a hit.
+            if team[slot].build.item == "Life Orb", dealt > 0,
+               team[slot].build.ability != "Sheer Force" {
+                lost += Swift.max(1, maxHP / 10)
+                board.note("\(name) is worn down by its Life Orb.")
+            }
+        }
+        guard lost > 0 else { return }
+        if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - lost) }
+        else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - lost) }
+        let after = byMine ? board.mine[slot] : board.theirs[slot]
+        if after.hp == 0, !move.effect.contains("The user faints") {
+            board.note("\(name) fainted.")
         }
     }
 
@@ -694,7 +800,7 @@ enum TurnModel {
             }
         }
         let names = drops.keys.map(\.short).sorted().joined(separator: " and ")
-        board.story.append("\(team[slot].build.form.formLabel)'s \(names) fell.")
+        board.note("\(team[slot].build.form.formLabel)'s \(names) fell.")
     }
 
     private static func applySelf(_ boosts: [Stat: Int], toMine: Bool, slot: Int,
@@ -712,7 +818,7 @@ enum TurnModel {
             }
         }
         let names = boosts.keys.map(\.short).sorted().joined(separator: " and ")
-        board.story.append("\(team[slot].build.form.formLabel)'s \(names) rose.")
+        board.note("\(team[slot].build.form.formLabel)'s \(names) rose.")
     }
 
     /// What a non-damaging move actually does.
@@ -730,7 +836,7 @@ enum TurnModel {
         let team = byMine ? board.mine : board.theirs
         guard team.indices.contains(slot) else { return }
         let name = team[slot].build.form.formLabel
-        board.story.append("\(name) used \(move.name).")
+        board.note("\(name) used \(move.name).")
 
         // Protect and its family arrive here whenever the move was picked as a
         // move rather than through the dedicated choice, which is how the
@@ -738,43 +844,43 @@ enum TurnModel {
         if DuelEngine.protectMoves.contains(move.name) {
             if byMine { board.mine[slot].isProtected = true }
             else { board.theirs[slot].isProtected = true }
-            board.story.append("\(name) braced itself.")
+            board.note("\(name) braced itself.")
             return
         }
 
         switch move.name {
         case "Tailwind":
             if byMine { board.myTailwind = 4 } else { board.theirTailwind = 4 }
-            board.story.append("The wind picked up behind \(byMine ? "you" : "them").")
+            board.note("The wind picked up behind \(byMine ? "you" : "them").")
             return
         case "Trick Room":
             board.trickRoom = board.trickRoom > 0 ? 0 : 5
-            board.story.append(board.trickRoom > 0
+            board.note(board.trickRoom > 0
                                ? "The dimensions twisted." : "The twisted dimensions returned.")
             return
         case "Follow Me", "Rage Powder":
             if byMine { board.mine[slot].drawingFire = true }
             else { board.theirs[slot].drawingFire = true }
-            board.story.append("\(name) drew attention to itself.")
+            board.note("\(name) drew attention to itself.")
             return
         case "Wide Guard":
             if byMine { board.myScreens.wideGuard = true }
             else { board.theirScreens.wideGuard = true }
-            board.story.append("A wide barrier went up.")
+            board.note("A wide barrier went up.")
             return
         case "Reflect":
             if byMine { board.myScreens.reflect = 5 } else { board.theirScreens.reflect = 5 }
-            board.story.append("Reflect went up.")
+            board.note("Reflect went up.")
             return
         case "Light Screen":
             if byMine { board.myScreens.lightScreen = 5 }
             else { board.theirScreens.lightScreen = 5 }
-            board.story.append("Light Screen went up.")
+            board.note("Light Screen went up.")
             return
         case "Aurora Veil":
             if byMine { board.myScreens.auroraVeil = 5 }
             else { board.theirScreens.auroraVeil = 5 }
-            board.story.append("Aurora Veil went up.")
+            board.note("Aurora Veil went up.")
             return
         case "Helping Hand":
             // Its whole effect is on a partner's move this turn, and the turn
@@ -791,14 +897,14 @@ enum TurnModel {
         if let weather: Weather = ["Sunny Day": .sun, "Rain Dance": .rain,
                                    "Sandstorm": .sand, "Snowscape": .snow][move.name] {
             board.field.weather = weather
-            board.story.append("The weather turned.")
+            board.note("The weather turned.")
             return
         }
         if let terrain: Terrain = ["Grassy Terrain": .grassy, "Electric Terrain": .electric,
                                    "Misty Terrain": .misty,
                                    "Psychic Terrain": .psychic][move.name] {
             board.field.terrain = terrain
-            board.story.append("The ground shifted.")
+            board.note("The ground shifted.")
             return
         }
 
@@ -831,7 +937,7 @@ enum TurnModel {
             guard defending.indices.contains(target), !defending[target].fainted,
                   !defending[target].isProtected,
                   defending[target].status == .none else {
-                board.story.append("It had no effect.")
+                board.note("It had no effect.")
                 return
             }
             let victim = defending[target]
@@ -849,7 +955,7 @@ enum TurnModel {
             default: immune = false
             }
             if immune {
-                board.story.append("\(victim.build.form.formLabel) is not affected.")
+                board.note("\(victim.build.form.formLabel) is not affected.")
                 return
             }
             if byMine {
@@ -861,9 +967,19 @@ enum TurnModel {
                 if ailment == .sleep { board.mine[target].asleepFor = rolling
                     ? Int.random(in: 1...3) : 2 }
             }
-            board.story.append("\(victim.build.form.formLabel) is \(ailment.rawValue).")
+            board.note("\(victim.build.form.formLabel) is \(ailment.rawValue).")
             return
         }
-        board.story.append("Nothing came of it.")
+        board.note("Nothing came of it.")
+    }
+
+    /// The non-damaging moves that end the user's game: Memento, Healing Wish.
+    private static func selfKO(_ move: Move, byMine: Bool, slot: Int,
+                               board: inout Board) {
+        guard move.effect.contains("The user faints") else { return }
+        let team = byMine ? board.mine : board.theirs
+        guard team.indices.contains(slot), !team[slot].fainted else { return }
+        if byMine { board.mine[slot].hp = 0 } else { board.theirs[slot].hp = 0 }
+        board.note("\(team[slot].build.form.formLabel) fainted using \(move.name).")
     }
 }

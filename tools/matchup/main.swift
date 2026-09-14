@@ -1016,6 +1016,95 @@ Ability: Regenerator
     check("while the search still gets the same answer every time",
           averaged.theirs[0].hp == again.theirs[0].hp)
 
+    // -- turn order is re-checked, not decided once -------------------------
+    //
+    // A Prankster Whimsicott putting up Tailwind goes first on priority, and
+    // its partner -- which has not moved yet -- is twice as fast from that
+    // moment. Sorting the whole turn up front makes that impossible, and it is
+    // most of why the move is worth a slot.
+    print("\n== turn order ==")
+    let windUp = fighters([("Whimsicott", "Focus Sash", ["Tailwind", "Protect"]),
+                           ("Incineroar", "Sitrus Berry", ["Flare Blitz", "Protect"]),
+                           ("Garchomp", "Life Orb", ["Earthquake", "Protect"])])
+    let quick = fighters([("Garchomp", "Choice Scarf", ["Earthquake", "Protect"]),
+                          ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"]),
+                          ("Kingambit", "Chople Berry", ["Iron Head", "Protect"])])
+    var windBoard = Board(mine: windUp, theirs: quick, store: store,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+    windBoard.mine[0].build.ability = "Prankster"
+    let mySlow = windBoard.mine[1].build.speed(in: windBoard.field)
+    let theirFast = windBoard.theirs[1].build.speed(in: windBoard.field)
+    print("  your Incineroar \(mySlow) against their Rillaboom \(theirFast)")
+    let blown = TurnModel.resolve(
+        windBoard,
+        mine: Play(left: .attack(move: at(windBoard.mine[0], "Tailwind"), target: 0),
+                   right: .attack(move: at(windBoard.mine[1], "Flare Blitz"), target: 1)),
+        theirs: Play(left: .attack(move: at(windBoard.theirs[0], "Protect"), target: 0),
+                     right: .attack(move: at(windBoard.theirs[1], "Wood Hammer"), target: 1)),
+        store: store)
+    let order = blown.story
+    print("  the turn, in order:")
+    for line in order.prefix(6) { print("    \(line)") }
+    check("Tailwind went up", blown.myTailwind > 0, "\(blown.myTailwind)")
+    // Incineroar is slower than Rillaboom on raw Speed, so without Tailwind
+    // taking effect immediately it could only have moved second.
+    let incinAt = order.firstIndex { $0.contains("Incineroar used") }
+    let rillaAt = order.firstIndex { $0.contains("Rillaboom used") }
+    // Either it moved first, or it moved first and knocked the other out before
+    // it could — both mean the Tailwind applied inside the turn.
+    check("and the partner it sped up moved before something faster than it",
+          mySlow < theirFast && incinAt != nil && (rillaAt == nil || incinAt! < rillaAt!),
+          "Incineroar at \(incinAt.map(String.init) ?? "-"), Rillaboom at \(rillaAt.map(String.init) ?? "-")")
+
+    // Every line of a turn carries the board as it stood, so it can be walked.
+    check("each line of the turn is snapshotted", blown.steps.count == blown.story.count,
+          "\(blown.steps.count) vs \(blown.story.count)")
+    check("and the snapshots carry the field with them",
+          blown.steps.last?.myTailwind ?? 0 > 0)
+
+    // Final Gambit, and the rest of what a move costs the one that used it.
+    print("\n== what a move costs its user ==")
+    if store.data.moves.values.contains(where: { $0.name == "Final Gambit" }) {
+        let gambit = fighters([("Whimsicott", "Focus Sash", ["Final Gambit", "Protect"]),
+                               ("Incineroar", "Sitrus Berry", ["Flare Blitz", "Protect"]),
+                               ("Garchomp", "Life Orb", ["Earthquake", "Protect"])])
+        let board2 = Board(mine: gambit, theirs: quick, store: store,
+                           field: Field(isDoubles: true), alreadyEvolved: false)
+        if board2.mine[0].moves.contains(where: { $0.name == "Final Gambit" }) {
+            let after = TurnModel.resolve(
+                board2,
+                mine: Play(left: .attack(move: at(board2.mine[0], "Final Gambit"), target: 0),
+                           right: .attack(move: at(board2.mine[1], "Protect"), target: 0)),
+                theirs: Play(left: .attack(move: at(board2.theirs[0], "Protect"), target: 0),
+                             right: .attack(move: at(board2.theirs[1], "Protect"), target: 0)),
+                store: store)
+            check("Final Gambit faints the one that used it",
+                  after.mine[0].fainted, "\(after.mine[0].hp)")
+        }
+    }
+    // Recoil, and a Life Orb.
+    let orbed = fighters([("Garchomp", "Life Orb", ["Double-Edge", "Protect"]),
+                          ("Incineroar", "Sitrus Berry", ["Protect"]),
+                          ("Whimsicott", "Focus Sash", ["Protect"])])
+    let orbBoard = Board(mine: orbed, theirs: quick, store: store,
+                         field: Field(isDoubles: true), alreadyEvolved: false)
+    if orbBoard.mine[0].moves.contains(where: { $0.name == "Double-Edge" }) {
+        let after = TurnModel.resolve(
+            orbBoard,
+            mine: Play(left: .attack(move: at(orbBoard.mine[0], "Double-Edge"), target: 1),
+                       right: .attack(move: at(orbBoard.mine[1], "Protect"), target: 0)),
+            // They have to actually stand there, or nothing lands and nothing
+            // is paid for it.
+            theirs: Play(left: .attack(move: at(orbBoard.theirs[0], "Earthquake"), target: 0),
+                         right: .attack(move: at(orbBoard.theirs[1], "Wood Hammer"), target: 0)),
+            store: store)
+        print("  Double-Edge off a Life Orb cost the user "
+              + "\(orbBoard.mine[0].maxHP - after.mine[0].hp)")
+        check("recoil and a Life Orb both come out of the attacker",
+              after.mine[0].hp < orbBoard.mine[0].maxHP,
+              "\(after.mine[0].hp)/\(orbBoard.mine[0].maxHP)")
+    }
+
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)
 }
