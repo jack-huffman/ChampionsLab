@@ -180,6 +180,9 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         board.activeCount = 2
         render(BattleView(playing: board), named: "battle-dark",
                size: CGSize(width: 1180, height: 1500), dark: true)
+        // And the Fight grid, which is what most turns are spent looking at.
+        render(BattleView(playing: board, showing: .fight), named: "battle-fight-dark",
+               size: CGSize(width: 1180, height: 1500), dark: true)
     }
     render(SpeedTiersView(), named: "speed-dark",
            size: CGSize(width: 1000, height: 900), dark: true)

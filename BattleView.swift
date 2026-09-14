@@ -59,8 +59,8 @@ struct BattleView: View {
     /// replaced. Stepping through the finished board would map the health of a
     /// Pokémon that fainted onto the one that came in for it.
     @State private var replayBoard: Board?
-    /// A move chosen and waiting for a target.
-    @State private var aiming: (slot: Int, move: Int)?
+    /// Where you are in giving orders to the Pokémon being commanded.
+    @State private var command: Command = .menu
     /// Slots of mine standing empty, waiting for somebody to be sent in.
     @State private var sending: [Int] = []
 
@@ -69,7 +69,9 @@ struct BattleView: View {
     /// ImageRenderer never calls.
     init(openTeams: (mine: String, theirs: String)? = nil,
          previewing: [String] = [],
-         playing: Board? = nil) {
+         playing: Board? = nil,
+         showing: Command = .menu) {
+        _command = State(initialValue: showing)
         if let openTeams {
             _myTeamID = State(initialValue: openTeams.mine)
             _opponentID = State(initialValue: openTeams.theirs)
@@ -411,7 +413,7 @@ struct BattleView: View {
         turn = 1
         finished = nil
         history = []; grade = nil; replay = []; at = 0; replayBoard = nil; sending = []
-        leftPick = nil; rightPick = nil; megaSlot = nil; aiming = nil
+        leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
         log = ["Both sides send out their leads. Neither knows what the other is holding, nor which four came."]
         think()
     }
@@ -878,7 +880,473 @@ struct BattleView: View {
         return (score, why)
     }
 
-    // MARK: Choosing
+    // MARK: Commanding, the way the game does it
+
+    /// Where you are in giving orders: one Pokémon at a time, first the choice
+    /// between fighting and switching, then the specific move or partner.
+    enum Command: Equatable {
+        case menu
+        case fight
+        case party
+        case aiming(move: Int)
+    }
+
+    @ViewBuilder
+    private func choices(_ board: Board) -> some View {
+        let living = (0..<board.activeCount).filter {
+            board.mine.indices.contains($0) && !board.mine[$0].fainted
+        }
+        let pending = living.first { pick(for: $0) == nil }
+        Card(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                // What is already locked in, as a strip along the top.
+                lockedStrip(board, living: living)
+                Divider()
+                if let slot = pending {
+                    commandDeck(board, slot: slot)
+                } else {
+                    readyToPlay(board)
+                }
+            }
+        }
+    }
+
+    private func pick(for slot: Int) -> Choice? { slot == 0 ? leftPick : rightPick }
+
+    /// The orders given so far. Click one to change it.
+    private func lockedStrip(_ board: Board, living: [Int]) -> some View {
+        HStack(spacing: 10) {
+            ForEach(living, id: \.self) { slot in
+                let fighter = board.mine[slot]
+                let chosen = pick(for: slot)
+                Button {
+                    // Reopen this one's orders.
+                    set(nil, slot: slot)
+                    command = .menu
+                } label: {
+                    HStack(spacing: 7) {
+                        SpriteImage(form: fighter.build.form, side: 28)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(fighter.build.form.formLabel)
+                                .font(.system(size: 11, weight: .semibold))
+                            Text(chosen.map { describeChoice($0, board: board, slot: slot) }
+                                 ?? "awaiting orders")
+                                .font(.system(size: 10))
+                                .foregroundStyle(chosen == nil ? AnyShapeStyle(.tertiary)
+                                                               : AnyShapeStyle(Palette.accent))
+                                .lineLimit(1)
+                        }
+                        if megaSlot == slot, fighter.pendingMega != nil {
+                            Image(systemName: "sparkles").font(.system(size: 10))
+                                .foregroundStyle(Palette.warn)
+                        }
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(chosen == nil ? Color.clear : Palette.accent.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 9))
+                }
+                .buttonStyle(.plain)
+                .disabled(chosen == nil)
+            }
+            Spacer()
+            if !history.isEmpty {
+                Button("Take back") { undo() }.controlSize(.small)
+            }
+            if !searchNote.isEmpty {
+                Text(searchNote).font(.system(size: 10)).foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 8)
+    }
+
+    private func describeChoice(_ choice: Choice, board: Board, slot: Int) -> String {
+        var game = TurnGame(board: board, store: store)
+        game.width = 10
+        return game.describe(choice, fighter: board.mine[slot],
+                             foes: Array(board.theirs.prefix(board.activeCount)),
+                             team: board.mine)
+    }
+
+    /// The command menu for one Pokémon.
+    private func commandDeck(_ board: Board, slot: Int) -> some View {
+        let fighter = board.mine[slot]
+        let ahead = evolving(fighter, slot: slot, board: board)
+        return VStack(alignment: .leading, spacing: 12) {
+            // Who is being commanded, and the two things that are true of it
+            // whatever you pick.
+            HStack(spacing: 10) {
+                SpriteImage(form: ahead.build.form, side: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("What will \(ahead.build.form.formLabel) do?")
+                            .font(.system(size: 14, weight: .semibold))
+                        if fighter.status != .none {
+                            Text(fighter.status.rawValue.uppercased())
+                                .font(.system(size: 8, weight: .bold)).kerning(0.4)
+                                .padding(.horizontal, 5).padding(.vertical, 1)
+                                .background(Palette.warn.opacity(0.2))
+                                .foregroundStyle(Palette.warn)
+                                .clipShape(Capsule())
+                        }
+                    }
+                    HStack(spacing: 8) {
+                        Text("Speed \(ahead.build.speed(in: ahead.field))")
+                            .font(.system(size: 10, design: .rounded)).monospacedDigit()
+                            .foregroundStyle(megaSlot == slot && fighter.pendingMega != nil
+                                             ? AnyShapeStyle(Palette.warn)
+                                             : AnyShapeStyle(.tertiary))
+                        Text("\(fighter.hp)/\(fighter.maxHP)")
+                            .font(.system(size: 10, design: .rounded)).monospacedDigit()
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                Spacer()
+                if let mega = fighter.pendingMega,
+                   !board.mine.contains(where: \.hasMegaEvolved) {
+                    megaToggle(slot: slot, becoming: mega)
+                }
+                if command != .menu {
+                    Button {
+                        command = .menu
+                    } label: {
+                        Label("Back", systemImage: "chevron.left")
+                            .font(.system(size: 11))
+                    }
+                    .controlSize(.small)
+                }
+            }
+
+            switch command {
+            case .menu:
+                HStack(spacing: 12) {
+                    bigCommand("Fight", symbol: "flame.fill", tint: Palette.bad) {
+                        command = .fight
+                    }
+                    bigCommand("Party", symbol: "arrow.left.arrow.right", tint: Palette.good,
+                               enabled: !switchOptions(board).isEmpty) {
+                        command = .party
+                    }
+                }
+            case .fight:
+                fightGrid(board, slot: slot, fighter: fighter)
+            case .aiming(let move):
+                if fighter.moves.indices.contains(move) {
+                    fightGrid(board, slot: slot, fighter: fighter, aiming: move)
+                    targetRow(board, slot: slot, move: fighter.moves[move], index: move)
+                }
+            case .party:
+                partyList(board, slot: slot)
+            }
+        }
+        .padding(16)
+    }
+
+    /// The two big buttons the game gives you.
+    private func bigCommand(_ title: String, symbol: String, tint: Color,
+                            enabled: Bool = true, act: @escaping () -> Void) -> some View {
+        Button(action: act) {
+            HStack(spacing: 10) {
+                Image(systemName: symbol).font(.system(size: 18, weight: .semibold))
+                Text(title.uppercased())
+                    .font(.system(size: 15, weight: .heavy)).kerning(1.2)
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold))
+                    .opacity(0.6)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 18).padding(.vertical, 16)
+            .frame(maxWidth: .infinity)
+            .background(
+                LinearGradient(colors: [tint, tint.opacity(0.72)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .shadow(color: tint.opacity(0.35), radius: 8, y: 3)
+            .opacity(enabled ? 1 : 0.4)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+
+    private func megaToggle(slot: Int, becoming: Form) -> some View {
+        Button { megaSlot = megaSlot == slot ? nil : slot } label: {
+            HStack(spacing: 5) {
+                Image(systemName: megaSlot == slot ? "sparkles" : "circle.dashed")
+                    .font(.system(size: 10))
+                Text("Mega Evolve").font(.system(size: 11, weight: .semibold))
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(megaSlot == slot ? Palette.warn.opacity(0.24) : Palette.surface)
+            .foregroundStyle(megaSlot == slot ? AnyShapeStyle(Palette.warn)
+                                              : AnyShapeStyle(.secondary))
+            .clipShape(Capsule())
+            .overlay(Capsule().strokeBorder(
+                megaSlot == slot ? Palette.warn.opacity(0.75) : Palette.hairline, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .help("Becomes \(becoming.formLabel) before anything else happens this turn. "
+              + "If both sides evolve, the slower one goes second — and when both bring "
+              + "weather, the second one is the weather that stays.")
+    }
+
+    /// The four moves, two by two, coloured by type the way the game draws them.
+    private func fightGrid(_ board: Board, slot: Int, fighter: Fighter,
+                           aiming: Int? = nil) -> some View {
+        let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+        return LazyVGrid(columns: columns, spacing: 10) {
+            ForEach(Array(fighter.moves.prefix(4).enumerated()), id: \.offset) { index, move in
+                moveTile(board, slot: slot, index: index, move: move, fighter: fighter,
+                         aiming: aiming == index)
+            }
+        }
+    }
+
+    private func moveTile(_ board: Board, slot: Int, index: Int, move: Move,
+                          fighter: Fighter, aiming: Bool) -> some View {
+        let type = PokeType(loose: move.type) ?? .normal
+        let aim = move.aim
+        let usable = !move.drawbacks.firstTurnOnly || fighter.justArrived
+        let reading = aim == .spread
+            ? preview(board, fighter: fighter, slot: slot,
+                      choice: .attack(move: index, target: 0)) : nil
+        return Button {
+            guard usable else { return }
+            if aim == .foe {
+                command = .aiming(move: index)
+            } else {
+                set(.attack(move: index, target: 0), slot: slot)
+                command = .menu
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(move.name)
+                        .font(.system(size: 14, weight: .bold))
+                        .lineLimit(1).minimumScaleFactor(0.75)
+                    Spacer()
+                    if move.priority != 0 {
+                        Text(move.priority > 0 ? "+\(move.priority)" : "\(move.priority)")
+                            .font(.system(size: 11, weight: .heavy))
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(.white.opacity(0.22))
+                            .clipShape(Capsule())
+                    }
+                }
+                HStack(spacing: 8) {
+                    Text(type.rawValue.uppercased())
+                        .font(.system(size: 9, weight: .heavy)).kerning(0.6)
+                        .opacity(0.9)
+                    Text(move.power > 0 ? "\(move.power) power" : move.category == "Other" ? "status" : "—")
+                        .font(.system(size: 10, design: .rounded)).monospacedDigit()
+                        .opacity(0.85)
+                    Text(move.accuracyLabel == "—" ? "never misses" : "\(move.accuracyLabel)% acc")
+                        .font(.system(size: 10, design: .rounded)).monospacedDigit()
+                        .opacity(0.85)
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 6) {
+                    Image(systemName: aimSymbol(aim)).font(.system(size: 9))
+                    Text(aimLabel(aim)).font(.system(size: 10))
+                    if let reading {
+                        Text("·").opacity(0.5)
+                        Text(reading.text)
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                    }
+                    if !usable {
+                        Text("· only on the turn it comes in")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    Spacer(minLength: 0)
+                }
+                .opacity(0.9)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14).padding(.vertical, 11)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                LinearGradient(colors: [type.color, type.color.opacity(0.7)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(aiming ? .white : .white.opacity(0.18), lineWidth: aiming ? 2 : 1))
+            .shadow(color: type.color.opacity(aiming ? 0.5 : 0.25), radius: aiming ? 10 : 5, y: 2)
+            .saturation(usable ? 1 : 0.2)
+            .opacity(usable ? 1 : 0.55)
+            .scaleEffect(aiming ? 1.02 : 1)
+        }
+        .buttonStyle(.plain)
+        .help(move.effect)
+        .animation(.easeOut(duration: 0.15), value: aiming)
+    }
+
+    private func aimSymbol(_ aim: Move.Aim) -> String {
+        switch aim {
+        case .foe:    return "scope"
+        case .spread: return "rays"
+        case .user:   return "person.fill"
+        case .ally:   return "person.2.fill"
+        case .side:   return "flag.fill"
+        }
+    }
+
+    private func aimLabel(_ aim: Move.Aim) -> String {
+        switch aim {
+        case .foe:    return "pick a target"
+        case .spread: return "hits everything it reaches"
+        case .user:   return "itself"
+        case .ally:   return "its partner"
+        case .side:   return "your side"
+        }
+    }
+
+    /// Which of them to aim at, with what it would do to each.
+    private func targetRow(_ board: Board, slot: Int, move: Move, index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("AIM \(move.name.uppercased()) AT")
+                .font(.system(size: 9, weight: .bold)).kerning(0.6)
+                .foregroundStyle(.tertiary)
+            HStack(spacing: 10) {
+                ForEach(0..<min(board.activeCount, board.theirs.count), id: \.self) { foe in
+                    if !board.theirs[foe].fainted {
+                        let choice = Choice.attack(move: index, target: foe)
+                        let reading = preview(board, fighter: board.mine[slot],
+                                              slot: slot, choice: choice)
+                        Button {
+                            set(choice, slot: slot)
+                            command = .menu
+                        } label: {
+                            HStack(spacing: 10) {
+                                SpriteImage(form: board.theirs[foe].build.form, side: 40)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(board.theirs[foe].build.form.formLabel)
+                                        .font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                                    if let reading {
+                                        Text(reading.text)
+                                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                                            .monospacedDigit()
+                                            .foregroundStyle(reading.tint)
+                                    } else {
+                                        Text("no damage").font(.system(size: 10))
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                                Image(systemName: "scope").foregroundStyle(Palette.warn)
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 9)
+                            .frame(maxWidth: .infinity)
+                            .background(Palette.warn.opacity(0.10))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(Palette.warn.opacity(0.6), lineWidth: 1.5))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    /// The bench, to switch to.
+    private func partyList(_ board: Board, slot: Int) -> some View {
+        let options = switchOptions(board)
+            .map { (index: $0, reading: sendInReading(board, bench: $0)) }
+            .sorted { $0.reading.score > $1.reading.score }
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("SWITCH TO")
+                .font(.system(size: 9, weight: .bold)).kerning(0.6)
+                .foregroundStyle(.tertiary)
+            Text("Switching happens before anything else, and whoever comes in takes whatever was aimed at this slot.")
+                .font(.system(size: 10)).foregroundStyle(.tertiary)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 270), spacing: 8)],
+                      alignment: .leading, spacing: 8) {
+                ForEach(Array(options.enumerated()), id: \.offset) { rank, option in
+                    let fighter = board.mine[option.index]
+                    Button {
+                        set(.swap(to: option.index), slot: slot)
+                        command = .menu
+                    } label: {
+                        HStack(spacing: 10) {
+                            SpriteImage(form: fighter.build.form, side: 44)
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 5) {
+                                    Text(fighter.build.form.formLabel)
+                                        .font(.system(size: 12, weight: .semibold))
+                                    if rank == 0 && options.count > 1 {
+                                        Text("BEST").font(.system(size: 8, weight: .bold)).kerning(0.4)
+                                            .padding(.horizontal, 4).padding(.vertical, 1)
+                                            .background(Palette.good.opacity(0.2))
+                                            .foregroundStyle(Palette.good)
+                                            .clipShape(Capsule())
+                                    }
+                                }
+                                HStack(spacing: 4) {
+                                    Text("\(fighter.hp)/\(fighter.maxHP)")
+                                        .font(.system(size: 9, design: .rounded)).monospacedDigit()
+                                        .foregroundStyle(.tertiary)
+                                    ForEach(fighter.build.form.pokeTypes) { TypeChip(type: $0, size: .small) }
+                                }
+                                Text(option.reading.why)
+                                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(rank == 0 ? Palette.good.opacity(0.10) : Palette.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(rank == 0 ? Palette.good.opacity(0.5) : Palette.hairline,
+                                          lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    /// Both orders given: the order they will go in, and the button.
+    private func readyToPlay(_ board: Board) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            orderPreview(board)
+            HStack {
+                if let grade {
+                    Text(grade).font(.system(size: 10))
+                        .foregroundStyle(grade.hasPrefix("That is")
+                                         ? AnyShapeStyle(Palette.good) : AnyShapeStyle(Palette.warn))
+                }
+                Spacer()
+                Button {
+                    playTurn()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "play.fill")
+                        Text("PLAY THE TURN").font(.system(size: 13, weight: .heavy)).kerning(1)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 22).padding(.vertical, 12)
+                    .background(LinearGradient(colors: [Palette.accent, Palette.accent.opacity(0.75)],
+                                               startPoint: .leading, endPoint: .trailing))
+                    .clipShape(Capsule())
+                    .shadow(color: Palette.accent.opacity(0.4), radius: 8, y: 3)
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(16)
+    }
+
+    /// The benched Pokémon that could come in.
+    private func switchOptions(_ board: Board) -> [Int] {
+        guard board.mine.count > board.activeCount else { return [] }
+        return (board.activeCount..<board.mine.count).filter { !board.mine[$0].fainted }
+    }
+
+    private func set(_ choice: Choice?, slot: Int) {
+        if slot == 0 { leftPick = choice } else { rightPick = choice }
+    }
 
     /// A turn arrives as a sequence, so it is shown as one.
     ///
@@ -920,44 +1388,6 @@ struct BattleView: View {
                                              ? AnyShapeStyle(Palette.good)
                                              : AnyShapeStyle(Palette.warn))
                     }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func choices(_ board: Board) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(title: "Your turn",
-                              subtitle: "Both sides lock in at the same moment, then Speed decides the order")
-                ForEach(0..<board.activeCount, id: \.self) { slot in
-                    if board.mine.indices.contains(slot), !board.mine[slot].fainted {
-                        slotChoices(board, slot: slot)
-                    }
-                }
-                orderPreview(board)
-                HStack {
-                    Button(thinking ? "Thinking…" : "Think again") { think() }
-                        .controlSize(.small).disabled(thinking)
-                    if !searchNote.isEmpty {
-                        Text(searchNote).font(.system(size: 10)).foregroundStyle(.tertiary)
-                    }
-                    if !history.isEmpty {
-                        Button("Take back") { undo() }.controlSize(.small)
-                    }
-                    Spacer()
-                    if let grade {
-                        Text(grade)
-                            .font(.system(size: 10))
-                            .foregroundStyle(grade.hasPrefix("That is")
-                                             ? AnyShapeStyle(Palette.good)
-                                             : AnyShapeStyle(Palette.warn))
-                    }
-                    Button("Play the turn") { playTurn() }
-                        .controlSize(.small)
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(!ready(board))
                 }
             }
         }
@@ -1028,227 +1458,6 @@ struct BattleView: View {
                     .clipShape(Capsule())
                     .help(entry.detail)
             }
-            Spacer(minLength: 0)
-        }
-    }
-
-    private func ready(_ board: Board) -> Bool {
-        guard leftPick != nil else { return false }
-        guard board.activeCount > 1, board.mine.count > 1, !board.mine[1].fainted
-        else { return true }
-        return rightPick != nil
-    }
-
-    private func slotChoices(_ board: Board, slot: Int) -> some View {
-        let fighter = board.mine[slot]
-        let ahead = evolving(fighter, slot: slot, board: board)
-        let picked = slot == 0 ? leftPick : rightPick
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                SpriteImage(form: ahead.build.form, side: 24)
-                Text(ahead.build.form.formLabel)
-                    .font(.system(size: 11, weight: .semibold))
-                Text("Speed \(ahead.build.speed(in: ahead.field))")
-                    .font(.system(size: 10))
-                    .foregroundStyle(megaSlot == slot && fighter.pendingMega != nil
-                                     ? AnyShapeStyle(Palette.warn) : AnyShapeStyle(.tertiary))
-                    .help(megaSlot == slot && fighter.pendingMega != nil
-                          ? "After it Mega Evolves, which happens before any move"
-                          : "Speed on the field")
-                if fighter.status != .none {
-                    Text(fighter.status.rawValue.uppercased())
-                        .font(.system(size: 8, weight: .bold)).kerning(0.4)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Palette.warn.opacity(0.2))
-                        .foregroundStyle(Palette.warn)
-                        .clipShape(Capsule())
-                }
-                if let mega = fighter.pendingMega,
-                   !board.mine.contains(where: \.hasMegaEvolved) {
-                    Button { megaSlot = megaSlot == slot ? nil : slot } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: megaSlot == slot ? "sparkles" : "circle.dashed")
-                                .font(.system(size: 9))
-                            Text("Mega Evolve").font(.system(size: 10, weight: .semibold))
-                        }
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(megaSlot == slot ? Palette.warn.opacity(0.22) : Palette.surface)
-                        .foregroundStyle(megaSlot == slot ? AnyShapeStyle(Palette.warn)
-                                                          : AnyShapeStyle(.secondary))
-                        .clipShape(Capsule())
-                        .overlay(Capsule().strokeBorder(
-                            megaSlot == slot ? Palette.warn.opacity(0.7) : Palette.hairline,
-                            lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Becomes \(mega.formLabel) before anything else happens this turn.")
-                }
-                Spacer(minLength: 0)
-            }
-
-            // Every move it knows, not a shortlist. This is a battle, so the
-            // whole moveset is on the table the way it is in the game.
-            // Wide enough that a type badge and a move name both fit, which
-            // most of them do not at anything narrower.
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 186), spacing: 6)],
-                      alignment: .leading, spacing: 6) {
-                ForEach(Array(fighter.moves.prefix(4).enumerated()), id: \.offset) {
-                    index, move in
-                    moveCard(board, slot: slot, index: index, move: move,
-                             fighter: fighter, picked: picked)
-                }
-                ForEach(Array(switchOptions(board).enumerated()), id: \.offset) { _, bench in
-                    let choice = Choice.swap(to: bench)
-                    ActionButton(label: "switch to \(board.mine[bench].build.form.formLabel)",
-                                 symbol: "arrow.left.arrow.right",
-                                 detail: "takes the turn, and it arrives to whatever lands",
-                                 chosen: picked == choice) {
-                        set(choice, slot: slot)
-                        aiming = nil
-                    }
-                }
-            }
-
-            // Targets, once a move that needs one is chosen.
-            if let aiming, aiming.slot == slot,
-               fighter.moves.indices.contains(aiming.move) {
-                targetRow(board, slot: slot, move: fighter.moves[aiming.move],
-                          index: aiming.move)
-            }
-        }
-    }
-
-    /// The benched Pokémon that could come in.
-    private func switchOptions(_ board: Board) -> [Int] {
-        guard board.mine.count > board.activeCount else { return [] }
-        return (board.activeCount..<board.mine.count).filter { !board.mine[$0].fainted }
-    }
-
-    private func set(_ choice: Choice, slot: Int) {
-        if slot == 0 { leftPick = choice } else { rightPick = choice }
-    }
-
-    /// One move, with what it would do if it needs no target choice.
-    private func moveCard(_ board: Board, slot: Int, index: Int, move: Move,
-                          fighter: Fighter, picked: Choice?) -> some View {
-        let aim = move.aim
-        let usable = !move.drawbacks.firstTurnOnly || fighter.justArrived
-        // Anything that picks its own target is settled the moment it is chosen.
-        let settled: Choice? = aim == .foe ? nil : .attack(move: index, target: 0)
-        let chosen: Bool = {
-            guard case .attack(let m, _) = picked else { return false }
-            return m == index
-        }()
-        let reading = aim == .spread
-            ? preview(board, fighter: fighter, slot: slot,
-                      choice: .attack(move: index, target: 0))
-            : nil
-        return Button {
-            guard usable else { return }
-            if let settled { set(settled, slot: slot); aiming = nil }
-            else { aiming = (slot: slot, move: index) }
-        } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
-                    TypeChip(type: PokeType(loose: move.type) ?? .normal, size: .small)
-                    Text(move.name)
-                        .font(.system(size: 11, weight: chosen ? .semibold : .regular))
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                    Spacer(minLength: 0)
-                    if move.priority != 0 {
-                        Text(move.priority > 0 ? "+\(move.priority)" : "\(move.priority)")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(move.priority > 0 ? Palette.good : Palette.warn)
-                            .help("Priority — it goes before or after everything on Speed")
-                    }
-                }
-                HStack(spacing: 5) {
-                    Text(move.power > 0 ? "\(move.power)" : "—")
-                        .font(.system(size: 9, design: .rounded)).monospacedDigit()
-                        .foregroundStyle(.tertiary)
-                    Text(move.accuracyLabel == "—" ? "always hits" : "\(move.accuracyLabel)%")
-                        .font(.system(size: 9, design: .rounded)).monospacedDigit()
-                        .foregroundStyle(.tertiary)
-                    Text(aimLabel(aim)).font(.system(size: 9)).foregroundStyle(.tertiary)
-                    Spacer(minLength: 0)
-                }
-                if let reading {
-                    Text(reading.text)
-                        .font(.system(size: 9, design: .rounded)).monospacedDigit()
-                        .foregroundStyle(reading.tint)
-                }
-                if !usable {
-                    Text("only on the turn it comes in")
-                        .font(.system(size: 9)).foregroundStyle(Palette.bad)
-                }
-            }
-            .padding(.horizontal, 8).padding(.vertical, 6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .opacity(usable ? 1 : 0.45)
-            .background(chosen ? Palette.accent.opacity(0.20)
-                        : (aiming?.move == index && aiming?.slot == slot
-                           ? Palette.warn.opacity(0.14) : Palette.surface))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(chosen ? Palette.accent
-                              : (aiming?.move == index && aiming?.slot == slot
-                                 ? Palette.warn : Palette.hairline),
-                              lineWidth: chosen ? 1.5 : 1))
-        }
-        .buttonStyle(.plain)
-        .help(move.effect)
-    }
-
-    private func aimLabel(_ aim: Move.Aim) -> String {
-        switch aim {
-        case .foe:    return "one target"
-        case .spread: return "everything it reaches"
-        case .user:   return "itself"
-        case .ally:   return "its partner"
-        case .side:   return "your side"
-        }
-    }
-
-    /// Which of them to aim at, with what it would do to each.
-    private func targetRow(_ board: Board, slot: Int, move: Move, index: Int) -> some View {
-        HStack(spacing: 6) {
-            Text("AIM AT").font(.system(size: 9, weight: .bold)).kerning(0.5)
-                .foregroundStyle(.tertiary)
-            ForEach(0..<min(board.activeCount, board.theirs.count), id: \.self) { foe in
-                if !board.theirs[foe].fainted {
-                    let choice = Choice.attack(move: index, target: foe)
-                    let reading = preview(board, fighter: board.mine[slot],
-                                          slot: slot, choice: choice)
-                    Button {
-                        set(choice, slot: slot)
-                        aiming = nil
-                    } label: {
-                        HStack(spacing: 6) {
-                            SpriteImage(form: board.theirs[foe].build.form, side: 28)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(board.theirs[foe].build.form.formLabel)
-                                    .font(.system(size: 10, weight: .medium)).lineLimit(1)
-                                if let reading {
-                                    Text(reading.text)
-                                        .font(.system(size: 9, design: .rounded))
-                                        .monospacedDigit()
-                                        .foregroundStyle(reading.tint)
-                                } else {
-                                    Text("no damage").font(.system(size: 9))
-                                        .foregroundStyle(.tertiary)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 8).padding(.vertical, 5)
-                        .background(Palette.warn.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(Palette.warn.opacity(0.55), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            Button("Cancel") { aiming = nil }.controlSize(.small)
             Spacer(minLength: 0)
         }
     }
@@ -1428,7 +1637,7 @@ struct BattleView: View {
         replayBoard = recorded
         at = 0
         sending = next.gapsOfMine
-        leftPick = nil; rightPick = nil; megaSlot = nil; aiming = nil
+        leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
         struck = hitMine; struckTheirs = hitTheirs
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 450_000_000)
@@ -1446,7 +1655,7 @@ struct BattleView: View {
         log = last.log
         turn = last.turn
         finished = nil
-        leftPick = nil; rightPick = nil; megaSlot = nil; aiming = nil
+        leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
         struck = []; struckTheirs = []
         grade = nil; replay = []; at = 0; replayBoard = nil; sending = []
         think()
