@@ -32,6 +32,8 @@ struct BattleView: View {
     /// A turn is being played out: the button waits rather than starting a
     /// second one on top of the first.
     @State private var playing = false
+    /// Every turn of this game, marked. Read back in the Review panel.
+    @State private var review: [TurnReview] = []
     /// The start of the game, being shown: the flash, the leads coming out,
     /// their abilities going off. Nil once orders can be given.
     @State private var opening = false
@@ -44,7 +46,28 @@ struct BattleView: View {
     /// has one, in Speed order alongside theirs.
     @State private var chosenSends: [(slot: Int, bench: Int)] = []
     /// Which of the three readings the side panel is showing.
-    enum Panel: String, CaseIterable { case engine = "Engine", theirs = "Their read", log = "Log" }
+    enum Panel: String, CaseIterable {
+        case engine = "Engine", theirs = "Their read", review = "Review", log = "Log"
+    }
+
+    /// One turn, marked. What you did, what it was worth against the mix they
+    /// were actually playing, and what the engine would have done instead —
+    /// kept for every turn, so a finished game can be read back.
+    struct TurnReview: Identifiable {
+        let id = UUID()
+        let turn: Int
+        let yours: String
+        let theirs: String
+        /// Both on the same scale: what your line and the engine's were worth
+        /// against their mix. Judging a choice against what they happened to
+        /// play would reward luck.
+        let played: Double
+        let best: Double
+        let bestLine: String
+        /// The board as it stood before the turn, so it can be played again.
+        let before: Board
+        var lost: Double { max(0, best - played) }
+    }
     @State private var panel: Panel = .engine
     /// What the two sixes say about each other, worked out once both are
     /// chosen and read by the versus page and Team Preview.
@@ -101,8 +124,13 @@ struct BattleView: View {
          previewing: [String] = [],
          playing: Board? = nil,
          showing: Command = .menu,
+         reviewing: [TurnReview] = [],
          thinking seeded: (BattleEngine.Result, TurnGame.Solution)? = nil) {
         _command = State(initialValue: showing)
+        if !reviewing.isEmpty {
+            _review = State(initialValue: reviewing)
+            _panel = State(initialValue: .review)
+        }
         // The search runs as a task, which a snapshot never gets to run, so a
         // snapshot hands the answer in ready-made.
         if let seeded {
@@ -1016,7 +1044,7 @@ struct BattleView: View {
         finished = nil
         history = []; grade = nil; replay = []; at = 0; replayBoard = nil; sending = []
         leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
-        chosenSends = []
+        chosenSends = []; review = []; playing = false
         log = [BattleView.opener]
         if snapshotMode {
             start.sendOutLeads()
@@ -1129,13 +1157,48 @@ struct BattleView: View {
 
     /// The game is over; what is left to do is look back or go again.
     private var afterGame: some View {
-        Card {
+        let worst = review.filter { $0.lost > 0.05 }.sorted { $0.lost > $1.lost }
+        let lost = review.reduce(0) { $0 + $1.lost }
+        return Card {
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(title: "Game over", subtitle: finished ?? "")
+                if review.isEmpty {
+                    Text("No turns to look back on.").font(.system(size: 11)).foregroundStyle(.tertiary)
+                } else if worst.isEmpty {
+                    Label(String(format: "Every turn on the engine's line. Nothing left on the table across %d turns.", review.count),
+                          systemImage: "checkmark.seal.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Palette.good)
+                } else {
+                    Text(String(format: "%.2f left on the table across %d turns. The ones that cost the most:", lost, review.count))
+                        .font(.system(size: 12, weight: .medium))
+                        .fixedSize(horizontal: false, vertical: true)
+                    ForEach(worst.prefix(3)) { entry in
+                        HStack(alignment: .top, spacing: 8) {
+                            Text(String(format: "−%.2f", entry.lost))
+                                .font(.system(size: 11, weight: .heavy, design: .rounded)).monospacedDigit()
+                                .foregroundStyle(Palette.warn)
+                                .frame(width: 44, alignment: .trailing)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("Turn \(entry.turn): you \(entry.yours)")
+                                    .font(.system(size: 11))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Text("the engine wanted \(entry.bestLine)")
+                                    .font(.system(size: 10)).foregroundStyle(Palette.accent)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 0)
+                            Button("Play it again") { rewind(to: entry.turn) }
+                                .controlSize(.small)
+                        }
+                    }
+                }
                 HStack(spacing: 8) {
                     Button("Back to Team Preview") { stage = .preview }.controlSize(.small)
                     Button("Undo the last turn") { undo() }.controlSize(.small)
                         .disabled(history.isEmpty)
+                    Button("Every turn") { panel = .review }.controlSize(.small)
+                        .disabled(review.isEmpty)
                 }
                 Spacer(minLength: 0)
             }
@@ -1178,6 +1241,8 @@ struct BattleView: View {
                         case .theirs:
                             reading(theirSide, Palette.warn,
                                     empty: "What they are probably weighing, and what they cannot see.")
+                        case .review:
+                            reviewPanel
                         case .log:
                             EmptyView()
                         }
@@ -1191,6 +1256,69 @@ struct BattleView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+    }
+
+    /// Every turn of the game, marked. While a game is running it reads in
+    /// order; once it is over the worst turns come first, because that is what
+    /// there is to learn from. Clicking one takes the game back to it.
+    @ViewBuilder
+    private var reviewPanel: some View {
+        if review.isEmpty {
+            Text("Nothing to review yet. Every turn you play is marked here: what you did, what it was worth, and what the engine would have done instead.")
+                .font(.system(size: 11)).foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            let lost = review.reduce(0) { $0 + $1.lost }
+            let ordered = finished == nil ? review : review.sorted { $0.lost > $1.lost }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Text(String(format: "%.2f", lost))
+                        .font(.system(size: 15, weight: .heavy, design: .rounded)).monospacedDigit()
+                        .foregroundStyle(lost > 0.5 ? Palette.warn : Palette.good)
+                    Text("left on the table across \(review.count) turn\(review.count == 1 ? "" : "s")")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                .help("The sum of what each turn cost against the line the engine wanted. Nought is perfect play by its own lights.")
+                ForEach(ordered) { entry in
+                    Button { rewind(to: entry.turn) } label: { reviewRow(entry) }
+                        .buttonStyle(.plain)
+                        .help("Take the game back to turn \(entry.turn) and play it differently")
+                }
+            }
+        }
+    }
+
+    private func reviewRow(_ entry: TurnReview) -> some View {
+        let bad = entry.lost > 0.05
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text("TURN \(entry.turn)")
+                    .font(.system(size: 9, weight: .heavy)).kerning(0.5)
+                    .foregroundStyle(.tertiary)
+                Spacer(minLength: 0)
+                Text(bad ? String(format: "−%.2f", entry.lost) : "on the line")
+                    .font(.system(size: 10, weight: .heavy, design: .rounded)).monospacedDigit()
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5).padding(.vertical, 1)
+                    .background(Capsule().fill(bad ? Palette.warn : Palette.good))
+            }
+            Text(entry.yours).font(.system(size: 11, weight: .medium))
+                .fixedSize(horizontal: false, vertical: true)
+            Text("they \(entry.theirs)").font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            if bad {
+                Text("wanted: \(entry.bestLine)")
+                    .font(.system(size: 10)).foregroundStyle(Palette.accent)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.surfaceRaised.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8)
+            .strokeBorder(bad ? Palette.warn.opacity(0.4) : Palette.hairline, lineWidth: 1))
     }
 
     /// What has happened, oldest at the top and the latest at the bottom where
@@ -3200,6 +3328,12 @@ struct BattleView: View {
                 grade = String(format: "The engine preferred %@ — %.2f better.",
                                game.describe(best.play, mine: true), -gap)
             }
+            review.append(TurnReview(turn: turn,
+                                     yours: game.describe(mine, mine: true),
+                                     theirs: game.describe(theirPlay, mine: false),
+                                     played: played, best: best.expected,
+                                     bestLine: game.describe(best.play, mine: true),
+                                     before: current))
         } else {
             grade = nil
         }
@@ -3257,13 +3391,31 @@ struct BattleView: View {
     /// Put the last turn back, so a line can be tried a different way.
     private func undo() {
         guard let last = history.popLast() else { return }
-        board = last.board
-        log = last.log
-        turn = last.turn
+        review.removeAll { $0.turn >= last.turn }
+        restore(last.board, log: last.log, turn: last.turn)
+    }
+
+    /// Take the whole game back to the start of a turn, so it can be played a
+    /// different way. This is what the Review panel is for: the engine has
+    /// already said which turns were worth the most, and the way to learn one
+    /// is to play it again rather than read about it.
+    private func rewind(to target: Int) {
+        guard let index = history.lastIndex(where: { $0.turn == target }) else { return }
+        let entry = history[index]
+        history.removeSubrange(index...)
+        review.removeAll { $0.turn >= target }
+        restore(entry.board, log: entry.log, turn: entry.turn)
+    }
+
+    private func restore(_ board: Board, log: [String], turn: Int) {
+        self.board = board
+        self.log = log
+        self.turn = turn
         finished = nil
         leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
         struck = []; struckTheirs = []
         grade = nil; replay = []; at = 0; replayBoard = nil; sending = []
+        chosenSends = []; playing = false
         think()
     }
 }

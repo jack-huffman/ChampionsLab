@@ -62,6 +62,22 @@ the analysis caches. Views read it through the environment.
   Weather Ball. Closed families that read alike (Protect, the party moves)
   are named.
 
+## Practising
+
+The point of the battle screen is not to watch a game, it is to be told where
+you went wrong. Every turn is marked as it is played: what you did, what it
+was worth against the mix they were actually playing, and what the engine
+would have done instead — both on one scale, so the gap means something.
+Judging a choice against what they *happened* to play would reward luck, so
+the comparison is always against their mix.
+
+The Review panel reads that back. While a game is running it is in turn
+order; once it is over the worst turns come first, because that is what there
+is to learn from. Clicking a turn takes the whole game back to the start of
+it — the board, the log and the turn number — so the answer to "what should I
+have done" is to play it again, not to read about it. The end-of-game card
+names the three turns that cost the most.
+
 ## Threads
 
 `Store`, `Matchup`, `BringFour` and the views are main-actor. The turn model,

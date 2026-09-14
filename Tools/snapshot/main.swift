@@ -196,6 +196,27 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         let thought = engine.think(board)
         var game = TurnGame(board: board)
         game.width = engine.beam + 2
+        // A game a few turns in, marked: what each turn was worth against the
+        // mix they were playing, and the line the engine wanted instead.
+        var marked = TurnGame(board: board, believingTheirs: true)
+        marked.width = 8
+        let solvedTurn = marked.solve()
+        let played = solvedTurn.myPlays.indices.contains(3) ? solvedTurn.myPlays[3] : solvedTurn.myPlays[0]
+        let wanted = solvedTurn.lines.first
+        render(BattleView(playing: board, showing: .menu, reviewing: [
+            BattleView.TurnReview(turn: 1, yours: marked.describe(played, mine: true),
+                                  theirs: marked.describe(solvedTurn.theirPlays[0], mine: false),
+                                  played: -0.18, best: -0.02,
+                                  bestLine: wanted.map { marked.describe($0.play, mine: true) } ?? "—",
+                                  before: board),
+            BattleView.TurnReview(turn: 2, yours: marked.describe(solvedTurn.myPlays[0], mine: true),
+                                  theirs: marked.describe(solvedTurn.theirPlays[0], mine: false),
+                                  played: 0.31, best: 0.31,
+                                  bestLine: marked.describe(solvedTurn.myPlays[0], mine: true),
+                                  before: board),
+        ], thinking: (thought, solvedTurn)),
+               named: "battle-review-dark",
+               size: CGSize(width: 1280, height: 860), dark: true)
         render(BattleView(playing: board, showing: .fight, thinking: (thought, game.solve())),
                named: "battle-fight-dark",
                size: CGSize(width: 1280, height: 860), dark: true)
