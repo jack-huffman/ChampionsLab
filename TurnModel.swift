@@ -1789,6 +1789,45 @@ enum TurnModel {
         let name = team[slot].build.form.formLabel
         board.note("\(name) used \(move.name).")
 
+        // Healing: Recover and its kind give back a share of the bar, to the
+        // user, the partner, or both; Rest gives back all of it and two turns.
+        if let healing = move.healing {
+            var share = healing.share
+            if healing.sunlit {
+                switch board.field.weather {
+                case .sun: share = 2.0 / 3.0
+                case .none: break
+                default: share = 0.25
+                }
+            }
+            let partner = slot == 0 ? 1 : 0
+            var receivers: [Int] = []
+            switch healing.whom {
+            case .user: receivers = [slot]
+            case .partner: receivers = [partner]
+            case .both: receivers = [slot, partner]
+            }
+            var anyone = false
+            for who in receivers where team.indices.contains(who) && who < board.activeCount && !team[who].fainted {
+                let maxHP = team[who].maxHP
+                let gained = Swift.min(maxHP - team[who].hp, Swift.max(1, Int(Double(maxHP) * share)))
+                guard gained > 0 else {
+                    board.note("\(team[who].build.form.formLabel)'s health is already full.")
+                    continue
+                }
+                if byMine { board.mine[who].hp += gained } else { board.theirs[who].hp += gained }
+                board.note("\(team[who].build.form.formLabel) recovered \(gained) health"
+                           + (share == 1 ? " and fell asleep." : "."))
+                anyone = true
+            }
+            if move.name == "Rest", anyone {
+                if byMine { board.mine[slot].status = .sleep; board.mine[slot].asleepFor = 2 }
+                else { board.theirs[slot].status = .sleep; board.theirs[slot].asleepFor = 2 }
+            }
+            if !anyone { board.note("But it failed.") }
+            return
+        }
+
         // Revival Blessing: the target is one of the user's own fallen, not
         // anything across the field. It comes back to the bench at half.
         if move.aim == .party {

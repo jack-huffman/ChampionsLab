@@ -355,6 +355,31 @@ struct Move: Codable, Identifiable, Hashable {
         return nil
     }
 
+    /// What a healing move gives back, as a share of the bar, and to whom.
+    /// Recover's half to the user, Heal Pulse's half to the partner, Life
+    /// Dew's quarter to both; Synthesis and its kind read the weather.
+    struct Healing {
+        enum Whom { case user, partner, both }
+        let share: Double
+        let whom: Whom
+        /// Two thirds in sun, a quarter in any other weather.
+        let sunlit: Bool
+    }
+
+    var healing: Healing? {
+        let text = effect
+        if text.hasPrefix("Fully restores the user's HP") { return Healing(share: 1, whom: .user, sunlit: false) }
+        guard let match = text.range(of: #"Restores (\d+)/(\d+) of (the user's|the target's|the max HP of the user and its allies|the max HP of the user or an ally|its) max HP|Restores (\d+)/(\d+) of the max HP of the user (and its allies|or an ally)"#,
+                                     options: .regularExpression) else { return nil }
+        let phrase = String(text[match])
+        let numbers = phrase.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+        guard numbers.count >= 2, numbers[1] > 0 else { return nil }
+        let share = Double(numbers[0]) / Double(numbers[1])
+        let whom: Healing.Whom = phrase.contains("and its allies") ? .both
+            : phrase.contains("target's") ? .partner : .user
+        return Healing(share: share, whom: whom, sunlit: text.contains("In harsh sunlight 2/3"))
+    }
+
     /// Stomping Tantrum: twice the power after a turn the user's move missed,
     /// failed, or never happened.
     var doublesAfterFailure: Bool {

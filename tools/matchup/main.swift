@@ -1999,6 +1999,29 @@ Ability: Regenerator
     check("Nuzzle paralyses every time, even for the search", zapped.theirs[1].status == .paralysis,
           "\(zapped.theirs[1].status)")
 
+    print("\n== getting health back ==")
+    let recover = store.data.moves.values.first { $0.name == "Recover" }!
+    let synthesis = store.data.moves.values.first { $0.name == "Synthesis" }!
+    let pulse = store.data.moves.values.first { $0.name == "Heal Pulse" }!
+    check("healing moves are read from the text",
+          recover.healing?.share == 0.5 && synthesis.healing?.sunlit == true && pulse.healing?.whom == .partner)
+    var tired = Board(mine: fighters([("Milotic", "Leftovers", ["Recover", "Protect"]),
+                                      ("Whimsicott", "Focus Sash", ["Protect"])]),
+                      theirs: chilled, store: store, field: Field(isDoubles: true), alreadyEvolved: false)
+    tired.mine[0].hp = tired.mine[0].maxHP / 5
+    let recovered = TurnModel.resolve(tired,
+        mine: Play(left: .attack(move: at(tired.mine[0], "Recover"), target: 0),
+                   right: .attack(move: at(tired.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(tired.theirs[0], "Swords Dance"), target: 0),
+                     right: .attack(move: at(tired.theirs[1], "Swords Dance"), target: 0)),
+        store: store)
+    for line in recovered.story where line.contains("recovered") { print("    \(line)") }
+    let expected = tired.mine[0].hp + tired.mine[0].maxHP / 2
+    print("  Milotic \(tired.mine[0].hp) -> \(recovered.mine[0].hp) of \(tired.mine[0].maxHP) (Leftovers adds a sixteenth at the end)")
+    check("Recover restores half the bar",
+          recovered.mine[0].hp >= expected && recovered.mine[0].hp <= expected + tired.mine[0].maxHP / 16 + 1,
+          "\(recovered.mine[0].hp) vs \(expected)")
+
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)
 }
