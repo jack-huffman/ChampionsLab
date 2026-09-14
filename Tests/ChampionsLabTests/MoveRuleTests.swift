@@ -310,4 +310,143 @@ print("\n== the tech ==")
 
         print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     }
+
+    /// nothing quick reaches anything standing on a Psychic Terrain
+    @MainActor func testPsychicTerrainRefusesPriority() throws {
+        print("== the terrain that refuses priority ==")
+        let quickOnes = fighters([("Incineroar", "Sitrus Berry", ["Fake Out", "Flare Blitz", "Protect"]),
+                                  ("Kingambit", "Chople Berry", ["Sucker Punch", "Iron Head", "Protect"])])
+        let grounded = fighters([("Indeedee (Female)", "Psychic Seed", ["Trick Room", "Dazzling Gleam", "Protect"]),
+                                 ("Garchomp", "Life Orb", ["Earthquake", "Protect"])])
+        var board = Board(mine: quickOnes, theirs: grounded, store: store,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+        board.field.terrain = .psychic
+        board.terrainTurns = 5
+        let refused = TurnModel.resolve(board,
+            mine: Play(left: .attack(move: at(board.mine[0], "Fake Out"), target: 0),
+                       right: .attack(move: at(board.mine[1], "Sucker Punch"), target: 1)),
+            theirs: Play(left: .attack(move: at(board.theirs[0], "Trick Room"), target: 0),
+                         right: .attack(move: at(board.theirs[1], "Earthquake"), target: 0)))
+        for line in refused.story where line.contains("Psychic Terrain") { print("    \(line)") }
+        check("a Fake Out does not reach something standing on it",
+              refused.theirs[0].hp == refused.theirs[0].maxHP && !refused.theirs[0].flinched,
+              "\(refused.theirs[0].hp)/\(refused.theirs[0].maxHP)")
+        check("and the Trick Room it was meant to stop goes up", refused.trickRoom > 0)
+        check("the refusal is said out loud",
+              refused.story.filter { $0.contains("Psychic Terrain refused") }.count == 2)
+        // Off the ground, the terrain does nothing.
+        var airborne = board
+        airborne.theirs[0].build.ability = "Levitate"
+        airborne.theirs[1].build.ability = "Levitate"
+        let landed = TurnModel.resolve(airborne,
+            mine: Play(left: .attack(move: at(airborne.mine[0], "Fake Out"), target: 0),
+                       right: .attack(move: at(airborne.mine[1], "Protect"), target: 0)),
+            theirs: Play(left: .attack(move: at(airborne.theirs[0], "Trick Room"), target: 0),
+                         right: .attack(move: at(airborne.theirs[1], "Earthquake"), target: 0)))
+        check("something off the ground gets no protection from it",
+              landed.theirs[0].hp < landed.theirs[0].maxHP,
+              "\(landed.theirs[0].hp)/\(landed.theirs[0].maxHP)")
+
+        print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
+    }
+
+    /// Sucker Punch needs a target that is winding up to attack
+    @MainActor func testSuckerPunch() throws {
+        print("== Sucker Punch ==")
+        let dark = fighters([("Kingambit", "Chople Berry", ["Sucker Punch", "Iron Head", "Protect"]),
+                             ("Whimsicott", "Focus Sash", ["Protect"])])
+        let targets = fighters([("Garchomp", "Life Orb", ["Earthquake", "Swords Dance", "Protect"]),
+                                ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"])])
+        let board = Board(mine: dark, theirs: targets, store: store,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+        let punch = at(board.mine[0], "Sucker Punch")
+        func into(_ theirLeft: Choice) -> Board {
+            TurnModel.resolve(board,
+                mine: Play(left: .attack(move: punch, target: 0),
+                           right: .attack(move: at(board.mine[1], "Protect"), target: 0)),
+                theirs: Play(left: theirLeft,
+                             right: .attack(move: at(board.theirs[1], "Wood Hammer"), target: 0)))
+        }
+        let landed = into(.attack(move: at(board.theirs[0], "Earthquake"), target: 0))
+        check("it lands on something about to attack",
+              landed.theirs[0].hp < landed.theirs[0].maxHP,
+              "\(landed.theirs[0].hp)/\(landed.theirs[0].maxHP)")
+        let setup = into(.attack(move: at(board.theirs[0], "Swords Dance"), target: 0))
+        for line in setup.story where line.contains("failed") { print("    \(line)") }
+        check("and fails against something setting up",
+              setup.theirs[0].hp == setup.theirs[0].maxHP && setup.story.contains { $0.contains("about to attack") })
+        let guarded = into(.protectSelf(move: at(board.theirs[0], "Protect")))
+        check("and against a Protect", guarded.theirs[0].hp == guarded.theirs[0].maxHP)
+        check("a failed Sucker Punch is remembered as a failed move", setup.mine[0].lastMoveFailed)
+
+        print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
+    }
+
+    /// two of yours trading places, and the odds of doing it twice
+    @MainActor func testAllySwitch() throws {
+        print("== Ally Switch ==")
+        let pair = fighters([("Indeedee (Female)", "Psychic Seed", ["Ally Switch", "Protect"]),
+                             ("Charizard", "Charizardite Y", ["Heat Wave", "Protect"])])
+        let board = Board(mine: pair, theirs: soaked, store: store,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+        let swapped = TurnModel.resolve(board,
+            mine: Play(left: .attack(move: at(board.mine[0], "Ally Switch"), target: 0),
+                       right: .attack(move: at(board.mine[1], "Protect"), target: 0)),
+            theirs: Play(left: .attack(move: at(board.theirs[0], "Swords Dance"), target: 0),
+                         right: .attack(move: at(board.theirs[1], "Swords Dance"), target: 0)))
+        for line in swapped.story where line.contains("traded places") { print("    \(line)") }
+        check("the two of yours trade places",
+              swapped.mine[0].build.form.formLabel == "Charizard"
+                && swapped.mine[1].build.form.formLabel == "Indeedee (Female)",
+              swapped.mine.prefix(2).map(\.build.form.formLabel).joined(separator: ", "))
+        check("and the one that did it is on a streak", swapped.mine[1].switchStreak == 1)
+        // A second in a row is a third as likely, and the search will not bet on it.
+        let again = TurnModel.resolve(swapped,
+            mine: Play(left: .attack(move: at(swapped.mine[0], "Protect"), target: 0),
+                       right: .attack(move: at(swapped.mine[1], "Ally Switch"), target: 0)),
+            theirs: Play(left: .attack(move: at(swapped.theirs[0], "Swords Dance"), target: 0),
+                         right: .attack(move: at(swapped.theirs[1], "Swords Dance"), target: 0)))
+        check("a second in a row is refused by the search",
+              again.story.contains { $0.contains("33%") },
+              again.story.filter { $0.contains("Indeedee") }.joined(separator: " | "))
+        var held = 0
+        for _ in 0..<300 {
+            let rolled = TurnModel.resolve(swapped,
+                mine: Play(left: .attack(move: at(swapped.mine[0], "Protect"), target: 0),
+                           right: .attack(move: at(swapped.mine[1], "Ally Switch"), target: 0)),
+                theirs: Play(left: .attack(move: at(swapped.theirs[0], "Swords Dance"), target: 0),
+                             right: .attack(move: at(swapped.theirs[1], "Swords Dance"), target: 0)),
+                rolling: true)
+            if rolled.story.contains(where: { $0.contains("traded places") }) { held += 1 }
+        }
+        print("  300 second Ally Switches: \(held) worked (about 100 expected)")
+        check("and about a third of them work when played", held > 55 && held < 150, "\(held)")
+
+        print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
+    }
+
+    /// a move the terrain doubles
+    @MainActor func testRisingVoltage() throws {
+        print("== Rising Voltage ==")
+        guard let bolt = store.data.moves.values.first(where: { $0.name == "Rising Voltage" }) else {
+            print("  (not in this format)"); return
+        }
+        let user = Combatant(form: form("Pawmot"), ability: "Volt Absorb", item: "",
+                             sp: Array(repeating: 0, count: 6), alignment: .neutral)
+        // Not a Ground type: an Electric move into one of those is nothing at
+        // all, doubled or otherwise.
+        var target = Combatant(form: form("Politoed"), ability: "Drizzle", item: "",
+                               sp: Array(repeating: 0, count: 6), alignment: .neutral)
+        let plainField = Field(isDoubles: true)
+        let charged = Field(terrain: .electric, isDoubles: true)
+        let flat = DamageCalc.calculate(attacker: user, defender: target, move: bolt, field: plainField).maxDamage
+        let lit = DamageCalc.calculate(attacker: user, defender: target, move: bolt, field: charged).maxDamage
+        print("  Rising Voltage: \(flat) on bare ground, \(lit) on Electric Terrain")
+        check("it doubles into something standing in the charge", lit > flat * 2, "\(flat) vs \(lit)")
+        target.ability = "Levitate"
+        let floating = DamageCalc.calculate(attacker: user, defender: target, move: bolt, field: charged).maxDamage
+        check("and not into something off the ground", floating < lit, "\(floating) vs \(lit)")
+
+        print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
+    }
 }

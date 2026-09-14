@@ -88,6 +88,9 @@ struct Fighter {
     var lastTarget = 0
     /// Turns of Encore left: it repeats its last move, whatever it is told.
     var encoredFor = 0
+    /// Ally Switches landed in a row. Like Protect, each one after the first
+    /// has a third of the chance of the one before.
+    var switchStreak = 0
     /// What it is held to, if anything.
     var encored: Choice? {
         guard encoredFor > 0, let last = lastMove, moves.indices.contains(last) else { return nil }
@@ -268,6 +271,14 @@ struct Board {
         if field.weather != old.weather { weatherTurns = field.weather == .none ? 0 : 5 }
         if field.terrain != old.terrain { terrainTurns = field.terrain == .none ? 0 : 5 }
     }
+
+    /// What each Pokémon was told to do this turn, keyed "m0" or "t1", and
+    /// which of them have gone already. Sucker Punch is the only thing that
+    /// reads this, and it is exactly what Sucker Punch needs to know: whether
+    /// the Pokémon in front of it is winding up to attack, and whether it has
+    /// already done so. Cleared once the turn is over.
+    var declared: [String: Choice] = [:]
+    var acted: Set<String> = []
 
     /// How a repeat Protect is to come out this turn, when the search wants to
     /// see one branch rather than roll: "m0" is your left slot, "t1" their
@@ -879,6 +890,11 @@ enum TurnModel {
         // its partner — who has not moved yet — is twice as fast from that
         // moment, which can move it ahead of something it was behind. Sorting
         // the whole turn up front makes that impossible.
+        // What everyone is about to do, before anyone does it.
+        for entry in entries {
+            out.declared[(entry.mine ? "m" : "t") + "\(entry.slot)"] = entry.choice
+        }
+
         var pending = entries
         while !pending.isEmpty {
             let inverted = out.trickRoom > 0
@@ -900,6 +916,7 @@ enum TurnModel {
             // is held to is checked now, not when the turn was queued: an
             // Encore that landed a moment ago already applies.
             let actor = (entry.mine ? out.mine : out.theirs)[entry.slot]
+            out.acted.insert((entry.mine ? "m" : "t") + "\(entry.slot)")
             out.beginStep()
             apply(forced(actor, entry.choice), byMine: entry.mine, slot: entry.slot, to: &out, rolling: rolling)
             out.closeStep()
@@ -910,6 +927,8 @@ enum TurnModel {
         endOfTurn(&out, rolling: rolling)
         out.closeStep()
         out.protectRulings = [:]
+        out.declared = [:]
+        out.acted = []
 
         return out
     }
@@ -1055,6 +1074,10 @@ enum TurnModel {
         for index in board.mine.indices {
             board.mine[index].protectedLast = board.mine[index].isProtected
             if !board.mine[index].isProtected { board.mine[index].protectStreak = 0 }
+            if board.mine[index].lastMove.map({ board.mine[index].moves.indices.contains($0)
+                && board.mine[index].moves[$0].name == "Ally Switch" }) != true {
+                board.mine[index].switchStreak = 0
+            }
             board.mine[index].justArrived = false
             if board.mine[index].asleepFor > 0 {
                 board.mine[index].asleepFor -= 1
@@ -1064,6 +1087,10 @@ enum TurnModel {
         for index in board.theirs.indices {
             board.theirs[index].protectedLast = board.theirs[index].isProtected
             if !board.theirs[index].isProtected { board.theirs[index].protectStreak = 0 }
+            if board.theirs[index].lastMove.map({ board.theirs[index].moves.indices.contains($0)
+                && board.theirs[index].moves[$0].name == "Ally Switch" }) != true {
+                board.theirs[index].switchStreak = 0
+            }
             board.theirs[index].justArrived = false
             if board.theirs[index].asleepFor > 0 {
                 board.theirs[index].asleepFor -= 1
@@ -1354,6 +1381,38 @@ enum TurnModel {
             // with increased priority can be aimed at that Pokémon or its
             // partner. It is the reason Farigiraf is on Trick Room teams — it
             // is what stops a Fake Out taking the setup turn away.
+            // Psychic Terrain: nothing quick reaches anything standing on it.
+            // It is why a Psychic Surge team can set up in front of a Fake Out.
+            if move.priority > 0, target < Choice.allyTarget,
+               board.field.terrain == .psychic,
+               move.aim == .foe || move.aim == .spread {
+                let defenders = byMine ? board.theirs : board.mine
+                if let shielded = (0..<Swift.min(board.activeCount, defenders.count)).first(where: {
+                    !defenders[$0].fainted && defenders[$0].build.grounded }) {
+                    board.note("The Psychic Terrain refused it — \(defenders[shielded].build.form.formLabel) is standing on it, and nothing quick gets through.")
+                    markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                    return
+                }
+            }
+            // Sucker Punch only lands on a Pokémon that is winding up to
+            // attack and has not gone yet. Against a Protect, a status move or
+            // something that has already moved, it does nothing at all.
+            if move.id == "suckerpunch", target < Choice.allyTarget {
+                let defenders = byMine ? board.theirs : board.mine
+                let key = (byMine ? "t" : "m") + "\(target)"
+                let attacking: Bool = {
+                    guard let choice = board.declared[key], !board.acted.contains(key),
+                          defenders.indices.contains(target) else { return false }
+                    guard case .attack(let index, _) = choice,
+                          defenders[target].moves.indices.contains(index) else { return false }
+                    return defenders[target].moves[index].isDamaging
+                }()
+                guard attacking else {
+                    board.note("But it failed — \(move.name) needs a target that is about to attack.")
+                    markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                    return
+                }
+            }
             if move.priority > 0, target < Choice.allyTarget, move.aim == .foe || move.aim == .spread {
                 let defenders = byMine ? board.theirs : board.mine
                 if let refused = (0..<Swift.min(board.activeCount, defenders.count)).first(where: {
@@ -2020,6 +2079,33 @@ enum TurnModel {
                 else { board.theirs[slot].status = .sleep; board.theirs[slot].asleepFor = 2 }
             }
             if !anyone { board.note("But it failed.") }
+            return
+        }
+
+        // Ally Switch: the two of yours trade places, which is how a Pokémon
+        // steps out of the way of something aimed at where it was standing.
+        // Like Protect, doing it again is a third as likely to work.
+        if move.name == "Ally Switch" {
+            let partner = slot == 0 ? 1 : 0
+            let own = byMine ? board.mine : board.theirs
+            guard board.activeCount > 1, own.indices.contains(partner), !own[partner].fainted else {
+                board.note("But there was no one to switch with.")
+                return
+            }
+            let chance = pow(1.0 / 3.0, Double(own[slot].switchStreak))
+            guard rolling ? Double.random(in: 0..<1) < chance : chance >= 0.5 else {
+                if byMine { board.mine[slot].switchStreak = 0 } else { board.theirs[slot].switchStreak = 0 }
+                board.note("But it failed — \(Int((chance * 100).rounded()))% after using it last turn.")
+                return
+            }
+            if byMine {
+                board.mine.swapAt(slot, partner)
+                board.mine[partner].switchStreak += 1
+            } else {
+                board.theirs.swapAt(slot, partner)
+                board.theirs[partner].switchStreak += 1
+            }
+            board.note("\(name) and \(own[partner].build.form.formLabel) traded places.")
             return
         }
 

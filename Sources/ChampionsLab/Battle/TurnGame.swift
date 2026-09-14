@@ -78,9 +78,13 @@ struct TurnGame {
         if let encored = fighter.encored { return [encored] }
         // Nothing with priority gets past an Armor Tail, so there is no point
         // the search spending one of its few choices on it.
+        // Nothing quick gets past an Armor Tail, and nothing quick reaches
+        // anything standing on a Psychic Terrain, so there is no point the
+        // search spending one of its few choices on a priority move.
         let priorityRefused = (0..<Swift.min(board.activeCount, foes.count)).contains {
-            !foes[$0].fainted
-                && TurnModel.priorityBlockers.contains(foes[$0].build.ability)
+            guard !foes[$0].fainted else { return false }
+            return TurnModel.priorityBlockers.contains(foes[$0].build.ability)
+                || (board.field.terrain == .psychic && foes[$0].build.grounded)
         }
         func allowed(_ move: Move) -> Bool {
             if move.drawbacks.firstTurnOnly, !fighter.justArrived { return false }

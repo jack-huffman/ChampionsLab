@@ -101,6 +101,12 @@ struct Combatant {
 
     var effectiveTypes: [PokeType] { form.pokeTypes }
 
+    /// Standing on the ground, which is what every terrain asks about: it does
+    /// nothing for a Flying type or a Levitate, and neither does a Spikes.
+    var grounded: Bool {
+        !form.pokeTypes.contains(.flying) && ability != "Levitate" && item != "Air Balloon"
+    }
+
     var maxHP: Int { stat(.hp) }
 
     /// Health it effectively has across a fight, which is what a damage race
@@ -309,6 +315,12 @@ enum DamageCalc {
         if field.terrain == .grassy, ["earthquake", "bulldoze", "magnitude"].contains(move.id) {
             power *= 0.5
             notes.append("Grassy Terrain halves Earthquake")
+        }
+        // Rising Voltage: twice the power into something standing in the
+        // charge, which is the whole reason an Electric Terrain team runs it.
+        if move.id == "risingvoltage", field.terrain == .electric, defender.grounded {
+            power *= 2
+            notes.append("Rising Voltage: double power on Electric Terrain")
         }
 
         // -- attack and defence ---------------------------------------------
