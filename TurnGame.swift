@@ -32,7 +32,7 @@ struct TurnGame {
     /// How many choices each Pokémon is allowed to consider. Every one squares
     /// the size of the matrix, so this is the knob that decides whether a turn
     /// takes ten milliseconds or ten seconds.
-    var width = 4
+    var width = 6
 
     // MARK: - What each side can plausibly do
 
@@ -48,7 +48,16 @@ struct TurnGame {
         guard team.indices.contains(slot), !team[slot].fainted else { return [] }
         let fighter = team[slot]
 
-        var out: [Choice] = []
+        // Kept apart by kind rather than in one list, because the list has to
+        // be trimmed and trimming it in append order threw away Protect and
+        // switching every time — which made a read about protecting produce the
+        // same answer as a read about anything else, since neither was ever on
+        // the table.
+        var attacks: [Choice] = []
+        var spread: [Choice] = []
+        var guarding: [Choice] = []
+        var setup: [Choice] = []
+        var leaving: [Choice] = []
         // The hardest single hit at each opponent still standing.
         for target in 0..<min(2, foes.count) where !foes[target].fainted {
             var best: (index: Int, damage: Int)?
@@ -62,30 +71,32 @@ struct TurnGame {
                 let worth = Int(Double(result.maxDamage) * accuracy)
                 if best == nil || worth > best!.damage { best = (index, worth) }
             }
-            if let best { out.append(.attack(move: best.index, target: target)) }
+            if let best { attacks.append(.attack(move: best.index, target: target)) }
         }
-        // A spread move is a different decision, not a better version of one.
-        if let spread = fighter.moves.firstIndex(where: { $0.isDamaging && $0.isSpread }) {
-            out.append(.attack(move: spread, target: 0))
+        // A spread move is a different decision, not a better version of one —
+        // and it is the move that covers a switch, since whatever comes in is
+        // standing in it.
+        if let index = fighter.moves.firstIndex(where: { $0.isDamaging && $0.isSpread }) {
+            spread.append(.attack(move: index, target: 0))
         }
         // Protect, unless it was used last turn, when it mostly fails.
         if !fighter.protectedLast,
            let guard_ = fighter.moves.firstIndex(where: {
                DuelEngine.protectMoves.contains($0.name) }) {
-            out.append(.protectSelf(move: guard_))
+            guarding.append(.protectSelf(move: guard_))
         }
         // Speed control, which is the whole turn on the teams that run it.
         if let control = fighter.moves.firstIndex(where: {
             ["Tailwind", "Trick Room"].contains($0.name) }) {
             let already = mine ? board.myTailwind : board.theirTailwind
-            if already == 0 { out.append(.attack(move: control, target: 0)) }
+            if already == 0 { setup.append(.attack(move: control, target: 0)) }
         }
         // Fake Out, which only exists on the turn it comes in.
         if fighter.justArrived,
            let fake = fighter.moves.firstIndex(where: { $0.name == "Fake Out" }),
-           !out.contains(where: { if case .attack(let m, _) = $0 { return m == fake }
-                                  return false }) {
-            out.append(.attack(move: fake, target: 0))
+           !attacks.contains(where: { if case .attack(let m, _) = $0 { return m == fake }
+                                      return false }) {
+            setup.append(.attack(move: fake, target: 0))
         }
         // One switch: the benched member that fares best against what is out.
         let benchStart = 2
@@ -104,11 +115,27 @@ struct TurnGame {
                 let score = -worst
                 if best == nil || score > best!.score { best = (index, score) }
             }
-            if let best { out.append(.swap(to: best.index)) }
+            if let best { leaving.append(.swap(to: best.index)) }
         }
 
+        // Assembled so that every kind of decision survives the trim: the two
+        // targets, the option to refuse the turn, the option to leave, and then
+        // whatever else fits.
+        var out: [Choice] = []
+        func take(_ group: [Choice], _ count: Int = 1) {
+            for choice in group.prefix(count) where out.count < width && !out.contains(choice) {
+                out.append(choice)
+            }
+        }
+        take(attacks, 2)
+        take(guarding)
+        take(leaving)
+        take(spread)
+        take(setup)
+        take(attacks, attacks.count)
+
         if out.isEmpty { out.append(.attack(move: 0, target: 0)) }
-        return Array(out.prefix(width))
+        return out
     }
 
     /// Every pair of choices one side can make.
@@ -261,7 +288,8 @@ struct TurnGame {
     // MARK: - Saying what it means
 
     /// One Pokémon's choice, in words.
-    func describe(_ choice: Choice, fighter: Fighter, foes: [Fighter]) -> String {
+    func describe(_ choice: Choice, fighter: Fighter, foes: [Fighter],
+                  team: [Fighter] = []) -> String {
         switch choice {
         case .attack(let index, let target):
             guard fighter.moves.indices.contains(index) else { return "attack" }
@@ -273,7 +301,8 @@ struct TurnGame {
         case .protectSelf(let index):
             return fighter.moves.indices.contains(index) ? fighter.moves[index].name : "Protect"
         case .swap(let bench):
-            return "switch to \(bench)"
+            guard team.indices.contains(bench) else { return "switch out" }
+            return "switch to \(team[bench].build.form.formLabel)"
         }
     }
 
@@ -281,8 +310,9 @@ struct TurnGame {
         let team = mine ? board.mine : board.theirs
         let foes = mine ? board.theirs : board.mine
         guard team.count >= 2 else { return "—" }
-        return "\(describe(play.left, fighter: team[0], foes: Array(foes.prefix(2))))"
-            + " and \(describe(play.right, fighter: team[1], foes: Array(foes.prefix(2))))"
+        let front = Array(foes.prefix(2))
+        return describe(play.left, fighter: team[0], foes: front, team: team)
+            + " and " + describe(play.right, fighter: team[1], foes: front, team: team)
     }
 
     /// The turn in the sentences a player would use.

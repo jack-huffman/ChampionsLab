@@ -91,6 +91,34 @@ let fieldMoveNeeds: [String: Set<String>] = [
     check("the winning structure is not rebuilt per evaluation", reaskedMS < 1,
           String(format: "%.2f ms", reaskedMS))
 
+    // -- solving a turn -----------------------------------------------------
+    //
+    // Every pair of your choices against every pair of theirs, each played out
+    // and scored, then solved for the equilibrium. It runs while somebody
+    // waits for it, so it has to be quick and it has to breathe.
+    print("\n== solving a turn ==")
+    if let meta = store.data.metaTeams.first(where: { $0.name == "Big Six" }),
+       let mine = store.teams.first(where: { $0.slots.count >= 4 }) {
+        let board = Board(mine: mine, theirs: store.opponentTeam(meta), store: store)
+        let game = TurnGame(board: board, store: store)
+        _ = game.solve()
+        let started = Date()
+        let solution = game.solve()
+        let warm = Date().timeIntervalSince(started) * 1000
+        print(String(format: "  %d x %d matrix, warm: %.1f ms",
+                     solution.myPlays.count, solution.theirPlays.count, warm))
+        check("a turn solves fast enough to feel instant", warm < 120,
+              String(format: "%.1f ms", warm))
+
+        BreathLog.begin()
+        _ = await game.solveYielding()
+        let (count, worst) = BreathLog.end()
+        print(String(format: "  yielding: %d suspensions, longest stretch %.0f ms",
+                     count, worst * 1000))
+        check("and the yielding path never holds the thread for a frame",
+              worst < frame, String(format: "%.0f ms", worst * 1000))
+    }
+
     // -- what the refiner will and will not suggest -------------------------
     //
     // The move ranker prices a move on its own, which is wrong twice over: it

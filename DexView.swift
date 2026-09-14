@@ -54,24 +54,34 @@ struct DexView: View {
         return forms
     }
 
+    /// Grid on the left, detail on the right, split down the middle.
+    ///
+    /// An HSplitView sizes its panes from their ideal widths and then lets the
+    /// window push them around, which left the detail a narrow column no matter
+    /// how wide the window was. This measures the space the dex actually has —
+    /// the sidebar is not part of it — and gives the panel half, so opening a
+    /// Pokémon opens something worth reading rather than a gutter.
     var body: some View {
-        HSplitView {
-            VStack(spacing: 0) {
-                filterBar
-                Divider()
-                list
-            }
-            .frame(minWidth: 380, idealWidth: 440)
+        GeometryReader { geometry in
+            let half = max(360, geometry.size.width / 2)
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    filterBar
+                    Divider()
+                    list
+                }
+                .frame(maxWidth: .infinity)
 
-            Group {
-                if let selection, let form = store.formsByID[selection] {
-                    FormDetail(form: form)
-                } else {
-                    EmptyHint(symbol: "sidebar.right", title: "Select a Pokémon",
-                              detail: "\(results.count) legal forms in Regulation M-C, Megas included.")
+                if selection != nil {
+                    Divider()
+                }
+                Group {
+                    if let selection, let form = store.formsByID[selection] {
+                        FormDetail(form: form)
+                            .frame(width: half)
+                    }
                 }
             }
-            .frame(minWidth: 420)
         }
     }
 

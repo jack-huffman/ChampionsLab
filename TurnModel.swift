@@ -196,11 +196,13 @@ enum TurnModel {
         // -- switches, which resolve before anything else --------------------
         for (slot, choice) in myChoices.enumerated() {
             guard case .swap(let bench) = choice else { continue }
-            swapIn(&out.mine, active: slot, bench: bench, opposing: &out.theirs)
+            swapIn(&out.mine, active: slot, bench: bench, opposing: &out.theirs,
+                   field: &out.field)
         }
         for (slot, choice) in theirChoices.enumerated() {
             guard case .swap(let bench) = choice else { continue }
-            swapIn(&out.theirs, active: slot, bench: bench, opposing: &out.mine)
+            swapIn(&out.theirs, active: slot, bench: bench, opposing: &out.mine,
+                   field: &out.field)
         }
 
         // -- everything else, in order ---------------------------------------
@@ -241,23 +243,41 @@ enum TurnModel {
     }
 
     /// Bring a benched Pokémon in, with whatever its entry does.
+    ///
+    /// Switching is most of competitive doubles and it is not merely a way out.
+    /// The Pokémon coming in takes a free hit, because it does not act on the
+    /// turn it arrives — that cost is paid by resolving switches first and then
+    /// letting the attacks land on whoever is now standing there. And arriving
+    /// is itself an action: Intimidate takes an Attack stage off both of them,
+    /// and a weather or terrain setter takes the field back, which is why
+    /// pivoting a Pelipper back in is a play rather than a retreat.
     private static func swapIn(_ team: inout [Fighter], active: Int, bench: Int,
-                               opposing: inout [Fighter]) {
+                               opposing: inout [Fighter], field: inout Field) {
         guard team.indices.contains(active), team.indices.contains(bench),
               !team[bench].fainted else { return }
         team.swapAt(active, bench)
         team[active].justArrived = true
         team[active].isProtected = false
-        // Intimidate is the one entry ability common enough to matter here, and
-        // it changes what the turn is worth rather than merely flavouring it.
-        if team[active].build.ability == "Intimidate" {
+
+        switch team[active].build.ability {
+        case "Intimidate":
             for index in opposing.indices.prefix(2) where !opposing[index].fainted {
-                if opposing[index].build.ability == "Clear Body"
-                    || opposing[index].build.ability == "Hyper Cutter"
-                    || opposing[index].build.ability == "Inner Focus" { continue }
+                // The abilities that refuse a stat drop outright.
+                if ["Clear Body", "Hyper Cutter", "Inner Focus", "White Smoke",
+                    "Full Metal Body", "Own Tempo", "Oblivious", "Scrappy",
+                    "Guard Dog"].contains(opposing[index].build.ability) { continue }
                 opposing[index].build.boosts[Stat.attack.rawValue] =
                     max(-6, opposing[index].build.boosts[Stat.attack.rawValue] - 1)
             }
+        case "Drought":        field.weather = .sun
+        case "Drizzle":        field.weather = .rain
+        case "Sand Stream":    field.weather = .sand
+        case "Snow Warning":   field.weather = .snow
+        case "Electric Surge": field.terrain = .electric
+        case "Grassy Surge":   field.terrain = .grassy
+        case "Misty Surge":    field.terrain = .misty
+        case "Psychic Surge":  field.terrain = .psychic
+        default: break
         }
     }
 

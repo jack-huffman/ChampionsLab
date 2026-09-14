@@ -19,6 +19,8 @@ struct MatchupView: View {
     @State private var choosing = false
     @State private var opponentSearch = ""
     @State private var turnRead: [String] = []
+    @State private var turnReading: [String] = []
+    @State private var turnExploits: [TurnGame.Exploit] = []
     @State private var turnLines: [TurnGame.Solution.Line] = []
     @State private var turnLabels: [String: String] = [:]
     @State private var solvingTurn = false
@@ -69,6 +71,7 @@ struct MatchupView: View {
         .onChange(of: opponentID) { _ in
             selectedPlan = nil
             turnRead = []; turnLines = []; turnLabels = [:]
+            turnReading = []; turnExploits = []
         }
         .onChange(of: weather) { _ in selectedPlan = nil }
         .onChange(of: terrain) { _ in selectedPlan = nil }
@@ -483,6 +486,45 @@ struct MatchupView: View {
                             noteRow(line, symbol: "arrow.turn.down.right", colour: .secondary)
                         }
                     }
+                    if !turnReading.isEmpty {
+                        Divider()
+                        Text("READING THEM")
+                            .font(.system(size: 10, weight: .semibold)).kerning(0.6)
+                            .foregroundStyle(.tertiary)
+                        VStack(alignment: .leading, spacing: 5) {
+                            ForEach(turnReading, id: \.self) { line in
+                                noteRow(line, symbol: "eye", colour: .secondary)
+                            }
+                        }
+                    }
+                    if !turnExploits.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(turnExploits.prefix(5)) { exploit in
+                                HStack(spacing: 8) {
+                                    Text(exploit.read.shorthand)
+                                        .font(.system(size: 11))
+                                        .frame(width: 160, alignment: .leading)
+                                        .foregroundStyle(.secondary)
+                                    Text(exploit.label)
+                                        .font(.system(size: 11, weight: .medium))
+                                        .lineLimit(1)
+                                    Spacer(minLength: 0)
+                                    // Gain against the read, and what being
+                                    // wrong costs. The trade, as two numbers.
+                                    Text(String(format: "%+.2f", exploit.gain))
+                                        .font(.system(size: 11, design: .rounded))
+                                        .monospacedDigit()
+                                        .foregroundStyle(Palette.good)
+                                    Text("risk").font(.system(size: 9))
+                                        .foregroundStyle(.tertiary)
+                                    Text(String(format: "%.2f", exploit.cost))
+                                        .font(.system(size: 11, design: .rounded))
+                                        .monospacedDigit()
+                                        .foregroundStyle(exploit.worthIt ? Palette.dim : Palette.bad)
+                                }
+                            }
+                        }
+                    }
                     if !turnLines.isEmpty {
                         Divider()
                         ForEach(turnLines.prefix(4)) { line in
@@ -533,6 +575,9 @@ struct MatchupView: View {
             let game = TurnGame(board: board, store: store)
             let solution = await game.solveYielding()
             turnRead = game.read(solution)
+            await breathe("turn read")
+            turnReading = game.readingNotes(solution)
+            turnExploits = game.exploits(solution)
             turnLines = solution.lines.filter { $0.weight > 0.01 }
             turnLabels = Dictionary(
                 solution.lines.map { ($0.id, game.describe($0.play, mine: true)) },
