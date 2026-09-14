@@ -1308,7 +1308,8 @@ struct BattleView: View {
                 // Yours: first up and left, second diagonally down and in.
                 ForEach(0..<min(board.activeCount, board.mine.count), id: \.self) { slot in
                     let out = !opening || shown.contains("m\(slot)")
-                    fighterCard(board.mine[slot], mine: true, slot: slot, field: board.field)
+                    fighterCard(board.mine[slot], mine: true, slot: slot, field: board.field,
+                                tailwind: board.myTailwind > 0, trickRoom: board.trickRoom > 0)
                         .opacity(out ? 1 : 0)
                         .scaleEffect(out ? 1 : 0.4)
                         .position(x: w * (singlesGame ? 0.26 : (slot == 0 ? 0.17 : 0.35)),
@@ -1317,12 +1318,15 @@ struct BattleView: View {
                 // Theirs: first up and left of their side, second down and right.
                 ForEach(0..<min(board.activeCount, board.theirs.count), id: \.self) { slot in
                     let out = !opening || shown.contains("t\(slot)")
-                    fighterCard(board.theirs[slot], mine: false, slot: slot, field: board.field)
+                    fighterCard(board.theirs[slot], mine: false, slot: slot, field: board.field,
+                                tailwind: board.theirTailwind > 0, trickRoom: board.trickRoom > 0)
                         .opacity(out ? 1 : 0)
                         .scaleEffect(out ? 1 : 0.4)
                         .position(x: w * (singlesGame ? 0.74 : (slot == 0 ? 0.65 : 0.83)),
                                   y: h * (singlesGame ? 0.50 : (slot == 0 ? 0.36 : 0.60)))
                 }
+                sideState(board, mine: true).position(x: w * 0.25, y: 18)
+                sideState(board, mine: false).position(x: w * 0.75, y: 18)
                 if startFlash {
                     Text("BATTLE START")
                         .font(.system(size: 44, weight: .black)).italic().kerning(2)
@@ -1521,9 +1525,9 @@ struct BattleView: View {
     /// carries its clock: it runs out, and knowing when is a turn's plan.
     @ViewBuilder
     private func fieldState(_ board: Board) -> some View {
-        let control = [board.myTailwind > 0 ? "your Tailwind · \(board.myTailwind) left" : nil,
-                       board.theirTailwind > 0 ? "their Tailwind · \(board.theirTailwind) left" : nil,
-                       board.trickRoom > 0 ? "Trick Room · \(board.trickRoom) left" : nil]
+        // Only what covers the whole field. Tailwind and screens belong to a
+        // side and sit over that side.
+        let control = [board.trickRoom > 0 ? "Trick Room · \(board.trickRoom) left" : nil]
             .compactMap { $0 }
         if board.field.weather == .none && control.isEmpty {
             Text("clear skies")
@@ -1540,6 +1544,35 @@ struct BattleView: View {
                         .background(.ultraThinMaterial)
                         .clipShape(Capsule())
                         .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 1))
+                }
+            }
+        }
+    }
+
+    /// What one side has going for it, over that side: Tailwind, screens,
+    /// Wide Guard, each with what is left of it.
+    @ViewBuilder
+    private func sideState(_ board: Board, mine: Bool) -> some View {
+        let tailwind = mine ? board.myTailwind : board.theirTailwind
+        let screens = mine ? board.myScreens : board.theirScreens
+        let bits: [(String, String)] = [
+            tailwind > 0 ? ("wind", "Tailwind · \(tailwind) left") : nil,
+            screens.reflect > 0 ? ("shield.lefthalf.filled", "Reflect · \(screens.reflect)") : nil,
+            screens.lightScreen > 0 ? ("shield.righthalf.filled", "Light Screen · \(screens.lightScreen)") : nil,
+            screens.auroraVeil > 0 ? ("sparkles", "Aurora Veil · \(screens.auroraVeil)") : nil,
+            screens.wideGuard ? ("shield.fill", "Wide Guard") : nil,
+        ].compactMap { $0 }
+        if !bits.isEmpty {
+            HStack(spacing: 6) {
+                ForEach(Array(bits.enumerated()), id: \.offset) { _, bit in
+                    HStack(spacing: 4) {
+                        Image(systemName: bit.0).font(.system(size: 9))
+                        Text(bit.1).font(.system(size: 10, weight: .semibold)).monospacedDigit()
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().strokeBorder((mine ? Palette.accent : Palette.bad).opacity(0.6), lineWidth: 1))
                 }
             }
         }
@@ -1582,7 +1615,7 @@ struct BattleView: View {
     }
 
     private func fighterCard(_ fighter: Fighter, mine: Bool, slot: Int,
-                             field: Field) -> some View {
+                             field: Field, tailwind: Bool = false, trickRoom: Bool = false) -> some View {
         let hit = mine ? struck.contains(slot) : struckTheirs.contains(slot)
         let health = fighter.share
         let bar: Color = health > 0.5 ? Palette.good
@@ -1630,12 +1663,25 @@ struct BattleView: View {
                 // Yours is what it is. Theirs is what you could work out from
                 // the stat, because showing the real number would quietly tell
                 // you about the Choice Scarf the card above says you cannot see.
-                Text("· \(visibleSpeed(fighter, mine: mine, field: field))\(mine ? "" : "?")")
-                    .font(.system(size: 9, design: .rounded)).monospacedDigit()
-                    .foregroundStyle(.tertiary)
-                    .help(mine
-                          ? "Speed on the field, item and weather abilities included"
+                // The Speed it actually moves at, and why: Tailwind, a weather
+                // ability, a Scarf, a paralysis. A bare number that has been
+                // doubled twice is not something anyone can check.
+                let reading = speedReading(fighter, mine: mine, field: field,
+                                           tailwind: tailwind, trickRoom: trickRoom)
+                Text("· \(reading.value)\(mine ? "" : "?")")
+                    .font(.system(size: 9, weight: reading.causes.isEmpty ? .regular : .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(reading.causes.isEmpty ? AnyShapeStyle(.tertiary) : AnyShapeStyle(Palette.accent))
+                    .help((mine
+                          ? "Speed on the field, everything included."
                           : "What its Speed would be with no item. You cannot see what it is holding, so you cannot see a Choice Scarf either.")
+                          + (reading.causes.isEmpty ? "" : " " + reading.causes.joined(separator: ", ") + "."))
+            }
+            if !speedReading(fighter, mine: mine, field: field, tailwind: tailwind, trickRoom: trickRoom).causes.isEmpty {
+                Text(speedReading(fighter, mine: mine, field: field, tailwind: tailwind, trickRoom: trickRoom).causes.joined(separator: " · "))
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(Palette.accent.opacity(0.85))
+                    .lineLimit(1).minimumScaleFactor(0.7)
             }
             Text(fighter.build.itemSpent && !fighter.build.item.isEmpty
                  ? "\(fighter.build.item) · used"
@@ -1744,7 +1790,47 @@ struct BattleView: View {
         let knockout = low >= hp ? "KO" : (high >= hp ? "may KO" : "\(hits)HKO")
         let tint: Color = best > 1 ? Palette.good
             : (best < 1 && best > 0 ? Palette.dim : Palette.accent)
-        return ("\(lowShare)–\(highShare)% · \(knockout)", tint)
+        var text = "\(lowShare)–\(highShare)% · \(knockout)"
+        // Mega Evolution happens before any move, so a target that could
+        // evolve may take this hit as its Mega — with its Mega's defences and
+        // ability. Said beside the plain number, because the difference
+        // between a knockout and a miss is often exactly that.
+        if aimed.count == 1, !atAlly, let slot = aimed.first, side.indices.contains(slot),
+           !side[slot].build.form.isMega, !board.theirs.contains(where: \.hasMegaEvolved),
+           let mega = likelyMega(of: side[slot].build.form) {
+            var evolved = side[slot].build
+            evolved.form = mega
+            evolved.ability = mega.abilities.first?.name ?? evolved.ability
+            evolved.item = ""
+            evolved.atFullHP = side[slot].hp == side[slot].maxHP
+            var field = becoming.field
+            field.screen = board.theirScreens.blunt(move)
+            var attacker = becoming.build
+            attacker.lastMoveFailed = fighter.lastMoveFailed
+            attacker.fallenAllies = board.mine.filter(\.fainted).count
+            let asMega = DamageCalc.calculate(attacker: attacker, defender: evolved, move: move, field: field)
+            if asMega.maxDamage > 0 {
+                let l2 = Int((Double(asMega.minDamage) / Double(max(1, fullHP)) * 100).rounded())
+                let h2 = Int((Double(asMega.maxDamage) / Double(max(1, fullHP)) * 100).rounded())
+                text += " · as \(mega.formLabel) \(l2)–\(h2)%"
+            } else {
+                text += " · no effect on \(mega.formLabel)"
+            }
+        }
+        return (text, tint)
+    }
+
+    /// The Mega a species most likely becomes, by what the ladder carries:
+    /// Charizard is a Y far more often than an X.
+    private func likelyMega(of form: Form) -> Form? {
+        let megas = store.data.forms.filter { $0.isMega && $0.species == form.species }
+        guard !megas.isEmpty else { return nil }
+        let odds = BattleEngine(rules: store.rulebook).itemOdds(for: form)
+        if let stone = odds.first(where: { entry in megas.contains { $0.megaStone == entry.item } }),
+           let match = megas.first(where: { $0.megaStone == stone.item }) {
+            return match
+        }
+        return megas.first
     }
 
     /// Their Speed as far as anybody could know it: the stat, without the item
@@ -1754,6 +1840,38 @@ struct BattleView: View {
         var blind = fighter.build
         blind.item = ""
         return blind.speed(in: field)
+    }
+
+    /// The Speed a Pokémon moves at this turn, and every reason it is not the
+    /// number on its stat card: a Chlorophyll in the sun, a Tailwind, a Scarf
+    /// you can see because it is yours, a paralysis. Trick Room is named
+    /// without changing the number, since it changes the order, not the stat.
+    private func speedReading(_ fighter: Fighter, mine: Bool, field: Field,
+                              tailwind: Bool, trickRoom: Bool) -> (value: Int, causes: [String]) {
+        var causes: [String] = []
+        var build = fighter.build
+        if !mine { build.item = "" }
+        let plain = build.stagedStat(.speed)
+        var value = build.speed(in: field)
+        if value != plain {
+            switch build.ability {
+            case "Swift Swim" where field.weather == .rain: causes.append("Swift Swim ×2 in rain")
+            case "Chlorophyll" where field.weather == .sun: causes.append("Chlorophyll ×2 in sun")
+            case "Sand Rush" where field.weather == .sand: causes.append("Sand Rush ×2 in sand")
+            case "Slush Rush" where field.weather == .snow: causes.append("Slush Rush ×2 in snow")
+            case "Surge Surfer" where field.terrain == .electric: causes.append("Surge Surfer ×2")
+            case "Unburden" where build.itemSpent: causes.append("Unburden ×2")
+            default: break
+            }
+            if mine, build.item == "Choice Scarf" { causes.append("Scarf ×1.5") }
+            if mine, build.item == "Iron Ball" || build.item == "Macho Brace" { causes.append("\(build.item) ×½") }
+        }
+        let stage = build.boosts[Stat.speed.rawValue]
+        if stage != 0 { causes.append("Spe \(stage > 0 ? "+" : "")\(stage)") }
+        if tailwind { value *= 2; causes.append("Tailwind ×2") }
+        if fighter.status.halvesSpeed { value /= 2; causes.append("paralysed ×½") }
+        if trickRoom { causes.append("Trick Room: slower first") }
+        return (value, causes)
     }
 
     /// What the measured ladder says they are probably holding.
@@ -1992,6 +2110,9 @@ struct BattleView: View {
     private func pick(for slot: Int) -> Choice? {
         if let board, board.mine.indices.contains(slot), let charging = board.mine[slot].charging {
             return .attack(move: charging, target: board.mine[slot].chargingTarget)
+        }
+        if let board, board.mine.indices.contains(slot), let encored = board.mine[slot].encored {
+            return encored
         }
         return slot == 0 ? leftPick : rightPick
     }

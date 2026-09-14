@@ -83,6 +83,16 @@ struct Fighter {
     /// moment it leaves the field.
     var confusedFor = 0
     var isConfused: Bool { confusedFor > 0 }
+    /// The last move it used and where it aimed it, for Encore to hold it to.
+    var lastMove: Int?
+    var lastTarget = 0
+    /// Turns of Encore left: it repeats its last move, whatever it is told.
+    var encoredFor = 0
+    /// What it is held to, if anything.
+    var encored: Choice? {
+        guard encoredFor > 0, let last = lastMove, moves.indices.contains(last) else { return nil }
+        return .attack(move: last, target: lastTarget)
+    }
 
     /// The chance Protect works right now.
     var protectChance: Double { pow(1.0 / 3.0, Double(protectStreak)) }
@@ -658,7 +668,17 @@ enum TurnModel {
         case .pass: return -99
         case .swap: return 6
         case .protectSelf(let index), .attack(let index, _):
-            return fighter.moves.indices.contains(index) ? fighter.moves[index].priority : 0
+            guard fighter.moves.indices.contains(index) else { return 0 }
+            let move = fighter.moves[index]
+            var priority = move.priority
+            // Prankster: a stage on every status move, which is what puts a
+            // Whimsicott's Tailwind or Encore ahead of anything without
+            // priority of its own — though not ahead of a Fake Out at +3.
+            if fighter.build.ability == "Prankster", !move.isDamaging { priority += 1 }
+            // Gale Wings: Flying moves first, while the bar is full.
+            if fighter.build.ability == "Gale Wings", move.type == "Flying",
+               fighter.hp == fighter.maxHP { priority += 1 }
+            return priority
         }
     }
 
@@ -779,6 +799,8 @@ enum TurnModel {
             if let charging = fighter.charging {
                 return .attack(move: charging, target: fighter.chargingTarget)
             }
+            // Encore: the move it used last, three turns running.
+            if let encored = fighter.encored { return encored }
             return choice
         }
         var entries: [(mine: Bool, slot: Int, choice: Choice, priority: Int, speed: Int)] = []
@@ -820,9 +842,12 @@ enum TurnModel {
                 if a.mine && !b.mine { choice = index }
             }
             let entry = pending.remove(at: choice)
-            // One action, one step: whatever it does to however many.
+            // One action, one step: whatever it does to however many. What it
+            // is held to is checked now, not when the turn was queued: an
+            // Encore that landed a moment ago already applies.
+            let actor = (entry.mine ? out.mine : out.theirs)[entry.slot]
             out.beginStep()
-            apply(entry.choice, byMine: entry.mine, slot: entry.slot, to: &out, rolling: rolling)
+            apply(forced(actor, entry.choice), byMine: entry.mine, slot: entry.slot, to: &out, rolling: rolling)
             out.closeStep()
         }
 
@@ -1132,6 +1157,8 @@ enum TurnModel {
         team[active].hidden = false
         team[active].protectStreak = 0
         team[active].confusedFor = 0
+        team[active].encoredFor = 0
+        team[active].lastMove = nil
         team.swapAt(active, bench)
         team[active].justArrived = true
         team[active].seen = true
@@ -1200,11 +1227,13 @@ enum TurnModel {
             return
         case .protectSelf(let index):
             let label = actor.moves.indices.contains(index) ? actor.moves[index].name : "Protect"
+            remember(byMine: byMine, slot: slot, move: index, target: 0, board: &board)
             let held = tryProtect(label, byMine: byMine, slot: slot, board: &board, rolling: rolling)
             markFailed(byMine: byMine, slot: slot, board: &board, failed: !held)
         case .attack(let moveIndex, let target):
             guard actor.moves.indices.contains(moveIndex) else { return }
             let move = actor.moves[moveIndex]
+            remember(byMine: byMine, slot: slot, move: moveIndex, target: target, board: &board)
             guard move.isDamaging else {
                 let before = board.story.count
                 support(move, byMine: byMine, slot: slot, target: target,
@@ -1770,6 +1799,24 @@ enum TurnModel {
         return said
     }
 
+    /// Note what a Pokémon used and where, for Encore; and if it is under an
+    /// Encore, count that down.
+    private static func remember(byMine: Bool, slot: Int, move: Int, target: Int, board: inout Board) {
+        if byMine {
+            board.mine[slot].lastMove = move; board.mine[slot].lastTarget = target
+            if board.mine[slot].encoredFor > 0 {
+                board.mine[slot].encoredFor -= 1
+                if board.mine[slot].encoredFor == 0 { board.note("\(board.mine[slot].build.form.formLabel)'s Encore ended.") }
+            }
+        } else {
+            board.theirs[slot].lastMove = move; board.theirs[slot].lastTarget = target
+            if board.theirs[slot].encoredFor > 0 {
+                board.theirs[slot].encoredFor -= 1
+                if board.theirs[slot].encoredFor == 0 { board.note("\(board.theirs[slot].build.form.formLabel)'s Encore ended.") }
+            }
+        }
+    }
+
     /// Whether a Pokémon's last move came off, for Stomping Tantrum.
     private static func markFailed(byMine: Bool, slot: Int, board: inout Board, failed: Bool) {
         if byMine, board.mine.indices.contains(slot) { board.mine[slot].lastMoveFailed = failed }
@@ -1872,6 +1919,17 @@ enum TurnModel {
         let name = team[slot].build.form.formLabel
         board.note("\(name) used \(move.name).")
 
+        // A Prankster's status move does not work on a Dark type: the one
+        // thing that keeps a Whimsicott's Encore off a Kingambit.
+        if team[slot].build.ability == "Prankster", move.aim == .foe {
+            let far = byMine ? board.theirs : board.mine
+            let index = far.indices.contains(target) && target < board.activeCount ? target : 0
+            if far.indices.contains(index), far[index].build.form.pokeTypes.contains(.dark) {
+                board.note("But it does not affect \(far[index].build.form.formLabel) — a Dark type shrugs off a Prankster's tricks.")
+                return
+            }
+        }
+
         // Healing: Recover and its kind give back a share of the bar, to the
         // user, the partner, or both; Rest gives back all of it and two turns.
         if let healing = move.healing {
@@ -1908,6 +1966,25 @@ enum TurnModel {
                 else { board.theirs[slot].status = .sleep; board.theirs[slot].asleepFor = 2 }
             }
             if !anyone { board.note("But it failed.") }
+            return
+        }
+
+        // Encore: the target repeats whatever it last used for its next three
+        // turns. It fails on a Pokémon that has not moved yet, and cannot hold
+        // one to an Encore of its own.
+        if move.name == "Encore" {
+            let far = byMine ? board.theirs : board.mine
+            let index = far.indices.contains(target) && target < board.activeCount ? target : 0
+            guard far.indices.contains(index), !far[index].fainted else { return }
+            let who = far[index].build.form.formLabel
+            if far[index].isProtected { board.note("\(who) protected itself."); return }
+            guard let last = far[index].lastMove, far[index].moves.indices.contains(last),
+                  far[index].moves[last].name != "Encore" else {
+                board.note("But \(who) had nothing to repeat.")
+                return
+            }
+            if byMine { board.theirs[index].encoredFor = 3 } else { board.mine[index].encoredFor = 3 }
+            board.note("\(who) received an Encore: it has to keep using \(far[index].moves[last].name).")
             return
         }
 

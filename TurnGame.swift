@@ -54,10 +54,12 @@ struct TurnGame {
         guard slot < board.activeCount,
               team.indices.contains(slot), !team[slot].fainted else { return [] }
         let fighter = team[slot]
-        // Halfway through a two-turn move there is nothing to decide.
+        // Halfway through a two-turn move, or under an Encore, there is
+        // nothing to decide.
         if let charging = fighter.charging {
             return [.attack(move: charging, target: fighter.chargingTarget)]
         }
+        if let encored = fighter.encored { return [encored] }
         // Nothing with priority gets past an Armor Tail, so there is no point
         // the search spending one of its few choices on it.
         let priorityRefused = (0..<Swift.min(board.activeCount, foes.count)).contains {
@@ -477,6 +479,7 @@ struct TurnGame {
                 return "\(move.name) into its own \(who)"
             }
             let name = foes.indices.contains(target) ? foes[target].build.form.formLabel : "the other"
+            if fighter.encoredFor > 0, fighter.lastMove == index { return "\(move.name) into \(name) (Encore)" }
             if let charge = move.charge {
                 if fighter.charging == index { return "\(move.name) into \(name), firing" }
                 if charge.skipsIn == nil || board.field.weather != charge.skipsIn {
