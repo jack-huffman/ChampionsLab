@@ -105,8 +105,10 @@ struct VersusBanner: View {
         /// The six as registered — a Charizard, not yet a Mega Charizard —
         /// leads first, the pair likeliest to be left home last.
         let forms: [Form]
-        /// Which of them hold a stone, marked the way the field marks them.
+        /// Which of them hold a stone — or, on their side, could: their items
+        /// are not on show, so the mark there is a question.
         var megas: Set<String> = []
+        var megasUncertain = false
         let leadCount: Int
         let tint: Color
     }
@@ -204,11 +206,17 @@ struct VersusBanner: View {
                         .shadow(color: side.tint.opacity(0.75), radius: 14)
                         .shadow(color: .black.opacity(0.65), radius: 4, y: 3)
                     if side.megas.contains(place.form.id) {
-                        Text("M").font(.system(size: 9, weight: .heavy))
-                            .frame(width: 17, height: 17)
-                            .background(Palette.warn).foregroundStyle(.white)
-                            .clipShape(Circle())
-                            .help("Holding its stone. It starts as itself and Mega Evolves when it uses a move.")
+                        Text(side.megasUncertain ? "M?" : "M")
+                            .font(.system(size: side.megasUncertain ? 8 : 9, weight: .heavy))
+                            .frame(width: side.megasUncertain ? 22 : 17, height: 17)
+                            .background(Palette.warn.opacity(side.megasUncertain ? 0.7 : 1))
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().strokeBorder(.white.opacity(side.megasUncertain ? 0.5 : 0),
+                                                            style: StrokeStyle(lineWidth: 1, dash: [2, 1.5])))
+                            .help(side.megasUncertain
+                                  ? "\(place.form.formLabel) has a Mega, and you cannot see what this one holds."
+                                  : "Holding its stone. It starts as itself and Mega Evolves when it uses a move.")
                     }
                 }
                 .position(x: place.x, y: place.y)

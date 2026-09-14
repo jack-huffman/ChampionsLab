@@ -501,6 +501,26 @@ struct BattleView: View {
                       .compactMap { $0.form(in: store)?.id })
     }
 
+    /// Theirs that *could* be holding a stone. Nobody's items are on show at
+    /// Team Preview, so what you actually know about their Charizard is that
+    /// Charizard has a Mega — not whether this one is carrying it. Reading
+    /// their list would answer a question the game does not let you ask.
+    private func possibleMegas(_ team: Team) -> Set<String> {
+        Set(team.slots.compactMap { slot -> String? in
+            guard let form = slot.form(in: store) else { return nil }
+            let couldMega = store.data.forms.contains { $0.isMega && $0.species == form.species }
+            return couldMega ? form.id : nil
+        })
+    }
+
+    /// How often that species actually carries its stone on the ladder.
+    private func stoneOdds(_ form: Form) -> String {
+        let engine = BattleEngine(store: store)
+        guard let stone = engine.itemOdds(for: form).first(where: { $0.item.hasSuffix("ite") || $0.item.hasSuffix("ite X") || $0.item.hasSuffix("ite Y") || $0.item.hasSuffix("ite Z") })
+        else { return "" }
+        return String(format: " About %.0f%% of them carry %@.", stone.chance * 100, stone.item)
+    }
+
     private func bannerSide(_ team: Team, plan: BringFour.Plan?, title: String, tag: String,
                             tint: Color) -> VersusBanner.Side {
         let all = team.slots.compactMap { $0.battleForm(in: store) }
@@ -511,9 +531,11 @@ struct BattleView: View {
         } else {
             ordered = all
         }
+        let mine = team.id == myTeam?.id
         return VersusBanner.Side(title: title, name: team.name, tag: tag,
                                  forms: ordered.map { registered($0, in: team) },
-                                 megas: stoneHolders(team),
+                                 megas: mine ? stoneHolders(team) : possibleMegas(team),
+                                 megasUncertain: !mine,
                                  leadCount: plan == nil ? 0 : leadCount, tint: tint)
     }
 
@@ -560,8 +582,8 @@ struct BattleView: View {
                 if let plan = lobby.theirPlan, let theirs = theirTeam {
                     Text("They will most likely bring")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
-                    fourRow(plan.bring.map { registered($0, in: theirs) }, megas: stoneHolders(theirs),
-                            leads: leadCount, tint: Palette.bad)
+                    fourRow(plan.bring.map { registered($0, in: theirs) }, megas: possibleMegas(theirs),
+                            uncertain: true, leads: leadCount, tint: Palette.bad)
                     bullets(plan.reasons.prefix(2).map(fromTheirChair), tint: Palette.bad)
                     if !lobby.theirFears.isEmpty {
                         Label("Nothing on their six beats your \(names(lobby.theirFears)) — expect them to play around it, not into it.",
@@ -583,7 +605,8 @@ struct BattleView: View {
         }
     }
 
-    private func fourRow(_ forms: [Form], megas: Set<String> = [], leads: Int, tint: Color) -> some View {
+    private func fourRow(_ forms: [Form], megas: Set<String> = [], uncertain: Bool = false,
+                         leads: Int, tint: Color) -> some View {
         HStack(spacing: 10) {
             ForEach(Array(forms.enumerated()), id: \.offset) { index, form in
                 VStack(spacing: 2) {
@@ -595,9 +618,7 @@ struct BattleView: View {
                             .background(index < leads ? tint : Palette.dim)
                             .clipShape(Circle())
                         if megas.contains(form.id) {
-                            Text("M").font(.system(size: 8, weight: .heavy)).foregroundStyle(.white)
-                                .frame(width: 14, height: 14)
-                                .background(Palette.warn).clipShape(Circle())
+                            megaBadge(uncertain: uncertain, form: form)
                                 .frame(maxWidth: .infinity, alignment: .topTrailing)
                                 .frame(width: 52)
                         }
@@ -756,12 +777,19 @@ struct BattleView: View {
         .padding(14)
     }
 
-    /// The mark the field puts on a stone-holder: it starts as itself.
-    private var megaBadge: some View {
-        Text("M").font(.system(size: 8, weight: .heavy)).foregroundStyle(.white)
-            .frame(width: 14, height: 14)
-            .background(Palette.warn).clipShape(Circle())
-            .help("Holding its stone. It starts as itself and Mega Evolves when it uses a move.")
+    /// The mark the field puts on a stone-holder: it starts as itself. On
+    /// their side it is a question, because their items are not on show.
+    private func megaBadge(uncertain: Bool, form: Form) -> some View {
+        Text(uncertain ? "M?" : "M")
+            .font(.system(size: uncertain ? 7 : 8, weight: .heavy)).foregroundStyle(.white)
+            .frame(width: uncertain ? 18 : 14, height: 14)
+            .background(uncertain ? Palette.warn.opacity(0.7) : Palette.warn)
+            .clipShape(Capsule())
+            .overlay(Capsule().strokeBorder(.white.opacity(uncertain ? 0.5 : 0),
+                                            style: StrokeStyle(lineWidth: 1, dash: [2, 1.5])))
+            .help(uncertain
+                  ? "\(form.formLabel) has a Mega, and you cannot see what this one holds." + stoneOdds(form)
+                  : "Holding its stone. It starts as itself and Mega Evolves when it uses a move.")
     }
 
     private func previewButton(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
@@ -781,7 +809,7 @@ struct BattleView: View {
     /// One of mine, in the order it is being brought.
     private func previewRow(_ slot: TeamSlot) -> some View {
         let form = slot.form(in: store)
-        let holdsStone = slot.megaEvolution(in: store) != nil
+        let holdsStone = slot.megaEvolution(in: store) != nil   // yours: you know
         let id = slot.formID
         let order = bringing.firstIndex(of: id).map { $0 + 1 }
         let isFocus = focused == id || (focused == nil && bringing.last == id)
@@ -808,7 +836,7 @@ struct BattleView: View {
                 if let form {
                     ZStack(alignment: .topTrailing) {
                         SpriteImage(form: form, side: 46).shadow(color: .black.opacity(0.5), radius: 3, y: 2)
-                        if holdsStone { megaBadge }
+                        if holdsStone { megaBadge(uncertain: false, form: form) }
                     }
                 }
                 VStack(alignment: .leading, spacing: 1) {
@@ -846,7 +874,9 @@ struct BattleView: View {
     private func opposingRow(_ slot: TeamSlot) -> some View {
         let form = slot.form(in: store)
         let battle = slot.battleForm(in: store)
-        let holdsStone = slot.megaEvolution(in: store) != nil
+        // Theirs: not what it holds, which you cannot see, but whether the
+        // species has a Mega at all.
+        let couldMega = form.map { theirTeam.map(possibleMegas)?.contains($0.id) ?? false } ?? false
         let reading = matchupMark(against: slot)
         // Where this one sits in the four they will most likely bring.
         let expected = lobby.theirPlan?.bring.firstIndex { $0.id == battle?.id }
@@ -890,7 +920,7 @@ struct BattleView: View {
                 ZStack(alignment: .topTrailing) {
                     SpriteImage(form: form, side: 46).opacity(likelyHome ? 0.6 : 1)
                         .shadow(color: .black.opacity(0.5), radius: 3, y: 2)
-                    if holdsStone { megaBadge }
+                    if couldMega { megaBadge(uncertain: true, form: form) }
                 }
             }
         }
