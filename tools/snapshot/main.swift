@@ -148,8 +148,27 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
     }
     if let playing = store.teams.first(where: { $0.slots.count >= 4 }),
        let against = store.data.metaTeams.first(where: { $0.name == "Big Six" }) {
-        render(BattleView(opening: (mine: playing.id.uuidString, theirs: against.id)),
-               named: "battle-dark",
+        let theirs = store.opponentTeam(against)
+        // Team Preview, with a four already chosen so the ordering shows.
+        let grid = Matchup(mine: playing, theirs: theirs, store: store,
+                           field: Field(isDoubles: true))
+        let chosen = BringFour(matchup: grid, store: store).plans.first?.bring
+            .compactMap { form in
+                playing.slots.first { $0.battleForm(in: store)?.id == form.id }?.formID
+            } ?? []
+        render(BattleView(openTeams: (mine: playing.id.uuidString, theirs: against.id),
+                          previewing: chosen),
+               named: "battle-preview-dark",
+               size: CGSize(width: 1180, height: 760), dark: true)
+
+        // And the field itself, a turn in.
+        var four = playing
+        four.slots = chosen.compactMap { id in playing.slots.first { $0.formID == id } }
+        var board = Board(mine: four.slots.isEmpty ? playing : four, theirs: theirs,
+                          store: store, field: Field(isDoubles: true),
+                          alreadyEvolved: false)
+        board.activeCount = 2
+        render(BattleView(playing: board), named: "battle-dark",
                size: CGSize(width: 1180, height: 1500), dark: true)
     }
     render(SpeedTiersView(), named: "speed-dark",

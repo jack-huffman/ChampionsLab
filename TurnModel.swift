@@ -49,15 +49,21 @@ struct Fighter {
     var protectedLast = false
     /// Protecting this turn. Cleared at the end of it.
     var isProtected = false
+    /// What it becomes when it Mega Evolves, if it is holding the stone and has
+    /// not done it yet. Nil once it has, or if it never could.
+    var pendingMega: Form?
+    /// Whether this side has already used its one Mega Evolution.
+    var hasMegaEvolved = false
 
     var fainted: Bool { hp <= 0 }
     var share: Double { maxHP > 0 ? max(0, Double(hp) / Double(maxHP)) : 0 }
 
-    init(build: Combatant, moves: [Move], hp: Int? = nil) {
+    init(build: Combatant, moves: [Move], hp: Int? = nil, pendingMega: Form? = nil) {
         self.build = build
         self.moves = moves
         self.maxHP = build.maxHP
         self.hp = hp ?? build.maxHP
+        self.pendingMega = pendingMega
     }
 }
 
@@ -104,13 +110,35 @@ extension Board {
     /// Slots with nothing selected still need a set to fight with, so they get
     /// the same worth-ranked fallback the versus grid uses. A Pokémon with no
     /// moves is not a harmless one.
+    /// `alreadyEvolved` is how every analysis screen wants it: a Mega is its
+    /// Mega, because the question there is what the team fights as. A battle is
+    /// the other case — it starts as what was registered and evolves during a
+    /// turn, which is the only way the order of it can matter, and the order is
+    /// what decides a weather war.
     init(mine myTeam: Team, theirs theirTeam: Team, store: Store,
          myLeads: [String] = [], theirLeads: [String] = [],
-         field: Field = Field(isDoubles: true)) {
+         field: Field = Field(isDoubles: true),
+         alreadyEvolved: Bool = true) {
         func build(_ team: Team, leads: [String]) -> [Fighter] {
             let made: [(String, Fighter)] = team.slots.compactMap { slot in
-                guard let form = slot.battleForm(in: store),
+                guard let registered = slot.form(in: store),
+                      let evolved = slot.battleForm(in: store),
                       let combatant = slot.combatant(in: store) else { return nil }
+                let mega = slot.megaEvolution(in: store)
+                let form = alreadyEvolved ? evolved : registered
+                // A slot with nothing chosen still has an ability; treating it
+                // as blank means an Intimidate that never fires.
+                let named = slot.ability.isEmpty
+                    ? (form.abilities.first?.name ?? "") : slot.ability
+                var fighting = combatant
+                if fighting.ability.isEmpty { fighting.ability = named }
+                if !alreadyEvolved, mega != nil {
+                    // Before it evolves it is what the list registered, ability
+                    // and all: a Salamence with Intimidate, not Aerilate.
+                    fighting = Combatant(form: registered, ability: named,
+                                         item: slot.item, sp: slot.sp,
+                                         alignment: slot.alignment)
+                }
                 var moves = slot.moves.compactMap { store.move($0) }
                 if !moves.contains(where: \.isDamaging) {
                     let pool = store.moves(for: form).filter { $0.isDamaging && $0.power > 0 }
@@ -119,7 +147,9 @@ extension Board {
                             > store.moveValue($1, for: form, ability: combatant.ability, item: slot.item)
                     }.prefix(3)
                 }
-                return (form.id, Fighter(build: combatant, moves: moves))
+                return (registered.id,
+                        Fighter(build: fighting, moves: moves,
+                                pendingMega: alreadyEvolved ? nil : mega))
             }
             // The leads go to the front; everything else keeps its order behind.
             let front = leads.compactMap { id in made.first { $0.0 == id }?.1 }
@@ -232,6 +262,43 @@ enum TurnModel {
                    field: &out.field)
         }
 
+        // -- Mega Evolution, in Speed order ----------------------------------
+        //
+        // After the switches and before any move, fastest first. The order is
+        // not decoration: an ability that fires on evolving fires in that
+        // order, so when two Megas both bring weather the *slower* one evolves
+        // second, overwrites the first, and its weather is the one left on the
+        // field. Getting this backwards would make every sun-against-rain lead
+        // read the wrong way round.
+        // One per side, and which one is a choice rather than a race: a team
+        // that brought two stones brought the second as a spare, and the one it
+        // leads with is the one it means to use. So the earlier slot claims it,
+        // and Speed only decides *when* — which is the part that matters.
+        var evolving: [(mine: Bool, slot: Int, speed: Int)] = []
+        if !out.mine.contains(where: \.hasMegaEvolved),
+           let slot = (0..<min(out.activeCount, out.mine.count)).first(where: {
+               out.mine[$0].pendingMega != nil && !out.mine[$0].fainted }) {
+            evolving.append((true, slot, speed(of: out.mine[slot],
+                                               tailwind: out.myTailwind > 0, board: out)))
+        }
+        if !out.theirs.contains(where: \.hasMegaEvolved),
+           let slot = (0..<min(out.activeCount, out.theirs.count)).first(where: {
+               out.theirs[$0].pendingMega != nil && !out.theirs[$0].fainted }) {
+            evolving.append((false, slot, speed(of: out.theirs[slot],
+                                                tailwind: out.theirTailwind > 0, board: out)))
+        }
+        // Trick Room does not invert this: Mega Evolution is worked out on raw
+        // Speed regardless of what is on the field.
+        for entry in evolving.sorted(by: { $0.speed > $1.speed }) {
+            if entry.mine {
+                megaEvolve(&out.mine, slot: entry.slot, opposing: &out.theirs,
+                           field: &out.field)
+            } else {
+                megaEvolve(&out.theirs, slot: entry.slot, opposing: &out.mine,
+                           field: &out.field)
+            }
+        }
+
         // -- everything else, in order ---------------------------------------
         var entries: [(mine: Bool, slot: Int, choice: Choice, priority: Int, speed: Int)] = []
         for (slot, choice) in myChoices.enumerated() where !choice.isSwap {
@@ -264,6 +331,52 @@ enum TurnModel {
         return out
     }
 
+    /// Turn one Pokémon into its Mega, with whatever that brings with it.
+    ///
+    /// Only one per side per battle, which is the rule the whole format is
+    /// built around, so evolving marks the rest of the team as having spent it.
+    private static func megaEvolve(_ team: inout [Fighter], slot: Int,
+                                   opposing: inout [Fighter], field: inout Field) {
+        guard team.indices.contains(slot), let mega = team[slot].pendingMega,
+              !team[slot].hasMegaEvolved,
+              !team.contains(where: { $0.hasMegaEvolved }) else { return }
+        let before = team[slot].build
+        team[slot].build = Combatant(form: mega,
+                                     ability: mega.abilities.first?.name ?? before.ability,
+                                     item: before.item, sp: before.sp,
+                                     alignment: before.alignment)
+        team[slot].build.boosts = before.boosts
+        team[slot].build.itemSpent = before.itemSpent
+        team[slot].pendingMega = nil
+        for index in team.indices { team[index].hasMegaEvolved = true }
+        entryAbility(of: team[slot].build.ability, team: &team, slot: slot,
+                     opposing: &opposing, field: &field)
+    }
+
+    /// What arriving — or evolving — does to the field and to the other side.
+    private static func entryAbility(of ability: String, team: inout [Fighter], slot: Int,
+                                     opposing: inout [Fighter], field: inout Field) {
+        switch ability {
+        case "Intimidate":
+            for index in opposing.indices.prefix(2) where !opposing[index].fainted {
+                if ["Clear Body", "Hyper Cutter", "Inner Focus", "White Smoke",
+                    "Full Metal Body", "Own Tempo", "Oblivious", "Scrappy",
+                    "Guard Dog"].contains(opposing[index].build.ability) { continue }
+                opposing[index].build.boosts[Stat.attack.rawValue] =
+                    max(-6, opposing[index].build.boosts[Stat.attack.rawValue] - 1)
+            }
+        case "Drought":        field.weather = .sun
+        case "Drizzle":        field.weather = .rain
+        case "Sand Stream":    field.weather = .sand
+        case "Snow Warning":   field.weather = .snow
+        case "Electric Surge": field.terrain = .electric
+        case "Grassy Surge":   field.terrain = .grassy
+        case "Misty Surge":    field.terrain = .misty
+        case "Psychic Surge":  field.terrain = .psychic
+        default: break
+        }
+    }
+
     private static func speed(of fighter: Fighter, tailwind: Bool, board: Board) -> Int {
         let base = fighter.build.speed(in: board.field)
         return tailwind ? base * 2 : base
@@ -286,26 +399,8 @@ enum TurnModel {
         team[active].justArrived = true
         team[active].isProtected = false
 
-        switch team[active].build.ability {
-        case "Intimidate":
-            for index in opposing.indices.prefix(2) where !opposing[index].fainted {
-                // The abilities that refuse a stat drop outright.
-                if ["Clear Body", "Hyper Cutter", "Inner Focus", "White Smoke",
-                    "Full Metal Body", "Own Tempo", "Oblivious", "Scrappy",
-                    "Guard Dog"].contains(opposing[index].build.ability) { continue }
-                opposing[index].build.boosts[Stat.attack.rawValue] =
-                    max(-6, opposing[index].build.boosts[Stat.attack.rawValue] - 1)
-            }
-        case "Drought":        field.weather = .sun
-        case "Drizzle":        field.weather = .rain
-        case "Sand Stream":    field.weather = .sand
-        case "Snow Warning":   field.weather = .snow
-        case "Electric Surge": field.terrain = .electric
-        case "Grassy Surge":   field.terrain = .grassy
-        case "Misty Surge":    field.terrain = .misty
-        case "Psychic Surge":  field.terrain = .psychic
-        default: break
-        }
+        entryAbility(of: team[active].build.ability, team: &team, slot: active,
+                     opposing: &opposing, field: &field)
     }
 
     private static func apply(_ choice: Choice, byMine: Bool, slot: Int,

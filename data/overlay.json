@@ -1118,7 +1118,7 @@
    "note": "Charizard Y + Garchomp was the single most common two-Pokemon core of the format, on roughly a quarter of sampled teams: Charizard is immune to Earthquake, so Garchomp can click it freely under Drought.",
    "members": [
     {
-     "form": "Mega Charizard Y",
+     "form": "Charizard",
      "item": "Charizardite Y",
      "ability": "Drought",
      "moves": [
@@ -1173,7 +1173,7 @@
      ]
     },
     {
-     "form": "Mega Floette",
+     "form": "Floette",
      "item": "Floettite",
      "ability": "Fairy Aura",
      "moves": [
@@ -1195,7 +1195,7 @@
    "note": "A Big Six variant that cuts the priority core for Venusaur and Sinistcha. Slower and bulkier, and it beats the mirror by outlasting it.",
    "members": [
     {
-     "form": "Mega Charizard Y",
+     "form": "Charizard",
      "item": "Charizardite Y",
      "ability": "Drought",
      "moves": [
@@ -1206,7 +1206,7 @@
      ]
     },
     {
-     "form": "Mega Floette",
+     "form": "Floette",
      "item": "Floettite",
      "ability": "Fairy Aura",
      "moves": [
@@ -1283,7 +1283,7 @@
      ]
     },
     {
-     "form": "Mega Swampert",
+     "form": "Swampert",
      "item": "Swampertite",
      "ability": "Swift Swim",
      "moves": [
@@ -1294,7 +1294,7 @@
      ]
     },
     {
-     "form": "Mega Metagross",
+     "form": "Metagross",
      "item": "Metagrossite",
      "ability": "Tough Claws",
      "moves": [
@@ -1360,7 +1360,7 @@
      ]
     },
     {
-     "form": "Mega Mawile",
+     "form": "Mawile",
      "item": "Mawilite",
      "ability": "Huge Power",
      "moves": [
@@ -1448,7 +1448,7 @@
      ]
     },
     {
-     "form": "Mega Golisopod",
+     "form": "Golisopod",
      "item": "Golisopite",
      "ability": "Tough Claws",
      "moves": [
@@ -1503,7 +1503,7 @@
    "note": "Both Z Megas sit above every established speed benchmark. The plan is to be faster than the answer and remove it before it moves.",
    "members": [
     {
-     "form": "Mega Garchomp Z",
+     "form": "Garchomp",
      "item": "Garchompite Z",
      "ability": "Levitate",
      "moves": [
@@ -1514,7 +1514,7 @@
      ]
     },
     {
-     "form": "Mega Lucario Z",
+     "form": "Lucario",
      "item": "Lucarionite Z",
      "ability": "Aura Guard",
      "moves": [
@@ -1525,7 +1525,7 @@
      ]
     },
     {
-     "form": "Mega Salamence",
+     "form": "Salamence",
      "item": "Salamencite",
      "ability": "Aerilate",
      "moves": [

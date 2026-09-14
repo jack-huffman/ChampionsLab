@@ -758,6 +758,91 @@ Ability: Regenerator
         }
     }
 
+    // -- Mega Evolution, and the order of it --------------------------------
+    //
+    // It happens after the switches and before any move, fastest first, and the
+    // order is not decoration: an ability that fires on evolving fires in that
+    // order, so when two Megas both bring weather the slower one evolves second
+    // and its weather is the one left on the field.
+    print("\n== mega evolution ==")
+    func sideOf(_ entries: [(String, String, [String])]) -> Team {
+        var out = Team(); out.format = "doubles"
+        out.slots = entries.map { name, item, moves in
+            var slot = TeamSlot(formID: form(name).id)
+            slot.item = item
+            slot.moves = moves.compactMap { n in
+                store.data.moves.values.first { $0.name == n }?.id }
+            var sp = Array(repeating: 0, count: 6); sp[Stat.speed.rawValue] = 32
+            slot.sp = sp; slot.alignmentName = "Timid"
+            return slot
+        }
+        return out
+    }
+    let sunSide = sideOf([("Charizard", "Charizardite Y", ["Heat Wave", "Protect"]),
+                          ("Incineroar", "Sitrus Berry", ["Flare Blitz", "Protect"]),
+                          ("Garchomp", "Life Orb", ["Earthquake", "Protect"])])
+    let snowSide = sideOf([("Froslass", "Froslassite", ["Blizzard", "Protect"]),
+                           ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"]),
+                           ("Kingambit", "Chople Berry", ["Iron Head", "Protect"])])
+
+    let unevolved = Board(mine: sunSide, theirs: snowSide, store: store,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+    check("a battle starts with what was registered, not what it becomes",
+          unevolved.mine[0].build.form.formLabel == "Charizard",
+          unevolved.mine[0].build.form.formLabel)
+    check("and with the registered ability",
+          unevolved.mine[0].build.ability != "Drought", unevolved.mine[0].build.ability)
+    check("but it knows what it turns into",
+          unevolved.mine[0].pendingMega?.formLabel == "Mega Charizard Y")
+    let analysed = Board(mine: sunSide, theirs: snowSide, store: store,
+                         field: Field(isDoubles: true))
+    check("while every analysis screen still sees the Mega",
+          analysed.mine[0].build.form.formLabel == "Mega Charizard Y",
+          analysed.mine[0].build.form.formLabel)
+
+    let mySpeed = unevolved.mine[0].build.speed(in: unevolved.field)
+    let theirSpeed = unevolved.theirs[0].build.speed(in: unevolved.field)
+    print("  Charizard \(mySpeed) against Froslass \(theirSpeed) — the slower evolves second")
+    let afterMega = TurnModel.resolve(
+        unevolved,
+        mine: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)),
+        theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)),
+        store: store)
+    print("  both evolved; the weather is \(afterMega.field.weather.rawValue)")
+    check("both sides Mega Evolved",
+          afterMega.mine[0].build.form.isMega && afterMega.theirs[0].build.form.isMega)
+    // Froslass is faster, so it evolves first and Charizard's Drought lands on
+    // top of its Snow Warning.
+    check("the slower Mega wins the weather war",
+          afterMega.field.weather == (mySpeed < theirSpeed ? .sun : .snow),
+          afterMega.field.weather.rawValue)
+    check("and evolving spends the side's one Mega Evolution",
+          afterMega.mine.allSatisfy(\.hasMegaEvolved))
+
+    // Two stones on one side is legal to register and only one can be used.
+    let twoStones = sideOf([("Charizard", "Charizardite Y", ["Heat Wave", "Protect"]),
+                            ("Froslass", "Froslassite", ["Blizzard", "Protect"]),
+                            ("Garchomp", "Life Orb", ["Earthquake", "Protect"])])
+    let dual = Board(mine: twoStones, theirs: snowSide, store: store,
+                     field: Field(isDoubles: true), alreadyEvolved: false)
+    let afterDual = TurnModel.resolve(
+        dual,
+        mine: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)),
+        theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)),
+        store: store)
+    let evolvedNames = afterDual.mine.prefix(2).filter { $0.build.form.isMega }
+        .map(\.build.form.formLabel)
+    print("  two stones on one side evolved: \(evolvedNames)")
+    check("only one of them evolves", evolvedNames.count == 1, "\(evolvedNames)")
+    check("and it is the one led with rather than the faster one",
+          evolvedNames.first == "Mega Charizard Y", "\(evolvedNames)")
+
+    // Team lists register the base form; the bundled archetypes now do too.
+    let stillMega = store.data.metaTeams.flatMap(\.members)
+        .filter { $0.form.hasPrefix("Mega ") }
+    check("no bundled team registers a Mega directly", stillMega.isEmpty,
+          "\(stillMega.count)")
+
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)
 }
