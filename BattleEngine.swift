@@ -33,9 +33,9 @@
 
 import Foundation
 
-@MainActor
-struct BattleEngine {
-    let store: Store
+struct BattleEngine: Sendable {
+    /// What it knows about the world beyond the board: the usage table.
+    let rules: Rulebook
     /// How long to think. Iterative deepening returns the best answer it
     /// reached rather than the one it was aiming for.
     var budget: TimeInterval = 0.6
@@ -65,7 +65,7 @@ struct BattleEngine {
     /// do not know a Whimsicott has a Focus Sash, you know 87% of them do and
     /// you play the turn accordingly.
     func itemOdds(for form: Form) -> [(item: String, chance: Double)] {
-        let entry = store.data.usage.first {
+        let entry = rules.usage.first {
             ($0.name == form.formLabel || $0.name == form.name) && $0.hasLiveData
         }
         if form.isMega || !form.megaStone.isEmpty {
@@ -189,7 +189,7 @@ struct BattleEngine {
 
             for (world, chance) in versions {
                 guard Date() < deadline else { ranOut = true; break }
-                var game = TurnGame(board: world, store: store)
+                var game = TurnGame(board: world)
                 game.width = beam + 2
                 let solved = solve(world, game: game, depth: depth,
                                    deadline: deadline, table: table)
@@ -298,7 +298,7 @@ struct BattleEngine {
                     payoff[i][j] = immediate + 0.75 * cached
                     continue
                 }
-                var next = TurnGame(board: after, store: store)
+                var next = TurnGame(board: after)
                 next.width = beam
                 next.assumeMega = true
                 let deeper = solve(after, game: next, depth: depth - 1,
@@ -348,7 +348,7 @@ struct BattleEngine {
         var current = board
         var play = plays[first]
         for turn in 0..<min(depth, 3) {
-            var game = TurnGame(board: current, store: store)
+            var game = TurnGame(board: current)
             game.width = turn == 0 ? beam + 2 : beam
             game.assumeMega = turn > 0
             let solved = shallow(current, game: game, table: table)
@@ -358,11 +358,11 @@ struct BattleEngine {
                 ?? Play(left: .pass, right: .pass)
             out.append("Turn \(turn + 1): \(game.describe(play, mine: true))"
                        + " — they answer \(game.describe(theirPlay, mine: false))")
-            var after = TurnModel.resolve(current, mine: play, theirs: theirPlay, store: store, narrating: false)
+            var after = TurnModel.resolve(current, mine: play, theirs: theirPlay, narrating: false)
             after.fillGaps()
             if after.isOut(mine: true) || after.isOut(mine: false) { break }
             current = after
-            var nextGame = TurnGame(board: current, store: store)
+            var nextGame = TurnGame(board: current)
             nextGame.width = beam
             nextGame.assumeMega = true
             let nextSolved = shallow(current, game: nextGame, table: table)

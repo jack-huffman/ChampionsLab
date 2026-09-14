@@ -547,7 +547,7 @@ struct MatchupView: View {
                               field: Field(weather: weather, terrain: terrain,
                                            isDoubles: team.isDoubles))
             await breathe("turn board")
-            let game = TurnGame(board: board, store: store)
+            let game = TurnGame(board: board)
             let (solution, deep) = await game.solveDeep()
             turnRead = game.read(solution)
             await breathe("turn read")

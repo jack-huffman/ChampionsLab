@@ -357,7 +357,7 @@ struct Board {
 
     /// Their pick for a gap: the benched one that takes least from whatever
     /// of yours is standing, which is how the choice is made in `choices`.
-    func theirBestReplacement(for slot: Int, store: Store, excluding taken: Set<Int>) -> Int? {
+    func theirBestReplacement(for slot: Int, excluding taken: Set<Int>) -> Int? {
         var best: (index: Int, worst: Double)?
         for index in activeCount..<theirs.count where !theirs[index].fainted && !taken.contains(index) {
             var worst = 0.0
@@ -378,14 +378,14 @@ struct Board {
     /// one's Intimidate never touches the slower one, and the slower one's
     /// weather is the weather. Yours are what you chose; theirs choose for
     /// themselves.
-    mutating func replaceFallen(mine picks: [(slot: Int, bench: Int)], store: Store) {
+    mutating func replaceFallen(mine picks: [(slot: Int, bench: Int)]) {
         var arrivals: [(mine: Bool, slot: Int, bench: Int, speed: Int)] = []
         for pick in picks where mine.indices.contains(pick.bench) && !mine[pick.bench].fainted {
             arrivals.append((true, pick.slot, pick.bench, mine[pick.bench].build.speed(in: field)))
         }
         var taken: Set<Int> = []
         for slot in 0..<min(activeCount, theirs.count) where theirs[slot].fainted {
-            guard let pick = theirBestReplacement(for: slot, store: store, excluding: taken)
+            guard let pick = theirBestReplacement(for: slot, excluding: taken)
             else { continue }
             taken.insert(pick)
             arrivals.append((false, slot, pick, theirs[pick].build.speed(in: field)))
@@ -628,7 +628,6 @@ struct Play: Hashable {
 
 // MARK: - Playing it out
 
-@MainActor
 enum TurnModel {
 
     /// Abilities that stop priority moves reaching their side at all.
@@ -671,7 +670,7 @@ enum TurnModel {
     /// across every way it could go — so it leaves this off and every hit lands
     /// for its expected damage. A battle somebody is watching wants the dice:
     /// the roll, the miss, the burn that did or did not take.
-    static func resolve(_ board: Board, mine: Play, theirs: Play, store: Store,
+    static func resolve(_ board: Board, mine: Play, theirs: Play,
                         rolling: Bool = false, narrating: Bool = true) -> Board {
         var out = board
         out.story = []
@@ -823,8 +822,7 @@ enum TurnModel {
             let entry = pending.remove(at: choice)
             // One action, one step: whatever it does to however many.
             out.beginStep()
-            apply(entry.choice, byMine: entry.mine, slot: entry.slot, to: &out,
-                  store: store, rolling: rolling)
+            apply(entry.choice, byMine: entry.mine, slot: entry.slot, to: &out, rolling: rolling)
             out.closeStep()
         }
 
@@ -842,7 +840,7 @@ enum TurnModel {
     /// is; two when one Pokémon is on a repeat Protect; four when both are.
     /// The search weighs these rather than betting on either branch, so a
     /// second Protect in a row is worth exactly a third of a first one.
-    static func outcomes(_ board: Board, mine: Play, theirs: Play, store: Store)
+    static func outcomes(_ board: Board, mine: Play, theirs: Play)
         -> [(board: Board, chance: Double)] {
         var chancy: [(key: String, chance: Double)] = []
         func consider(_ choice: Choice, fighter: Fighter, key: String) {
@@ -852,7 +850,7 @@ enum TurnModel {
                 chancy.append((key, fighter.protectChance))
             case .attack(let index, _):
                 if fighter.moves.indices.contains(index),
-                   DuelEngine.protectMoves.contains(fighter.moves[index].name) {
+                   Move.protectMoves.contains(fighter.moves[index].name) {
                     chancy.append((key, fighter.protectChance))
                 }
             default: break
@@ -863,7 +861,7 @@ enum TurnModel {
         if board.theirs.indices.contains(0) { consider(theirs.left, fighter: board.theirs[0], key: "t0") }
         if board.theirs.indices.contains(1), board.activeCount > 1 { consider(theirs.right, fighter: board.theirs[1], key: "t1") }
         guard !chancy.isEmpty else {
-            return [(resolve(board, mine: mine, theirs: theirs, store: store, narrating: false), 1)]
+            return [(resolve(board, mine: mine, theirs: theirs, narrating: false), 1)]
         }
         var out: [(board: Board, chance: Double)] = []
         for mask in 0..<(1 << chancy.count) {
@@ -874,7 +872,7 @@ enum TurnModel {
                 ruled.protectRulings[entry.key] = holds
                 chance *= holds ? entry.chance : 1 - entry.chance
             }
-            out.append((resolve(ruled, mine: mine, theirs: theirs, store: store, narrating: false), chance))
+            out.append((resolve(ruled, mine: mine, theirs: theirs, narrating: false), chance))
         }
         return out.sorted { $0.chance > $1.chance }
     }
@@ -1022,7 +1020,7 @@ enum TurnModel {
     /// nothing on the way in. Weather and terrain simply take the field, which
     /// is why the order two setters arrive in decides whose stays.
     @discardableResult
-    nonisolated static func entryAbility(of ability: String, team: inout [Fighter], slot: Int,
+    static func entryAbility(of ability: String, team: inout [Fighter], slot: Int,
                                          opposing: inout [Fighter], field: inout Field) -> String? {
         let name = team.indices.contains(slot) ? team[slot].build.form.formLabel : "It"
         switch ability {
@@ -1144,7 +1142,7 @@ enum TurnModel {
     }
 
     private static func apply(_ choice: Choice, byMine: Bool, slot: Int,
-                              to board: inout Board, store: Store,
+                              to board: inout Board,
                               rolling: Bool = false) {
         let actor = byMine ? board.mine[slot] : board.theirs[slot]
         guard !actor.fainted else { return }
@@ -1759,7 +1757,7 @@ enum TurnModel {
     /// White Herb: the moment any of the holder's stats sits below zero, the
     /// herb goes and the drops are undone. It is what turns Unburden on — the
     /// item is gone, so the Speed doubles — which is the whole Sneasler set.
-    nonisolated static func whiteHerb(_ fighter: inout Fighter) -> String? {
+    static func whiteHerb(_ fighter: inout Fighter) -> String? {
         guard fighter.build.item == "White Herb", !fighter.build.itemSpent,
               fighter.build.boosts.contains(where: { $0 < 0 }) else { return nil }
         for index in fighter.build.boosts.indices where fighter.build.boosts[index] < 0 {
@@ -1956,7 +1954,7 @@ enum TurnModel {
         // Protect and its family arrive here whenever the move was picked as a
         // move rather than through the dedicated choice, which is how the
         // interface offers it and how the search sometimes picks it.
-        if DuelEngine.protectMoves.contains(move.name) {
+        if Move.protectMoves.contains(move.name) {
             tryProtect(nil, byMine: byMine, slot: slot, board: &board, rolling: rolling)
             return
         }

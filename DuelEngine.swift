@@ -81,10 +81,7 @@ enum DuelEngine {
     /// the family is small, closed and easy to get wrong: Wide Guard and Quick
     /// Guard read almost identically and do something else entirely, and Endure
     /// leaves you on one health point rather than untouched.
-    static let protectMoves: Set<String> = [
-        "Protect", "Detect", "Spiky Shield", "Baneful Bunker",
-        "Burning Bulwark", "Silk Trap", "Obstruct", "King's Shield",
-    ]
+    static var protectMoves: Set<String> { Move.protectMoves }
 
     static func protects(in moves: [Move]) -> Move? {
         moves.first { protectMoves.contains($0.name) }

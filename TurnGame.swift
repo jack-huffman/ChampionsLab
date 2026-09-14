@@ -25,10 +25,8 @@
 
 import Foundation
 
-@MainActor
 struct TurnGame {
     let board: Board
-    let store: Store
     /// How many choices each Pokémon is allowed to consider. Every one squares
     /// the size of the matrix, so this is the knob that decides whether a turn
     /// takes ten milliseconds or ten seconds.
@@ -111,7 +109,7 @@ struct TurnGame {
         // real. A third in a row, at a ninth, is not worth a slot.
         if fighter.protectChance >= 0.3,
            let guard_ = fighter.moves.firstIndex(where: {
-               DuelEngine.protectMoves.contains($0.name) }) {
+               Move.protectMoves.contains($0.name) }) {
             guarding.append(.protectSelf(move: guard_))
         }
         // Speed control, which is the whole turn on the teams that run it.
@@ -365,7 +363,7 @@ struct TurnGame {
     /// and the likeliest of those boards for anything that has to look on
     /// from a single position.
     func settle(_ mine: Play, _ theirs: Play) -> (expected: Double, likeliest: Board) {
-        let outcomes = TurnModel.outcomes(board, mine: mine, theirs: theirs, store: store)
+        let outcomes = TurnModel.outcomes(board, mine: mine, theirs: theirs)
         let before = TurnModel.value(board)
         let expected = outcomes.reduce(0) { $0 + $1.chance * (TurnModel.value($1.board) - before) }
         return (expected, outcomes[0].board)
@@ -413,7 +411,7 @@ struct TurnGame {
                 // The turn that follows, worth what its own equilibrium says.
                 // A board where every line is bad is a bad board, whatever the
                 // health bars say about it.
-                var next = TurnGame(board: settled.likeliest, store: store)
+                var next = TurnGame(board: settled.likeliest)
                 next.width = max(3, width - 2)
                 let follow = next.solve(iterations: 600)
                 // Where the turn left things, plus what the turn after is worth

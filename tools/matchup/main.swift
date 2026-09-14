@@ -608,13 +608,12 @@ Ability: Regenerator
             let openTurn = TurnModel.resolve(
                 start, mine: Play(left: .attack(move: hitIndex, target: 0),
                                   right: .attack(move: hitIndex, target: 0)),
-                theirs: Play(left: .attack(move: 0, target: 0), right: .attack(move: 0, target: 0)),
-                store: store)
+                theirs: Play(left: .attack(move: 0, target: 0), right: .attack(move: 0, target: 0)))
             let guardedTurn = TurnModel.resolve(
                 start, mine: Play(left: .attack(move: hitIndex, target: 0),
                                   right: .attack(move: hitIndex, target: 0)),
                 theirs: Play(left: .protectSelf(move: guardIndex),
-                             right: .attack(move: 0, target: 0)), store: store)
+                             right: .attack(move: 0, target: 0)))
             print("  their lead takes \(start.theirs[0].maxHP - openTurn.theirs[0].hp) open, "
                   + "\(start.theirs[0].maxHP - guardedTurn.theirs[0].hp) behind Protect")
             check("Protect refuses the damage",
@@ -624,7 +623,7 @@ Ability: Regenerator
         }
         _ = attackers
 
-        let game = TurnGame(board: start, store: store)
+        let game = TurnGame(board: start)
         // The first solve pays for warming the damage calculator's caches, and
         // measuring that measures the caches rather than the search. What the
         // interface actually costs is the second one — and it takes the
@@ -723,11 +722,11 @@ Ability: Regenerator
                 start, mine: Play(left: .attack(move: 0, target: 0),
                                   right: .attack(move: 0, target: 0)),
                 theirs: Play(left: .attack(move: hit, target: 0),
-                             right: .attack(move: 0, target: 1)), store: store)
+                             right: .attack(move: 0, target: 1)))
             let swapped = TurnModel.resolve(
                 start, mine: Play(left: .swap(to: 2), right: .attack(move: 0, target: 0)),
                 theirs: Play(left: .attack(move: hit, target: 0),
-                             right: .attack(move: 0, target: 1)), store: store)
+                             right: .attack(move: 0, target: 1)))
             print("  the one that came in is \(swapped.mine[0].build.form.formLabel), "
                   + "on \(swapped.mine[0].hp) of \(swapped.mine[0].maxHP)")
             check("the Pokemon that switched in is the one that took the hit",
@@ -751,7 +750,7 @@ Ability: Regenerator
             let wet = TurnModel.resolve(dry,
                 mine: Play(left: .swap(to: 2), right: .attack(move: 0, target: 0)),
                 theirs: Play(left: .attack(move: 0, target: 0),
-                             right: .attack(move: 0, target: 1)), store: store)
+                             right: .attack(move: 0, target: 1)))
             print("  after pivoting Pelipper in, the weather is \(wet.field.weather.rawValue)")
             check("a Drizzle switch-in takes the field back", wet.field.weather == .rain,
                   wet.field.weather.rawValue)
@@ -809,8 +808,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0),
                    megaSlot: 0),
         theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0),
-                     megaSlot: 0),
-        store: store)
+                     megaSlot: 0))
     print("  both evolved; the weather is \(afterMega.field.weather.rawValue)")
     check("both sides Mega Evolved",
           afterMega.mine[0].build.form.isMega && afterMega.theirs[0].build.form.isMega)
@@ -834,8 +832,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0),
                    megaSlot: 0),
         theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0),
-                     megaSlot: 0),
-        store: store)
+                     megaSlot: 0))
     let evolvedNames = afterDual.mine.prefix(2).filter { $0.build.form.isMega }
         .map(\.build.form.formLabel)
     print("  two stones on one side, asked for the first: \(evolvedNames)")
@@ -848,8 +845,7 @@ Ability: Regenerator
         dual,
         mine: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0),
                    megaSlot: 1),
-        theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)),
-        store: store)
+        theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)))
     check("asking for the other one evolves the other one",
           afterOther.mine.prefix(2).filter { $0.build.form.isMega }
             .map(\.build.form.formLabel) == ["Mega Froslass"],
@@ -859,8 +855,7 @@ Ability: Regenerator
     let held = TurnModel.resolve(
         unevolved,
         mine: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)),
-        theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)),
-        store: store)
+        theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)))
     check("nothing evolves unless it is asked to",
           !held.mine[0].build.form.isMega && !held.theirs[0].build.form.isMega)
     check("and holding it back leaves the field clear",
@@ -871,8 +866,7 @@ Ability: Regenerator
         held,
         mine: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0),
                    megaSlot: 0),
-        theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)),
-        store: store)
+        theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)))
     check("evolving a turn later still works",
           afterHeld.mine[0].build.form.isMega && afterHeld.field.weather == .sun,
           afterHeld.field.weather.rawValue)
@@ -925,8 +919,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(opening.mine[0], "Will-O-Wisp"), target: 0),
                    right: .attack(move: at(opening.mine[1], "Follow Me"), target: 0)),
         theirs: Play(left: .attack(move: at(opening.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(opening.theirs[1], "Wood Hammer"), target: 1)),
-        store: store)
+                     right: .attack(move: at(opening.theirs[1], "Wood Hammer"), target: 1)))
     print("  the turn, in order:")
     for line in firstTurn.story.prefix(7) { print("    \(line)") }
     check("Will-O-Wisp actually burns something",
@@ -952,8 +945,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(settled.mine[0], "Protect"), target: 0),
                    right: .protectSelf(move: at(settled.mine[1], "Protect"))),
         theirs: Play(left: .attack(move: at(settled.theirs[0], "Earthquake"), target: 0),
-                     right: .attack(move: at(settled.theirs[1], "Wood Hammer"), target: 0)),
-        store: store)
+                     right: .attack(move: at(settled.theirs[1], "Wood Hammer"), target: 0)))
     check("Protect picked as a move still protects",
           behindProtect.mine[0].hp == settled.mine[0].hp,
           "\(behindProtect.mine[0].hp) vs \(settled.mine[0].hp)")
@@ -969,8 +961,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(wide.mine[0], "Protect"), target: 0),
                    right: .attack(move: at(wide.mine[1], "Wide Guard"), target: 0)),
         theirs: Play(left: .attack(move: at(wide.theirs[0], "Earthquake"), target: 0),
-                     right: .attack(move: at(wide.theirs[1], "Protect"), target: 0)),
-        store: store)
+                     right: .attack(move: at(wide.theirs[1], "Protect"), target: 0)))
     check("Wide Guard turns a spread move away from the whole side",
           blocked.mine[1].hp == wide.mine[1].maxHP,
           "\(blocked.mine[1].hp)/\(wide.mine[1].maxHP)")
@@ -980,8 +971,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(wide.mine[0], "Light Screen"), target: 0),
                    right: .attack(move: at(wide.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(wide.theirs[0], "Protect"), target: 0),
-                     right: .attack(move: at(wide.theirs[1], "Protect"), target: 0)),
-        store: store)
+                     right: .attack(move: at(wide.theirs[1], "Protect"), target: 0)))
     check("Light Screen goes up and stays up", lit.myScreens.lightScreen > 0,
           "\(lit.myScreens.lightScreen)")
 
@@ -993,8 +983,7 @@ Ability: Regenerator
             mine: Play(left: .attack(move: at(opening.mine[0], "Flare Blitz"), target: 0),
                        right: .protectSelf(move: at(opening.mine[1], "Protect"))),
             theirs: Play(left: .attack(move: at(opening.theirs[0], "Swords Dance"), target: 0),
-                         right: .attack(move: at(opening.theirs[1], "Fake Out"), target: 1)),
-            store: store, rolling: true)
+                         right: .attack(move: at(opening.theirs[1], "Fake Out"), target: 1)), rolling: true)
         rolls.insert(rolled.theirs[0].hp)
     }
     print("  the same attack, rolled forty times: \(rolls.count) different results")
@@ -1004,15 +993,13 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(opening.mine[0], "Flare Blitz"), target: 0),
                    right: .protectSelf(move: at(opening.mine[1], "Protect"))),
         theirs: Play(left: .attack(move: at(opening.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(opening.theirs[1], "Fake Out"), target: 1)),
-        store: store)
+                     right: .attack(move: at(opening.theirs[1], "Fake Out"), target: 1)))
     let again = TurnModel.resolve(
         opening,
         mine: Play(left: .attack(move: at(opening.mine[0], "Flare Blitz"), target: 0),
                    right: .protectSelf(move: at(opening.mine[1], "Protect"))),
         theirs: Play(left: .attack(move: at(opening.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(opening.theirs[1], "Fake Out"), target: 1)),
-        store: store)
+                     right: .attack(move: at(opening.theirs[1], "Fake Out"), target: 1)))
     check("while the search still gets the same answer every time",
           averaged.theirs[0].hp == again.theirs[0].hp)
 
@@ -1040,8 +1027,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(windBoard.mine[0], "Tailwind"), target: 0),
                    right: .attack(move: at(windBoard.mine[1], "Flare Blitz"), target: 1)),
         theirs: Play(left: .attack(move: at(windBoard.theirs[0], "Protect"), target: 0),
-                     right: .attack(move: at(windBoard.theirs[1], "Wood Hammer"), target: 1)),
-        store: store)
+                     right: .attack(move: at(windBoard.theirs[1], "Wood Hammer"), target: 1)))
     let order = blown.story
     print("  the turn, in order:")
     for line in order.prefix(6) { print("    \(line)") }
@@ -1075,8 +1061,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(heatBoard.mine[0], "Heat Wave"), target: 0),
                    right: .attack(move: at(heatBoard.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(heatBoard.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(heatBoard.theirs[1], "Wood Hammer"), target: 1)),
-        store: store)
+                     right: .attack(move: at(heatBoard.theirs[1], "Wood Hammer"), target: 1)))
     let heatStep = heatTurn.steps.first { $0.text.contains("Heat Wave") }
     print("  the Heat Wave step:")
     for line in heatStep?.text.split(separator: "\n") ?? [] { print("    \(line)") }
@@ -1102,8 +1087,7 @@ Ability: Regenerator
                 // Into something attacking, not Protecting: a Final Gambit that
                 // is blocked leaves its user standing, as in the game.
                 theirs: Play(left: .attack(move: board2.theirs[0].moves.firstIndex { !DuelEngine.protectMoves.contains($0.name) } ?? 0, target: 1),
-                             right: .attack(move: at(board2.theirs[1], "Protect"), target: 0)),
-                store: store)
+                             right: .attack(move: at(board2.theirs[1], "Protect"), target: 0)))
             check("Final Gambit faints the one that used it",
                   after.mine[0].fainted, "\(after.mine[0].hp)")
         }
@@ -1122,8 +1106,7 @@ Ability: Regenerator
             // They have to actually stand there, or nothing lands and nothing
             // is paid for it.
             theirs: Play(left: .attack(move: at(orbBoard.theirs[0], "Earthquake"), target: 0),
-                         right: .attack(move: at(orbBoard.theirs[1], "Wood Hammer"), target: 0)),
-            store: store)
+                         right: .attack(move: at(orbBoard.theirs[1], "Wood Hammer"), target: 0)))
         print("  Double-Edge off a Life Orb cost the user "
               + "\(orbBoard.mine[0].maxHP - after.mine[0].hp)")
         check("recoil and a Life Orb both come out of the attacker",
@@ -1153,8 +1136,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(tailed.mine[0], "Protect"), target: 0),
                    right: .attack(move: at(tailed.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(tailed.theirs[0], "Fake Out"), target: 0),
-                     right: .attack(move: at(tailed.theirs[1], "Fake Out"), target: 1)),
-        store: store)
+                     right: .attack(move: at(tailed.theirs[1], "Fake Out"), target: 1)))
     for line in refused.story.prefix(6) { print("    \(line)") }
     check("a Fake Out aimed at the Armor Tail is refused",
           refused.story.contains { $0.contains("refused it") })
@@ -1167,13 +1149,12 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(tailed.mine[0], "Protect"), target: 0),
                    right: .attack(move: at(tailed.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(tailed.theirs[0], "Protect"), target: 0),
-                     right: .attack(move: at(tailed.theirs[1], "Protect"), target: 0)),
-        store: store)
+                     right: .attack(move: at(tailed.theirs[1], "Protect"), target: 0)))
     check("but Protect, which is priority aimed at itself, still works",
           ownSide.story.contains { $0.contains("braced") })
 
     // And the search stops offering a move that cannot be used.
-    var tailedGame = TurnGame(board: tailed, store: store)
+    var tailedGame = TurnGame(board: tailed)
     tailedGame.width = 8
     let theirOptions = tailedGame.choices(forMine: false, slot: 0)
     let stillOffered = theirOptions.contains { choice in
@@ -1233,8 +1214,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(barbBoard.mine[0], "Flare Blitz"), target: 0),
                    right: .attack(move: at(barbBoard.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(barbBoard.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(barbBoard.theirs[1], "Protect"), target: 0)),
-        store: store)
+                     right: .attack(move: at(barbBoard.theirs[1], "Protect"), target: 0)))
     check("Rough Skin costs a contact attacker health",
           scraped.story.contains { $0.contains("Rough Skin") },
           scraped.story.filter { $0.contains("Incineroar") }.joined(separator: " | "))
@@ -1254,8 +1234,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(exitBoard.mine[0], "Protect"), target: 0),
                    right: .attack(move: at(exitBoard.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(exitBoard.theirs[0], "Earthquake"), target: 0),
-                     right: .attack(move: at(exitBoard.theirs[1], "Wood Hammer"), target: 0)),
-        store: store)
+                     right: .attack(move: at(exitBoard.theirs[1], "Wood Hammer"), target: 0)))
     // Golisopod protected, so it should still be there. Now let it be hit.
     var exposed = exitBoard
     exposed.mine[0].moves = [store.data.moves.values.first { $0.name == "Iron Head" }!]
@@ -1264,8 +1243,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: 0, target: 0),
                    right: .attack(move: at(exposed.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(exposed.theirs[0], "Protect"), target: 0),
-                     right: .attack(move: at(exposed.theirs[1], "Wood Hammer"), target: 0)),
-        store: store)
+                     right: .attack(move: at(exposed.theirs[1], "Wood Hammer"), target: 0)))
     print("  after being hit, slot 0 is \(struck.mine[0].build.form.formLabel)")
     check("Emergency Exit sends Golisopod out when it drops below half",
           struck.story.contains { $0.contains("Emergency Exit") }
@@ -1282,8 +1260,7 @@ Ability: Regenerator
         regen,
         mine: Play(left: .swap(to: 2), right: .attack(move: at(regen.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(regen.theirs[0], "Protect"), target: 0),
-                     right: .attack(move: at(regen.theirs[1], "Protect"), target: 0)),
-        store: store)
+                     right: .attack(move: at(regen.theirs[1], "Protect"), target: 0)))
     let benched = pivoted.mine.first { $0.build.form.formLabel == "Incineroar" }!
     print("  Incineroar left on \(regen.mine[0].hp), sits on the bench at \(benched.hp)")
     check("Regenerator heals a third on the way out",
@@ -1299,8 +1276,7 @@ Ability: Regenerator
             mine: Play(left: .attack(move: at(barbBoard.mine[0], "Flare Blitz"), target: 0),
                        right: .attack(move: at(barbBoard.mine[1], "Protect"), target: 0)),
             theirs: Play(left: .attack(move: at(barbBoard.theirs[0], "Swords Dance"), target: 0),
-                         right: .attack(move: at(barbBoard.theirs[1], "Protect"), target: 0)),
-            store: store, rolling: true)
+                         right: .attack(move: at(barbBoard.theirs[1], "Protect"), target: 0)), rolling: true)
         if rolled.story.contains(where: { $0.contains("critical") }) { crits += 1 }
     }
     print("  200 Flare Blitzes: \(crits) critical hits (about 8 expected at 1 in 24)")
@@ -1350,7 +1326,7 @@ Ability: Regenerator
     check("every pair they could be carrying is on the list", odds.count == 6, "\(odds.count)")
     check("including the one holding a stone",
           odds.contains { $0.fighters.contains { $0.build.form.formLabel == "Charizard" } })
-    let searcher = BattleEngine(store: store, budget: 0.1)
+    let searcher = BattleEngine(rules: store.rulebook, budget: 0.1)
     let worlds = searcher.imagine(game, belief: BattleEngine.Belief())
     let truth = game.theirs.dropFirst(2).map(\.build.form.id)
     let benches = worlds.map { $0.board.theirs.dropFirst(2).map(\.build.form.id) }
@@ -1432,7 +1408,7 @@ Ability: Regenerator
     fallen.mine[2].build.ability = "Intimidate"     // Kingambit, slower
     fallen.theirs[2].build.ability = "Intimidate"   // Garchomp, faster
     fallen.story = []
-    fallen.replaceFallen(mine: [(slot: 0, bench: 2)], store: store)
+    fallen.replaceFallen(mine: [(slot: 0, bench: 2)])
     print("  after the faints:")
     for line in fallen.story { print("    \(line)") }
     let mineIn = fallen.mine[0].build.form.formLabel, theirsIn = fallen.theirs[0].build.form.formLabel
@@ -1459,8 +1435,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(combat.mine[0], "Protect"), target: 0),
                    right: .attack(move: closeCombat, target: 1)),
         theirs: Play(left: .attack(move: at(combat.theirs[0], "Protect"), target: 0),
-                     right: .attack(move: at(combat.theirs[1], "Iron Head"), target: 0)),
-        store: store)
+                     right: .attack(move: at(combat.theirs[1], "Iron Head"), target: 0)))
     for line in fought.story where line.contains("Staraptor") { print("    \(line)") }
     check("Close Combat drops the user's defences",
           fought.mine[1].build.boosts[Stat.defense.rawValue] == -1
@@ -1472,8 +1447,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(combat.mine[0], "Protect"), target: 0),
                    right: .attack(move: closeCombat, target: 1)),
         theirs: Play(left: .attack(move: at(combat.theirs[0], "Protect"), target: 0),
-                     right: .attack(move: at(combat.theirs[1], "Iron Head"), target: 0)),
-        store: store)
+                     right: .attack(move: at(combat.theirs[1], "Iron Head"), target: 0)))
     for line in contrary.story where line.contains("Contrary") { print("    \(line)") }
     check("and Contrary turns the drop into a raise",
           contrary.mine[1].build.boosts[Stat.defense.rawValue] == 1
@@ -1493,7 +1467,7 @@ Ability: Regenerator
     reviveBoard.mine[3].hp = 0        // Kingambit is down
     let blessing = at(reviveBoard.mine[0], "Revival Blessing")
     check("Revival Blessing is aimed at the party", reviveBoard.mine[0].moves[blessing].aim == .party)
-    let game2 = TurnGame(board: reviveBoard, store: store)
+    let game2 = TurnGame(board: reviveBoard)
     let offered = game2.choices(forMine: true, slot: 0)
     check("the search offers it once somebody has fainted",
           offered.contains(.attack(move: blessing, target: 3)), "\(offered)")
@@ -1502,8 +1476,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: blessing, target: 3),
                    right: .attack(move: at(reviveBoard.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(reviveBoard.theirs[0], "Protect"), target: 0),
-                     right: .attack(move: at(reviveBoard.theirs[1], "Protect"), target: 0)),
-        store: store)
+                     right: .attack(move: at(reviveBoard.theirs[1], "Protect"), target: 0)))
     for line in revived.story where line.contains("Kingambit") { print("    \(line)") }
     check("and the fallen one comes back at half its health",
           revived.mine[3].hp == revived.mine[3].maxHP / 2, "\(revived.mine[3].hp)/\(revived.mine[3].maxHP)")
@@ -1513,7 +1486,7 @@ Ability: Regenerator
     print("\n== both of theirs act ==")
     let bothGame = Board.opening(mine: mySix, bringing: mySix.slots.prefix(4).map(\.formID),
                                  theirs: theirSix, store: store, singles: false)
-    let bothSolve = TurnGame(board: bothGame, store: store).solve(iterations: 300)
+    let bothSolve = TurnGame(board: bothGame).solve(iterations: 300)
     let theirsActing = bothSolve.theirPlays.filter { !$0.left.isPass && !$0.right.isPass }.count
     check("every line of theirs gives both Pokémon something to do",
           theirsActing == bothSolve.theirPlays.count, "\(theirsActing) of \(bothSolve.theirPlays.count)")
@@ -1530,8 +1503,7 @@ Ability: Regenerator
         bothGame,
         mine: Play(left: .protectSelf(move: at(bothGame.mine[0], "Protect")),
                    right: .protectSelf(move: at(bothGame.mine[1], "Protect"))),
-        theirs: Play(left: .attack(move: 0, target: 0), right: .swap(to: 2)),
-        store: store)
+        theirs: Play(left: .attack(move: 0, target: 0), right: .swap(to: 2)))
     for line in switching.story.prefix(4) { print("    \(line)") }
     check("a switch is narrated", switching.story.contains { $0.hasPrefix("They switched") })
     check("and the one that came in is seen", switching.theirs[1].seen)
@@ -1544,8 +1516,7 @@ Ability: Regenerator
     let swapped = TurnModel.resolve(
         bothSwitch,
         mine: Play(left: .swap(to: 2), right: .protectSelf(move: at(bothSwitch.mine[1], "Protect"))),
-        theirs: Play(left: .attack(move: 0, target: 0), right: .swap(to: 2)),
-        store: store)
+        theirs: Play(left: .attack(move: 0, target: 0), right: .swap(to: 2)))
     print("  \(bothSwitch.mine[0].build.form.formLabel) \(leaverSpeed) leaves against \(bothSwitch.theirs[1].build.form.formLabel) \(theirLeaverSpeed)")
     for step in swapped.steps.prefix(3) { print("    step: \(step.text.replacingOccurrences(of: "\n", with: " / "))") }
     let mineAt = swapped.story.firstIndex { $0.hasPrefix("You switched") }!
@@ -1588,8 +1559,7 @@ Ability: Regenerator
                           // Rillaboom attacks rather than Protects, or the
                           // one-turn tests would be measuring its Protect.
                           theirs: Play(left: .attack(move: at(board.theirs[0], "Swords Dance"), target: 0),
-                                       right: .attack(move: at(board.theirs[1], "Wood Hammer"), target: 1)),
-                          store: store)
+                                       right: .attack(move: at(board.theirs[1], "Wood Hammer"), target: 1)))
     }
     let charged1 = quiet(chargeBoard, .attack(move: eShot, target: 1))
     for line in charged1.story where line.contains("Kingambit") { print("    \(line)") }
@@ -1630,13 +1600,12 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(flyBoard.mine[0], "Protect"), target: 0),
                    right: .attack(move: 0, target: 0)),
         theirs: Play(left: .attack(move: at(flyBoard.theirs[0], "Earthquake"), target: 1),
-                     right: .attack(move: at(flyBoard.theirs[1], "Wood Hammer"), target: 1)),
-        store: store)
+                     right: .attack(move: at(flyBoard.theirs[1], "Wood Hammer"), target: 1)))
     for line in flew.story where line.contains("reach") || line.contains("Fly") { print("    \(line)") }
     check("a Pokémon in the air cannot be hit", flew.mine[1].hidden && flew.mine[1].hp == flew.mine[1].maxHP,
           "hp \(flew.mine[1].hp)/\(flew.mine[1].maxHP)")
     check("and the search offers only the finish while it is charging",
-          TurnGame(board: charged1, store: store).choices(forMine: true, slot: 0) == [.attack(move: eShot, target: 1)])
+          TurnGame(board: charged1).choices(forMine: true, slot: 0) == [.attack(move: eShot, target: 1)])
 
     print("\n== Protect wearing thin ==")
     let protect = at(chargeBoard.mine[1], "Protect")
@@ -1644,16 +1613,14 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(chargeBoard.mine[0], "Protect"), target: 0),
                    right: .protectSelf(move: protect)),
         theirs: Play(left: .attack(move: at(chargeBoard.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(chargeBoard.theirs[1], "Wood Hammer"), target: 1)),
-        store: store)
+                     right: .attack(move: at(chargeBoard.theirs[1], "Wood Hammer"), target: 1)))
     check("the first Protect holds and starts a streak",
           once.mine[1].hp == once.mine[1].maxHP && once.mine[1].protectStreak == 1)
     let twice = TurnModel.resolve(once,
         mine: Play(left: .attack(move: at(once.mine[0], "Protect"), target: 0),
                    right: .protectSelf(move: protect)),
         theirs: Play(left: .attack(move: at(once.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(once.theirs[1], "Wood Hammer"), target: 1)),
-        store: store)
+                     right: .attack(move: at(once.theirs[1], "Wood Hammer"), target: 1)))
     for line in twice.story where line.contains("Whimsicott") { print("    \(line)") }
     check("the search takes a second Protect in a row as a failure",
           twice.mine[1].hp < twice.mine[1].maxHP && twice.mine[1].protectStreak == 0)
@@ -1663,8 +1630,7 @@ Ability: Regenerator
             mine: Play(left: .attack(move: at(once.mine[0], "Protect"), target: 0),
                        right: .protectSelf(move: protect)),
             theirs: Play(left: .attack(move: at(once.theirs[0], "Swords Dance"), target: 0),
-                         right: .attack(move: at(once.theirs[1], "Protect"), target: 0)),
-            store: store, rolling: true)
+                         right: .attack(move: at(once.theirs[1], "Protect"), target: 0)), rolling: true)
         if rolled.mine[1].isProtected { heldCount += 1 }
     }
     print("  600 second Protects in a row: \(heldCount) held (about 200 expected)")
@@ -1675,25 +1641,24 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(rested.mine[0], "Protect"), target: 0),
                    right: .attack(move: 0, target: 0)),
         theirs: Play(left: .attack(move: at(rested.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(rested.theirs[1], "Protect"), target: 0)),
-        store: store)
+                     right: .attack(move: at(rested.theirs[1], "Protect"), target: 0)))
     check("a turn without Protect resets the streak", afterRest.mine[1].protectStreak == 0)
     // The search weighs a repeat Protect at its odds, not as a certain miss.
-    let repeatGame = TurnGame(board: once, store: store)
+    let repeatGame = TurnGame(board: once)
     let repeatChoices = repeatGame.choices(forMine: true, slot: 1)
     check("the search still offers a second Protect, at a third",
           repeatChoices.contains { $0.isProtect }, "\(repeatChoices)")
     var thrice = once
     thrice.mine[1].protectStreak = 2
     check("but not a third one, at a ninth",
-          !TurnGame(board: thrice, store: store).choices(forMine: true, slot: 1).contains { $0.isProtect })
+          !TurnGame(board: thrice).choices(forMine: true, slot: 1).contains { $0.isProtect })
     // Kingambit charges rather than Protects, or it would be a second chancy
     // Protect and four branches.
     let guardPlay = Play(left: .attack(move: at(once.mine[0], "Solar Beam"), target: 1),
                          right: .protectSelf(move: protect))
     let hammerPlay = Play(left: .attack(move: at(once.theirs[0], "Swords Dance"), target: 0),
                           right: .attack(move: at(once.theirs[1], "Wood Hammer"), target: 1))
-    let branches = TurnModel.outcomes(once, mine: guardPlay, theirs: hammerPlay, store: store)
+    let branches = TurnModel.outcomes(once, mine: guardPlay, theirs: hammerPlay)
     print("  branches: " + branches.map { String(format: "%.0f%% -> Whimsicott %d/%d", $0.chance * 100, $0.board.mine[1].hp, $0.board.mine[1].maxHP) }.joined(separator: ", "))
     check("a repeat Protect is two branches, a third and two thirds",
           branches.count == 2 && abs(branches[0].chance - 2.0 / 3.0) < 0.01 && abs(branches[1].chance - 1.0 / 3.0) < 0.01)
@@ -1722,15 +1687,13 @@ Ability: Regenerator
         mine: Play(left: .attack(move: feint, target: 0),
                    right: .attack(move: at(feintBoard.mine[1], "Dragon Claw"), target: 0)),
         theirs: Play(left: .protectSelf(move: at(feintBoard.theirs[0], "Protect")),
-                     right: .attack(move: at(feintBoard.theirs[1], "Protect"), target: 0)),
-        store: store)
+                     right: .attack(move: at(feintBoard.theirs[1], "Protect"), target: 0)))
     for line in broken.story where line.contains("Kingambit") || line.contains("Feint") || line.contains("Dragon Claw") { print("    \(line)") }
     let feintOnly = TurnModel.resolve(feintBoard,
         mine: Play(left: .attack(move: feint, target: 0),
                    right: .attack(move: at(feintBoard.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .protectSelf(move: at(feintBoard.theirs[0], "Protect")),
-                     right: .attack(move: at(feintBoard.theirs[1], "Protect"), target: 0)),
-        store: store)
+                     right: .attack(move: at(feintBoard.theirs[1], "Protect"), target: 0)))
     let feintDamage = feintOnly.theirs[0].maxHP - feintOnly.theirs[0].hp
     print("  Feint alone took \(feintDamage); with Dragon Claw after it, \(broken.theirs[0].maxHP - broken.theirs[0].hp)")
     check("Feint lands through Protect", feintDamage > 0)
@@ -1751,8 +1714,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(turnBoard.mine[0], "Moonblast"), target: 0),
                    right: .attack(move: at(turnBoard.mine[1], "Dragon Claw"), target: 0)),
         theirs: Play(left: .attack(move: at(turnBoard.theirs[0], "Wood Hammer"), target: 1),
-                     right: .attack(move: at(turnBoard.theirs[1], "Iron Head"), target: 0)),
-        store: store)
+                     right: .attack(move: at(turnBoard.theirs[1], "Iron Head"), target: 0)))
     for line in turned.story where line.contains("Dragon Claw") || line.contains("turned") || line.contains("fainted") { print("    \(line)") }
     check("Whimsicott removed Rillaboom first", turned.theirs[0].fainted)
     check("and Garchomp's Dragon Claw turned to Kingambit instead of hitting nothing",
@@ -1772,8 +1734,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(thermal.mine[0], "Heat Wave"), target: 0),
                    right: .attack(move: at(thermal.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(thermal.theirs[0], "Glaive Rush"), target: 1),
-                     right: .attack(move: at(thermal.theirs[1], "Wood Hammer"), target: 1)),
-        store: store)
+                     right: .attack(move: at(thermal.theirs[1], "Wood Hammer"), target: 1)))
     for line in warmed.story where line.contains("Thermal") { print("    \(line)") }
     check("Thermal Exchange raises Attack when hit by a Fire move",
           warmed.theirs[0].build.boosts[Stat.attack.rawValue] == 1,
@@ -1788,8 +1749,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(techBoard.mine[0], "Heat Wave"), target: 0),
                    right: .attack(move: at(techBoard.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(techBoard.theirs[0], "Protect"), target: 0),
-                     right: .attack(move: at(techBoard.theirs[1], "Protect"), target: 0)),
-        store: store)
+                     right: .attack(move: at(techBoard.theirs[1], "Protect"), target: 0)))
     _ = selfHit
     var ally = techBoard
     // A small Fire move: enough to set the Policy off, not enough to remove
@@ -1803,15 +1763,14 @@ Ability: Regenerator
         mine: Play(left: Choice.attackingAlly(move: 0),
                    right: .attack(move: 0, target: 0)),
         theirs: Play(left: .attack(move: at(ally.theirs[0], "Protect"), target: 0),
-                     right: .attack(move: at(ally.theirs[1], "Protect"), target: 0)),
-        store: store)
+                     right: .attack(move: at(ally.theirs[1], "Protect"), target: 0)))
     for line in hitOwn.story where line.contains("Whimsicott") { print("    \(line)") }
     check("a move can be aimed at your own partner",
           hitOwn.mine[1].hp < hitOwn.mine[1].maxHP && hitOwn.theirs[0].hp == hitOwn.theirs[0].maxHP,
           "\(hitOwn.mine[1].hp)/\(hitOwn.mine[1].maxHP)")
     check("and what it carries goes off — the Weakness Policy",
           hitOwn.mine[1].build.boosts[Stat.attack.rawValue] == 2, "\(hitOwn.mine[1].build.boosts)")
-    print("  described as: \(TurnGame(board: ally, store: store).describe(Choice.attackingAlly(move: 0), fighter: ally.mine[0], foes: Array(ally.theirs.prefix(2)), team: ally.mine))")
+    print("  described as: \(TurnGame(board: ally).describe(Choice.attackingAlly(move: 0), fighter: ally.mine[0], foes: Array(ally.theirs.prefix(2)), team: ally.mine))")
 
     // -- dice per target, moves that give back, and a field that runs out -----
     print("\n== each target rolls its own ==")
@@ -1827,8 +1786,7 @@ Ability: Regenerator
             mine: Play(left: .attack(move: at(muddyBoard.mine[0], "Muddy Water"), target: 0),
                        right: .attack(move: at(muddyBoard.mine[1], "Protect"), target: 0)),
             theirs: Play(left: .attack(move: at(muddyBoard.theirs[0], "Swords Dance"), target: 0),
-                         right: .attack(move: at(muddyBoard.theirs[1], "Swords Dance"), target: 0)),
-            store: store, rolling: true)
+                         right: .attack(move: at(muddyBoard.theirs[1], "Swords Dance"), target: 0)), rolling: true)
         let hits = [rolled.theirs[0], rolled.theirs[1]].filter { $0.hp < $0.maxHP }.count
         if hits == 1 { oneOfTwo += 1 }
         if hits == 2 { bothHit += 1 }
@@ -1848,8 +1806,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: 0, target: 0),
                    right: .attack(move: at(drainBoard.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(drainBoard.theirs[0], "Muddy Water"), target: 0),
-                     right: .attack(move: 0, target: 0)),
-        store: store)
+                     right: .attack(move: 0, target: 0)))
     for line in drained.story where line.contains("drained") { print("    \(line)") }
     let drainLine = drained.story.first { $0.contains("Garchomp drained") }
     let gained = drainLine.flatMap { line in Int(line.split(separator: " ").first { Int($0) != nil } ?? "") } ?? 0
@@ -1870,8 +1827,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: 0, target: 1),
                    right: .attack(move: at(tantrumBoard.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(tantrumBoard.theirs[0], "Protect"), target: 0),
-                     right: .protectSelf(move: at(tantrumBoard.theirs[1], "Protect"))),
-        store: store)
+                     right: .protectSelf(move: at(tantrumBoard.theirs[1], "Protect"))))
     check("a move that reached nobody is remembered as failed", walled.mine[0].lastMoveFailed)
     let calm = DamageCalc.calculate(attacker: tantrumBoard.mine[0].build, defender: tantrumBoard.theirs[1].build,
                                     move: tantrum, field: tantrumBoard.field).maxDamage
@@ -1896,8 +1852,7 @@ Ability: Regenerator
             mine: Play(left: .attack(move: at(running.mine[0], "Protect"), target: 0),
                        right: .attack(move: at(running.mine[1], "Protect"), target: 0)),
             theirs: Play(left: .attack(move: at(running.theirs[0], "Protect"), target: 0),
-                         right: .attack(move: at(running.theirs[1], "Protect"), target: 0)),
-            store: store)
+                         right: .attack(move: at(running.theirs[1], "Protect"), target: 0)))
         if running.field.weather == .none { endedAt = turn }
     }
     print("  the rain stopped at the end of turn \(endedAt)")
@@ -1931,14 +1886,12 @@ Ability: Regenerator
     let unbowed = TurnModel.resolve(mourning,
         mine: Play(left: .attack(move: 0, target: 0), right: .attack(move: 0, target: 0)),
         theirs: Play(left: .attack(move: at(mourning.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(mourning.theirs[1], "Swords Dance"), target: 0)),
-        store: store)
+                     right: .attack(move: at(mourning.theirs[1], "Swords Dance"), target: 0)))
     mourning.mine[2].hp = 0; mourning.mine[3].hp = 0
     let bereaved = TurnModel.resolve(mourning,
         mine: Play(left: .attack(move: 0, target: 0), right: .attack(move: 0, target: 0)),
         theirs: Play(left: .attack(move: at(mourning.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(mourning.theirs[1], "Swords Dance"), target: 0)),
-        store: store)
+                     right: .attack(move: at(mourning.theirs[1], "Swords Dance"), target: 0)))
     let took1 = unbowed.theirs[0].maxHP - unbowed.theirs[0].hp
     let took2 = bereaved.theirs[0].maxHP - bereaved.theirs[0].hp
     print("  in a turn: \(took1) with the team standing, \(took2) with two down")
@@ -1957,8 +1910,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(icyBoard.mine[0], "Icy Wind"), target: 0),
                    right: .attack(move: at(icyBoard.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(icyBoard.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(icyBoard.theirs[1], "Swords Dance"), target: 0)),
-        store: store)
+                     right: .attack(move: at(icyBoard.theirs[1], "Swords Dance"), target: 0)))
     for line in windy.story where line.contains("Spe") { print("    \(line)") }
     check("Icy Wind takes a stage of Speed off both",
           windy.theirs[0].build.boosts[Stat.speed.rawValue] == -1 && windy.theirs[1].build.boosts[Stat.speed.rawValue] == -1,
@@ -1974,8 +1926,7 @@ Ability: Regenerator
             mine: Play(left: .attack(move: at(icyBoard.mine[0], "Protect"), target: 0),
                        right: .attack(move: at(icyBoard.mine[1], "Scald"), target: 0)),
             theirs: Play(left: .attack(move: at(icyBoard.theirs[0], "Swords Dance"), target: 0),
-                         right: .attack(move: at(icyBoard.theirs[1], "Swords Dance"), target: 0)),
-            store: store, rolling: true)
+                         right: .attack(move: at(icyBoard.theirs[1], "Swords Dance"), target: 0)), rolling: true)
         if rolled.theirs[0].status == .burn { burns += 1 }
     }
     print("  300 Scalds: \(burns) burns (about 90 expected)")
@@ -1984,8 +1935,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(icyBoard.mine[0], "Protect"), target: 0),
                    right: .attack(move: at(icyBoard.mine[1], "Scald"), target: 0)),
         theirs: Play(left: .attack(move: at(icyBoard.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(icyBoard.theirs[1], "Swords Dance"), target: 0)),
-        store: store)
+                     right: .attack(move: at(icyBoard.theirs[1], "Swords Dance"), target: 0)))
     check("and the search does not count on it", averaged2.theirs[0].status == .none)
     var nuzzleBoard = icyBoard
     nuzzleBoard.mine[0].moves = [nuzzle] + nuzzleBoard.mine[0].moves
@@ -1994,8 +1944,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: 0, target: 1),
                    right: .attack(move: at(nuzzleBoard.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(nuzzleBoard.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(nuzzleBoard.theirs[1], "Swords Dance"), target: 0)),
-        store: store)
+                     right: .attack(move: at(nuzzleBoard.theirs[1], "Swords Dance"), target: 0)))
     check("Nuzzle paralyses every time, even for the search", zapped.theirs[1].status == .paralysis,
           "\(zapped.theirs[1].status)")
 
@@ -2013,8 +1962,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(tired.mine[0], "Recover"), target: 0),
                    right: .attack(move: at(tired.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(tired.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(tired.theirs[1], "Swords Dance"), target: 0)),
-        store: store)
+                     right: .attack(move: at(tired.theirs[1], "Swords Dance"), target: 0)))
     for line in recovered.story where line.contains("recovered") { print("    \(line)") }
     let expected = tired.mine[0].hp + tired.mine[0].maxHP / 2
     print("  Milotic \(tired.mine[0].hp) -> \(recovered.mine[0].hp) of \(tired.mine[0].maxHP) (Leftovers adds a sixteenth at the end)")
@@ -2036,8 +1984,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: 0, target: 0),
                    right: .attack(move: at(dazed.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(dazed.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(dazed.theirs[1], "Swords Dance"), target: 0)),
-        store: store)
+                     right: .attack(move: at(dazed.theirs[1], "Swords Dance"), target: 0)))
     for line in rayed.story where line.contains("confus") { print("    \(line)") }
     check("Confuse Ray leaves the target confused", rayed.theirs[0].isConfused, "\(rayed.theirs[0].confusedFor)")
     // Over many rolled turns, a confused Pokémon hurts itself about a third of the time.
@@ -2049,8 +1996,7 @@ Ability: Regenerator
             mine: Play(left: .attack(move: at(still.mine[0], "Protect"), target: 0),
                        right: .attack(move: at(still.mine[1], "Protect"), target: 0)),
             theirs: Play(left: .attack(move: at(still.theirs[0], "Swords Dance"), target: 0),
-                         right: .attack(move: at(still.theirs[1], "Swords Dance"), target: 0)),
-            store: store, rolling: true)
+                         right: .attack(move: at(still.theirs[1], "Swords Dance"), target: 0)), rolling: true)
         turnsConfused += 1
         if rolled.story.contains(where: { $0.contains("hurt itself") }) { selfHits += 1 }
     }
@@ -2060,8 +2006,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(rayed.mine[0], "Protect"), target: 0),
                    right: .attack(move: at(rayed.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(rayed.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(rayed.theirs[1], "Swords Dance"), target: 0)),
-        store: store)
+                     right: .attack(move: at(rayed.theirs[1], "Swords Dance"), target: 0)))
     check("the search lets it act, and the count runs down",
           averaged3.theirs[0].confusedFor == rayed.theirs[0].confusedFor - 1
             && averaged3.theirs[0].build.boosts[Stat.attack.rawValue] == rayed.theirs[0].build.boosts[Stat.attack.rawValue] + 2)
@@ -2071,8 +2016,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(leaving.mine[0], "Protect"), target: 0),
                    right: .attack(move: at(leaving.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .swap(to: 2),
-                     right: .attack(move: at(leaving.theirs[1], "Swords Dance"), target: 0)),
-        store: store)
+                     right: .attack(move: at(leaving.theirs[1], "Swords Dance"), target: 0)))
     check("switching out clears it", !switched.theirs[2].isConfused)
     var tempo = dazed
     tempo.theirs[0].build.ability = "Own Tempo"
@@ -2080,8 +2024,7 @@ Ability: Regenerator
         mine: Play(left: .attack(move: 0, target: 0),
                    right: .attack(move: at(tempo.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(tempo.theirs[0], "Swords Dance"), target: 0),
-                     right: .attack(move: at(tempo.theirs[1], "Swords Dance"), target: 0)),
-        store: store)
+                     right: .attack(move: at(tempo.theirs[1], "Swords Dance"), target: 0)))
     check("Own Tempo refuses it", !unbothered.theirs[0].isConfused)
 
     print("\n== the herb and the burden ==")
@@ -2096,16 +2039,14 @@ Ability: Regenerator
         mine: Play(left: .attack(move: at(herbal.mine[0], "Protect"), target: 0),
                    right: .attack(move: at(herbal.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(herbal.theirs[0], "Icy Wind"), target: 0),
-                     right: .attack(move: at(herbal.theirs[1], "Swords Dance"), target: 0)),
-        store: store)
+                     right: .attack(move: at(herbal.theirs[1], "Swords Dance"), target: 0)))
     _ = chilled2
     // Protect blocks Icy Wind; use a turn where Sneasler attacks instead.
     let dropped = TurnModel.resolve(herbal,
         mine: Play(left: .attack(move: at(herbal.mine[0], "Close Combat"), target: 1),
                    right: .attack(move: at(herbal.mine[1], "Protect"), target: 0)),
         theirs: Play(left: .attack(move: at(herbal.theirs[0], "Protect"), target: 0),
-                     right: .attack(move: at(herbal.theirs[1], "Swords Dance"), target: 0)),
-        store: store)
+                     right: .attack(move: at(herbal.theirs[1], "Swords Dance"), target: 0)))
     for line in dropped.story where line.contains("Sneasler") { print("    \(line)") }
     let quick1 = dropped.mine[0].build.speed(in: dropped.field)
     check("White Herb undoes the drop and is used up",

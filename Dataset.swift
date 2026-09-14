@@ -107,6 +107,9 @@ final class Store: ObservableObject {
 
     // MARK: - Lookups
 
+    /// The engine's frozen view of the data. Rebuilt if the dataset is.
+    private(set) lazy var rulebook = Rulebook(dataset: data)
+
     lazy var formsByID: [String: Form] = {
         Dictionary(data.forms.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
     }()

@@ -100,7 +100,7 @@ let fieldMoveNeeds: [String: Set<String>] = [
     if let meta = store.data.metaTeams.first(where: { $0.name == "Big Six" }),
        let mine = store.teams.first(where: { $0.slots.count >= 4 }) {
         let board = Board(mine: mine, theirs: store.opponentTeam(meta), store: store)
-        let game = TurnGame(board: board, store: store)
+        let game = TurnGame(board: board)
         _ = game.solve()
         let started = Date()
         let solution = game.solve()
@@ -140,7 +140,7 @@ let fieldMoveNeeds: [String: Set<String>] = [
         let board = Board(mine: mine, theirs: store.opponentTeam(meta), store: store)
         var reached: [Int] = []
         for budget in [0.15, 0.5] {
-            var engine = BattleEngine(store: store, budget: budget)
+            var engine = BattleEngine(rules: store.rulebook, budget: budget)
             let started = Date()
             let result = engine.think(board)
             let took = Date().timeIntervalSince(started)
@@ -158,7 +158,7 @@ let fieldMoveNeeds: [String: Set<String>] = [
               "\(reached)")
 
         // The belief: what it cannot see, and where the guess comes from.
-        var engine = BattleEngine(store: store, budget: 0.3)
+        var engine = BattleEngine(rules: store.rulebook, budget: 0.3)
         let worlds = engine.imagine(board, belief: .init())
         print("  worlds imagined: \(worlds.count)")
         check("it imagines more than one version of what they are holding",
@@ -183,15 +183,14 @@ let fieldMoveNeeds: [String: Set<String>] = [
         // Singles is the same machinery with one slot a side.
         var solo = board
         solo.activeCount = 1
-        var soloGame = TurnGame(board: solo, store: store)
+        var soloGame = TurnGame(board: solo)
         soloGame.width = 6
         let soloPlays = soloGame.plays(forMine: true)
-        print("  singles: \(soloPlays.count) lines rather than \(TurnGame(board: board, store: store).plays(forMine: true).count)")
+        print("  singles: \(soloPlays.count) lines rather than \(TurnGame(board: board).plays(forMine: true).count)")
         check("singles gives one Pokemon its choices and nobody else one",
               soloPlays.allSatisfy { $0.right.isPass }, "\(soloPlays.count)")
         check("and it still resolves a turn",
-              !TurnModel.resolve(solo, mine: soloPlays[0], theirs: soloPlays[0],
-                                 store: store).mine.isEmpty)
+              !TurnModel.resolve(solo, mine: soloPlays[0], theirs: soloPlays[0]).mine.isEmpty)
     }
 
     // -- what the refiner will and will not suggest -------------------------

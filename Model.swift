@@ -180,6 +180,15 @@ struct Move: Codable, Identifiable, Hashable {
     /// Aimed at somebody on the bench: the one move that brings a Pokémon back.
     static let partyMoves: Set<String> = ["Revival Blessing"]
 
+    /// Protect and its family. Named rather than read from the text because
+    /// the family is small, closed and easy to get wrong: Wide Guard and Quick
+    /// Guard read almost identically and do something else entirely, and Endure
+    /// leaves you on one health point rather than untouched.
+    static let protectMoves: Set<String> = [
+        "Protect", "Detect", "Spiky Shield", "Baneful Bunker",
+        "Burning Bulwark", "Silk Trap", "Obstruct", "King's Shield",
+    ]
+
     /// Aimed at the user's own side or the whole field.
     static let sideMoves: Set<String> = [
         "Tailwind", "Trick Room", "Reflect", "Light Screen", "Aurora Veil",
@@ -575,7 +584,7 @@ struct Rules: Codable {
 
 /// A threat in the usage table. `projected` marks the M-C arrivals that have no
 /// ladder history yet — their placement is an argument, not a measurement.
-struct UsageEntry: Codable, Identifiable, Hashable {
+struct UsageEntry: Codable, Identifiable, Hashable, Sendable {
     let name: String
     let tier: String
     let usage: Double
@@ -615,7 +624,7 @@ struct UsageEntry: Codable, Identifiable, Hashable {
 }
 
 /// One line of a usage breakdown: a name and the share of sets running it.
-struct UsageShare: Codable, Identifiable, Hashable {
+struct UsageShare: Codable, Identifiable, Hashable, Sendable {
     let name: String
     let percent: Double
     var id: String { name }

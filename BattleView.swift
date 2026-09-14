@@ -27,6 +27,8 @@ struct BattleView: View {
     @State private var opponentID = ""
     @State private var opponentSearch = ""
     @State private var startHover = false
+    /// Which search the view is waiting on; an older one's answer is dropped.
+    @State private var thinkTicket = 0
     /// The start of the game, being shown: the flash, the leads coming out,
     /// their abilities going off. Nil once orders can be given.
     @State private var opening = false
@@ -523,7 +525,7 @@ struct BattleView: View {
 
     /// How often that species actually carries its stone on the ladder.
     private func stoneOdds(_ form: Form) -> String {
-        let engine = BattleEngine(store: store)
+        let engine = BattleEngine(rules: store.rulebook)
         guard let stone = engine.itemOdds(for: form).first(where: { $0.item.hasSuffix("ite") || $0.item.hasSuffix("ite X") || $0.item.hasSuffix("ite Y") || $0.item.hasSuffix("ite Z") })
         else { return "" }
         return String(format: " About %.0f%% of them carry %@.", stone.chance * 100, stone.item)
@@ -1756,7 +1758,7 @@ struct BattleView: View {
 
     /// What the measured ladder says they are probably holding.
     private func likelyItem(_ form: Form) -> String {
-        let engine = BattleEngine(store: store)
+        let engine = BattleEngine(rules: store.rulebook)
         guard let best = engine.itemOdds(for: form).first else { return "item unknown" }
         if best.chance >= 0.99 { return best.item }
         return String(format: "likely %@ (%.0f%%)", best.item, best.chance * 100)
@@ -1799,7 +1801,7 @@ struct BattleView: View {
                             guard chosenSends.count >= sending.count else { return }
                             var next = board
                             next.story = []
-                            next.replaceFallen(mine: chosenSends, store: store)
+                            next.replaceFallen(mine: chosenSends)
                             log.append(contentsOf: next.story)
                             self.board = next
                             sending = next.gapsOfMine
@@ -1927,7 +1929,7 @@ struct BattleView: View {
         // is still yours to play, so it is scored the same way, against their
         // mix, rather than left blank.
         var total = 0.0
-        let game = TurnGame(board: board, store: store)
+        let game = TurnGame(board: board)
         for (column, theirs) in solved.theirPlays.enumerated() where solved.theirMix[column] > 0.001 {
             total += game.settle(play, theirs).expected * solved.theirMix[column]
         }
@@ -2041,7 +2043,7 @@ struct BattleView: View {
     }
 
     private func describeChoice(_ choice: Choice, board: Board, slot: Int) -> String {
-        var game = TurnGame(board: board, store: store)
+        var game = TurnGame(board: board)
         game.width = 10
         return game.describe(choice, fighter: board.mine[slot],
                              foes: Array(board.theirs.prefix(board.activeCount)),
@@ -2149,7 +2151,7 @@ struct BattleView: View {
     @ViewBuilder
     private func engineLine(_ board: Board) -> some View {
         if let thought, let pick = enginePick {
-            var game = TurnGame(board: board, store: store)
+            var game = TurnGame(board: board)
             let _ = { game.width = 10 }()
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
@@ -2404,7 +2406,7 @@ struct BattleView: View {
                                   ? "The weather waives the charging turn: it boosts and fires this turn."
                                   : "This turn winds it up; next turn it fires at the same target, whatever else happens. Switching out gives up the charge.")
                     }
-                    if DuelEngine.protectMoves.contains(move.name), fighter.protectStreak > 0 {
+                    if Move.protectMoves.contains(move.name), fighter.protectStreak > 0 {
                         Text("\(Int((fighter.protectChance * 100).rounded()))% chance after last turn's")
                             .font(.system(size: 9, weight: .semibold))
                             .padding(.horizontal, 5).padding(.vertical, 1)
@@ -2698,7 +2700,7 @@ struct BattleView: View {
             // Yours against the engine's, before you commit. Both are scored
             // against their mix, on one scale, so the gap means something.
             if let pick = enginePick, let yours = worth(mine), let best = worth(pick) {
-                var game = TurnGame(board: board, store: store)
+                var game = TurnGame(board: board)
                 let _ = { game.width = 10 }()
                 HStack(spacing: 10) {
                     Text(String(format: "Your line %+.2f", yours))
@@ -2909,20 +2911,38 @@ struct BattleView: View {
 
     // MARK: Running a turn
 
-    private func think() {
-        guard let board else { return }
-        thinking = true
-        Task { @MainActor in
-            await breathe("battle think")
-            let engine = BattleEngine(store: store, budget: 0.5)
+    /// The search, off the main thread. The engine is a value that knows the
+    /// rulebook and nothing else, so it runs wherever it is put; the window
+    /// keeps drawing and the spinner actually spins.
+    private static func search(_ engine: BattleEngine, _ board: Board)
+        async -> (result: BattleEngine.Result, turnSolve: TurnGame.Solution, likeliest: Board) {
+        await Task.detached(priority: .userInitiated) {
             let result = engine.think(board)
             // The one-turn read is taken on the likeliest version of the board
             // rather than the board itself, so nothing shown here can name a
             // Pokémon of theirs that has not come out.
             let likeliest = engine.imagine(board, belief: BattleEngine.Belief()).first?.board ?? board
-            var game = TurnGame(board: likeliest, store: store)
+            var game = TurnGame(board: likeliest)
             game.width = engine.beam + 2
-            let turnSolve = game.solve()
+            return (result, game.solve(), likeliest)
+        }.value
+    }
+
+    private func think() {
+        guard let board else { return }
+        thinking = true
+        thinkTicket += 1
+        let ticket = thinkTicket
+        let engine = BattleEngine(rules: store.rulebook, budget: 0.5)
+        Task { @MainActor in
+            let searched = await Self.search(engine, board)
+            // The board moved on while this was thinking; the answer is to a
+            // position that no longer exists.
+            guard ticket == thinkTicket else { return }
+            let result = searched.result
+            let turnSolve = searched.turnSolve
+            var game = TurnGame(board: searched.likeliest)
+            game.width = engine.beam + 2
 
             var ours: [String] = []
             if let top = result.mix.indices.max(by: { result.mix[$0] < result.mix[$1] }),
@@ -3027,7 +3047,7 @@ struct BattleView: View {
 
     private func playTurn() {
         guard let current = board, let mine = ordersAsPlay(current) else { return }
-        var game = TurnGame(board: current, store: store)
+        var game = TurnGame(board: current)
         game.width = 10
         let solved = game.solve()
         let roll = Double.random(in: 0...1)
@@ -3067,8 +3087,7 @@ struct BattleView: View {
 
         // A battle rolls. The search does not, which is deliberate: it wants
         // the average and a player wants the dice.
-        var next = TurnModel.resolve(current, mine: mine, theirs: theirPlay,
-                                     store: store, rolling: true)
+        var next = TurnModel.resolve(current, mine: mine, theirs: theirPlay, rolling: true)
         let told = next.story
         let recorded = next
         // Replacements are sent in together at the end of the turn, faster
@@ -3078,7 +3097,7 @@ struct BattleView: View {
         var arrivals: [String] = []
         if next.gapsOfMine.isEmpty {
             next.story = []
-            next.replaceFallen(mine: [], store: store)
+            next.replaceFallen(mine: [])
             arrivals = next.story
         }
 
