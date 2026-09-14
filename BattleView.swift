@@ -40,6 +40,11 @@ struct BattleView: View {
     @State private var theirSide: [String] = []
     @State private var searchNote = ""
     @State private var finished: String?
+    /// Toggled beside the move, the way the game asks for it.
+    @State private var megaSlot: Int?
+    /// Who took a hit on the last turn, so they can flinch on screen.
+    @State private var struck: Set<Int> = []
+    @State private var struckTheirs: Set<Int> = []
 
     /// Seeded state, so tools/snapshot.sh can render a screen nobody has
     /// clicked into. Done through init rather than onAppear, which an
@@ -302,7 +307,7 @@ struct BattleView: View {
         stage = .battle
         turn = 1
         finished = nil
-        leftPick = nil; rightPick = nil
+        leftPick = nil; rightPick = nil; megaSlot = nil
         log = ["Both sides send out their leads. Neither knows what the other is holding, nor which four came."]
         think()
     }
@@ -315,28 +320,24 @@ struct BattleView: View {
                 Card { Label(finished, systemImage: "flag.checkered")
                     .font(.system(size: 14, weight: .semibold)) }
             }
-            Card(padding: 16) {
-                HStack(alignment: .top, spacing: 0) {
-                    sideColumn(board, mine: true)
-                    VStack(spacing: 6) {
-                        Rectangle().fill(Palette.hairline).frame(width: 1, height: 80)
-                        Text("vs").font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.tertiary)
-                        Rectangle().fill(Palette.hairline).frame(width: 1, height: 80)
-                    }
-                    .frame(width: 46)
-                    sideColumn(board, mine: false)
-                }
-                .overlay(alignment: .top) { fieldState(board) }
-            }
+            arena(board)
             if finished == nil { choices(board) }
             analysisPanels()
             if !log.isEmpty {
                 Card {
                     VStack(alignment: .leading, spacing: 5) {
                         SectionHeader(title: "What happened")
-                        ForEach(Array(log.enumerated().reversed()), id: \.offset) { _, line in
-                            Text(line).font(.system(size: 11)).foregroundStyle(.secondary)
+                        ForEach(Array(log.enumerated().reversed()), id: \.offset) {
+                            index, line in
+                            let latest = index == log.count - 1
+                            Text(line)
+                                .font(.system(size: 11, weight: latest ? .medium : .regular))
+                                .foregroundStyle(latest ? AnyShapeStyle(.primary)
+                                                        : AnyShapeStyle(.secondary))
+                                .padding(.horizontal, latest ? 8 : 0)
+                                .padding(.vertical, latest ? 5 : 0)
+                                .background(latest ? Palette.accent.opacity(0.10) : .clear)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
@@ -344,6 +345,55 @@ struct BattleView: View {
             }
         }
         .padding(20)
+    }
+
+    /// The field itself. Tinted by whatever weather is up, because that is the
+    /// single most useful thing to be able to see without reading.
+    private func arena(_ board: Board) -> some View {
+        let tint: Color = {
+            switch board.field.weather {
+            case .sun:  return Color(red: 0.95, green: 0.62, blue: 0.20)
+            case .rain: return Color(red: 0.30, green: 0.55, blue: 0.90)
+            case .sand: return Color(red: 0.80, green: 0.68, blue: 0.36)
+            case .snow: return Color(red: 0.62, green: 0.82, blue: 0.92)
+            case .none:
+                switch board.field.terrain {
+                case .grassy:   return Color(red: 0.40, green: 0.74, blue: 0.38)
+                case .electric: return Color(red: 0.93, green: 0.82, blue: 0.25)
+                case .psychic:  return Color(red: 0.86, green: 0.38, blue: 0.60)
+                case .misty:    return Color(red: 0.80, green: 0.56, blue: 0.86)
+                case .none:     return Palette.accent
+                }
+            }
+        }()
+        let lit = board.field.weather != .none || board.field.terrain != .none
+        return VStack(spacing: 10) {
+            fieldState(board)
+            HStack(alignment: .top, spacing: 0) {
+                sideColumn(board, mine: true)
+                VStack(spacing: 5) {
+                    Rectangle().fill(tint.opacity(0.35)).frame(width: 1, height: 64)
+                    Text("VS").font(.system(size: 10, weight: .heavy)).kerning(1)
+                        .foregroundStyle(tint.opacity(0.85))
+                    Rectangle().fill(tint.opacity(0.35)).frame(width: 1, height: 64)
+                }
+                .frame(width: 54)
+                sideColumn(board, mine: false)
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity)
+        .background(
+            LinearGradient(colors: [tint.opacity(lit ? 0.16 : 0.07),
+                                    tint.opacity(lit ? 0.05 : 0.02)],
+                           startPoint: .top, endPoint: .bottom)
+        )
+        .background(Palette.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .strokeBorder(tint.opacity(lit ? 0.45 : 0.18), lineWidth: 1))
+        .animation(.easeInOut(duration: 0.4), value: board.field.weather)
+        .animation(.easeInOut(duration: 0.4), value: board.field.terrain)
     }
 
     @ViewBuilder
@@ -354,13 +404,30 @@ struct BattleView: View {
                     board.theirTailwind > 0 ? "their Tailwind \(board.theirTailwind)" : nil,
                     board.trickRoom > 0 ? "Trick Room \(board.trickRoom)" : nil]
             .compactMap { $0 }
-        if !bits.isEmpty {
-            Text(bits.joined(separator: " · "))
-                .font(.system(size: 10, weight: .medium))
-                .padding(.horizontal, 8).padding(.vertical, 3)
-                .background(Palette.accent.opacity(0.16))
-                .foregroundStyle(Palette.accent)
-                .clipShape(Capsule())
+        if bits.isEmpty {
+            Text("clear field")
+                .font(.system(size: 10)).foregroundStyle(.tertiary)
+        } else {
+            HStack(spacing: 5) {
+                Image(systemName: weatherSymbol(board.field))
+                    .font(.system(size: 10))
+                Text(bits.joined(separator: " · "))
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
+            .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 1))
+        }
+    }
+
+    private func weatherSymbol(_ field: Field) -> String {
+        switch field.weather {
+        case .sun:  return "sun.max.fill"
+        case .rain: return "cloud.rain.fill"
+        case .sand: return "aqi.medium"
+        case .snow: return "snowflake"
+        case .none: return field.terrain == .none ? "circle.grid.cross" : "square.stack.3d.down.forward.fill"
         }
     }
 
@@ -373,8 +440,8 @@ struct BattleView: View {
             HStack(spacing: 10) {
                 if !mine { Spacer(minLength: 0) }
                 ForEach(Array(team.prefix(board.activeCount).enumerated()), id: \.offset) {
-                    _, fighter in
-                    fighterCard(fighter, mine: mine)
+                    slot, fighter in
+                    fighterCard(fighter, mine: mine, slot: slot, field: board.field)
                 }
                 if mine { Spacer(minLength: 0) }
             }
@@ -397,47 +464,86 @@ struct BattleView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func fighterCard(_ fighter: Fighter, mine: Bool) -> some View {
-        VStack(spacing: 3) {
+    private func fighterCard(_ fighter: Fighter, mine: Bool, slot: Int,
+                             field: Field) -> some View {
+        let hit = mine ? struck.contains(slot) : struckTheirs.contains(slot)
+        let health = fighter.share
+        let bar: Color = health > 0.5 ? Palette.good
+            : (health > 0.2 ? Palette.warn : Palette.bad)
+        return VStack(spacing: 4) {
             ZStack(alignment: .topTrailing) {
-                SpriteImage(form: fighter.build.form, side: 62)
-                    .opacity(fighter.fainted ? 0.25 : 1)
+                SpriteImage(form: fighter.build.form, side: 78)
+                    .opacity(fighter.fainted ? 0.22 : 1)
                     .saturation(fighter.fainted ? 0 : 1)
+                    .scaleEffect(fighter.fainted ? 0.86 : (hit ? 1.1 : 1))
+                    .rotationEffect(.degrees(fighter.fainted ? -12 : 0))
+                    .shadow(color: hit ? Palette.bad.opacity(0.55) : .clear, radius: 9)
+                    .animation(.spring(response: 0.32, dampingFraction: 0.5), value: hit)
+                    .animation(.easeOut(duration: 0.35), value: fighter.fainted)
                 if fighter.pendingMega != nil {
-                    Text("M").font(.system(size: 9, weight: .bold))
-                        .frame(width: 16, height: 16)
+                    Text("M").font(.system(size: 9, weight: .heavy))
+                        .frame(width: 17, height: 17)
                         .background(Palette.warn).foregroundStyle(.white)
                         .clipShape(Circle())
-                        .help("Holding its stone — it Mega Evolves before any move, "
-                              + "in Speed order against anything else evolving.")
+                        .help("Holding its stone. It Mega Evolves only if you toggle it on "
+                              + "with a move, before anything else happens, in Speed order.")
+                } else if fighter.build.form.isMega {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.warn)
+                        .help("Mega Evolved")
                 }
             }
             Text(fighter.build.form.formLabel)
-                .font(.system(size: 11, weight: .medium))
-                .lineLimit(1).minimumScaleFactor(0.7)
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Palette.hairline)
-                    Capsule()
-                        .fill(fighter.share > 0.5 ? Palette.good
-                              : (fighter.share > 0.2 ? Palette.warn : Palette.bad))
-                        .frame(width: geo.size.width * fighter.share)
+                .font(.system(size: 11, weight: .semibold))
+                .lineLimit(1).minimumScaleFactor(0.65)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Palette.hairline).frame(height: 7)
+                GeometryReader { geo in
+                    Capsule().fill(bar).frame(width: geo.size.width * health)
                 }
+                .frame(height: 7)
             }
-            .frame(height: 5)
-            Text("\(fighter.hp)/\(fighter.maxHP)")
-                .font(.system(size: 9, design: .rounded)).monospacedDigit()
-                .foregroundStyle(.tertiary)
-            Text(mine ? fighter.build.item : likelyItem(fighter.build.form))
+            .frame(height: 7)
+            .animation(.easeOut(duration: 0.45), value: fighter.hp)
+            HStack(spacing: 4) {
+                Text("\(fighter.hp)/\(fighter.maxHP)")
+                    .font(.system(size: 9, design: .rounded)).monospacedDigit()
+                    .foregroundStyle(.secondary)
+                // Yours is what it is. Theirs is what you could work out from
+                // the stat, because showing the real number would quietly tell
+                // you about the Choice Scarf the card above says you cannot see.
+                Text("· \(visibleSpeed(fighter, mine: mine, field: field))\(mine ? "" : "?")")
+                    .font(.system(size: 9, design: .rounded)).monospacedDigit()
+                    .foregroundStyle(.tertiary)
+                    .help(mine
+                          ? "Speed on the field, item and weather abilities included"
+                          : "What its Speed would be with no item. You cannot see what it is holding, so you cannot see a Choice Scarf either.")
+            }
+            Text(mine ? (fighter.build.item.isEmpty ? "no item" : fighter.build.item)
+                      : likelyItem(fighter.build.form))
                 .font(.system(size: 9))
                 .foregroundStyle(mine ? AnyShapeStyle(.tertiary)
-                                      : AnyShapeStyle(Palette.warn.opacity(0.8)))
-                .lineLimit(1)
+                                      : AnyShapeStyle(Palette.warn.opacity(0.85)))
+                .lineLimit(1).minimumScaleFactor(0.7)
             Text(fighter.build.ability)
-                .font(.system(size: 9)).foregroundStyle(Palette.accent.opacity(0.8))
-                .lineLimit(1)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(Palette.accent.opacity(0.85))
+                .lineLimit(1).minimumScaleFactor(0.7)
         }
-        .frame(width: 104)
+        .frame(width: 118)
+        .padding(.vertical, 8).padding(.horizontal, 4)
+        .background(fighter.fainted ? Color.clear : Palette.surfaceRaised.opacity(0.55))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    /// Their Speed as far as anybody could know it: the stat, without the item
+    /// nobody has seen yet.
+    private func visibleSpeed(_ fighter: Fighter, mine: Bool, field: Field) -> Int {
+        guard !mine else { return fighter.build.speed(in: field) }
+        var blind = fighter.build
+        blind.item = ""
+        return blind.speed(in: field)
     }
 
     /// What the measured ladder says they are probably holding.
@@ -461,6 +567,7 @@ struct BattleView: View {
                         slotChoices(board, slot: slot)
                     }
                 }
+                orderPreview(board)
                 HStack {
                     Button(thinking ? "Thinking…" : "Think again") { think() }
                         .controlSize(.small).disabled(thinking)
@@ -474,6 +581,71 @@ struct BattleView: View {
                         .disabled(!ready(board))
                 }
             }
+        }
+    }
+
+    /// Who moves first, worked out before the turn is committed.
+    ///
+    /// Turn order is the thing a beginner gets wrong and an expert checks every
+    /// time, and it is not only Speed: priority comes first, Trick Room inverts
+    /// the rest, and a switch happens before any of it.
+    private func orderPreview(_ board: Board) -> some View {
+        var entries: [(label: String, detail: String, mine: Bool,
+                       rank: Int, speed: Int)] = []
+        func add(_ fighter: Fighter, choice: Choice?, mine: Bool, slot: Int) {
+            guard !fighter.fainted else { return }
+            let speed = visibleSpeed(fighter, mine: mine, field: board.field)
+                * ((mine ? board.myTailwind : board.theirTailwind) > 0 ? 2 : 1)
+            if let choice, choice.isSwap {
+                entries.append((fighter.build.form.formLabel, "switches, before anything",
+                                mine, 99, speed))
+                return
+            }
+            var priority = 0
+            if let choice, case .attack(let index, _) = choice,
+               fighter.moves.indices.contains(index) {
+                priority = fighter.moves[index].priority
+            } else if let choice, case .protectSelf(let index) = choice,
+                      fighter.moves.indices.contains(index) {
+                priority = fighter.moves[index].priority
+            }
+            let note = priority > 0 ? "priority +\(priority)"
+                : (mine ? "Speed \(speed)" : "Speed about \(speed), item unseen")
+            entries.append((fighter.build.form.formLabel, note, mine, priority, speed))
+        }
+        add(board.mine[0], choice: leftPick, mine: true, slot: 0)
+        if board.activeCount > 1, board.mine.count > 1 {
+            add(board.mine[1], choice: rightPick, mine: true, slot: 1)
+        }
+        for slot in 0..<min(board.activeCount, board.theirs.count) {
+            add(board.theirs[slot], choice: nil, mine: false, slot: slot)
+        }
+        // Switches first, then priority, then Speed — and Trick Room turns the
+        // Speed half upside down. Listing them in the order they were added
+        // said a Speed 80 Pokémon moves before a Speed 130 one.
+        entries.sort { first, second in
+            if first.rank != second.rank { return first.rank > second.rank }
+            return board.trickRoom > 0 ? first.speed < second.speed
+                                       : first.speed > second.speed
+        }
+        return HStack(spacing: 6) {
+            Text("LIKELY ORDER")
+                .font(.system(size: 9, weight: .bold)).kerning(0.5)
+                .foregroundStyle(.tertiary)
+            ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
+                if index > 0 {
+                    Image(systemName: "chevron.right").font(.system(size: 7))
+                        .foregroundStyle(.quaternary)
+                }
+                Text(entry.label)
+                    .font(.system(size: 10, weight: entry.mine ? .semibold : .regular))
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background((entry.mine ? Palette.accent : Palette.warn).opacity(0.14))
+                    .foregroundStyle(entry.mine ? Palette.accent : Palette.warn)
+                    .clipShape(Capsule())
+                    .help(entry.detail)
+            }
+            Spacer(minLength: 0)
         }
     }
 
@@ -494,9 +666,40 @@ struct BattleView: View {
             HStack(spacing: 6) {
                 SpriteImage(form: fighter.build.form, side: 24)
                 Text(fighter.build.form.formLabel)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 11, weight: .semibold))
                 Text("Speed \(fighter.build.speed(in: board.field))")
                     .font(.system(size: 10)).foregroundStyle(.tertiary)
+                // The toggle sits with the move because that is where the game
+                // puts it: you flip it on as you choose what this Pokémon does.
+                if let mega = fighter.pendingMega,
+                   !board.mine.contains(where: \.hasMegaEvolved) {
+                    Button {
+                        megaSlot = megaSlot == slot ? nil : slot
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: megaSlot == slot
+                                  ? "sparkles" : "circle.dashed")
+                                .font(.system(size: 9))
+                            Text("Mega Evolve")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(megaSlot == slot ? Palette.warn.opacity(0.22)
+                                                     : Palette.surface)
+                        .foregroundStyle(megaSlot == slot
+                                         ? AnyShapeStyle(Palette.warn)
+                                         : AnyShapeStyle(.secondary))
+                        .clipShape(Capsule())
+                        .overlay(Capsule().strokeBorder(
+                            megaSlot == slot ? Palette.warn.opacity(0.7) : Palette.hairline,
+                            lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Becomes \(mega.formLabel) before anything else happens this turn. "
+                          + "If both sides evolve, the slower one goes second — and when both "
+                          + "bring weather, the second one is the weather that stays.")
+                }
+                Spacer(minLength: 0)
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 6)],
                       alignment: .leading, spacing: 6) {
@@ -505,26 +708,12 @@ struct BattleView: View {
                                               foes: Array(board.theirs.prefix(board.activeCount)),
                                               team: board.mine)
                     let chosen = picked == choice
-                    Button {
+                    ActionButton(label: label.isEmpty ? "do nothing" : label,
+                                 symbol: choice.isSwap ? "arrow.left.arrow.right"
+                                    : (choice.isProtect ? "shield.lefthalf.filled" : "bolt.fill"),
+                                 chosen: chosen) {
                         if slot == 0 { leftPick = choice } else { rightPick = choice }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: choice.isSwap ? "arrow.left.arrow.right"
-                                  : (choice.isProtect ? "shield.fill" : "bolt.fill"))
-                                .font(.system(size: 8))
-                                .foregroundStyle(chosen ? AnyShapeStyle(Palette.accent)
-                                                    : AnyShapeStyle(.tertiary))
-                            Text(label.isEmpty ? "do nothing" : label)
-                                .font(.system(size: 11)).lineLimit(1)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 8).padding(.vertical, 5)
-                        .background(chosen ? Palette.accent.opacity(0.2) : Palette.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: 7))
-                        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(
-                            chosen ? Palette.accent : Palette.hairline, lineWidth: 1))
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -603,6 +792,15 @@ struct BattleView: View {
             } else if let ours1 = evolvingMine {
                 ours.append("\(ours1.build.form.formLabel) Mega Evolves before any move this turn, bringing whatever its new ability does with it.")
             }
+            // If the line it likes involves evolving, say which and why the
+            // order matters, since that is the toggle sitting on screen.
+            if let top = result.mix.indices.max(by: { result.mix[$0] < result.mix[$1] }),
+               result.plays.indices.contains(top),
+               let wants = result.plays[top].megaSlot,
+               board.mine.indices.contains(wants),
+               let becoming = board.mine[wants].pendingMega {
+                ours.append("It wants \(board.mine[wants].build.form.formLabel) to Mega Evolve into \(becoming.formLabel) this turn — the toggle beside its move.")
+            }
             ours += result.principal
             mySide = ours
             searchNote = "searched \(result.depth) turns, \(result.nodes) positions"
@@ -643,7 +841,8 @@ struct BattleView: View {
             }
         }
         let mine = Play(left: left,
-                        right: current.activeCount > 1 ? (rightPick ?? .pass) : .pass)
+                        right: current.activeCount > 1 ? (rightPick ?? .pass) : .pass,
+                        megaSlot: megaSlot)
         let before = current
         current = TurnModel.resolve(current, mine: mine, theirs: theirPlay, store: store)
         current.fillGaps()
@@ -684,11 +883,59 @@ struct BattleView: View {
         }
         log.append(entry)
 
+        // Light up whatever took a hit, then let it settle.
+        var hitMine: Set<Int> = [], hitTheirs: Set<Int> = []
+        for index in current.mine.indices where index < before.mine.count
+            && current.mine[index].hp < before.mine[index].hp { hitMine.insert(index) }
+        for index in current.theirs.indices where index < before.theirs.count
+            && current.theirs[index].hp < before.theirs[index].hp { hitTheirs.insert(index) }
+
         board = current
         turn += 1
-        leftPick = nil; rightPick = nil
+        leftPick = nil; rightPick = nil; megaSlot = nil
+        struck = hitMine; struckTheirs = hitTheirs
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            struck = []; struckTheirs = []
+        }
         if current.isOut(mine: false) { finished = "They have nothing left. You win." }
         else if current.isOut(mine: true) { finished = "You have nothing left. They win." }
         else { think() }
+    }
+}
+
+/// One choice, which is a button you want to press.
+private struct ActionButton: View {
+    let label: String
+    let symbol: String
+    let chosen: Bool
+    let act: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: act) {
+            HStack(spacing: 6) {
+                Image(systemName: symbol)
+                    .font(.system(size: 9))
+                    .foregroundStyle(chosen ? AnyShapeStyle(Palette.accent)
+                                            : AnyShapeStyle(.tertiary))
+                Text(label)
+                    .font(.system(size: 11, weight: chosen ? .semibold : .regular))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 9).padding(.vertical, 6)
+            .background(chosen ? Palette.accent.opacity(0.20)
+                               : (hovering ? Palette.hairline.opacity(0.6) : Palette.surface))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(chosen ? Palette.accent : Palette.hairline,
+                              lineWidth: chosen ? 1.5 : 1))
+            .scaleEffect(hovering && !chosen ? 1.015 : 1)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
+        .animation(.easeOut(duration: 0.15), value: chosen)
     }
 }

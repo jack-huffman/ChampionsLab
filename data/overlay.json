@@ -1120,7 +1120,7 @@
     {
      "form": "Charizard",
      "item": "Charizardite Y",
-     "ability": "Drought",
+     "ability": "Blaze",
      "moves": [
       "Heat Wave",
       "Solar Beam",
@@ -1175,7 +1175,7 @@
     {
      "form": "Floette",
      "item": "Floettite",
-     "ability": "Fairy Aura",
+     "ability": "Flower Veil",
      "moves": [
       "Moonblast",
       "Protect",
@@ -1197,7 +1197,7 @@
     {
      "form": "Charizard",
      "item": "Charizardite Y",
-     "ability": "Drought",
+     "ability": "Blaze",
      "moves": [
       "Heat Wave",
       "Solar Beam",
@@ -1208,7 +1208,7 @@
     {
      "form": "Floette",
      "item": "Floettite",
-     "ability": "Fairy Aura",
+     "ability": "Flower Veil",
      "moves": [
       "Moonblast",
       "Dazzling Gleam",
@@ -1285,7 +1285,7 @@
     {
      "form": "Swampert",
      "item": "Swampertite",
-     "ability": "Swift Swim",
+     "ability": "Torrent",
      "moves": [
       "Earthquake",
       "Ice Punch",
@@ -1296,7 +1296,7 @@
     {
      "form": "Metagross",
      "item": "Metagrossite",
-     "ability": "Tough Claws",
+     "ability": "Clear Body",
      "moves": [
       "Iron Head",
       "Zen Headbutt",
@@ -1362,7 +1362,7 @@
     {
      "form": "Mawile",
      "item": "Mawilite",
-     "ability": "Huge Power",
+     "ability": "Hyper Cutter",
      "moves": [
       "Play Rough",
       "Iron Head",
@@ -1450,7 +1450,7 @@
     {
      "form": "Golisopod",
      "item": "Golisopite",
-     "ability": "Tough Claws",
+     "ability": "Emergency Exit",
      "moves": [
       "First Impression",
       "Liquidation",
@@ -1505,7 +1505,7 @@
     {
      "form": "Garchomp",
      "item": "Garchompite Z",
-     "ability": "Levitate",
+     "ability": "Sand Veil",
      "moves": [
       "Draco Meteor",
       "Earth Power",
@@ -1516,7 +1516,7 @@
     {
      "form": "Lucario",
      "item": "Lucarionite Z",
-     "ability": "Aura Guard",
+     "ability": "Steadfast",
      "moves": [
       "Aura Sphere",
       "Flash Cannon",
@@ -1527,7 +1527,7 @@
     {
      "form": "Salamence",
      "item": "Salamencite",
-     "ability": "Aerilate",
+     "ability": "Intimidate",
      "moves": [
       "Double-Edge",
       "Dragon Dance",

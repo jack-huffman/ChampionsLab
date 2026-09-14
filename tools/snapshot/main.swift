@@ -164,6 +164,16 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         // And the field itself, a turn in.
         var four = playing
         four.slots = chosen.compactMap { id in playing.slots.first { $0.formID == id } }
+        // Lead with something holding a stone, so the Mega Evolve toggle shows.
+        if let stoneSlot = four.slots.firstIndex(where: {
+            $0.megaEvolution(in: store) != nil }), stoneSlot > 0 {
+            four.slots.swapAt(0, stoneSlot)
+        } else if let outside = playing.slots.first(where: {
+            $0.megaEvolution(in: store) != nil }),
+            !four.slots.contains(where: { $0.formID == outside.formID }) {
+            four.slots.insert(outside, at: 0)
+            four.slots = Array(four.slots.prefix(4))
+        }
         var board = Board(mine: four.slots.isEmpty ? playing : four, theirs: theirs,
                           store: store, field: Field(isDoubles: true),
                           alreadyEvolved: false)

@@ -803,10 +803,13 @@ Ability: Regenerator
     let mySpeed = unevolved.mine[0].build.speed(in: unevolved.field)
     let theirSpeed = unevolved.theirs[0].build.speed(in: unevolved.field)
     print("  Charizard \(mySpeed) against Froslass \(theirSpeed) — the slower evolves second")
+    // Both sides toggle it on for their lead, which is how the game asks.
     let afterMega = TurnModel.resolve(
         unevolved,
-        mine: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)),
-        theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)),
+        mine: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0),
+                   megaSlot: 0),
+        theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0),
+                     megaSlot: 0),
         store: store)
     print("  both evolved; the weather is \(afterMega.field.weather.rawValue)")
     check("both sides Mega Evolved",
@@ -825,17 +828,54 @@ Ability: Regenerator
                             ("Garchomp", "Life Orb", ["Earthquake", "Protect"])])
     let dual = Board(mine: twoStones, theirs: snowSide, store: store,
                      field: Field(isDoubles: true), alreadyEvolved: false)
+    // Asking for the second slot as well changes nothing: a side gets one.
     let afterDual = TurnModel.resolve(
         dual,
-        mine: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)),
-        theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)),
+        mine: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0),
+                   megaSlot: 0),
+        theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0),
+                     megaSlot: 0),
         store: store)
     let evolvedNames = afterDual.mine.prefix(2).filter { $0.build.form.isMega }
         .map(\.build.form.formLabel)
-    print("  two stones on one side evolved: \(evolvedNames)")
+    print("  two stones on one side, asked for the first: \(evolvedNames)")
     check("only one of them evolves", evolvedNames.count == 1, "\(evolvedNames)")
-    check("and it is the one led with rather than the faster one",
+    check("and it is the one that was asked for",
           evolvedNames.first == "Mega Charizard Y", "\(evolvedNames)")
+
+    // The other one, if that is the one you ask for.
+    let afterOther = TurnModel.resolve(
+        dual,
+        mine: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0),
+                   megaSlot: 1),
+        theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)),
+        store: store)
+    check("asking for the other one evolves the other one",
+          afterOther.mine.prefix(2).filter { $0.build.form.isMega }
+            .map(\.build.form.formLabel) == ["Mega Froslass"],
+          "\(afterOther.mine.prefix(2).map(\.build.form.formLabel))")
+
+    // Not asking leaves it alone, which is a turn people really do take.
+    let held = TurnModel.resolve(
+        unevolved,
+        mine: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)),
+        theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)),
+        store: store)
+    check("nothing evolves unless it is asked to",
+          !held.mine[0].build.form.isMega && !held.theirs[0].build.form.isMega)
+    check("and holding it back leaves the field clear",
+          held.field.weather == .none, held.field.weather.rawValue)
+
+    // Holding it back one turn is how you win a weather war you would lose.
+    let afterHeld = TurnModel.resolve(
+        held,
+        mine: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0),
+                   megaSlot: 0),
+        theirs: Play(left: .attack(move: 1, target: 0), right: .attack(move: 1, target: 0)),
+        store: store)
+    check("evolving a turn later still works",
+          afterHeld.mine[0].build.form.isMega && afterHeld.field.weather == .sun,
+          afterHeld.field.weather.rawValue)
 
     // Team lists register the base form; the bundled archetypes now do too.
     let stillMega = store.data.metaTeams.flatMap(\.members)

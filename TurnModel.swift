@@ -128,8 +128,15 @@ extension Board {
                 let form = alreadyEvolved ? evolved : registered
                 // A slot with nothing chosen still has an ability; treating it
                 // as blank means an Intimidate that never fires.
-                let named = slot.ability.isEmpty
-                    ? (form.abilities.first?.name ?? "") : slot.ability
+                // It has to be an ability this form actually has. A team list
+                // written for the Mega carries the Mega's ability, and reading
+                // that onto the base form gives a Charizard with Drought, which
+                // is a Pokémon that does not exist.
+                let named: String = {
+                    let own = form.abilities.map(\.name)
+                    if !slot.ability.isEmpty, own.contains(slot.ability) { return slot.ability }
+                    return own.first ?? ""
+                }()
                 var fighting = combatant
                 if fighting.ability.isEmpty { fighting.ability = named }
                 if !alreadyEvolved, mega != nil {
@@ -184,6 +191,15 @@ enum Choice: Hashable {
 struct Play: Hashable {
     var left: Choice
     var right: Choice
+    /// Which of the two is Mega Evolving this turn, if either.
+    ///
+    /// In the game this is a toggle you flip while choosing that Pokémon's
+    /// move, not something that happens to you, and it is a decision worth
+    /// having: evolving changes your Speed, it shows the other side what you
+    /// brought, and when both sides bring weather the one that evolves second
+    /// is the one whose weather stays. Holding it back a turn is sometimes the
+    /// whole plan.
+    var megaSlot: Int?
 }
 
 // MARK: - Playing it out
@@ -270,20 +286,18 @@ enum TurnModel {
         // second, overwrites the first, and its weather is the one left on the
         // field. Getting this backwards would make every sun-against-rain lead
         // read the wrong way round.
-        // One per side, and which one is a choice rather than a race: a team
-        // that brought two stones brought the second as a spare, and the one it
-        // leads with is the one it means to use. So the earlier slot claims it,
-        // and Speed only decides *when* — which is the part that matters.
+        // Only who was actually told to. One per side, because that is the
+        // rule, and Speed decides only *when* — which is the part that matters.
         var evolving: [(mine: Bool, slot: Int, speed: Int)] = []
-        if !out.mine.contains(where: \.hasMegaEvolved),
-           let slot = (0..<min(out.activeCount, out.mine.count)).first(where: {
-               out.mine[$0].pendingMega != nil && !out.mine[$0].fainted }) {
+        if let slot = mine.megaSlot, out.mine.indices.contains(slot),
+           slot < out.activeCount, out.mine[slot].pendingMega != nil,
+           !out.mine[slot].fainted, !out.mine.contains(where: \.hasMegaEvolved) {
             evolving.append((true, slot, speed(of: out.mine[slot],
                                                tailwind: out.myTailwind > 0, board: out)))
         }
-        if !out.theirs.contains(where: \.hasMegaEvolved),
-           let slot = (0..<min(out.activeCount, out.theirs.count)).first(where: {
-               out.theirs[$0].pendingMega != nil && !out.theirs[$0].fainted }) {
+        if let slot = theirs.megaSlot, out.theirs.indices.contains(slot),
+           slot < out.activeCount, out.theirs[slot].pendingMega != nil,
+           !out.theirs[slot].fainted, !out.theirs.contains(where: \.hasMegaEvolved) {
             evolving.append((false, slot, speed(of: out.theirs[slot],
                                                 tailwind: out.theirTailwind > 0, board: out)))
         }

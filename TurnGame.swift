@@ -147,12 +147,32 @@ struct TurnGame {
         // singles the second slot is empty every turn.
         let leftOptions = left.isEmpty ? [Choice.pass] : left
         let rightOptions = right.isEmpty ? [Choice.pass] : right
+        // Whether to Mega Evolve is part of the turn, so it is part of the
+        // choice. Both versions are offered for whichever slot could: evolving
+        // is nearly always right, but "nearly always" is not a thing a search
+        // should assume, and the exception — holding it back so your weather
+        // lands second — is exactly the sort of turn worth finding.
+        let team = mine ? board.mine : board.theirs
+        let spent = team.contains(where: \.hasMegaEvolved)
+        var megaOptions: [Int?] = [nil]
+        if !spent {
+            for slot in 0..<min(board.activeCount, team.count)
+            where team[slot].pendingMega != nil && !team[slot].fainted {
+                megaOptions.append(slot)
+            }
+        }
+
         var out: [Play] = []
         for a in leftOptions {
             for b in rightOptions {
                 // Both switching to the same benched Pokémon is not a thing.
                 if case .swap(let x) = a, case .swap(let y) = b, x == y { continue }
-                out.append(Play(left: a, right: b))
+                for mega in megaOptions {
+                    // A Pokémon leaving the field does not evolve on the way out.
+                    if let mega, mega == 0, a.isSwap { continue }
+                    if let mega, mega == 1, b.isSwap { continue }
+                    out.append(Play(left: a, right: b, megaSlot: mega))
+                }
             }
         }
         return out
@@ -419,9 +439,15 @@ struct TurnGame {
         let foes = mine ? board.theirs : board.mine
         guard team.count >= 2 else { return "—" }
         let front = Array(foes.prefix(board.activeCount))
-        let first = describe(play.left, fighter: team[0], foes: front, team: team)
+        var first = describe(play.left, fighter: team[0], foes: front, team: team)
+        if play.megaSlot == 0, let mega = team[0].pendingMega {
+            first = "Mega Evolve into \(mega.formLabel), then \(first)"
+        }
         guard board.activeCount > 1, team.count > 1, !play.right.isPass else { return first }
-        let second = describe(play.right, fighter: team[1], foes: front, team: team)
+        var second = describe(play.right, fighter: team[1], foes: front, team: team)
+        if play.megaSlot == 1, let mega = team[1].pendingMega {
+            second = "Mega Evolve into \(mega.formLabel), then \(second)"
+        }
         return second.isEmpty ? first : first + " and " + second
     }
 
