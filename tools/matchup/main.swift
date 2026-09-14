@@ -2084,6 +2084,44 @@ Ability: Regenerator
         store: store)
     check("Own Tempo refuses it", !unbothered.theirs[0].isConfused)
 
+    print("\n== the herb and the burden ==")
+    var herbal = Board(mine: fighters([("Sneasler", "White Herb", ["Close Combat", "Protect"]),
+                                       ("Whimsicott", "Focus Sash", ["Protect"])]),
+                       theirs: fighters([("Whimsicott", "Focus Sash", ["Icy Wind", "Protect"]),
+                                         ("Kingambit", "Chople Berry", ["Swords Dance", "Protect"])]),
+                       store: store, field: Field(isDoubles: true), alreadyEvolved: false)
+    herbal.mine[0].build.ability = "Unburden"
+    let quick0 = herbal.mine[0].build.speed(in: herbal.field)
+    let chilled2 = TurnModel.resolve(herbal,
+        mine: Play(left: .attack(move: at(herbal.mine[0], "Protect"), target: 0),
+                   right: .attack(move: at(herbal.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(herbal.theirs[0], "Icy Wind"), target: 0),
+                     right: .attack(move: at(herbal.theirs[1], "Swords Dance"), target: 0)),
+        store: store)
+    _ = chilled2
+    // Protect blocks Icy Wind; use a turn where Sneasler attacks instead.
+    let dropped = TurnModel.resolve(herbal,
+        mine: Play(left: .attack(move: at(herbal.mine[0], "Close Combat"), target: 1),
+                   right: .attack(move: at(herbal.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(herbal.theirs[0], "Protect"), target: 0),
+                     right: .attack(move: at(herbal.theirs[1], "Swords Dance"), target: 0)),
+        store: store)
+    for line in dropped.story where line.contains("Sneasler") { print("    \(line)") }
+    let quick1 = dropped.mine[0].build.speed(in: dropped.field)
+    check("White Herb undoes the drop and is used up",
+          dropped.mine[0].build.boosts[Stat.defense.rawValue] == 0 && dropped.mine[0].build.itemSpent,
+          "\(dropped.mine[0].build.boosts) spent \(dropped.mine[0].build.itemSpent)")
+    check("and Unburden then doubles its Speed", quick1 == quick0 * 2, "\(quick0) -> \(quick1)")
+    // Intimidate takes the herb too.
+    var glared = herbal
+    glared.theirs[1].build.ability = "Intimidate"
+    glared.activeCount = 2
+    glared.sendOutLeads()
+    for line in glared.story where line.contains("Intimidate") { print("    \(line)") }
+    check("Intimidate into a White Herb spends the herb and leaves no drop",
+          glared.mine[0].build.itemSpent && glared.mine[0].build.boosts[Stat.attack.rawValue] == 0
+            && glared.mine[0].build.speed(in: glared.field) == quick0 * 2)
+
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)
 }

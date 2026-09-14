@@ -1441,16 +1441,26 @@ struct BattleView: View {
         let changed = Stat.allCases.filter { fighter.build.boosts.indices.contains($0.rawValue)
             && fighter.build.boosts[$0.rawValue] != 0 }
         if !changed.isEmpty || fighter.status != .none || fighter.isConfused {
-            HStack(spacing: 3) {
-                ForEach(changed, id: \.rawValue) { stat in
-                    let stage = fighter.build.boosts[stat.rawValue]
-                    Text("\(stat.short) \(stage > 0 ? "+" : "−")\(abs(stage))")
-                        .font(.system(size: 8, weight: .heavy, design: .rounded)).monospacedDigit()
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 4).padding(.vertical, 1)
-                        .background(Capsule().fill(stage > 0 ? Palette.good : Palette.bad))
-                        .help("\(stat.short) \(stage > 0 ? "raised" : "lowered") by \(abs(stage)) stage\(abs(stage) == 1 ? "" : "s") — ×\(String(format: "%.2f", stageMultiplier(stage)))")
+            // Three to a row and no wrapping inside a chip: five drops read as
+            // two tidy rows, not a capsule broken across two lines.
+            let rows = stride(from: 0, to: changed.count, by: 3).map { Array(changed[$0..<min($0 + 3, changed.count)]) }
+            VStack(spacing: 2) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    HStack(spacing: 3) {
+                        ForEach(row, id: \.rawValue) { stat in
+                            let stage = fighter.build.boosts[stat.rawValue]
+                            Text("\(stat.short) \(stage > 0 ? "+" : "−")\(abs(stage))")
+                                .font(.system(size: 8, weight: .heavy, design: .rounded)).monospacedDigit()
+                                .lineLimit(1).fixedSize()
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 4).padding(.vertical, 1)
+                                .background(Capsule().fill(stage > 0 ? Palette.good : Palette.bad))
+                                .help("\(stat.short) \(stage > 0 ? "raised" : "lowered") by \(abs(stage)) stage\(abs(stage) == 1 ? "" : "s") — ×\(String(format: "%.2f", stageMultiplier(stage)))")
+                        }
+                    }
                 }
+            }
+            HStack(spacing: 3) {
                 if fighter.status != .none {
                     Text(fighter.status.rawValue.uppercased())
                         .font(.system(size: 8, weight: .heavy)).kerning(0.3)
@@ -1625,8 +1635,10 @@ struct BattleView: View {
                           ? "Speed on the field, item and weather abilities included"
                           : "What its Speed would be with no item. You cannot see what it is holding, so you cannot see a Choice Scarf either.")
             }
-            Text(mine ? (fighter.build.item.isEmpty ? "no item" : fighter.build.item)
-                      : likelyItem(fighter.build.form))
+            Text(fighter.build.itemSpent && !fighter.build.item.isEmpty
+                 ? "\(fighter.build.item) · used"
+                 : mine ? (fighter.build.item.isEmpty ? "no item" : fighter.build.item)
+                        : likelyItem(fighter.build.form))
                 .font(.system(size: 9))
                 .foregroundStyle(mine ? AnyShapeStyle(.tertiary)
                                       : AnyShapeStyle(Palette.warn.opacity(0.85)))

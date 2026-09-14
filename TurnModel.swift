@@ -1061,8 +1061,13 @@ enum TurnModel {
             if !cut.isEmpty { parts.append("cut \(cut.joined(separator: " and "))'s Attack") }
             if !shrugged.isEmpty { parts.append("\(shrugged.joined(separator: " and ")) shrugged it off") }
             parts += rallied
+            var herbs: [String] = []
+            for index in opposing.indices.prefix(2) {
+                if let herb = whiteHerb(&opposing[index]) { herbs.append(herb) }
+            }
             guard !parts.isEmpty else { return nil }
             return "\(name)'s Intimidate " + parts.joined(separator: "; ") + "."
+                + (herbs.isEmpty ? "" : " " + herbs.joined(separator: " "))
         case "Drought":
             let same = field.weather == .sun
             field.weather = .sun
@@ -1751,6 +1756,22 @@ enum TurnModel {
         board.note("\(name) became confused" + (chance < 100 ? " — the \(chance)% came up." : "."))
     }
 
+    /// White Herb: the moment any of the holder's stats sits below zero, the
+    /// herb goes and the drops are undone. It is what turns Unburden on — the
+    /// item is gone, so the Speed doubles — which is the whole Sneasler set.
+    nonisolated static func whiteHerb(_ fighter: inout Fighter) -> String? {
+        guard fighter.build.item == "White Herb", !fighter.build.itemSpent,
+              fighter.build.boosts.contains(where: { $0 < 0 }) else { return nil }
+        for index in fighter.build.boosts.indices where fighter.build.boosts[index] < 0 {
+            fighter.build.boosts[index] = 0
+        }
+        fighter.build.itemSpent = true
+        let name = fighter.build.form.formLabel
+        var said = "\(name)'s White Herb restored its stats."
+        if fighter.build.ability == "Unburden" { said += " Its Unburden doubled its Speed." }
+        return said
+    }
+
     /// Whether a Pokémon's last move came off, for Stomping Tantrum.
     private static func markFailed(byMine: Bool, slot: Int, board: inout Board, failed: Bool) {
         if byMine, board.mine.indices.contains(slot) { board.mine[slot].lastMoveFailed = failed }
@@ -1830,6 +1851,10 @@ enum TurnModel {
         else if ability == "Contrary" { line = "\(name)'s Contrary turned it round: " + parts.joined(separator: "; ") + "." }
         else if ability == "Simple" { line = "\(name)'s Simple doubled it: " + parts.joined(separator: "; ") + "." }
         board.note(line)
+        if !fell.isEmpty {
+            let herb = onMine ? whiteHerb(&board.mine[slot]) : whiteHerb(&board.theirs[slot])
+            if let herb { board.note(herb) }
+        }
     }
 
     /// What a non-damaging move actually does.
