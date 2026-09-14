@@ -146,6 +146,9 @@ final class Store: ObservableObject {
     /// a base Charizard with 109 and Solar Power.
     func megaForm(for base: Form, holding item: String) -> Form? {
         guard !item.isEmpty, !base.isMega else { return nil }
+        // Floette's Mega belongs to the Eternal Flower form alone: the plain
+        // Floette holds a Floettite the way anyone else would, uselessly.
+        if base.species == "floette", base.suffix.isEmpty { return nil }
         let candidates = data.forms.filter { $0.dex == base.dex && $0.isMega }
         if let exact = candidates.first(where: { $0.megaStone == item }) { return exact }
         // Only one Mega for this species and the item is some stone: take it.

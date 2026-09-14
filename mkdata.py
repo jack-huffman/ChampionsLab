@@ -186,6 +186,28 @@ def parse_roster():
     return sorted(forms.values(), key=lambda f: (f["dex"], f["suffix"]))
 
 
+def with_eternal_floette(roster):
+    """Add Eternal Flower Floette, which Serebii's Champions listings leave out.
+
+    It is the Floette that Mega Evolves — the only one that can — and the one
+    every tournament list means by "Floette". Its stats are the Eternal
+    Flower's (74/65/67/125/128/92), its typing, abilities and learnset are
+    Floette's, and its icon is 670-e, which both Serebii and the PKHeX render
+    set know. Without this row the app showed a plain Floette holding a stone
+    it could not use.
+    """
+    base = next((f for f in roster if f["icon"] == "670"), None)
+    if base is None or any(f["icon"] == "670-e" for f in roster):
+        return roster
+    eternal = dict(base)
+    eternal.update({
+        "icon": "670-e",
+        "suffix": "e",
+        "stats": [74, 65, 67, 125, 128, 92],
+    })
+    return sorted(roster + [eternal], key=lambda f: (f["dex"], f["suffix"]))
+
+
 # --------------------------------------------------------------- species ----
 
 def split_form_sections(page):
@@ -510,6 +532,7 @@ def parse_move_index():
 def main():
     print("==> roster")
     roster = parse_roster()
+    roster = with_eternal_floette(roster)
     print("    %d legal forms" % len(roster))
 
     species_slugs = sorted({f["species"] for f in roster})
@@ -849,7 +872,7 @@ def assign_stones(roster, items):
 PIKALYTICS_NAMES = {
     "Indeedee-F": "Indeedee (Female)",
     "Indeedee-M": "Indeedee",
-    "Floette-Eternal": "Floette",
+    "Floette-Eternal": "Floette (Eternal)",
     "Basculegion-F": "Basculegion (Female)",
     "Tauros-Paldea-Aqua": "Paldean Tauros (Aqua)",
     "Tauros-Paldea-Blaze": "Paldean Tauros (Blaze)",
@@ -1005,7 +1028,7 @@ def tidy_event(name):
 
 # How the events spell things against how Serebii does.
 TOURNAMENT_ALIASES = {
-    "Eternal Flower Floette": "Floette",
+    "Eternal Flower Floette": "Floette (Eternal)",
     "Indeedee \u2640": "Indeedee (Female)",
     "Basculegion \u2640": "Basculegion (Female)",
     "Lycanroc Dusk": "Lycanroc (Dusk)",
