@@ -66,10 +66,32 @@ make snapshot    # look at build/shots/ — the renders catch layout regressions
 make accuracy    # 55.2% on 1,454 games is the floor; a drop is a regression
 ```
 
+## The suite
+
+`Tests/ChampionsLabTests` is one case per area over a shared `HarnessCase`,
+which owns the dataset, the `check` that prints as well as asserts, and the
+teams the cases build their boards out of. A case that wants its own version
+of a shared team simply declares it: a local declaration shadows the
+inherited one. Add a rule, add a check to the case that owns that area.
+
+| case | what it holds |
+|---|---|
+| `ImportTests` | the paste importer and the EV-to-SP arithmetic |
+| `MatchupGridTests` | the six-against-six grid, move valuation, bring-four |
+| `SpeedAndProtectTests` | Speed on the field, Protect in a duel, the clock |
+| `SolverTests` | the matrix game, the reads, switching in |
+| `MegaEvolutionTests` | one per side, in Speed order, and the weather war |
+| `TurnOrderTests` | the order a turn resolves in, and what a move costs |
+| `AbilityTests` | abilities during a turn, and what arriving does |
+| `HiddenInformationTests` | what neither side can see |
+| `MoveRuleTests` | rules belonging to particular moves |
+| `DiceTests` | what a played turn rolls and the search averages |
+| `StatusTests` | conditions, healing, confusion |
+| `EncoreTests` | stages in the roll, ability priority, Encore |
+| `StatsAndDamageTests` | the stat and damage arithmetic |
+
 ## Known debts
 
-- `TurnHarnessTests` is one long test: its sections share fixtures. Splitting
-  it into per-area cases with a shared fixture file is the next step.
 - The engine's answer is right for the turn in hand; two plies down it
   follows the likeliest Protect branch rather than blending both.
 - Their side of the matrix evaluates your switch plays against your real
