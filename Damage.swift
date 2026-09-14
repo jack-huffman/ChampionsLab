@@ -162,6 +162,45 @@ enum DamageCalc {
     /// The 16 damage rolls, as percentages of the maximum.
     private static let rolls: [Double] = (85...100).map { Double($0) / 100.0 }
 
+    /// What a move is under the field it is used on. Weather Ball is 50 base
+    /// Normal on paper and 100 base Fire under sun, which is the entire reason
+    /// a Drought team runs it; reading the printed number undervalued it by
+    /// half and gave it the wrong type. Read at the moment the move resolves,
+    /// so a switch-in that changes the weather earlier in the turn changes
+    /// what this move is before it lands.
+    static func fieldForm(of move: Move, in field: Field) -> (type: PokeType, power: Int, note: String?) {
+        let printed = PokeType(loose: move.type) ?? .normal
+        if move.id == "weatherball", field.weather != .none {
+            let type: PokeType
+            switch field.weather {
+            case .sun:  type = .fire
+            case .rain: type = .water
+            case .snow: type = .ice
+            case .sand: type = .rock
+            case .none: type = printed
+            }
+            return (type, move.power * 2,
+                    "Weather Ball: \(type.rawValue) and double power in \(field.weather.rawValue)")
+        }
+        if move.id == "terrainpulse", field.terrain != .none {
+            let type: PokeType
+            switch field.terrain {
+            case .electric: type = .electric
+            case .grassy:   type = .grass
+            case .misty:    type = .fairy
+            case .psychic:  type = .psychic
+            case .none:     type = printed
+            }
+            return (type, move.power * 2, "Terrain Pulse: \(type.rawValue) and double power")
+        }
+        // Solar Beam and Solar Blade are half power in any weather but sun.
+        if move.id == "solarbeam" || move.id == "solarblade",
+           field.weather != .none, field.weather != .sun {
+            return (printed, move.power / 2, "\(move.name): half power in \(field.weather.rawValue)")
+        }
+        return (printed, move.power, nil)
+    }
+
     static func calculate(attacker: Combatant, defender: Combatant,
                           move: Move, field: Field) -> DamageResult {
         var notes: [String] = []
@@ -170,35 +209,11 @@ enum DamageCalc {
                                 effectiveness: 1, notes: ["Status move"])
         }
 
-        var moveType = PokeType(loose: move.type) ?? .normal
-        var power = Double(move.power)
-
         // -- moves whose type and power come from the field --------------------
-        // Weather Ball is 50 base Normal on paper and 100 base Water under rain,
-        // which is the entire reason a Drizzle team runs it. Reading the printed
-        // number undervalued it by half and gave it the wrong type as well.
-        if move.id == "weatherball", field.weather != .none {
-            power *= 2
-            switch field.weather {
-            case .sun:  moveType = .fire
-            case .rain: moveType = .water
-            case .snow: moveType = .ice
-            case .sand: moveType = .rock
-            case .none: break
-            }
-            notes.append("Weather Ball: \(moveType.rawValue) and double power in \(field.weather.rawValue)")
-        }
-        if move.id == "terrainpulse", field.terrain != .none {
-            power *= 2
-            switch field.terrain {
-            case .electric: moveType = .electric
-            case .grassy:   moveType = .grass
-            case .misty:    moveType = .fairy
-            case .psychic:  moveType = .psychic
-            case .none:     break
-            }
-            notes.append("Terrain Pulse: \(moveType.rawValue) and double power")
-        }
+        let form = fieldForm(of: move, in: field)
+        var moveType = form.type
+        var power = Double(form.power)
+        if let said = form.note { notes.append(said) }
         // Final Gambit deals the user's remaining health, not a base power of 1.
         // It costs the user its life, which the worth model already charges for.
         if move.id == "finalgambit" {

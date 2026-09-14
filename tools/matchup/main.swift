@@ -1376,6 +1376,345 @@ Ability: Regenerator
             && Set(laterWorlds.map { $0.board.theirs[3].build.form.id }).count >= 1)
     _ = truth; _ = revealed
 
+    // -- arriving, and what a move costs its user in stages ------------------
+    print("\n== arriving ==")
+    let weatherLeads = fighters([("Politoed", "Leftovers", ["Scald", "Protect"]),
+                                 ("Staraptor", "Choice Scarf", ["Brave Bird", "Close Combat", "Protect"]),
+                                 ("Kingambit", "Chople Berry", ["Iron Head", "Protect"]),
+                                 ("Whimsicott", "Focus Sash", ["Tailwind", "Protect"])])
+    let sunLeads = fighters([("Torkoal", "Charcoal", ["Eruption", "Protect"]),
+                             ("Kingambit", "Chople Berry", ["Iron Head", "Protect"]),
+                             ("Garchomp", "Life Orb", ["Earthquake", "Protect"]),
+                             ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"])])
+    var startBoard = Board(mine: weatherLeads, theirs: sunLeads, store: store,
+                           field: Field(isDoubles: true), alreadyEvolved: false)
+    startBoard.mine[0].build.ability = "Drizzle"
+    startBoard.mine[1].build.ability = "Intimidate"
+    startBoard.theirs[0].build.ability = "Drought"
+    startBoard.theirs[1].build.ability = "Defiant"
+    startBoard.activeCount = 2
+    startBoard.sendOutLeads()
+    print("  at the start:")
+    for line in startBoard.story { print("    \(line)") }
+    let politoedSpeed = startBoard.mine[0].build.speed(in: startBoard.field)
+    let torkoalSpeed = startBoard.theirs[0].build.speed(in: startBoard.field)
+    print("  Politoed \(politoedSpeed) Speed against Torkoal \(torkoalSpeed)")
+    check("the leads' abilities fire when the game starts",
+          startBoard.story.contains { $0.contains("Drizzle") } && startBoard.story.contains { $0.contains("Intimidate") })
+    check("and the slower weather setter's weather is the one that stays",
+          startBoard.field.weather == (politoedSpeed > torkoalSpeed ? .sun : .rain),
+          "\(startBoard.field.weather)")
+    check("Intimidate into Defiant hands over two stages of Attack",
+          startBoard.theirs[1].build.boosts[Stat.attack.rawValue] == 1,
+          "\(startBoard.theirs[1].build.boosts[Stat.attack.rawValue])")
+
+    // Both sides lose a Pokémon; both send in at once, faster first.
+    var fallen = startBoard
+    fallen.mine[0].hp = 0
+    fallen.theirs[0].hp = 0
+    fallen.mine[2].build.ability = "Intimidate"     // Kingambit, slower
+    fallen.theirs[2].build.ability = "Intimidate"   // Garchomp, faster
+    fallen.story = []
+    fallen.replaceFallen(mine: [(slot: 0, bench: 2)], store: store)
+    print("  after the faints:")
+    for line in fallen.story { print("    \(line)") }
+    let mineIn = fallen.mine[0].build.form.formLabel, theirsIn = fallen.theirs[0].build.form.formLabel
+    check("both sides send in at once", mineIn == "Kingambit" && !fallen.theirs[0].fainted,
+          "\(mineIn) and \(theirsIn)")
+    let garchompFirst = fallen.story.firstIndex { $0.contains("They sent in") }! <
+                        fallen.story.firstIndex { $0.contains("You sent in") }!
+    check("the faster one arrives first", garchompFirst)
+    // Garchomp arrived first, so its Intimidate never saw Kingambit; Kingambit
+    // arrived second and its Intimidate hit Garchomp.
+    check("and the faster one's Intimidate never touches the slower arrival",
+          fallen.mine[0].build.boosts[Stat.attack.rawValue] == 0
+            && fallen.theirs[0].build.boosts[Stat.attack.rawValue] == -1,
+          "\(fallen.mine[0].build.boosts[Stat.attack.rawValue]) / \(fallen.theirs[0].build.boosts[Stat.attack.rawValue])")
+    check("and the arrival is seen from then on", fallen.theirs[0].seen)
+
+    // Close Combat costs its user, unless it is Contrary.
+    let closeCombat = at(startBoard.mine[1], "Close Combat")
+    print("  Close Combat lowers: \(startBoard.mine[1].moves[closeCombat].selfDrops)")
+    var combat = startBoard
+    combat.story = []
+    let fought = TurnModel.resolve(
+        combat,
+        mine: Play(left: .attack(move: at(combat.mine[0], "Protect"), target: 0),
+                   right: .attack(move: closeCombat, target: 1)),
+        theirs: Play(left: .attack(move: at(combat.theirs[0], "Protect"), target: 0),
+                     right: .attack(move: at(combat.theirs[1], "Protect"), target: 0)),
+        store: store)
+    for line in fought.story where line.contains("Staraptor") { print("    \(line)") }
+    check("Close Combat drops the user's defences",
+          fought.mine[1].build.boosts[Stat.defense.rawValue] == -1
+            && fought.mine[1].build.boosts[Stat.spDefense.rawValue] == -1,
+          "\(fought.mine[1].build.boosts)")
+    combat.mine[1].build.ability = "Contrary"
+    let contrary = TurnModel.resolve(
+        combat,
+        mine: Play(left: .attack(move: at(combat.mine[0], "Protect"), target: 0),
+                   right: .attack(move: closeCombat, target: 1)),
+        theirs: Play(left: .attack(move: at(combat.theirs[0], "Protect"), target: 0),
+                     right: .attack(move: at(combat.theirs[1], "Protect"), target: 0)),
+        store: store)
+    for line in contrary.story where line.contains("Contrary") { print("    \(line)") }
+    check("and Contrary turns the drop into a raise",
+          contrary.mine[1].build.boosts[Stat.defense.rawValue] == 1
+            && contrary.mine[1].build.boosts[Stat.spDefense.rawValue] == 1,
+          "\(contrary.mine[1].build.boosts)")
+
+    // Revival Blessing brings one of your own back, at half.
+    print("\n== the party as a target ==")
+    let revivers = fighters([("Pawmot", "Focus Sash", ["Revival Blessing", "Close Combat", "Protect"]),
+                             ("Whimsicott", "Focus Sash", ["Protect"]),
+                             ("Garchomp", "Life Orb", ["Earthquake", "Protect"]),
+                             ("Kingambit", "Chople Berry", ["Iron Head", "Protect"])])
+    let bystanders = fighters([("Rillaboom", "Life Orb", ["Protect"]),
+                               ("Incineroar", "Sitrus Berry", ["Protect"])])
+    var reviveBoard = Board(mine: revivers, theirs: bystanders, store: store,
+                            field: Field(isDoubles: true), alreadyEvolved: false)
+    reviveBoard.mine[3].hp = 0        // Kingambit is down
+    let blessing = at(reviveBoard.mine[0], "Revival Blessing")
+    check("Revival Blessing is aimed at the party", reviveBoard.mine[0].moves[blessing].aim == .party)
+    let game2 = TurnGame(board: reviveBoard, store: store)
+    let offered = game2.choices(forMine: true, slot: 0)
+    check("the search offers it once somebody has fainted",
+          offered.contains(.attack(move: blessing, target: 3)), "\(offered)")
+    let revived = TurnModel.resolve(
+        reviveBoard,
+        mine: Play(left: .attack(move: blessing, target: 3),
+                   right: .attack(move: at(reviveBoard.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(reviveBoard.theirs[0], "Protect"), target: 0),
+                     right: .attack(move: at(reviveBoard.theirs[1], "Protect"), target: 0)),
+        store: store)
+    for line in revived.story where line.contains("Kingambit") { print("    \(line)") }
+    check("and the fallen one comes back at half its health",
+          revived.mine[3].hp == revived.mine[3].maxHP / 2, "\(revived.mine[3].hp)/\(revived.mine[3].maxHP)")
+    print("  described as: \(game2.describe(Choice.attack(move: blessing, target: 3), fighter: reviveBoard.mine[0], foes: Array(reviveBoard.theirs.prefix(2)), team: reviveBoard.mine))")
+
+    // Both of theirs act every turn, and a switch is said out loud.
+    print("\n== both of theirs act ==")
+    let bothGame = Board.opening(mine: mySix, bringing: mySix.slots.prefix(4).map(\.formID),
+                                 theirs: theirSix, store: store, singles: false)
+    let bothSolve = TurnGame(board: bothGame, store: store).solve(iterations: 300)
+    let theirsActing = bothSolve.theirPlays.filter { !$0.left.isPass && !$0.right.isPass }.count
+    check("every line of theirs gives both Pokémon something to do",
+          theirsActing == bothSolve.theirPlays.count, "\(theirsActing) of \(bothSolve.theirPlays.count)")
+    let kinds = Set(bothSolve.theirPlays.flatMap { [$0.left, $0.right] }.map { choice -> String in
+        switch choice {
+        case .attack: return "attack"
+        case .protectSelf: return "protect"
+        case .swap: return "switch"
+        case .pass: return "pass"
+        }
+    })
+    check("and they can attack, Protect and switch, like you", kinds.isSuperset(of: ["attack", "protect", "switch"]), "\(kinds)")
+    let switching = TurnModel.resolve(
+        bothGame,
+        mine: Play(left: .protectSelf(move: at(bothGame.mine[0], "Protect")),
+                   right: .protectSelf(move: at(bothGame.mine[1], "Protect"))),
+        theirs: Play(left: .attack(move: 0, target: 0), right: .swap(to: 2)),
+        store: store)
+    for line in switching.story.prefix(4) { print("    \(line)") }
+    check("a switch is narrated", switching.story.contains { $0.hasPrefix("They switched") })
+    check("and the one that came in is seen", switching.theirs[1].seen)
+    // Both sides switch: the faster one leaves first, and each switch is a
+    // step of its own that also carries what the arrival did.
+    var bothSwitch = bothGame
+    bothSwitch.mine[2].build.ability = "Intimidate"
+    let leaverSpeed = bothSwitch.mine[0].build.speed(in: bothSwitch.field)
+    let theirLeaverSpeed = bothSwitch.theirs[1].build.speed(in: bothSwitch.field)
+    let swapped = TurnModel.resolve(
+        bothSwitch,
+        mine: Play(left: .swap(to: 2), right: .protectSelf(move: at(bothSwitch.mine[1], "Protect"))),
+        theirs: Play(left: .attack(move: 0, target: 0), right: .swap(to: 2)),
+        store: store)
+    print("  \(bothSwitch.mine[0].build.form.formLabel) \(leaverSpeed) leaves against \(bothSwitch.theirs[1].build.form.formLabel) \(theirLeaverSpeed)")
+    for step in swapped.steps.prefix(3) { print("    step: \(step.text.replacingOccurrences(of: "\n", with: " / "))") }
+    let mineAt = swapped.story.firstIndex { $0.hasPrefix("You switched") }!
+    let theirsAt = swapped.story.firstIndex { $0.hasPrefix("They switched") }!
+    check("switches happen in Speed order", leaverSpeed > theirLeaverSpeed ? mineAt < theirsAt : theirsAt < mineAt)
+    check("and before any move", max(mineAt, theirsAt) < swapped.story.firstIndex { $0.contains(" used ") }!)
+    check("and the arrival's ability is in the switch's step",
+          swapped.steps.contains { $0.text.hasPrefix("You switched") && $0.text.contains("Intimidate") },
+          swapped.steps.first { $0.text.hasPrefix("You switched") }?.text ?? "-")
+
+    // Weather Ball is whatever the weather says it is, when it lands.
+    print("\n== the field decides the move ==")
+    let weatherBall = store.data.moves.values.first { $0.name == "Weather Ball" }!
+    let inSun = DamageCalc.fieldForm(of: weatherBall, in: Field(weather: .sun, isDoubles: true))
+    let inRain = DamageCalc.fieldForm(of: weatherBall, in: Field(weather: .rain, isDoubles: true))
+    let clear = DamageCalc.fieldForm(of: weatherBall, in: Field(isDoubles: true))
+    print("  Weather Ball: clear \(clear.type) \(clear.power), sun \(inSun.type) \(inSun.power), rain \(inRain.type) \(inRain.power)")
+    check("Weather Ball is Fire and 100 under sun", inSun.type == .fire && inSun.power == 100)
+    check("Water and 100 under rain, Normal and 50 with nothing up",
+          inRain.type == .water && inRain.power == 100 && clear.type == .normal && clear.power == 50)
+
+    // -- two turns for one move, and Protect wearing thin ----------------------
+    print("\n== two-turn moves ==")
+    let chargers = fighters([("Kingambit", "Leftovers", ["Electro Shot", "Solar Beam", "Fly", "Protect"]),
+                             ("Whimsicott", "Focus Sash", ["Protect"])])
+    let standing = fighters([("Garchomp", "Life Orb", ["Swords Dance", "Earthquake", "Protect"]),
+                             ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"])])
+    let chargeBoard = Board(mine: chargers, theirs: standing, store: store,
+                            field: Field(isDoubles: true), alreadyEvolved: false)
+    let eShot = at(chargeBoard.mine[0], "Electro Shot")
+    let beam = at(chargeBoard.mine[0], "Solar Beam")
+    let fly = at(chargeBoard.mine[0], "Fly")
+    let electro = chargeBoard.mine[0].moves[eShot]
+    print("  Electro Shot reads: hides \(electro.charge?.hides ?? false), skips in \(electro.charge?.skipsIn.map { "\($0)" } ?? "nothing"), boosts \(electro.charge?.boosts ?? [:])")
+    check("Electro Shot is read as a two-turn move that boosts Sp. Atk and skips in rain",
+          electro.charge?.skipsIn == Weather.rain && electro.charge?.boosts[Stat.spAttack] == 1 && electro.charge?.hides == false)
+    let quiet = { (board: Board, left: Choice) -> Board in
+        TurnModel.resolve(board,
+                          mine: Play(left: left, right: .attack(move: at(board.mine[1], "Protect"), target: 0)),
+                          // Rillaboom attacks rather than Protects, or the
+                          // one-turn tests would be measuring its Protect.
+                          theirs: Play(left: .attack(move: at(board.theirs[0], "Swords Dance"), target: 0),
+                                       right: .attack(move: at(board.theirs[1], "Wood Hammer"), target: 1)),
+                          store: store)
+    }
+    let charged1 = quiet(chargeBoard, .attack(move: eShot, target: 1))
+    for line in charged1.story where line.contains("Kingambit") { print("    \(line)") }
+    let charged1SpA: Int = charged1.mine[0].build.boosts[Stat.spAttack.rawValue]
+    let charged1Unhurt: Bool = charged1.theirs[1].hp == charged1.theirs[1].maxHP
+    let charged1Charging: Bool = charged1.mine[0].charging == eShot
+    check("with no rain, the first turn only charges: +1 Sp. Atk and no damage",
+          charged1SpA == 1 && charged1Unhurt && charged1Charging,
+          "spa \(charged1SpA), hp \(charged1.theirs[1].hp)/\(charged1.theirs[1].maxHP)")
+    // Next turn it fires, whatever it is told to do.
+    let fired = quiet(charged1, .attack(move: at(charged1.mine[0], "Protect"), target: 0))
+    for line in fired.story where line.contains("Kingambit") { print("    \(line)") }
+    check("the second turn fires it, even when asked to do something else",
+          fired.theirs[1].hp < fired.theirs[1].maxHP && fired.mine[0].charging == nil,
+          "hp \(fired.theirs[1].hp)/\(fired.theirs[1].maxHP)")
+    var rainy = chargeBoard
+    rainy.field.weather = .rain
+    let atOnce = quiet(rainy, .attack(move: eShot, target: 1))
+    for line in atOnce.story where line.contains("Kingambit") { print("    \(line)") }
+    let atOnceSpA: Int = atOnce.mine[0].build.boosts[Stat.spAttack.rawValue]
+    let atOnceHurt: Bool = atOnce.theirs[1].hp < atOnce.theirs[1].maxHP
+    check("in rain the boost and the beam both land in one turn",
+          atOnceSpA == 1 && atOnceHurt && atOnce.mine[0].charging == nil)
+    var sunny = chargeBoard
+    sunny.field.weather = .sun
+    let solar = quiet(sunny, .attack(move: beam, target: 0))
+    let solarSlow = quiet(chargeBoard, .attack(move: beam, target: 0))
+    let solarHurt: Bool = solar.theirs[0].hp < solar.theirs[0].maxHP
+    let solarSlowUnhurt: Bool = solarSlow.theirs[0].hp == solarSlow.theirs[0].maxHP
+    check("Solar Beam fires at once in sun and charges without it",
+          solarHurt && solar.mine[0].charging == nil && solarSlowUnhurt && solarSlow.mine[0].charging == beam)
+    // Fly: out of reach for the turn it is up — once it is up, which means
+    // it has to move first. Whimsicott outspeeds both of theirs; a Kingambit
+    // would have been hit before it left the ground, as in the game.
+    var flyBoard = chargeBoard
+    flyBoard.mine[1].moves = [chargeBoard.mine[0].moves[fly], chargeBoard.mine[1].moves[0]]
+    let flew = TurnModel.resolve(flyBoard,
+        mine: Play(left: .attack(move: at(flyBoard.mine[0], "Protect"), target: 0),
+                   right: .attack(move: 0, target: 0)),
+        theirs: Play(left: .attack(move: at(flyBoard.theirs[0], "Earthquake"), target: 1),
+                     right: .attack(move: at(flyBoard.theirs[1], "Wood Hammer"), target: 1)),
+        store: store)
+    for line in flew.story where line.contains("reach") || line.contains("Fly") { print("    \(line)") }
+    check("a Pokémon in the air cannot be hit", flew.mine[1].hidden && flew.mine[1].hp == flew.mine[1].maxHP,
+          "hp \(flew.mine[1].hp)/\(flew.mine[1].maxHP)")
+    check("and the search offers only the finish while it is charging",
+          TurnGame(board: charged1, store: store).choices(forMine: true, slot: 0) == [.attack(move: eShot, target: 1)])
+
+    print("\n== Protect wearing thin ==")
+    let protect = at(chargeBoard.mine[1], "Protect")
+    let once = TurnModel.resolve(chargeBoard,
+        mine: Play(left: .attack(move: at(chargeBoard.mine[0], "Protect"), target: 0),
+                   right: .protectSelf(move: protect)),
+        theirs: Play(left: .attack(move: at(chargeBoard.theirs[0], "Swords Dance"), target: 0),
+                     right: .attack(move: at(chargeBoard.theirs[1], "Wood Hammer"), target: 1)),
+        store: store)
+    check("the first Protect holds and starts a streak",
+          once.mine[1].hp == once.mine[1].maxHP && once.mine[1].protectStreak == 1)
+    let twice = TurnModel.resolve(once,
+        mine: Play(left: .attack(move: at(once.mine[0], "Protect"), target: 0),
+                   right: .protectSelf(move: protect)),
+        theirs: Play(left: .attack(move: at(once.theirs[0], "Swords Dance"), target: 0),
+                     right: .attack(move: at(once.theirs[1], "Wood Hammer"), target: 1)),
+        store: store)
+    for line in twice.story where line.contains("Whimsicott") { print("    \(line)") }
+    check("the search takes a second Protect in a row as a failure",
+          twice.mine[1].hp < twice.mine[1].maxHP && twice.mine[1].protectStreak == 0)
+    var heldCount = 0
+    for _ in 0..<600 {
+        let rolled = TurnModel.resolve(once,
+            mine: Play(left: .attack(move: at(once.mine[0], "Protect"), target: 0),
+                       right: .protectSelf(move: protect)),
+            theirs: Play(left: .attack(move: at(once.theirs[0], "Swords Dance"), target: 0),
+                         right: .attack(move: at(once.theirs[1], "Protect"), target: 0)),
+            store: store, rolling: true)
+        if rolled.mine[1].isProtected { heldCount += 1 }
+    }
+    print("  600 second Protects in a row: \(heldCount) held (about 200 expected)")
+    check("a played second Protect holds about a third of the time", heldCount > 140 && heldCount < 260, "\(heldCount)")
+    var rested = once
+    rested.mine[1].isProtected = false
+    let afterRest = TurnModel.resolve(rested,
+        mine: Play(left: .attack(move: at(rested.mine[0], "Protect"), target: 0),
+                   right: .attack(move: 0, target: 0)),
+        theirs: Play(left: .attack(move: at(rested.theirs[0], "Swords Dance"), target: 0),
+                     right: .attack(move: at(rested.theirs[1], "Protect"), target: 0)),
+        store: store)
+    check("a turn without Protect resets the streak", afterRest.mine[1].protectStreak == 0)
+
+    // Feint goes through Protect and takes it down for the partner.
+    print("\n== Feint ==")
+    let feinters = fighters([("Whimsicott", "Focus Sash", ["Feint", "Protect"]),
+                             ("Garchomp", "Life Orb", ["Earthquake", "Dragon Claw", "Protect"])])
+    let guardedSide = fighters([("Kingambit", "Chople Berry", ["Protect", "Iron Head"]),
+                            ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"])])
+    let feintBoard = Board(mine: feinters, theirs: guardedSide, store: store,
+                           field: Field(isDoubles: true), alreadyEvolved: false)
+    let feint = at(feintBoard.mine[0], "Feint")
+    check("Feint is +2 and not protectable",
+          feintBoard.mine[0].moves[feint].priority == 2 && !feintBoard.mine[0].moves[feint].isProtectable
+            && feintBoard.mine[0].moves[feint].breaksProtect)
+    let broken = TurnModel.resolve(feintBoard,
+        mine: Play(left: .attack(move: feint, target: 0),
+                   right: .attack(move: at(feintBoard.mine[1], "Dragon Claw"), target: 0)),
+        theirs: Play(left: .protectSelf(move: at(feintBoard.theirs[0], "Protect")),
+                     right: .attack(move: at(feintBoard.theirs[1], "Protect"), target: 0)),
+        store: store)
+    for line in broken.story where line.contains("Kingambit") || line.contains("Feint") || line.contains("Dragon Claw") { print("    \(line)") }
+    let feintOnly = TurnModel.resolve(feintBoard,
+        mine: Play(left: .attack(move: feint, target: 0),
+                   right: .attack(move: at(feintBoard.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .protectSelf(move: at(feintBoard.theirs[0], "Protect")),
+                     right: .attack(move: at(feintBoard.theirs[1], "Protect"), target: 0)),
+        store: store)
+    let feintDamage = feintOnly.theirs[0].maxHP - feintOnly.theirs[0].hp
+    print("  Feint alone took \(feintDamage); with Dragon Claw after it, \(broken.theirs[0].maxHP - broken.theirs[0].hp)")
+    check("Feint lands through Protect", feintDamage > 0)
+    check("and the partner's move then lands on the opened target",
+          broken.theirs[0].maxHP - broken.theirs[0].hp > feintDamage
+            && broken.story.contains { $0.contains("broke through") })
+
+    // A move whose target fell before its turn came turns to the one left.
+    print("\n== the target that was gone ==")
+    let turners = fighters([("Whimsicott", "Focus Sash", ["Moonblast", "Protect"]),
+                            ("Garchomp", "Life Orb", ["Dragon Claw", "Protect"])])
+    let falling = fighters([("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"]),
+                            ("Kingambit", "Chople Berry", ["Iron Head", "Protect"])])
+    var turnBoard = Board(mine: turners, theirs: falling, store: store,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+    turnBoard.theirs[0].hp = 1
+    let turned = TurnModel.resolve(turnBoard,
+        mine: Play(left: .attack(move: at(turnBoard.mine[0], "Moonblast"), target: 0),
+                   right: .attack(move: at(turnBoard.mine[1], "Dragon Claw"), target: 0)),
+        theirs: Play(left: .attack(move: at(turnBoard.theirs[0], "Wood Hammer"), target: 1),
+                     right: .attack(move: at(turnBoard.theirs[1], "Iron Head"), target: 0)),
+        store: store)
+    for line in turned.story where line.contains("Dragon Claw") || line.contains("turned") || line.contains("fainted") { print("    \(line)") }
+    check("Whimsicott removed Rillaboom first", turned.theirs[0].fainted)
+    check("and Garchomp's Dragon Claw turned to Kingambit instead of hitting nothing",
+          turned.story.contains { $0.contains("turned toward Kingambit") },
+          turned.story.joined(separator: " | "))
+
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)
 }

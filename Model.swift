@@ -101,6 +101,12 @@ struct Move: Codable, Identifiable, Hashable {
     var isPowder: Bool { flags["powder"] == true }
     var isProtectable: Bool { flags["protectable"] != false }
 
+    /// Feint, Phantom Force, Shadow Force: goes through Protect and takes it
+    /// down, so everything else aimed there this turn lands too.
+    var breaksProtect: Bool {
+        effect.lowercased().contains("removes the effects of those moves")
+    }
+
     /// Hits more than one Pokémon, so it takes the 0.75x spread penalty and is
     /// the reason Earthquake and Rock Slide define doubles.
     var isSpread: Bool {
@@ -146,16 +152,22 @@ struct Move: Codable, Identifiable, Hashable {
         case ally
         /// The side, or the field.
         case side
+        /// A fainted member of the user's own party, and you pick which.
+        case party
     }
 
     var aim: Aim {
         if isSpread { return .spread }
+        if Move.partyMoves.contains(name) { return .party }
         if Move.sideMoves.contains(name) { return .side }
         if Move.allyMoves.contains(name) { return .ally }
         if Move.selfMoves.contains(name) { return .user }
         if !isDamaging, !selfBoosts.isEmpty, targetDrops.isEmpty { return .user }
         return .foe
     }
+
+    /// Aimed at somebody on the bench: the one move that brings a Pokémon back.
+    static let partyMoves: Set<String> = ["Revival Blessing"]
 
     /// Aimed at the user's own side or the whole field.
     static let sideMoves: Set<String> = [
@@ -215,14 +227,65 @@ struct Move: Codable, Identifiable, Hashable {
         return out
     }
 
-    var selfBoosts: [Stat: Int] {
-        guard let match = effect.range(of: #"Boosts the user's .+? stats? by \d+ stage"#,
+    /// A move that takes a turn to wind up: what the user does on the first
+    /// turn, whether it is out of reach while doing it, and the weather that
+    /// lets it skip the wait. Read from the text, which is regular about it.
+    struct Charge {
+        /// Fly, Dig, Dive, Bounce, Phantom Force: nothing reaches it meanwhile.
+        let hides: Bool
+        /// Solar Beam fires at once in sun, Electro Shot in rain.
+        let skipsIn: Weather?
+        /// Stages gained on the charging turn: Electro Shot and Meteor Beam
+        /// raise Special Attack while they wind up.
+        let boosts: [Stat: Int]
+    }
+
+    var charge: Charge? {
+        let lower = effect.lowercased()
+        guard lower.contains("status on the turn this move is used then attacks on the following turn")
+        else { return nil }
+        let hides = ["sky-high", "underground", "submerged", "concealed"]
+            .contains { lower.contains("gains the \($0) status") }
+        var skipsIn: Weather?
+        if lower.contains("in rain the user does not gain") { skipsIn = .rain }
+        if lower.contains("in harsh sunlight the user does not gain") { skipsIn = .sun }
+        var boosts: [Stat: Int] = [:]
+        if let match = effect.range(of: #"The user's (.+?) stat is boosted by (\d+) stage"#,
+                                    options: .regularExpression) {
+            let phrase = String(effect[match])
+            let amount = phrase.range(of: #"\d+"#, options: .regularExpression)
+                .flatMap { Int(phrase[$0]) } ?? 1
+            let statName = phrase
+                .replacingOccurrences(of: "The user's ", with: "")
+                .replacingOccurrences(of: #" stat is boosted by \d+ stage"#, with: "",
+                                      options: .regularExpression)
+            switch statName {
+            case "Attack":  boosts[.attack] = amount
+            case "Defense": boosts[.defense] = amount
+            case "Sp. Atk": boosts[.spAttack] = amount
+            case "Sp. Def": boosts[.spDefense] = amount
+            case "Speed":   boosts[.speed] = amount
+            default: break
+            }
+        }
+        return Charge(hides: hides, skipsIn: skipsIn, boosts: boosts)
+    }
+
+    var selfBoosts: [Stat: Int] { ownChanges(verb: "Boosts") }
+
+    /// What a move costs the user in stages: Close Combat's Defence and
+    /// Special Defence, Overheat's two stages of Special Attack. Positive
+    /// numbers, the way the drops on a target are.
+    var selfDrops: [Stat: Int] { ownChanges(verb: "Lowers") }
+
+    private func ownChanges(verb: String) -> [Stat: Int] {
+        guard let match = effect.range(of: "\(verb) the user's .+? stats? by \\d+ stage",
                                        options: .regularExpression) else { return [:] }
         let phrase = String(effect[match])
         guard let amount = phrase.range(of: #"\d+"#, options: [.regularExpression, .backwards])
             .flatMap({ Int(phrase[$0]) }) else { return [:] }
         let statsPart = phrase
-            .replacingOccurrences(of: "Boosts the user's ", with: "")
+            .replacingOccurrences(of: "\(verb) the user's ", with: "")
             .replacingOccurrences(of: #" stats? by \d+ stage"#, with: "",
                                   options: .regularExpression)
         var out: [Stat: Int] = [:]

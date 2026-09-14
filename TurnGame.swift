@@ -56,6 +56,10 @@ struct TurnGame {
         guard slot < board.activeCount,
               team.indices.contains(slot), !team[slot].fainted else { return [] }
         let fighter = team[slot]
+        // Halfway through a two-turn move there is nothing to decide.
+        if let charging = fighter.charging {
+            return [.attack(move: charging, target: fighter.chargingTarget)]
+        }
         // Nothing with priority gets past an Armor Tail, so there is no point
         // the search spending one of its few choices on it.
         let priorityRefused = (0..<Swift.min(board.activeCount, foes.count)).contains {
@@ -112,6 +116,13 @@ struct TurnGame {
             ["Tailwind", "Trick Room"].contains($0.name) }) {
             let already = mine ? board.myTailwind : board.theirTailwind
             if already == 0 { setup.append(.attack(move: control, target: 0)) }
+        }
+        // Revival Blessing, once there is somebody to bring back. Each fallen
+        // teammate is its own choice, since which one matters.
+        for (index, move) in fighter.moves.enumerated() where move.aim == .party {
+            for bench in 2..<team.count where team[bench].fainted {
+                setup.append(.attack(move: index, target: bench))
+            }
         }
         // Fake Out, which only exists on the turn it comes in.
         if fighter.justArrived, !priorityRefused,
@@ -448,9 +459,19 @@ struct TurnGame {
         case .attack(let index, let target):
             guard fighter.moves.indices.contains(index) else { return "attack" }
             let move = fighter.moves[index]
+            if move.aim == .party {
+                let who = team.indices.contains(target) ? team[target].build.form.formLabel : "a teammate"
+                return "\(move.name) on \(who)"
+            }
             if !move.isDamaging { return move.name }
             if move.isSpread { return "\(move.name) (both)" }
             let name = foes.indices.contains(target) ? foes[target].build.form.formLabel : "the other"
+            if let charge = move.charge {
+                if fighter.charging == index { return "\(move.name) into \(name), firing" }
+                if charge.skipsIn == nil || board.field.weather != charge.skipsIn {
+                    return "charge \(move.name) at \(name)"
+                }
+            }
             return "\(move.name) into \(name)"
         case .protectSelf(let index):
             return fighter.moves.indices.contains(index) ? fighter.moves[index].name : "Protect"

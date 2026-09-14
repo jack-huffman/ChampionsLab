@@ -65,6 +65,19 @@ struct Fighter {
     /// a benched Pokémon is one of the two they might have brought, and the
     /// game is played against that, not against the answer.
     var seen = false
+    /// A two-turn move it began last turn — the index into its moves — and
+    /// where it was aimed. Its next action is that move, whatever else is
+    /// asked of it.
+    var charging: Int?
+    var chargingTarget = 0
+    /// Up in the air, underground, under water: nothing reaches it this turn.
+    var hidden = false
+    /// Protects landed in a row. Each one after the first has a third of the
+    /// chance of the one before, and a turn without one starts the count over.
+    var protectStreak = 0
+
+    /// The chance Protect works right now.
+    var protectChance: Double { pow(1.0 / 3.0, Double(protectStreak)) }
 
     var fainted: Bool { hp <= 0 }
     var share: Double { maxHP > 0 ? max(0, Double(hp) / Double(maxHP)) : 0 }
@@ -254,17 +267,104 @@ struct Board {
     /// rather than choosing for them, so the interface fills only the opponent
     /// and then asks; a search fills both, because it has to keep going.
     mutating func fillGaps(mine fillMine: Bool = true, theirs fillTheirs: Bool = true) {
-        func refill(_ team: inout [Fighter]) {
-            for slot in 0..<min(activeCount, team.count) where team[slot].fainted {
+        for side in [true, false] where side ? fillMine : fillTheirs {
+            let count = side ? mine.count : theirs.count
+            for slot in 0..<min(activeCount, count) where (side ? mine : theirs)[slot].fainted {
+                let team = side ? mine : theirs
                 guard let next = (activeCount..<team.count).first(where: { !team[$0].fainted })
                 else { continue }
-                team.swapAt(slot, next)
-                team[slot].justArrived = true
-                team[slot].seen = true
+                if side { mine.swapAt(slot, next) } else { theirs.swapAt(slot, next) }
+                landed(mine: side, slot: slot)
             }
         }
-        if fillMine { refill(&mine) }
-        if fillTheirs { refill(&theirs) }
+    }
+
+    /// A Pokémon has just reached the field: it is seen, it can Fake Out, and
+    /// whatever it does on arrival happens now.
+    mutating func landed(mine side: Bool, slot: Int) {
+        if side {
+            mine[slot].justArrived = true
+            mine[slot].seen = true
+            mine[slot].isProtected = false
+            if let said = TurnModel.entryAbility(of: mine[slot].build.ability, team: &mine,
+                                                 slot: slot, opposing: &theirs, field: &field) {
+                note(said)
+            }
+        } else {
+            theirs[slot].justArrived = true
+            theirs[slot].seen = true
+            theirs[slot].isProtected = false
+            if let said = TurnModel.entryAbility(of: theirs[slot].build.ability, team: &theirs,
+                                                 slot: slot, opposing: &mine, field: &field) {
+                note(said)
+            }
+        }
+    }
+
+    /// The start of the game: everyone out front arrives at once, and their
+    /// abilities go off in Speed order, which is what decides whose weather
+    /// the first turn is played in.
+    mutating func sendOutLeads() {
+        var order: [(mine: Bool, slot: Int, speed: Int)] = []
+        for slot in 0..<min(activeCount, mine.count) where !mine[slot].fainted {
+            order.append((true, slot, mine[slot].build.speed(in: field)))
+        }
+        for slot in 0..<min(activeCount, theirs.count) where !theirs[slot].fainted {
+            order.append((false, slot, theirs[slot].build.speed(in: field)))
+        }
+        // Fastest first; a tie goes to you, the same way every time.
+        order.sort { $0.speed > $1.speed || ($0.speed == $1.speed && $0.mine && !$1.mine) }
+        for entry in order { landed(mine: entry.mine, slot: entry.slot) }
+    }
+
+    /// Their pick for a gap: the benched one that takes least from whatever
+    /// of yours is standing, which is how the choice is made in `choices`.
+    func theirBestReplacement(for slot: Int, store: Store, excluding taken: Set<Int>) -> Int? {
+        var best: (index: Int, worst: Double)?
+        for index in activeCount..<theirs.count where !theirs[index].fainted && !taken.contains(index) {
+            var worst = 0.0
+            for foe in mine.prefix(activeCount) where !foe.fainted {
+                for move in foe.moves where move.isDamaging {
+                    let result = DamageCalc.calculate(attacker: foe.build, defender: theirs[index].build,
+                                                      move: move, field: field)
+                    worst = Swift.max(worst, Double(result.maxDamage) / Double(theirs[index].maxHP))
+                }
+            }
+            if best == nil || worst < best!.worst { best = (index, worst) }
+        }
+        return best?.index
+    }
+
+    /// The end of a turn with something down on either side: both players
+    /// send in at once, and the arrivals happen in Speed order — so the faster
+    /// one's Intimidate never touches the slower one, and the slower one's
+    /// weather is the weather. Yours are what you chose; theirs choose for
+    /// themselves.
+    mutating func replaceFallen(mine picks: [(slot: Int, bench: Int)], store: Store) {
+        var arrivals: [(mine: Bool, slot: Int, bench: Int, speed: Int)] = []
+        for pick in picks where mine.indices.contains(pick.bench) && !mine[pick.bench].fainted {
+            arrivals.append((true, pick.slot, pick.bench, mine[pick.bench].build.speed(in: field)))
+        }
+        var taken: Set<Int> = []
+        for slot in 0..<min(activeCount, theirs.count) where theirs[slot].fainted {
+            guard let pick = theirBestReplacement(for: slot, store: store, excluding: taken)
+            else { continue }
+            taken.insert(pick)
+            arrivals.append((false, slot, pick, theirs[pick].build.speed(in: field)))
+        }
+        arrivals.sort { $0.speed > $1.speed || ($0.speed == $1.speed && $0.mine && !$1.mine) }
+        for arrival in arrivals {
+            if arrival.mine {
+                guard mine[arrival.slot].fainted else { continue }
+                mine.swapAt(arrival.slot, arrival.bench)
+                note("You sent in \(mine[arrival.slot].build.form.formLabel).")
+            } else {
+                guard theirs[arrival.slot].fainted else { continue }
+                theirs.swapAt(arrival.slot, arrival.bench)
+                note("They sent in \(theirs[arrival.slot].build.form.formLabel).")
+            }
+            landed(mine: arrival.mine, slot: arrival.slot)
+        }
     }
 
     /// Slots on my side standing empty with somebody able to fill them.
@@ -280,8 +380,7 @@ struct Board {
         guard mine.indices.contains(bench), mine.indices.contains(slot),
               !mine[bench].fainted, mine[slot].fainted else { return }
         mine.swapAt(slot, bench)
-        mine[slot].justArrived = true
-        mine[slot].seen = true
+        landed(mine: true, slot: slot)
     }
 }
 
@@ -386,6 +485,7 @@ extension Board {
         var board = Board(mine: brought, theirs: theirBrought, store: store,
                           field: field, alreadyEvolved: false)
         board.activeCount = leadCount
+        board.sendOutLeads()
 
         // Every Pokémon on their six as a fighter, so a guess can be played.
         let whole = Board(mine: brought, theirs: theirTeam, store: store,
@@ -538,15 +638,48 @@ enum TurnModel {
         let theirChoices = [theirs.left, theirs.right]
 
         // -- switches, which resolve before anything else --------------------
+        // In turn order — the faster Pokémon leaves first, Trick Room turning
+        // that round — and each one its own step, with whatever the arrival
+        // did in the same step. Said out loud, because a silent switch reads
+        // as a Pokémon that did nothing, which is exactly what a switch is
+        // meant to look like to the other player and exactly what a log must
+        // not let it be.
+        var leaving: [(mine: Bool, slot: Int, bench: Int, speed: Int)] = []
         for (slot, choice) in myChoices.enumerated() {
-            guard case .swap(let bench) = choice else { continue }
-            swapIn(&out.mine, active: slot, bench: bench, opposing: &out.theirs,
-                   field: &out.field)
+            guard case .swap(let bench) = choice,
+                  out.mine.indices.contains(slot), out.mine.indices.contains(bench),
+                  !out.mine[bench].fainted, !out.mine[slot].fainted,
+                  out.mine[slot].charging == nil else { continue }
+            leaving.append((true, slot, bench,
+                            speed(of: out.mine[slot], tailwind: out.myTailwind > 0, board: out)))
         }
         for (slot, choice) in theirChoices.enumerated() {
-            guard case .swap(let bench) = choice else { continue }
-            swapIn(&out.theirs, active: slot, bench: bench, opposing: &out.mine,
-                   field: &out.field)
+            guard case .swap(let bench) = choice,
+                  out.theirs.indices.contains(slot), out.theirs.indices.contains(bench),
+                  !out.theirs[bench].fainted, !out.theirs[slot].fainted,
+                  out.theirs[slot].charging == nil else { continue }
+            leaving.append((false, slot, bench,
+                            speed(of: out.theirs[slot], tailwind: out.theirTailwind > 0, board: out)))
+        }
+        let inverted = out.trickRoom > 0
+        leaving.sort { a, b in
+            if a.speed != b.speed { return inverted ? a.speed < b.speed : a.speed > b.speed }
+            return a.mine && !b.mine
+        }
+        for entry in leaving {
+            out.beginStep()
+            if entry.mine {
+                out.note("You switched \(out.mine[entry.slot].build.form.formLabel) out for \(out.mine[entry.bench].build.form.formLabel).")
+                let said = swapIn(&out.mine, active: entry.slot, bench: entry.bench,
+                                  opposing: &out.theirs, field: &out.field)
+                if let said { out.note(said) }
+            } else {
+                out.note("They switched \(out.theirs[entry.slot].build.form.formLabel) out for \(out.theirs[entry.bench].build.form.formLabel).")
+                let said = swapIn(&out.theirs, active: entry.slot, bench: entry.bench,
+                                  opposing: &out.mine, field: &out.field)
+                if let said { out.note(said) }
+            }
+            out.closeStep()
         }
 
         // -- Mega Evolution, in Speed order ----------------------------------
@@ -585,14 +718,26 @@ enum TurnModel {
         }
 
         // -- everything else, in order ---------------------------------------
+        // A Pokémon halfway through a two-turn move has no choice this turn:
+        // it fires, whatever it was asked to do.
+        func forced(_ fighter: Fighter, _ choice: Choice) -> Choice {
+            if let charging = fighter.charging {
+                return .attack(move: charging, target: fighter.chargingTarget)
+            }
+            return choice
+        }
         var entries: [(mine: Bool, slot: Int, choice: Choice, priority: Int, speed: Int)] = []
-        for (slot, choice) in myChoices.enumerated() where !choice.isSwap {
+        for (slot, given) in myChoices.enumerated() {
             guard out.mine.indices.contains(slot), !out.mine[slot].fainted else { continue }
+            let choice = forced(out.mine[slot], given)
+            guard !choice.isSwap else { continue }
             entries.append((true, slot, choice, priority(of: choice, for: out.mine[slot]),
                             speed(of: out.mine[slot], tailwind: out.myTailwind > 0, board: out)))
         }
-        for (slot, choice) in theirChoices.enumerated() where !choice.isSwap {
+        for (slot, given) in theirChoices.enumerated() {
             guard out.theirs.indices.contains(slot), !out.theirs[slot].fainted else { continue }
+            let choice = forced(out.theirs[slot], given)
+            guard !choice.isSwap else { continue }
             entries.append((false, slot, choice, priority(of: choice, for: out.theirs[slot]),
                             speed(of: out.theirs[slot], tailwind: out.theirTailwind > 0, board: out)))
         }
@@ -709,6 +854,7 @@ enum TurnModel {
         board.theirScreens.tick()
         for index in board.mine.indices {
             board.mine[index].protectedLast = board.mine[index].isProtected
+            if !board.mine[index].isProtected { board.mine[index].protectStreak = 0 }
             board.mine[index].justArrived = false
             if board.mine[index].asleepFor > 0 {
                 board.mine[index].asleepFor -= 1
@@ -717,6 +863,7 @@ enum TurnModel {
         }
         for index in board.theirs.indices {
             board.theirs[index].protectedLast = board.theirs[index].isProtected
+            if !board.theirs[index].isProtected { board.theirs[index].protectStreak = 0 }
             board.theirs[index].justArrived = false
             if board.theirs[index].asleepFor > 0 {
                 board.theirs[index].asleepFor -= 1
@@ -748,26 +895,72 @@ enum TurnModel {
     }
 
     /// What arriving — or evolving — does to the field and to the other side.
-    private static func entryAbility(of ability: String, team: inout [Fighter], slot: Int,
-                                     opposing: inout [Fighter], field: inout Field) {
+    /// What arriving does, and a line saying so — nil when the ability does
+    /// nothing on the way in. Weather and terrain simply take the field, which
+    /// is why the order two setters arrive in decides whose stays.
+    @discardableResult
+    nonisolated static func entryAbility(of ability: String, team: inout [Fighter], slot: Int,
+                                         opposing: inout [Fighter], field: inout Field) -> String? {
+        let name = team.indices.contains(slot) ? team[slot].build.form.formLabel : "It"
         switch ability {
         case "Intimidate":
+            var cut: [String] = [], shrugged: [String] = [], rallied: [String] = []
             for index in opposing.indices.prefix(2) where !opposing[index].fainted {
-                if ["Clear Body", "Hyper Cutter", "Inner Focus", "White Smoke",
-                    "Full Metal Body", "Own Tempo", "Oblivious", "Scrappy",
-                    "Guard Dog"].contains(opposing[index].build.ability) { continue }
-                opposing[index].build.boosts[Stat.attack.rawValue] =
-                    max(-6, opposing[index].build.boosts[Stat.attack.rawValue] - 1)
+                let other = opposing[index].build.form.formLabel
+                switch opposing[index].build.ability {
+                case "Clear Body", "Hyper Cutter", "Inner Focus", "White Smoke",
+                     "Full Metal Body", "Own Tempo", "Oblivious", "Scrappy":
+                    shrugged.append(other)
+                case "Guard Dog", "Contrary":
+                    // Turns the drop into a raise.
+                    opposing[index].build.boosts[Stat.attack.rawValue] =
+                        Swift.min(6, opposing[index].build.boosts[Stat.attack.rawValue] + 1)
+                    rallied.append("\(other)'s \(opposing[index].build.ability) turned it into a raise")
+                case "Defiant":
+                    // The drop lands, then Defiant answers with two stages.
+                    opposing[index].build.boosts[Stat.attack.rawValue] =
+                        Swift.min(6, opposing[index].build.boosts[Stat.attack.rawValue] + 1)
+                    rallied.append("\(other)'s Defiant answered with two stages of Attack")
+                case "Competitive":
+                    opposing[index].build.boosts[Stat.attack.rawValue] =
+                        Swift.max(-6, opposing[index].build.boosts[Stat.attack.rawValue] - 1)
+                    opposing[index].build.boosts[Stat.spAttack.rawValue] =
+                        Swift.min(6, opposing[index].build.boosts[Stat.spAttack.rawValue] + 2)
+                    cut.append(other)
+                    rallied.append("\(other)'s Competitive answered with two stages of Special Attack")
+                default:
+                    opposing[index].build.boosts[Stat.attack.rawValue] =
+                        Swift.max(-6, opposing[index].build.boosts[Stat.attack.rawValue] - 1)
+                    cut.append(other)
+                }
             }
-        case "Drought":        field.weather = .sun
-        case "Drizzle":        field.weather = .rain
-        case "Sand Stream":    field.weather = .sand
-        case "Snow Warning":   field.weather = .snow
-        case "Electric Surge": field.terrain = .electric
-        case "Grassy Surge":   field.terrain = .grassy
-        case "Misty Surge":    field.terrain = .misty
-        case "Psychic Surge":  field.terrain = .psychic
-        default: break
+            var parts: [String] = []
+            if !cut.isEmpty { parts.append("cut \(cut.joined(separator: " and "))'s Attack") }
+            if !shrugged.isEmpty { parts.append("\(shrugged.joined(separator: " and ")) shrugged it off") }
+            parts += rallied
+            guard !parts.isEmpty else { return nil }
+            return "\(name)'s Intimidate " + parts.joined(separator: "; ") + "."
+        case "Drought":
+            let same = field.weather == .sun
+            field.weather = .sun
+            return "\(name)'s Drought " + (same ? "kept the sunlight harsh." : "made the sunlight harsh.")
+        case "Drizzle":
+            let same = field.weather == .rain
+            field.weather = .rain
+            return "\(name)'s Drizzle " + (same ? "kept the rain falling." : "made it rain.")
+        case "Sand Stream":
+            let same = field.weather == .sand
+            field.weather = .sand
+            return "\(name)'s Sand Stream " + (same ? "kept the sandstorm up." : "whipped up a sandstorm.")
+        case "Snow Warning":
+            let same = field.weather == .snow
+            field.weather = .snow
+            return "\(name)'s Snow Warning " + (same ? "kept the snow falling." : "made it snow.")
+        case "Electric Surge": field.terrain = .electric; return "\(name)'s Electric Surge charged the field."
+        case "Grassy Surge":   field.terrain = .grassy;   return "\(name)'s Grassy Surge grew grass across the field."
+        case "Misty Surge":    field.terrain = .misty;    return "\(name)'s Misty Surge covered the field in mist."
+        case "Psychic Surge":  field.terrain = .psychic;  return "\(name)'s Psychic Surge made the field feel strange."
+        default: return nil
         }
     }
 
@@ -798,23 +991,27 @@ enum TurnModel {
     /// is itself an action: Intimidate takes an Attack stage off both of them,
     /// and a weather or terrain setter takes the field back, which is why
     /// pivoting a Pelipper back in is a play rather than a retreat.
+    @discardableResult
     private static func swapIn(_ team: inout [Fighter], active: Int, bench: Int,
-                               opposing: inout [Fighter], field: inout Field) {
+                               opposing: inout [Fighter], field: inout Field) -> String? {
         guard team.indices.contains(active), team.indices.contains(bench),
-              !team[bench].fainted else { return }
+              !team[bench].fainted else { return nil }
         // Regenerator heals a third on the way out, which is what makes a
         // Regenerator pivot free where another Pokémon's costs it the chip.
         if team[active].build.ability == "Regenerator", !team[active].fainted {
             team[active].hp = Swift.min(team[active].maxHP,
                                         team[active].hp + team[active].maxHP / 3)
         }
+        team[active].charging = nil
+        team[active].hidden = false
+        team[active].protectStreak = 0
         team.swapAt(active, bench)
         team[active].justArrived = true
         team[active].seen = true
         team[active].isProtected = false
 
-        entryAbility(of: team[active].build.ability, team: &team, slot: active,
-                     opposing: &opposing, field: &field)
+        return entryAbility(of: team[active].build.ability, team: &team, slot: active,
+                            opposing: &opposing, field: &field)
     }
 
     private static func apply(_ choice: Choice, byMine: Bool, slot: Int,
@@ -825,16 +1022,19 @@ enum TurnModel {
         let name = actor.build.form.formLabel
         if actor.flinched {
             board.note("\(name) flinched and could not move.")
+            dropCharge(byMine: byMine, slot: slot, board: &board)
             return
         }
         // Sleep and paralysis cost turns, which is the whole reason they are
         // worth a move slot.
         if actor.status == .sleep {
             board.note("\(name) is fast asleep.")
+            dropCharge(byMine: byMine, slot: slot, board: &board)
             return
         }
         if actor.status == .paralysis, rolling, Double.random(in: 0...1) < 0.25 {
             board.note("\(name) is paralysed and cannot move.")
+            dropCharge(byMine: byMine, slot: slot, board: &board)
             return
         }
 
@@ -845,9 +1045,7 @@ enum TurnModel {
             return
         case .protectSelf(let index):
             let label = actor.moves.indices.contains(index) ? actor.moves[index].name : "Protect"
-            if byMine { board.mine[slot].isProtected = true }
-            else { board.theirs[slot].isProtected = true }
-            board.note("\(name) used \(label) and braced.")
+            tryProtect(label, byMine: byMine, slot: slot, board: &board, rolling: rolling)
         case .attack(let moveIndex, let target):
             guard actor.moves.indices.contains(moveIndex) else { return }
             let move = actor.moves[moveIndex]
@@ -870,7 +1068,37 @@ enum TurnModel {
                 board.note("\(name) used \(move.name), but it only works on the turn it comes in.")
                 return
             }
-            board.note("\(name) used \(move.name).")
+            // A two-turn move: this turn is the wind-up unless the weather
+            // waives it, and the next turn is the hit. Electro Shot in rain
+            // does both at once — the boost, then the beam.
+            if let charge = move.charge {
+                let firing = actor.charging == moveIndex
+                let waived = charge.skipsIn != nil && board.field.weather == charge.skipsIn
+                if !firing {
+                    board.note(waived
+                        ? "\(name) used \(move.name). In the \(board.field.weather.rawValue.lowercased()) it needs no time to charge."
+                        : (charge.hides ? "\(name) used \(move.name) and is out of reach."
+                                        : "\(name) began charging \(move.name)."))
+                    applySelf(charge.boosts, toMine: byMine, slot: slot, board: &board)
+                    if !waived {
+                        if byMine {
+                            board.mine[slot].charging = moveIndex
+                            board.mine[slot].chargingTarget = target
+                            board.mine[slot].hidden = charge.hides
+                        } else {
+                            board.theirs[slot].charging = moveIndex
+                            board.theirs[slot].chargingTarget = target
+                            board.theirs[slot].hidden = charge.hides
+                        }
+                        return
+                    }
+                } else {
+                    dropCharge(byMine: byMine, slot: slot, board: &board, quietly: true)
+                    board.note("\(name) unleashed \(move.name).")
+                }
+            } else {
+                board.note("\(name) used \(move.name).")
+            }
 
             // 2. The field: anything that stops it before it starts.
             let farScreens = byMine ? board.theirScreens : board.myScreens
@@ -897,8 +1125,18 @@ enum TurnModel {
             var aimed = move.isSpread ? [0, 1] : [target]
             if !move.isSpread {
                 let defenders = byMine ? board.theirs : board.mine
+                // The target went down before this move's turn came: it turns
+                // to whoever is left standing across the field. A Whimsicott on
+                // one point of Focus Sash health is exactly who this finds.
+                let gone = !defenders.indices.contains(target) || target >= board.activeCount
+                    || defenders[target].fainted
+                if gone, let other = (0..<Swift.min(board.activeCount, defenders.count))
+                    .first(where: { $0 != target && !defenders[$0].fainted }) {
+                    aimed = [other]
+                    board.note("\(name)'s \(move.name) turned toward \(defenders[other].build.form.formLabel) instead.")
+                }
                 if let pulled = (0..<Swift.min(board.activeCount, defenders.count)).first(where: {
-                    defenders[$0].drawingFire && !defenders[$0].fainted }), pulled != target {
+                    defenders[$0].drawingFire && !defenders[$0].fainted }), pulled != aimed[0] {
                     aimed = [pulled]
                     board.note("It was drawn to \(defenders[pulled].build.form.formLabel).")
                 }
@@ -923,9 +1161,20 @@ enum TurnModel {
                 let defending = byMine ? board.theirs : board.mine
                 guard defending.indices.contains(index), !defending[index].fainted else { continue }
                 let hitName = defending[index].build.form.formLabel
+                if defending[index].hidden {
+                    board.note("\(hitName) is out of reach.")
+                    continue
+                }
                 if defending[index].isProtected, move.isProtectable {
                     board.note("\(hitName) protected itself.")
                     continue
+                }
+                // Feint: through the Protect, and the Protect is gone — so the
+                // partner's move, coming after, lands on an open target.
+                if defending[index].isProtected, move.breaksProtect {
+                    if byMine { board.theirs[index].isProtected = false }
+                    else { board.mine[index].isProtected = false }
+                    board.note("\(move.name) broke through \(hitName)'s protection.")
                 }
                 var defender = defending[index].build
                 defender.atFullHP = defending[index].hp == defending[index].maxHP
@@ -1023,6 +1272,10 @@ enum TurnModel {
                 if after.hp == 0 { board.note("\(hitName) fainted.") }
             }
             applySelf(move.selfBoosts, toMine: byMine, slot: slot, board: &board)
+            // What the move takes off its user: Close Combat's defences,
+            // Overheat's Special Attack. Missed entirely until now, so a
+            // Sneasler could Close Combat all game at full Defence.
+            applySelf(move.selfDrops.mapValues { -$0 }, toMine: byMine, slot: slot, board: &board)
             cost(of: move, dealt: totalDealt, byMine: byMine, slot: slot, board: &board)
         }
     }
@@ -1114,17 +1367,10 @@ enum TurnModel {
         guard let next = (board.activeCount..<team.count).first(where: { !team[$0].fainted })
         else { return }
         let name = team[slot].build.form.formLabel
-        if mine {
-            board.mine.swapAt(slot, next)
-            board.mine[slot].justArrived = true
-            board.mine[slot].seen = true
-        } else {
-            board.theirs.swapAt(slot, next)
-            board.theirs[slot].justArrived = true
-            board.theirs[slot].seen = true
-        }
+        if mine { board.mine.swapAt(slot, next) } else { board.theirs.swapAt(slot, next) }
         let arrival = (mine ? board.mine : board.theirs)[slot].build.form.formLabel
         board.note("\(name)'s \(team[slot].build.ability) sent it out. \(arrival) came in.")
+        board.landed(mine: mine, slot: slot)
     }
 
     /// What using the move costs the Pokémon that used it.
@@ -1173,43 +1419,107 @@ enum TurnModel {
     }
 
     /// Stat stages a move takes off whatever it hit.
+    /// Stat stages taken off a Pokémon by the other side: Icy Wind, Snarl, a
+    /// Weakness Policy going off on the wrong one. The abilities that answer
+    /// a drop from outside all live here: Clear Body refuses it, Contrary
+    /// turns it round, Defiant and Competitive take it and hit back.
     private static func applyDrops(_ drops: [Stat: Int], toMine: Bool, slot: Int,
                                    board: inout Board) {
         guard !drops.isEmpty else { return }
         let team = toMine ? board.mine : board.theirs
         guard team.indices.contains(slot), !team[slot].fainted else { return }
-        if ["Clear Body", "White Smoke", "Full Metal Body"].contains(team[slot].build.ability) {
+        let name = team[slot].build.form.formLabel
+        let ability = team[slot].build.ability
+        if ["Clear Body", "White Smoke", "Full Metal Body", "Mirror Armor"].contains(ability) {
+            board.note("\(name)'s \(ability) kept its stats where they were.")
             return
         }
-        for (stat, amount) in drops {
-            if toMine {
-                board.mine[slot].build.boosts[stat.rawValue] =
-                    Swift.max(-6, board.mine[slot].build.boosts[stat.rawValue] - amount)
-            } else {
-                board.theirs[slot].build.boosts[stat.rawValue] =
-                    Swift.max(-6, board.theirs[slot].build.boosts[stat.rawValue] - amount)
-            }
+        let deltas = Dictionary(uniqueKeysWithValues: drops.map { ($0.key, -$0.value) })
+        change(deltas, onMine: toMine, slot: slot, board: &board)
+        if ability == "Defiant" {
+            change([.attack: 2], onMine: toMine, slot: slot, board: &board, because: "Defiant")
+        } else if ability == "Competitive" {
+            change([.spAttack: 2], onMine: toMine, slot: slot, board: &board, because: "Competitive")
         }
-        let names = drops.keys.map(\.short).sorted().joined(separator: " and ")
-        board.note("\(team[slot].build.form.formLabel)'s \(names) fell.")
     }
 
+    /// Stat stages a Pokémon gives itself, up or down: Swords Dance, Close
+    /// Combat's cost, Weakness Policy. Nothing refuses these except Contrary,
+    /// which reverses them — the whole reason Contrary Close Combat exists.
     private static func applySelf(_ boosts: [Stat: Int], toMine: Bool, slot: Int,
                                   board: inout Board) {
-        guard !boosts.isEmpty else { return }
-        let team = toMine ? board.mine : board.theirs
-        guard team.indices.contains(slot), !team[slot].fainted else { return }
-        for (stat, amount) in boosts {
-            if toMine {
-                board.mine[slot].build.boosts[stat.rawValue] =
-                    Swift.min(6, board.mine[slot].build.boosts[stat.rawValue] + amount)
-            } else {
-                board.theirs[slot].build.boosts[stat.rawValue] =
-                    Swift.min(6, board.theirs[slot].build.boosts[stat.rawValue] + amount)
-            }
+        change(boosts, onMine: toMine, slot: slot, board: &board)
+    }
+
+    /// Protect, with the odds the game gives it: certain the first time, a
+    /// third the next, a ninth after that, and back to certain the moment one
+    /// fails or a turn goes by without one. A played turn rolls it; the search
+    /// takes anything under even as a miss, so it never counts on a second
+    /// Protect in a row — which is exactly the read a good player makes.
+    private static func tryProtect(_ label: String?, byMine: Bool, slot: Int,
+                                   board: inout Board, rolling: Bool) {
+        let team = byMine ? board.mine : board.theirs
+        guard team.indices.contains(slot) else { return }
+        let fighter = team[slot]
+        let name = fighter.build.form.formLabel
+        let word = label ?? "Protect"
+        let chance = fighter.protectChance
+        let works = rolling ? Double.random(in: 0..<1) < chance : chance >= 0.5
+        if works {
+            if byMine { board.mine[slot].isProtected = true; board.mine[slot].protectStreak += 1 }
+            else { board.theirs[slot].isProtected = true; board.theirs[slot].protectStreak += 1 }
+            board.note(chance < 1
+                ? "\(name) used \(word) and braced — a \(Int((chance * 100).rounded()))% chance, and it held."
+                : "\(name) used \(word) and braced.")
+        } else {
+            if byMine { board.mine[slot].protectStreak = 0 } else { board.theirs[slot].protectStreak = 0 }
+            board.note("\(name) used \(word), but it failed — \(Int((chance * 100).rounded()))% after using it last turn.")
         }
-        let names = boosts.keys.map(\.short).sorted().joined(separator: " and ")
-        board.note("\(team[slot].build.form.formLabel)'s \(names) rose.")
+    }
+
+    /// A charge that will not be finished: the Pokémon was stopped, or the
+    /// move is landing now.
+    private static func dropCharge(byMine: Bool, slot: Int, board: inout Board, quietly: Bool = false) {
+        let team = byMine ? board.mine : board.theirs
+        guard team.indices.contains(slot), let charging = team[slot].charging else { return }
+        if !quietly, team[slot].moves.indices.contains(charging) {
+            board.note("\(team[slot].build.form.formLabel) lost its \(team[slot].moves[charging].name).")
+        }
+        if byMine { board.mine[slot].charging = nil; board.mine[slot].hidden = false }
+        else { board.theirs[slot].charging = nil; board.theirs[slot].hidden = false }
+    }
+
+    /// Move a Pokémon's stages, through whatever its ability does to stage
+    /// changes, and say what happened in one line.
+    private static func change(_ deltas: [Stat: Int], onMine: Bool, slot: Int,
+                               board: inout Board, because: String? = nil) {
+        guard !deltas.isEmpty else { return }
+        let team = onMine ? board.mine : board.theirs
+        guard team.indices.contains(slot), !team[slot].fainted else { return }
+        let name = team[slot].build.form.formLabel
+        let ability = team[slot].build.ability
+        var applied = deltas
+        if ability == "Contrary" { applied = applied.mapValues { -$0 } }
+        if ability == "Simple" { applied = applied.mapValues { $0 * 2 } }
+        var rose: [String] = [], fell: [String] = []
+        for (stat, amount) in applied.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+            let before = team[slot].build.boosts[stat.rawValue]
+            let after = Swift.max(-6, Swift.min(6, before + amount))
+            guard after != before else { continue }
+            if onMine { board.mine[slot].build.boosts[stat.rawValue] = after }
+            else { board.theirs[slot].build.boosts[stat.rawValue] = after }
+            let word = abs(amount) >= 2 ? "\(stat.short) sharply" : stat.short
+            if amount > 0 { rose.append(word) } else { fell.append(word) }
+        }
+        guard !rose.isEmpty || !fell.isEmpty else { return }
+        var parts: [String] = []
+        if !rose.isEmpty { parts.append("\(rose.joined(separator: " and ")) rose") }
+        if !fell.isEmpty { parts.append("\(fell.joined(separator: " and ")) fell") }
+        var line = "\(name)'s " + parts.joined(separator: "; ") + "."
+        if let because { line = "\(name)'s \(because): " + parts.joined(separator: "; ") + "." }
+        else if ability == "Contrary" { line = "\(name)'s Contrary turned it round: " + parts.joined(separator: "; ") + "." }
+        else if ability == "Simple" { line = "\(name)'s Simple doubled it: " + parts.joined(separator: "; ") + "." }
+        board.note(line)
     }
 
     /// What a non-damaging move actually does.
@@ -1229,13 +1539,31 @@ enum TurnModel {
         let name = team[slot].build.form.formLabel
         board.note("\(name) used \(move.name).")
 
+        // Revival Blessing: the target is one of the user's own fallen, not
+        // anything across the field. It comes back to the bench at half.
+        if move.aim == .party {
+            let bench = (board.activeCount..<team.count)
+            let chosen = bench.contains(target) && team[target].fainted
+                ? target : bench.first { team[$0].fainted }
+            guard let chosen else {
+                board.note("But nobody on \(byMine ? "your" : "their") side had fainted.")
+                return
+            }
+            let half = Swift.max(1, team[chosen].maxHP / 2)
+            if byMine {
+                board.mine[chosen].hp = half; board.mine[chosen].status = .none
+            } else {
+                board.theirs[chosen].hp = half; board.theirs[chosen].status = .none
+            }
+            board.note("\(team[chosen].build.form.formLabel) was revived to half its health.")
+            return
+        }
+
         // Protect and its family arrive here whenever the move was picked as a
         // move rather than through the dedicated choice, which is how the
         // interface offers it and how the search sometimes picks it.
         if DuelEngine.protectMoves.contains(move.name) {
-            if byMine { board.mine[slot].isProtected = true }
-            else { board.theirs[slot].isProtected = true }
-            board.note("\(name) braced itself.")
+            tryProtect(nil, byMine: byMine, slot: slot, board: &board, rolling: rolling)
             return
         }
 

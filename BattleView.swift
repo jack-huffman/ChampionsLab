@@ -27,6 +27,9 @@ struct BattleView: View {
     @State private var opponentID = ""
     @State private var opponentSearch = ""
     @State private var startHover = false
+    /// Replacements chosen so far this turn, sent in together once every gap
+    /// has one, in Speed order alongside theirs.
+    @State private var chosenSends: [(slot: Int, bench: Int)] = []
     /// Which of the three readings the side panel is showing.
     enum Panel: String, CaseIterable { case engine = "Engine", theirs = "Their read", log = "Log" }
     @State private var panel: Panel = .engine
@@ -114,9 +117,13 @@ struct BattleView: View {
         if let playing {
             _board = State(initialValue: playing)
             _stage = State(initialValue: .battle)
-            _log = State(initialValue: ["Both sides send out their leads. Neither knows what the other is holding, nor which four came."])
+            _log = State(initialValue: [BattleView.opener] + playing.story)
         }
     }
+
+    static let opener = "Both sides send out their leads. Neither knows what the other is holding, nor which four came."
+    /// A log line that is a turn marker rather than an event.
+    static let dividerMark = "\u{00A7}"
 
     private var myTeam: Team? { store.teams.first { $0.id.uuidString == myTeamID } }
     private var theirTeam: Team? {
@@ -139,7 +146,7 @@ struct BattleView: View {
                 case .versus:
                     versusPage
                 case .preview:
-                    if snapshotMode { previewBoard } else { ScrollView { previewBoard } }
+                    previewBoard
                 case .battle:
                     if let board { field(board) }
                 }
@@ -622,21 +629,53 @@ struct BattleView: View {
     // MARK: Team Preview
 
     private var previewBoard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Card {
-                VStack(alignment: .leading, spacing: 12) {
-                    SectionHeader(
-                        title: "Team Preview",
-                        subtitle: "Choose the \(bringCount) you bring, in order. "
-                            + (singles ? "The first leads."
-                                       : "The first two lead; the others come in behind.")
-                            + " They are choosing too: their likely four is marked, and each shows how the one you just picked fares against it.")
-                    HStack(alignment: .top, spacing: 18) {
-                        // Yours down the left, theirs down the right, which is
-                        // where the game puts them.
+        GeometryReader { geo in
+            let h = geo.size.height
+            let lean = tan(25 * CGFloat.pi / 180) * h / 2
+            ZStack {
+                Color(red: 0.05, green: 0.06, blue: 0.09)
+                Slab(lean: lean, left: true)
+                    .fill(LinearGradient(colors: [Palette.accent.opacity(0.50), Palette.accent.opacity(0.06)],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                Slab(lean: lean, left: false)
+                    .fill(LinearGradient(colors: [Palette.bad.opacity(0.06), Palette.bad.opacity(0.50)],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                SlantLines(lean: lean, spacing: 44).stroke(.white.opacity(0.05), lineWidth: 1)
+                Path { p in
+                    p.move(to: CGPoint(x: geo.size.width / 2 + lean, y: 0))
+                    p.addLine(to: CGPoint(x: geo.size.width / 2 - lean, y: h))
+                }
+                .stroke(.white.opacity(0.35), lineWidth: 2)
+                .shadow(color: .white.opacity(0.3), radius: 8)
+
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("TEAM PREVIEW").font(.system(size: 26, weight: .black)).italic()
+                                .foregroundStyle(.white)
+                                .shadow(color: .black.opacity(0.6), radius: 4, y: 2)
+                            Text("Choose the \(bringCount) you bring, in order. "
+                                 + (singles ? "The first leads."
+                                            : "The first two lead; the others come in behind.")
+                                 + " They are choosing too: their likely four is marked, and each shows how the one you just picked fares against it.")
+                                .font(.system(size: 11)).foregroundStyle(.white.opacity(0.7))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: 620, alignment: .leading)
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("BRINGING").font(.system(size: 9, weight: .heavy)).kerning(1.2)
+                                .foregroundStyle(.white.opacity(0.6))
+                            Text("\(bringing.count) of \(bringCount)")
+                                .font(.system(size: 22, weight: .black, design: .rounded)).monospacedDigit()
+                                .foregroundStyle(.white)
+                        }
+                    }
+
+                    HStack(alignment: .top, spacing: 72) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("YOURS").font(.system(size: 9, weight: .bold)).kerning(0.6)
-                                .foregroundStyle(.tertiary)
+                            Text("YOUR SIX").font(.system(size: 9, weight: .heavy)).kerning(1.2)
+                                .foregroundStyle(.white.opacity(0.6))
                             ForEach(Array((myTeam?.slots ?? []).enumerated()), id: \.offset) {
                                 _, slot in
                                 previewRow(slot)
@@ -644,11 +683,9 @@ struct BattleView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                        Rectangle().fill(Palette.hairline).frame(width: 1)
-
                         VStack(alignment: .trailing, spacing: 6) {
-                            Text("THEIRS").font(.system(size: 9, weight: .bold)).kerning(0.6)
-                                .foregroundStyle(.tertiary)
+                            Text("THEIR SIX").font(.system(size: 9, weight: .heavy)).kerning(1.2)
+                                .foregroundStyle(.white.opacity(0.6))
                             ForEach(Array((theirTeam?.slots ?? []).enumerated()), id: \.offset) {
                                 _, slot in
                                 opposingRow(slot)
@@ -656,27 +693,58 @@ struct BattleView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .trailing)
                     }
-                    Divider()
+
+                    Spacer(minLength: 0)
+
                     HStack(spacing: 10) {
                         Text(bringing.isEmpty
-                             ? "Nothing chosen yet."
-                             : "Bringing: " + bringing.enumerated().map { index, id in
+                             ? "Nothing chosen yet. Click your Pokémon in the order they should come."
+                             : bringing.enumerated().map { index, id in
                                 "\(index + 1). \(label(id))" }.joined(separator: "   "))
-                            .font(.system(size: 11))
-                            .foregroundStyle(bringing.isEmpty ? AnyShapeStyle(.tertiary)
-                                                              : AnyShapeStyle(.secondary))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white.opacity(bringing.isEmpty ? 0.55 : 0.9))
                         Spacer()
-                        Button("Suggest") { autoPick() }.controlSize(.small)
-                        Button("Clear") { bringing = []; focused = nil }.controlSize(.small)
-                        Button("Start the battle") { begin() }
-                            .controlSize(.small)
-                            .keyboardShortcut(.defaultAction)
-                            .disabled(bringing.count < bringCount)
+                        previewButton("Suggest", symbol: "wand.and.stars") { autoPick() }
+                        previewButton("Clear", symbol: "xmark") { bringing = []; focused = nil }
+                        Button { begin() } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "flag.2.crossed.fill")
+                                Text("START THE BATTLE").font(.system(size: 13, weight: .heavy)).kerning(1.2)
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 22).padding(.vertical, 11)
+                            .background(LinearGradient(colors: [Palette.accent, Palette.bad],
+                                                       startPoint: .leading, endPoint: .trailing))
+                            .clipShape(Capsule())
+                            .opacity(bringing.count < bringCount ? 0.4 : 1)
+                            .shadow(color: Palette.accent.opacity(bringing.count < bringCount ? 0 : 0.45), radius: 10, y: 4)
+                        }
+                        .buttonStyle(.plain)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(bringing.count < bringCount)
                     }
                 }
+                .padding(22)
             }
         }
-        .padding(20)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .strokeBorder(.white.opacity(0.12), lineWidth: 1))
+        .padding(14)
+    }
+
+    private func previewButton(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: symbol).font(.system(size: 10))
+                Text(title).font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(Capsule().fill(.white.opacity(0.12)))
+            .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     /// One of mine, in the order it is being brought.
@@ -699,16 +767,17 @@ struct BattleView: View {
             HStack(spacing: 9) {
                 ZStack {
                     Circle()
-                        .fill(order == nil ? Palette.hairline
-                              : (order! <= leadCount ? Palette.accent : Palette.dim))
+                        .fill(order == nil ? Color.white.opacity(0.15)
+                              : (order! <= leadCount ? Palette.accent : Color.white.opacity(0.35)))
                         .frame(width: 20, height: 20)
                     Text(order.map(String.init) ?? "")
                         .font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
                 }
-                if let form { SpriteImage(form: form, side: 42) }
+                if let form { SpriteImage(form: form, side: 46).shadow(color: .black.opacity(0.5), radius: 3, y: 2) }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(form?.formLabel ?? id)
                         .font(.system(size: 12, weight: order == nil ? .regular : .semibold))
+                        .foregroundStyle(.white)
                         .lineLimit(1)
                     HStack(spacing: 3) {
                         ForEach(form?.pokeTypes ?? []) { TypeChip(type: $0, size: .small) }
@@ -726,11 +795,11 @@ struct BattleView: View {
                 }
             }
             .padding(.horizontal, 8).padding(.vertical, 5)
-            .background(order != nil ? Palette.accent.opacity(isFocus ? 0.18 : 0.10)
-                                     : Palette.surface)
+            .background(order != nil ? Palette.accent.opacity(isFocus ? 0.42 : 0.26)
+                                     : Color.white.opacity(0.08))
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(
-                isFocus && order != nil ? Palette.accent.opacity(0.7) : Palette.hairline,
+                isFocus && order != nil ? Color.white.opacity(0.8) : Color.white.opacity(0.14),
                 lineWidth: 1))
         }
         .buttonStyle(.plain)
@@ -763,7 +832,9 @@ struct BattleView: View {
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 1) {
                 Text(form?.formLabel ?? slot.formID)
-                    .font(.system(size: 12, weight: expected == nil ? .regular : .semibold)).lineLimit(1)
+                    .font(.system(size: 12, weight: expected == nil ? .regular : .semibold))
+                    .foregroundStyle(.white.opacity(likelyHome ? 0.7 : 1))
+                    .lineLimit(1)
                 HStack(spacing: 3) {
                     if let expected {
                         Text(expected < leadCount ? "LIKELY LEADS" : "LIKELY BRINGS")
@@ -771,18 +842,21 @@ struct BattleView: View {
                             .foregroundStyle(expected < leadCount ? Palette.bad : Palette.warn)
                     } else if likelyHome {
                         Text("LIKELY HOME").font(.system(size: 8, weight: .bold)).kerning(0.4)
-                            .foregroundStyle(.quaternary)
+                            .foregroundStyle(.white.opacity(0.4))
                     }
                     ForEach(form?.pokeTypes ?? []) { TypeChip(type: $0, size: .small) }
                 }
             }
-            if let form { SpriteImage(form: form, side: 42).opacity(likelyHome ? 0.6 : 1) }
+            if let form {
+                SpriteImage(form: form, side: 46).opacity(likelyHome ? 0.6 : 1)
+                    .shadow(color: .black.opacity(0.5), radius: 3, y: 2)
+            }
         }
         .padding(.horizontal, 8).padding(.vertical, 5)
-        .background(Palette.surface)
+        .background(Color.white.opacity(likelyHome ? 0.05 : 0.09))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10)
-            .strokeBorder(reading?.tint.opacity(0.35) ?? Palette.hairline, lineWidth: 1))
+            .strokeBorder(reading?.tint.opacity(0.55) ?? Color.white.opacity(0.14), lineWidth: 1))
     }
 
     /// How the Pokémon in focus fares against one of theirs.
@@ -855,7 +929,8 @@ struct BattleView: View {
         finished = nil
         history = []; grade = nil; replay = []; at = 0; replayBoard = nil; sending = []
         leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
-        log = ["Both sides send out their leads. Neither knows what the other is holding, nor which four came."]
+        chosenSends = []
+        log = [BattleView.opener] + (board?.story ?? [])
         think()
     }
 
@@ -866,32 +941,52 @@ struct BattleView: View {
         // turn ended up.
         let board = replay.indices.contains(at)
             ? rewound(replayBoard ?? live, to: replay[at]) : live
-        // Laid out to fit the window rather than to scroll: the field across
-        // the top, what you are doing on the left, and everything that reads
-        // — the engine, their side, the log — in one panel on the right, one
-        // reading at a time. A turn should never need scrolling to play.
-        return VStack(alignment: .leading, spacing: 12) {
-            if let finished {
-                Card(padding: 10) { Label(finished, systemImage: "flag.checkered")
-                    .font(.system(size: 14, weight: .semibold)) }
-            }
-            arena(board)
-            HStack(alignment: .top, spacing: 12) {
-                scrolling {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if !replay.isEmpty { stepper() }
-                        if replay.isEmpty, !sending.isEmpty, finished == nil { replacement(board) }
-                        if finished == nil && replay.isEmpty && sending.isEmpty { choices(board) }
-                    }
+        // Half the window is the field, half is what you are doing about it,
+        // and the deck on the left is as tall as the readings on the right.
+        // A turn should never need scrolling to play.
+        return GeometryReader { geo in
+            let gap: CGFloat = 12
+            let banner: CGFloat = finished == nil ? 0 : 40
+            let half = (geo.size.height - gap - (banner > 0 ? banner + gap : 0)) / 2
+            VStack(alignment: .leading, spacing: gap) {
+                if let finished {
+                    Card(padding: 10) { Label(finished, systemImage: "flag.checkered")
+                        .font(.system(size: 14, weight: .semibold)) }
+                        .frame(height: banner)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                sidePanel
-                    .frame(width: 340)
-                    .frame(maxHeight: .infinity, alignment: .top)
+                arena(board).frame(height: half)
+                HStack(alignment: .top, spacing: gap) {
+                    Group {
+                        if !replay.isEmpty { stepper() }
+                        else if !sending.isEmpty, finished == nil { replacement(board) }
+                        else if finished == nil { choices(board) }
+                        else { afterGame }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    sidePanel
+                        .frame(width: 340)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                }
+                .frame(height: half)
             }
-            .frame(maxHeight: .infinity, alignment: .top)
         }
         .padding(14)
+    }
+
+    /// The game is over; what is left to do is look back or go again.
+    private var afterGame: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionHeader(title: "Game over", subtitle: finished ?? "")
+                HStack(spacing: 8) {
+                    Button("Back to Team Preview") { stage = .preview }.controlSize(.small)
+                    Button("Undo the last turn") { undo() }.controlSize(.small)
+                        .disabled(history.isEmpty)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
     }
 
     /// The readings, one at a time: what the engine makes of your turn, what
@@ -930,27 +1025,74 @@ struct BattleView: View {
                             reading(theirSide, Palette.warn,
                                     empty: "What they are probably weighing, and what they cannot see.")
                         case .log:
-                            if log.isEmpty {
-                                Text("Nothing has happened yet.").font(.system(size: 11))
-                                    .foregroundStyle(.tertiary)
-                            }
-                            ForEach(Array(log.enumerated().reversed()), id: \.offset) {
-                                index, line in
-                                let latest = index == log.count - 1
-                                Text(line)
-                                    .font(.system(size: 11, weight: latest ? .medium : .regular))
-                                    .foregroundStyle(latest ? AnyShapeStyle(.primary)
-                                                            : AnyShapeStyle(.secondary))
-                                    .padding(.horizontal, latest ? 8 : 0)
-                                    .padding(.vertical, latest ? 5 : 0)
-                                    .background(latest ? Palette.accent.opacity(0.10) : .clear)
-                                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
+                            EmptyView()
                         }
                     }
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                .opacity(panel == .log ? 0 : 1)
+                .frame(maxHeight: panel == .log ? 0 : nil)
+                if panel == .log { logPanel }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    /// What has happened, oldest at the top and the latest at the bottom where
+    /// a conversation puts it, with each turn ruled off from the last. It
+    /// follows the newest line on its own.
+    private var logPanel: some View {
+        let lines = Array(log.enumerated())
+        let latest = lines.last { !$0.element.hasPrefix(BattleView.dividerMark) }?.offset
+        let body = VStack(alignment: .leading, spacing: 6) {
+            if log.isEmpty {
+                Text("Nothing has happened yet.").font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+            ForEach(lines, id: \.offset) { index, line in
+                if line.hasPrefix(BattleView.dividerMark) {
+                    HStack(spacing: 8) {
+                        Rectangle().fill(Palette.hairline).frame(height: 1)
+                        Text(String(line.dropFirst()).uppercased())
+                            .font(.system(size: 9, weight: .heavy)).kerning(1.2)
+                            .foregroundStyle(.tertiary)
+                            .fixedSize()
+                        Rectangle().fill(Palette.hairline).frame(height: 1)
+                    }
+                    .padding(.vertical, 6)
+                    .id(index)
+                } else {
+                    Text(line)
+                        .font(.system(size: 11, weight: index == latest ? .medium : .regular))
+                        .foregroundStyle(index == latest ? AnyShapeStyle(.primary)
+                                                         : AnyShapeStyle(.secondary))
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(index == latest ? Palette.accent.opacity(0.12)
+                                                    : Palette.surfaceRaised.opacity(0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .id(index)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        return Group {
+            if snapshotMode {
+                body
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        body
+                    }
+                    .onAppear { proxy.scrollTo(log.count - 1, anchor: .bottom) }
+                    .onChange(of: log.count) { count in
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            proxy.scrollTo(count - 1, anchor: .bottom)
+                        }
+                    }
                 }
             }
         }
@@ -972,8 +1114,10 @@ struct BattleView: View {
         }
     }
 
-    /// The field itself. Tinted by whatever weather is up, because that is the
-    /// single most useful thing to be able to see without reading.
+    /// The field itself, laid out the way the game shows it: your first
+    /// Pokémon up and to the left, the second diagonally down from it, and
+    /// theirs the same way across the line. Tinted by whatever weather is up,
+    /// because that is the single most useful thing to see without reading.
     private func arena(_ board: Board) -> some View {
         let tint: Color = {
             switch board.field.weather {
@@ -992,24 +1136,49 @@ struct BattleView: View {
             }
         }()
         let lit = board.field.weather != .none || board.field.terrain != .none
-        return VStack(spacing: 10) {
-            fieldState(board)
-            HStack(alignment: .top, spacing: 0) {
-                sideColumn(board, mine: true)
-                VStack(spacing: 5) {
-                    Rectangle().fill(tint.opacity(0.35)).frame(width: 1, height: 64)
-                    Text("VS").font(.system(size: 10, weight: .heavy)).kerning(1)
-                        .foregroundStyle(tint.opacity(0.85))
-                    Rectangle().fill(tint.opacity(0.35)).frame(width: 1, height: 64)
+        let singlesGame = board.activeCount == 1
+        return GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            let lean = h * 0.18
+            ZStack {
+                // The line down the middle, leaning the way the versus page does.
+                SlantLines(lean: lean, spacing: 72)
+                    .stroke(tint.opacity(lit ? 0.09 : 0.05), lineWidth: 1)
+                Path { p in
+                    p.move(to: CGPoint(x: w / 2 + lean, y: 0))
+                    p.addLine(to: CGPoint(x: w / 2 - lean, y: h))
                 }
-                .frame(width: 54)
-                sideColumn(board, mine: false)
+                .stroke(tint.opacity(lit ? 0.5 : 0.28), lineWidth: 1.5)
+                Text("VS").font(.system(size: 11, weight: .heavy)).kerning(1)
+                    .foregroundStyle(tint.opacity(0.85))
+                    .padding(.horizontal, 7).padding(.vertical, 3)
+                    .background(Palette.surface)
+                    .clipShape(Capsule())
+                    .position(x: w / 2, y: h / 2)
+
+                // Yours: first up and left, second diagonally down and in.
+                ForEach(0..<min(board.activeCount, board.mine.count), id: \.self) { slot in
+                    fighterCard(board.mine[slot], mine: true, slot: slot, field: board.field)
+                        .position(x: w * (singlesGame ? 0.26 : (slot == 0 ? 0.17 : 0.35)),
+                                  y: h * (singlesGame ? 0.50 : (slot == 0 ? 0.40 : 0.64)))
+                }
+                // Theirs: first up and left of their side, second down and right.
+                ForEach(0..<min(board.activeCount, board.theirs.count), id: \.self) { slot in
+                    fighterCard(board.theirs[slot], mine: false, slot: slot, field: board.field)
+                        .position(x: w * (singlesGame ? 0.74 : (slot == 0 ? 0.65 : 0.83)),
+                                  y: h * (singlesGame ? 0.50 : (slot == 0 ? 0.36 : 0.60)))
+                }
             }
+            .overlay(alignment: .top) { fieldState(board).padding(.top, 10) }
+            .overlay(alignment: .topLeading) {
+                Text("YOURS").font(.system(size: 9, weight: .bold)).kerning(0.6)
+                    .foregroundStyle(.tertiary).padding(14)
+            }
+            .overlay(alignment: .bottomLeading) { bench(board, mine: true).padding(12) }
+            .overlay(alignment: .topTrailing) { bench(board, mine: false).padding(12) }
         }
-        .padding(18)
-        .frame(maxWidth: .infinity)
         .background(
-            LinearGradient(colors: [tint.opacity(lit ? 0.16 : 0.07),
+            LinearGradient(colors: [tint.opacity(lit ? 0.18 : 0.07),
                                     tint.opacity(lit ? 0.05 : 0.02)],
                            startPoint: .top, endPoint: .bottom)
         )
@@ -1019,6 +1188,72 @@ struct BattleView: View {
             .strokeBorder(tint.opacity(lit ? 0.45 : 0.18), lineWidth: 1))
         .animation(.easeInOut(duration: 0.4), value: board.field.weather)
         .animation(.easeInOut(duration: 0.4), value: board.field.terrain)
+    }
+
+    /// The Pokémon waiting behind a side. Yours are yours to see; theirs are
+    /// what has shown itself, question marks for what has not, and the odds
+    /// on who is behind them.
+    private func bench(_ board: Board, mine: Bool) -> some View {
+        let team = mine ? board.mine : board.theirs
+        let hiding = !mine && board.hidesTheirBench
+        return VStack(alignment: mine ? .leading : .trailing, spacing: 4) {
+            if !mine {
+                Text("THEIRS").font(.system(size: 9, weight: .bold)).kerning(0.6)
+                    .foregroundStyle(.tertiary)
+            }
+            HStack(spacing: 4) {
+                ForEach(Array(team.dropFirst(board.activeCount).enumerated()), id: \.offset) {
+                    _, fighter in
+                    if hiding && !fighter.seen && !fighter.fainted {
+                        // One of the two they brought behind, not yet shown.
+                        // What it is stays their business until it walks on.
+                        VStack(spacing: 2) {
+                            ZStack {
+                                Circle().strokeBorder(Palette.hairline, style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+                                    .frame(width: 30, height: 30)
+                                Text("?").font(.system(size: 14, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            Text("hidden").font(.system(size: 8)).foregroundStyle(.tertiary)
+                        }
+                        .frame(width: 52)
+                        .help("They brought something here, but it has not come out yet. The engine plays against the likeliest versions rather than peeking.")
+                    } else {
+                        VStack(spacing: 2) {
+                            SpriteImage(form: fighter.build.form, side: 30)
+                                .opacity(fighter.fainted ? 0.25 : 1)
+                                .saturation(fighter.fainted ? 0 : 1)
+                            Text(fighter.build.form.formLabel)
+                                .font(.system(size: 8)).lineLimit(1).minimumScaleFactor(0.7)
+                        }
+                        .frame(width: 52)
+                    }
+                }
+            }
+            if hiding {
+                // Who is probably back there, from their six and the two they
+                // led with. Weighed the way they would weigh it: by what hurts.
+                HStack(spacing: 5) {
+                    Text("probably").font(.system(size: 8, weight: .semibold)).kerning(0.3)
+                        .foregroundStyle(.tertiary)
+                    ForEach(Array(board.theirBenchCandidates.prefix(4).enumerated()), id: \.offset) {
+                        _, candidate in
+                        HStack(spacing: 3) {
+                            SpriteImage(form: candidate.fighter.build.form, side: 16)
+                            Text(String(format: "%.0f%%", candidate.chance * 100))
+                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(candidate.chance >= 0.5 ? AnyShapeStyle(.primary)
+                                                                         : AnyShapeStyle(.secondary))
+                        }
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(Palette.surface)
+                        .clipShape(Capsule())
+                        .help("\(candidate.fighter.build.form.formLabel): \(Int((candidate.chance * 100).rounded()))% likely to be one of the two behind")
+                    }
+                }
+            }
+        }
     }
 
     /// The board as it stood at one step of the turn.
@@ -1078,80 +1313,6 @@ struct BattleView: View {
         case .snow: return "snowflake"
         case .none: return field.terrain == .none ? "circle.grid.cross" : "square.stack.3d.down.forward.fill"
         }
-    }
-
-    private func sideColumn(_ board: Board, mine: Bool) -> some View {
-        let team = mine ? board.mine : board.theirs
-        return VStack(alignment: mine ? .leading : .trailing, spacing: 8) {
-            Text(mine ? "YOURS" : "THEIRS")
-                .font(.system(size: 9, weight: .bold)).kerning(0.6)
-                .foregroundStyle(.tertiary)
-            HStack(spacing: 10) {
-                if !mine { Spacer(minLength: 0) }
-                ForEach(Array(team.prefix(board.activeCount).enumerated()), id: \.offset) {
-                    slot, fighter in
-                    fighterCard(fighter, mine: mine, slot: slot, field: board.field)
-                }
-                if mine { Spacer(minLength: 0) }
-            }
-            let hiding = !mine && board.hidesTheirBench
-            HStack(spacing: 4) {
-                if !mine { Spacer(minLength: 0) }
-                ForEach(Array(team.dropFirst(board.activeCount).enumerated()), id: \.offset) {
-                    index, fighter in
-                    if hiding && !fighter.seen && !fighter.fainted {
-                        // One of the two they brought behind, not yet shown.
-                        // What it is stays their business until it walks on.
-                        VStack(spacing: 2) {
-                            ZStack {
-                                Circle().strokeBorder(Palette.hairline, style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
-                                    .frame(width: 30, height: 30)
-                                Text("?").font(.system(size: 14, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.tertiary)
-                            }
-                            Text("hidden").font(.system(size: 8)).foregroundStyle(.tertiary)
-                        }
-                        .frame(width: 52)
-                        .help("They brought something here, but it has not come out yet. The engine plays against the likeliest versions rather than peeking.")
-                    } else {
-                        VStack(spacing: 2) {
-                            SpriteImage(form: fighter.build.form, side: 30)
-                                .opacity(fighter.fainted ? 0.25 : 1)
-                                .saturation(fighter.fainted ? 0 : 1)
-                            Text(fighter.build.form.formLabel)
-                                .font(.system(size: 8)).lineLimit(1).minimumScaleFactor(0.7)
-                        }
-                        .frame(width: 52)
-                    }
-                }
-                if mine { Spacer(minLength: 0) }
-            }
-            if hiding {
-                // Who is probably back there, from their six and the two they
-                // led with. Weighed the way they would weigh it: by what hurts.
-                HStack(spacing: 5) {
-                    Spacer(minLength: 0)
-                    Text("probably").font(.system(size: 8, weight: .semibold)).kerning(0.3)
-                        .foregroundStyle(.tertiary)
-                    ForEach(Array(board.theirBenchCandidates.prefix(4).enumerated()), id: \.offset) {
-                        _, candidate in
-                        HStack(spacing: 3) {
-                            SpriteImage(form: candidate.fighter.build.form, side: 16)
-                            Text(String(format: "%.0f%%", candidate.chance * 100))
-                                .font(.system(size: 9, weight: .semibold, design: .rounded))
-                                .monospacedDigit()
-                                .foregroundStyle(candidate.chance >= 0.5 ? AnyShapeStyle(.primary)
-                                                                         : AnyShapeStyle(.secondary))
-                        }
-                        .padding(.horizontal, 5).padding(.vertical, 2)
-                        .background(Palette.surface)
-                        .clipShape(Capsule())
-                        .help("\(candidate.fighter.build.form.formLabel): \(Int((candidate.chance * 100).rounded()))% likely to be one of the two behind")
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
     }
 
     private func fighterCard(_ fighter: Fighter, mine: Bool, slot: Int,
@@ -1332,15 +1493,19 @@ struct BattleView: View {
     /// what is out and what survives arriving. Both halves are worked out and
     /// the better of them named, but the pick stays yours.
     private func replacement(_ board: Board) -> some View {
-        let slot = sending.first ?? 0
+        let slot = sending.first { gap in !chosenSends.contains { $0.slot == gap } } ?? sending.first ?? 0
         let options = (board.activeCount..<board.mine.count)
-            .filter { !board.mine[$0].fainted }
+            .filter { index in !board.mine[index].fainted && !chosenSends.contains { $0.bench == index } }
             .map { (index: $0, reading: sendInReading(board, bench: $0)) }
             .sorted { $0.reading.score > $1.reading.score }
+        let theyToo = (0..<min(board.activeCount, board.theirs.count)).contains { board.theirs[$0].fainted }
         return Card {
             VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(title: "Send one in",
-                              subtitle: "It arrives without acting, so it takes whatever lands next turn")
+                SectionHeader(title: sending.count > 1 ? "Send two in" : "Send one in",
+                              subtitle: (theyToo
+                                ? "They lost one too. Both sides send in at once, and the faster arrives first — its ability going off before the slower one even lands. "
+                                : "")
+                                + "Whoever comes arrives without acting, so it takes whatever lands next turn.")
                 if let best = options.first {
                     Text("Suggested: \(board.mine[best.index].build.form.formLabel) — "
                          + best.reading.why)
@@ -1352,10 +1517,15 @@ struct BattleView: View {
                           alignment: .leading, spacing: 8) {
                     ForEach(Array(options.enumerated()), id: \.offset) { rank, option in
                         Button {
+                            chosenSends.append((slot: slot, bench: option.index))
+                            guard chosenSends.count >= sending.count else { return }
                             var next = board
-                            next.sendIn(option.index, to: slot)
+                            next.story = []
+                            next.replaceFallen(mine: chosenSends, store: store)
+                            log.append(contentsOf: next.story)
                             self.board = next
                             sending = next.gapsOfMine
+                            chosenSends = []
                             if sending.isEmpty { think() }
                         } label: {
                             HStack(spacing: 9) {
@@ -1526,16 +1696,26 @@ struct BattleView: View {
                 // What is already locked in, as a strip along the top.
                 lockedStrip(board, living: living)
                 Divider()
-                if let slot = pending {
-                    commandDeck(board, slot: slot)
-                } else {
-                    readyToPlay(board)
+                scrolling {
+                    if let slot = pending {
+                        commandDeck(board, slot: slot)
+                    } else {
+                        readyToPlay(board)
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
     }
 
-    private func pick(for slot: Int) -> Choice? { slot == 0 ? leftPick : rightPick }
+    /// The order given for a slot — or the one it has no choice about, when it
+    /// is halfway through a two-turn move.
+    private func pick(for slot: Int) -> Choice? {
+        if let board, board.mine.indices.contains(slot), let charging = board.mine[slot].charging {
+            return .attack(move: charging, target: board.mine[slot].chargingTarget)
+        }
+        return slot == 0 ? leftPick : rightPick
+    }
 
     /// The orders given so far. Click one to change it.
     private func lockedStrip(_ board: Board, living: [Int]) -> some View {
@@ -1847,9 +2027,17 @@ struct BattleView: View {
 
     private func moveTile(_ board: Board, slot: Int, index: Int, move: Move,
                           fighter: Fighter, aiming: Bool) -> some View {
-        let type = PokeType(loose: move.type) ?? .normal
+        // What the move is on this field — after the Mega Evolution toggled
+        // beside it, if that brings weather. Weather Ball reads Fire and 100
+        // under sun, not the Normal and 50 printed on it.
+        let ahead = evolving(fighter, slot: slot, board: board)
+        let form = DamageCalc.fieldForm(of: move, in: ahead.field)
+        let type = form.type
         let aim = move.aim
-        let usable = !move.drawbacks.firstTurnOnly || fighter.justArrived
+        // Revival Blessing has nobody to bring back until somebody has gone.
+        let fallen = (board.activeCount..<board.mine.count).filter { board.mine[$0].fainted }
+        let usable = (!move.drawbacks.firstTurnOnly || fighter.justArrived)
+            && !(move.aim == .party && fallen.isEmpty)
         // What it does to each of them, on the tile, before anything is
         // clicked. The point of a practice board is seeing the numbers — and
         // a target it cannot touch is said so, not left off.
@@ -1865,7 +2053,7 @@ struct BattleView: View {
             } : []
         return Button {
             guard usable else { return }
-            if aim == .foe {
+            if aim == .foe || aim == .party {
                 command = .aiming(move: index)
             } else {
                 set(.attack(move: index, target: 0), slot: slot)
@@ -1903,9 +2091,41 @@ struct BattleView: View {
                     Text(type.rawValue.uppercased())
                         .font(.system(size: 9, weight: .heavy)).kerning(0.6)
                         .opacity(0.9)
-                    Text(move.power > 0 ? "\(move.power) power" : move.category == "Other" ? "status" : "—")
+                    Text(form.power > 0 ? "\(form.power) power" : move.category == "Other" ? "status" : "—")
                         .font(.system(size: 10, design: .rounded)).monospacedDigit()
                         .opacity(0.85)
+                    if form.note != nil {
+                        Text(ahead.field.weather != .none ? "in \(ahead.field.weather.rawValue.lowercased())"
+                             : "on \(ahead.field.terrain.rawValue.lowercased()) terrain")
+                            .font(.system(size: 9, weight: .semibold))
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(.white.opacity(0.22))
+                            .clipShape(Capsule())
+                            .help("Read from the field as the move would be used, so whatever weather is up when it resolves is what it becomes.")
+                    }
+                    if let charge = move.charge {
+                        let waived = charge.skipsIn != nil && ahead.field.weather == charge.skipsIn
+                        let boost = charge.boosts.map { "+\($1) \($0.short)" }.joined(separator: " ")
+                        Text(waived ? "fires at once in \(ahead.field.weather.rawValue.lowercased())"
+                                    + (boost.isEmpty ? "" : " · \(boost) first")
+                             : "charges a turn" + (boost.isEmpty ? "" : " · \(boost) now")
+                                    + (charge.hides ? " · out of reach" : ""))
+                            .font(.system(size: 9, weight: .semibold))
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(.white.opacity(0.22))
+                            .clipShape(Capsule())
+                            .help(waived
+                                  ? "The weather waives the charging turn: it boosts and fires this turn."
+                                  : "This turn winds it up; next turn it fires at the same target, whatever else happens. Switching out gives up the charge.")
+                    }
+                    if DuelEngine.protectMoves.contains(move.name), fighter.protectStreak > 0 {
+                        Text("\(Int((fighter.protectChance * 100).rounded()))% chance after last turn's")
+                            .font(.system(size: 9, weight: .semibold))
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Palette.warn.opacity(0.55))
+                            .clipShape(Capsule())
+                            .help("Protect in a row: a third of the chance each time, back to certain after a turn without it or one that fails.")
+                    }
                     Text(move.accuracyLabel == "—" ? "never misses" : "\(move.accuracyLabel)% acc")
                         .font(.system(size: 10, design: .rounded)).monospacedDigit()
                         .opacity(0.85)
@@ -1924,7 +2144,7 @@ struct BattleView: View {
                             .monospacedDigit()
                     }
                     if !usable {
-                        Text("· only on the turn it comes in")
+                        Text(aim == .party ? "· nobody has fainted yet" : "· only on the turn it comes in")
                             .font(.system(size: 10, weight: .semibold))
                     }
                     Spacer(minLength: 0)
@@ -1957,6 +2177,7 @@ struct BattleView: View {
         case .user:   return "person.fill"
         case .ally:   return "person.2.fill"
         case .side:   return "flag.fill"
+        case .party:  return "arrow.uturn.up"
         }
     }
 
@@ -1967,11 +2188,65 @@ struct BattleView: View {
         case .user:   return "itself"
         case .ally:   return "its partner"
         case .side:   return "your side"
+        case .party:  return "a fainted teammate"
         }
     }
 
     /// Which of them to aim at, with what it would do to each.
+    @ViewBuilder
     private func targetRow(_ board: Board, slot: Int, move: Move, index: Int) -> some View {
+        if move.aim == .party {
+            partyTargets(board, slot: slot, move: move, index: index)
+        } else {
+            foeTargets(board, slot: slot, move: move, index: index)
+        }
+    }
+
+    /// Which of your fallen to bring back.
+    private func partyTargets(_ board: Board, slot: Int, move: Move, index: Int) -> some View {
+        let fallen = (board.activeCount..<board.mine.count).filter { board.mine[$0].fainted }
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("BRING BACK")
+                .font(.system(size: 9, weight: .bold)).kerning(0.6)
+                .foregroundStyle(.tertiary)
+            HStack(spacing: 10) {
+                ForEach(fallen, id: \.self) { bench in
+                    let fighter = board.mine[bench]
+                    Button {
+                        set(.attack(move: index, target: bench), slot: slot)
+                        command = .menu
+                    } label: {
+                        HStack(spacing: 10) {
+                            SpriteImage(form: fighter.build.form, side: 40).saturation(0.3)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(fighter.build.form.formLabel)
+                                    .font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                                Text("back at \(fighter.maxHP / 2)/\(fighter.maxHP), on the bench")
+                                    .font(.system(size: 10, design: .rounded)).monospacedDigit()
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "arrow.uturn.up").foregroundStyle(Palette.good)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 9)
+                        .frame(maxWidth: .infinity)
+                        .background(Palette.good.opacity(0.10))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Palette.good.opacity(0.6), lineWidth: 1.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+                Button { command = .fight } label: {
+                    Text("Back").font(.system(size: 11, weight: .semibold))
+                }
+                .controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 16).padding(.bottom, 14)
+    }
+
+    private func foeTargets(_ board: Board, slot: Int, move: Move, index: Int) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("AIM \(move.name.uppercased()) AT")
                 .font(.system(size: 9, weight: .bold)).kerning(0.6)
@@ -2161,6 +2436,7 @@ struct BattleView: View {
         let step = replay.indices.contains(at) ? replay[at] : nil
         return Card {
             VStack(alignment: .leading, spacing: 10) {
+                Color.clear.frame(height: 0).frame(maxWidth: .infinity)
                 SectionHeader(title: "Turn \(turn - 1), step \(at + 1) of \(replay.count)")
                 if let step {
                     Text(step.text)
@@ -2458,13 +2734,22 @@ struct BattleView: View {
                                      store: store, rolling: true)
         let told = next.story
         let recorded = next
-        // Theirs fills itself. Mine is a decision, and one of the sharper ones
-        // in the game, so it is asked rather than assumed.
-        next.fillGaps(mine: false, theirs: true)
+        // Replacements are sent in together at the end of the turn, faster
+        // first. Yours is a decision, and one of the sharper ones in the game,
+        // so when you have a gap the turn waits for you and theirs waits with
+        // it; when you have none, theirs arrives now.
+        var arrivals: [String] = []
+        if next.gapsOfMine.isEmpty {
+            next.story = []
+            next.replaceFallen(mine: [], store: store)
+            arrivals = next.story
+        }
 
-        log.append("Turn \(turn) — you \(game.describe(mine, mine: true)); "
+        log.append(BattleView.dividerMark + "Turn \(turn)")
+        log.append("You \(game.describe(mine, mine: true)); "
                    + "they \(game.describe(theirPlay, mine: false)).")
         log.append(contentsOf: told)
+        log.append(contentsOf: arrivals)
 
         var hitMine: Set<Int> = [], hitTheirs: Set<Int> = []
         for index in next.mine.indices where index < current.mine.count
@@ -2478,6 +2763,7 @@ struct BattleView: View {
         replayBoard = recorded
         at = 0
         sending = next.gapsOfMine
+        chosenSends = []
         leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
         struck = hitMine; struckTheirs = hitTheirs
         thought = nil; self.solved = nil

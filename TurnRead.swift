@@ -46,6 +46,17 @@ extension TurnGame {
             case .goesForTheBig: return "aims at the biggest threat"
             }
         }
+
+        /// The same, after "they": "if they aim at", not "if they aims at".
+        var afterThey: String {
+            switch self {
+            case .protectsOften: return "protect too much"
+            case .neverProtects: return "never protect"
+            case .alwaysAttacks: return "always attack"
+            case .switchesOut:   return "switch a lot"
+            case .goesForTheBig: return "aim at the biggest threat"
+            }
+        }
     }
 
     /// Whether one of their plays fits the tendency.
@@ -218,7 +229,7 @@ extension TurnGame {
             for exploit in worthwhile {
                 guard said.insert(exploit.label).inserted else { continue }
                 out.append(String(format: "If they %@: %@ punishes it for %+.2f, %+.2f better than playing the mix. Being wrong costs %.2f, so it is %@.",
-                                  exploit.read.shorthand, exploit.label, exploit.against,
+                                  exploit.read.afterThey, exploit.label, exploit.against,
                                   exploit.gain, exploit.cost,
                                   exploit.worthIt ? "worth taking" : "not worth it yet"))
                 if said.count >= 2 { break }
