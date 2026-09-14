@@ -2022,6 +2022,68 @@ Ability: Regenerator
           recovered.mine[0].hp >= expected && recovered.mine[0].hp <= expected + tired.mine[0].maxHP / 16 + 1,
           "\(recovered.mine[0].hp) vs \(expected)")
 
+    print("\n== confusion ==")
+    let confuseRay = store.data.moves.values.first { $0.name == "Confuse Ray" }!
+    let swagger = store.data.moves.values.first { $0.name == "Swagger" }!
+    check("confusing moves are read from the text",
+          confuseRay.confuses && swagger.confuses && swagger.targetBoosts[Stat.attack] == 2
+            && store.data.moves.values.first { $0.name == "Water Pulse" }?.secondary?.chance == 20)
+    var dazed = Board(mine: fighters([("Whimsicott", "Focus Sash", ["Confuse Ray", "Protect"]),
+                                      ("Milotic", "Leftovers", ["Protect"])]),
+                      theirs: chilled, store: store, field: Field(isDoubles: true), alreadyEvolved: false)
+    dazed.mine[0].moves = [confuseRay] + dazed.mine[0].moves
+    let rayed = TurnModel.resolve(dazed,
+        mine: Play(left: .attack(move: 0, target: 0),
+                   right: .attack(move: at(dazed.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(dazed.theirs[0], "Swords Dance"), target: 0),
+                     right: .attack(move: at(dazed.theirs[1], "Swords Dance"), target: 0)),
+        store: store)
+    for line in rayed.story where line.contains("confus") { print("    \(line)") }
+    check("Confuse Ray leaves the target confused", rayed.theirs[0].isConfused, "\(rayed.theirs[0].confusedFor)")
+    // Over many rolled turns, a confused Pokémon hurts itself about a third of the time.
+    var selfHits = 0, turnsConfused = 0
+    for _ in 0..<300 {
+        var still = rayed
+        still.theirs[0].confusedFor = 5
+        let rolled = TurnModel.resolve(still,
+            mine: Play(left: .attack(move: at(still.mine[0], "Protect"), target: 0),
+                       right: .attack(move: at(still.mine[1], "Protect"), target: 0)),
+            theirs: Play(left: .attack(move: at(still.theirs[0], "Swords Dance"), target: 0),
+                         right: .attack(move: at(still.theirs[1], "Swords Dance"), target: 0)),
+            store: store, rolling: true)
+        turnsConfused += 1
+        if rolled.story.contains(where: { $0.contains("hurt itself") }) { selfHits += 1 }
+    }
+    print("  300 confused turns: \(selfHits) went into its own face (about 100 expected)")
+    check("a confused Pokémon hurts itself about one time in three", selfHits > 65 && selfHits < 140, "\(selfHits)")
+    let averaged3 = TurnModel.resolve(rayed,
+        mine: Play(left: .attack(move: at(rayed.mine[0], "Protect"), target: 0),
+                   right: .attack(move: at(rayed.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(rayed.theirs[0], "Swords Dance"), target: 0),
+                     right: .attack(move: at(rayed.theirs[1], "Swords Dance"), target: 0)),
+        store: store)
+    check("the search lets it act, and the count runs down",
+          averaged3.theirs[0].confusedFor == rayed.theirs[0].confusedFor - 1
+            && averaged3.theirs[0].build.boosts[Stat.attack.rawValue] == rayed.theirs[0].build.boosts[Stat.attack.rawValue] + 2)
+    var leaving = rayed
+    leaving.theirs.append(rayed.theirs[1])
+    let switched = TurnModel.resolve(leaving,
+        mine: Play(left: .attack(move: at(leaving.mine[0], "Protect"), target: 0),
+                   right: .attack(move: at(leaving.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .swap(to: 2),
+                     right: .attack(move: at(leaving.theirs[1], "Swords Dance"), target: 0)),
+        store: store)
+    check("switching out clears it", !switched.theirs[2].isConfused)
+    var tempo = dazed
+    tempo.theirs[0].build.ability = "Own Tempo"
+    let unbothered = TurnModel.resolve(tempo,
+        mine: Play(left: .attack(move: 0, target: 0),
+                   right: .attack(move: at(tempo.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(tempo.theirs[0], "Swords Dance"), target: 0),
+                     right: .attack(move: at(tempo.theirs[1], "Swords Dance"), target: 0)),
+        store: store)
+    check("Own Tempo refuses it", !unbothered.theirs[0].isConfused)
+
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)
 }

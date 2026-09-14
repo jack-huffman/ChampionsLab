@@ -1440,7 +1440,7 @@ struct BattleView: View {
     private func stages(_ fighter: Fighter) -> some View {
         let changed = Stat.allCases.filter { fighter.build.boosts.indices.contains($0.rawValue)
             && fighter.build.boosts[$0.rawValue] != 0 }
-        if !changed.isEmpty || fighter.status != .none {
+        if !changed.isEmpty || fighter.status != .none || fighter.isConfused {
             HStack(spacing: 3) {
                 ForEach(changed, id: \.rawValue) { stat in
                     let stage = fighter.build.boosts[stat.rawValue]
@@ -1457,6 +1457,14 @@ struct BattleView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 4).padding(.vertical, 1)
                         .background(Capsule().fill(Palette.warn))
+                }
+                if fighter.isConfused {
+                    Text("CONFUSED")
+                        .font(.system(size: 8, weight: .heavy)).kerning(0.3)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4).padding(.vertical, 1)
+                        .background(Capsule().fill(Color(red: 0.75, green: 0.45, blue: 0.85)))
+                        .help("Confused for up to \(fighter.confusedFor) more turn\(fighter.confusedFor == 1 ? "" : "s"): one action in three goes into its own face. Switching out clears it.")
                 }
             }
             .padding(.top, 2)
@@ -1478,6 +1486,7 @@ struct BattleView: View {
             }
             if index < step.myBoosts.count { out.mine[index].build.boosts = step.myBoosts[index] }
             if index < step.myStatus.count { out.mine[index].status = step.myStatus[index] }
+            if index < step.myConfused.count { out.mine[index].confusedFor = step.myConfused[index] ? max(1, out.mine[index].confusedFor) : 0 }
         }
         for index in out.theirs.indices where index < step.theirHP.count {
             out.theirs[index].hp = step.theirHP[index]
@@ -1487,6 +1496,7 @@ struct BattleView: View {
             }
             if index < step.theirBoosts.count { out.theirs[index].build.boosts = step.theirBoosts[index] }
             if index < step.theirStatus.count { out.theirs[index].status = step.theirStatus[index] }
+            if index < step.theirConfused.count { out.theirs[index].confusedFor = step.theirConfused[index] ? max(1, out.theirs[index].confusedFor) : 0 }
         }
         out.field = step.field
         out.myTailwind = step.myTailwind

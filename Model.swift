@@ -301,6 +301,7 @@ struct Move: Codable, Identifiable, Hashable {
             case status(Ailment)
             case flinch
             case drops([Stat: Int])
+            case confuse
         }
         let chance: Int
         let kind: Kind
@@ -325,6 +326,11 @@ struct Move: Codable, Identifiable, Hashable {
             let verb = phrase.replacingOccurrences(of: #"^Has a \d+% chance of "#, with: "", options: .regularExpression)
                 .replacingOccurrences(of: " the target", with: "")
             if let ailment = ailment(verb) { return Secondary(chance: chance, kind: .status(ailment)) }
+        }
+        if let match = text.range(of: #"Has a (\d+)% chance of confusing the target"#,
+                                  options: .regularExpression) {
+            let chance = Int(String(text[match]).split(separator: " ")[2].dropLast()) ?? 0
+            return Secondary(chance: chance, kind: .confuse)
         }
         if let match = text.range(of: #"Has a (\d+)% chance of making (?:the )?targets? flinch"#,
                                   options: .regularExpression) {
@@ -378,6 +384,30 @@ struct Move: Codable, Identifiable, Hashable {
         let whom: Healing.Whom = phrase.contains("and its allies") ? .both
             : phrase.contains("target's") ? .partner : .user
         return Healing(share: share, whom: whom, sunlit: text.contains("In harsh sunlight 2/3"))
+    }
+
+    /// Confuse Ray, Swagger, Flatter, Dynamic Punch: the target ends up
+    /// confused whatever else the move does.
+    var confuses: Bool {
+        let lower = effect.lowercased()
+        return lower.hasPrefix("confuses the target") || lower.contains("and confuses it")
+            || lower.contains("confuses all other")
+    }
+
+    /// Swagger's two stages of Attack, Flatter's one of Special Attack: a
+    /// raise handed to the target, which only makes sense with the confusion.
+    var targetBoosts: [Stat: Int] {
+        guard let match = effect.range(of: #"Boosts the target's (.+?) stats? by (\d+) stage"#,
+                                       options: .regularExpression) else { return [:] }
+        let phrase = String(effect[match])
+        let amount = phrase.range(of: #"\d+"#, options: [.regularExpression, .backwards])
+            .flatMap { Int(phrase[$0]) } ?? 1
+        let statName = phrase
+            .replacingOccurrences(of: "Boosts the target's ", with: "")
+            .replacingOccurrences(of: #" stats? by \d+ stage"#, with: "", options: .regularExpression)
+        let stat: Stat? = ["Attack": .attack, "Defense": .defense, "Sp. Atk": .spAttack,
+                           "Sp. Def": .spDefense, "Speed": .speed][statName]
+        return stat.map { [$0: amount] } ?? [:]
     }
 
     /// Stomping Tantrum: twice the power after a turn the user's move missed,

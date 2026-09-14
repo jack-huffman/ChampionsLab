@@ -78,6 +78,11 @@ struct Fighter {
     /// Its last move missed, failed, or never happened. Stomping Tantrum
     /// doubles on it.
     var lastMoveFailed = false
+    /// Turns of confusion left. It sits on top of a burn or a paralysis, one
+    /// in three of its actions goes into its own face, and it is gone the
+    /// moment it leaves the field.
+    var confusedFor = 0
+    var isConfused: Bool { confusedFor > 0 }
 
     /// The chance Protect works right now.
     var protectChance: Double { pow(1.0 / 3.0, Double(protectStreak)) }
@@ -206,6 +211,8 @@ struct Board {
         var theirBoosts: [[Int]] = []
         var myStatus: [Ailment] = []
         var theirStatus: [Ailment] = []
+        var myConfused: [Bool] = []
+        var theirConfused: [Bool] = []
     }
 
     /// Turns of weather and terrain left. Five when something sets them; zero
@@ -259,7 +266,8 @@ struct Board {
              field: field, myTailwind: myTailwind,
              theirTailwind: theirTailwind, trickRoom: trickRoom,
              myBoosts: mine.map(\.build.boosts), theirBoosts: theirs.map(\.build.boosts),
-             myStatus: mine.map(\.status), theirStatus: theirs.map(\.status))
+             myStatus: mine.map(\.status), theirStatus: theirs.map(\.status),
+             myConfused: mine.map(\.isConfused), theirConfused: theirs.map(\.isConfused))
     }
 
     /// Say what happened, and remember what the board looked like when it did.
@@ -1120,6 +1128,7 @@ enum TurnModel {
         team[active].charging = nil
         team[active].hidden = false
         team[active].protectStreak = 0
+        team[active].confusedFor = 0
         team.swapAt(active, bench)
         team[active].justArrived = true
         team[active].seen = true
@@ -1154,6 +1163,31 @@ enum TurnModel {
             dropCharge(byMine: byMine, slot: slot, board: &board)
             markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return
+        }
+        // Confusion: counted down each time it comes to act, and one action in
+        // three goes into its own face — a typeless forty-power hit with its
+        // own Attack against its own Defence. The search, which averages,
+        // lets it act; a played turn rolls.
+        if actor.confusedFor > 0 {
+            if byMine { board.mine[slot].confusedFor -= 1 } else { board.theirs[slot].confusedFor -= 1 }
+            if (byMine ? board.mine : board.theirs)[slot].confusedFor == 0 {
+                board.note("\(name) snapped out of its confusion.")
+            } else {
+                board.note("\(name) is confused.")
+                if rolling, Double.random(in: 0..<1) < 1.0 / 3.0 {
+                    let attack = Double(actor.build.stagedStat(.attack))
+                    let defence = Double(actor.build.stagedStat(.defense))
+                    let base = (2.0 * 50 / 5 + 2) * 40 * attack / defence / 50 + 2
+                    let hurt = Swift.max(1, Int(base * Double.random(in: 0.85...1.0)))
+                    if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - hurt) }
+                    else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - hurt) }
+                    board.note("It hurt itself in its confusion for \(hurt).")
+                    if (byMine ? board.mine : board.theirs)[slot].fainted { board.note("\(name) fainted.") }
+                    dropCharge(byMine: byMine, slot: slot, board: &board)
+                    markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                    return
+                }
+            }
         }
 
         switch choice {
@@ -1688,7 +1722,33 @@ enum TurnModel {
             board.note("\(name) flinched" + (chance < 100 ? " — the \(chance)% came up." : "."))
         case .drops(let drops):
             applyDrops(drops, toMine: hitMine, slot: hit, board: &board)
+        case .confuse:
+            confuse(onMine: hitMine, slot: hit, board: &board, rolling: rolling, chance: chance)
         }
+    }
+
+    /// Leave a Pokémon confused for two to five turns, unless something on it
+    /// or under it says no.
+    private static func confuse(onMine: Bool, slot: Int, board: inout Board, rolling: Bool, chance: Int) {
+        let team = onMine ? board.mine : board.theirs
+        guard team.indices.contains(slot), !team[slot].fainted else { return }
+        let target = team[slot]
+        let name = target.build.form.formLabel
+        if target.isConfused { return }
+        if target.build.ability == "Own Tempo" {
+            board.note("\(name)'s Own Tempo kept it clear-headed.")
+            return
+        }
+        if board.field.terrain == .misty, !target.build.form.pokeTypes.contains(.flying),
+           target.build.ability != "Levitate" {
+            board.note("The mist kept \(name) from being confused.")
+            return
+        }
+        // Two to five turns of it. The search takes the shortest, so it never
+        // counts on more than the game guarantees.
+        let turns = rolling ? Int.random(in: 2...5) : 2
+        if onMine { board.mine[slot].confusedFor = turns } else { board.theirs[slot].confusedFor = turns }
+        board.note("\(name) became confused" + (chance < 100 ? " — the \(chance)% came up." : "."))
     }
 
     /// Whether a Pokémon's last move came off, for Stomping Tantrum.
@@ -1825,6 +1885,26 @@ enum TurnModel {
                 else { board.theirs[slot].status = .sleep; board.theirs[slot].asleepFor = 2 }
             }
             if !anyone { board.note("But it failed.") }
+            return
+        }
+
+        // Confuse Ray, Swagger, Flatter: aimed across the field, and the raise
+        // Swagger hands over comes with the confusion that makes it a trap.
+        if move.confuses {
+            let far = byMine ? board.theirs : board.mine
+            let everyone = move.effect.lowercased().contains("confuses all other")
+            let hits = everyone
+                ? Array(0..<Swift.min(board.activeCount, far.count))
+                : [far.indices.contains(target) && target < board.activeCount ? target
+                   : (0..<Swift.min(board.activeCount, far.count)).first { !far[$0].fainted } ?? 0]
+            for index in hits where far.indices.contains(index) && !far[index].fainted {
+                if far[index].isProtected {
+                    board.note("\(far[index].build.form.formLabel) protected itself.")
+                    continue
+                }
+                applySelf(move.targetBoosts, toMine: !byMine, slot: index, board: &board)
+                confuse(onMine: !byMine, slot: index, board: &board, rolling: rolling, chance: 100)
+            }
             return
         }
 
