@@ -1056,11 +1056,35 @@ Ability: Regenerator
           mySlow < theirFast && incinAt != nil && (rillaAt == nil || incinAt! < rillaAt!),
           "Incineroar at \(incinAt.map(String.init) ?? "-"), Rillaboom at \(rillaAt.map(String.init) ?? "-")")
 
-    // Every line of a turn carries the board as it stood, so it can be walked.
-    check("each line of the turn is snapshotted", blown.steps.count == blown.story.count,
-          "\(blown.steps.count) vs \(blown.story.count)")
+    // Every line of a turn is in some step, and every step carries the board
+    // as it stood, so the turn can be walked without losing anything.
+    let stepped = blown.steps.flatMap { $0.text.split(separator: "\n").map(String.init) }
+    check("every line of the turn is in a step", stepped == blown.story,
+          "\(stepped.count) lines in \(blown.steps.count) steps vs \(blown.story.count)")
     check("and the snapshots carry the field with them",
           blown.steps.last?.myTailwind ?? 0 > 0)
+    // A spread move is one step that names everyone it hit.
+    let heaters = fighters([("Charizard", "Charizardite Y", ["Heat Wave", "Protect"]),
+                            ("Whimsicott", "Focus Sash", ["Protect"])])
+    let heated = fighters([("Garchomp", "Life Orb", ["Swords Dance", "Earthquake"]),
+                           ("Rillaboom", "Life Orb", ["Wood Hammer"])])
+    let heatBoard = Board(mine: heaters, theirs: heated, store: store,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+    let heatTurn = TurnModel.resolve(
+        heatBoard,
+        mine: Play(left: .attack(move: at(heatBoard.mine[0], "Heat Wave"), target: 0),
+                   right: .attack(move: at(heatBoard.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(heatBoard.theirs[0], "Swords Dance"), target: 0),
+                     right: .attack(move: at(heatBoard.theirs[1], "Wood Hammer"), target: 1)),
+        store: store)
+    let heatStep = heatTurn.steps.first { $0.text.contains("Heat Wave") }
+    print("  the Heat Wave step:")
+    for line in heatStep?.text.split(separator: "\n") ?? [] { print("    \(line)") }
+    check("a spread move is a single step",
+          heatTurn.steps.filter { $0.text.contains("Heat Wave") }.count == 1,
+          "\(heatTurn.steps.filter { $0.text.contains("Heat Wave") }.count)")
+    check("and that step names both it hit",
+          heatStep?.text.contains("Garchomp") == true && heatStep?.text.contains("Rillaboom") == true)
 
     // Final Gambit, and the rest of what a move costs the one that used it.
     print("\n== what a move costs its user ==")
@@ -1294,6 +1318,63 @@ Ability: Regenerator
     print("  Blaze Flamethrower: \(healthy) healthy, \(desperate) when low")
     check("Blaze adds half again once the user is low", desperate > healthy,
           "\(desperate) vs \(healthy)")
+
+    // -- what nobody has seen -------------------------------------------------
+    print("\n== the hidden back two ==")
+    let mySix = fighters([("Incineroar", "Sitrus Berry", ["Fake Out", "Flare Blitz", "Protect"]),
+                          ("Indeedee (Female)", "Leftovers", ["Follow Me", "Dazzling Gleam", "Protect"]),
+                          ("Garchomp", "Life Orb", ["Earthquake", "Rock Slide", "Protect"]),
+                          ("Whimsicott", "Focus Sash", ["Tailwind", "Moonblast", "Protect"]),
+                          ("Kingambit", "Chople Berry", ["Iron Head", "Sucker Punch", "Protect"]),
+                          ("Charizard", "Charizardite Y", ["Heat Wave", "Solar Beam", "Protect"])])
+    let theirSix = fighters([("Garchomp", "Focus Sash", ["Earthquake", "Rock Slide", "Protect"]),
+                             ("Rillaboom", "Life Orb", ["Wood Hammer", "Fake Out", "Protect"]),
+                             ("Kingambit", "Chople Berry", ["Iron Head", "Sucker Punch", "Protect"]),
+                             ("Incineroar", "Sitrus Berry", ["Fake Out", "Flare Blitz", "Protect"]),
+                             ("Charizard", "Charizardite Y", ["Heat Wave", "Solar Beam", "Protect"]),
+                             ("Farigiraf", "Leftovers", ["Trick Room", "Psychic", "Protect"])])
+    let game = Board.opening(mine: mySix, bringing: mySix.slots.prefix(4).map(\.formID),
+                             theirs: theirSix, store: store, singles: false)
+    print("  they brought \(game.theirs.map { $0.build.form.formLabel }), leading the first two")
+    check("their four is chosen, but only the leads are on show",
+          game.theirs.count == 4 && game.theirs[0].seen && game.theirs[1].seen
+            && !game.theirs[2].seen && !game.theirs[3].seen)
+    let odds = game.liveBenchGuesses
+    print("  guesses: " + odds.prefix(3).map { g in
+        g.fighters.map(\.build.form.formLabel).joined(separator: "+") + String(format: " %.0f%%", g.chance * 100)
+    }.joined(separator: ", "))
+    check("the back two are weighed as guesses that add up",
+          odds.count > 1 && abs(odds.reduce(0) { $0 + $1.chance } - 1) < 0.01, "\(odds.count)")
+    check("every pair they could be carrying is on the list", odds.count == 6, "\(odds.count)")
+    check("including the one holding a stone",
+          odds.contains { $0.fighters.contains { $0.build.form.formLabel == "Charizard" } })
+    let searcher = BattleEngine(store: store, budget: 0.1)
+    let worlds = searcher.imagine(game, belief: BattleEngine.Belief())
+    let truth = game.theirs.dropFirst(2).map(\.build.form.id)
+    let benches = worlds.map { $0.board.theirs.dropFirst(2).map(\.build.form.id) }
+    print("  worlds see: " + benches.map { $0.joined(separator: "+") }.joined(separator: " | "))
+    check("the search plays several possible back twos, not the answer",
+          Set(benches.map { $0.joined(separator: "+") }).count > 1, "\(benches)")
+    check("no world's bench is anything but a live guess",
+          benches.allSatisfy { bench in odds.contains { $0.fighters.map(\.build.form.id) == bench } })
+    // One walks on, and is known from then on.
+    var revealed = game
+    revealed.fillGaps()
+    var hurt = game
+    hurt.theirs[0].hp = 0
+    hurt.fillGaps(mine: false, theirs: true)
+    print("  after their lead fell, \(hurt.theirs[0].build.form.formLabel) came in")
+    check("a Pokémon that comes in is seen", hurt.theirs[0].seen && hurt.theirUnseenBench == [3])
+    let after = hurt.liveBenchGuesses
+    let arrived = hurt.theirs[0].build.form.id
+    check("the guesses shrink to pairs it was in",
+          !after.isEmpty && after.allSatisfy { $0.fighters.contains { $0.build.form.id == arrived } },
+          "\(after.count) left")
+    let laterWorlds = searcher.imagine(hurt, belief: BattleEngine.Belief())
+    check("the one still hidden stays a guess; the one that showed does not",
+          laterWorlds.allSatisfy { $0.board.theirs[0].build.form.id == arrived }
+            && Set(laterWorlds.map { $0.board.theirs[3].build.form.id }).count >= 1)
+    _ = truth; _ = revealed
 
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)

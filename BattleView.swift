@@ -20,11 +20,18 @@ struct BattleView: View {
     @EnvironmentObject private var store: Store
     @Environment(\.snapshotMode) private var snapshotMode
 
-    enum Stage { case setup, preview, battle }
+    enum Stage { case setup, versus, preview, battle }
 
     @State private var stage: Stage = .setup
     @State private var myTeamID = ""
     @State private var opponentID = ""
+    @State private var opponentSearch = ""
+    /// Which of the three readings the side panel is showing.
+    enum Panel: String, CaseIterable { case engine = "Engine", theirs = "Their read", log = "Log" }
+    @State private var panel: Panel = .engine
+    /// What the two sixes say about each other, worked out once both are
+    /// chosen and read by the versus page and Team Preview.
+    @State private var lobby = Lobby()
     @State private var singles = false
 
     /// The four being brought, in order. The first two lead.
@@ -73,6 +80,7 @@ struct BattleView: View {
     /// clicked into. Done through init rather than onAppear, which an
     /// ImageRenderer never calls.
     init(openTeams: (mine: String, theirs: String)? = nil,
+         arriving: Stage? = nil,
          previewing: [String] = [],
          playing: Board? = nil,
          showing: Command = .menu,
@@ -87,7 +95,19 @@ struct BattleView: View {
         if let openTeams {
             _myTeamID = State(initialValue: openTeams.mine)
             _opponentID = State(initialValue: openTeams.theirs)
-            _stage = State(initialValue: .preview)
+            let stage = arriving ?? .preview
+            _stage = State(initialValue: stage)
+            // A snapshot never runs the step that works the two sixes out, so
+            // it is done here, against the shared store the sprites also use.
+            let shared = Store.shared
+            if stage != .setup,
+               let mine = shared.teams.first(where: { $0.id.uuidString == openTeams.mine }),
+               let theirs = shared.data.metaTeams.first(where: { $0.id == openTeams.theirs })
+                   .map({ shared.opponentTeam($0) })
+                   ?? shared.teams.first(where: { $0.id.uuidString == openTeams.theirs }) {
+                _lobby = State(initialValue: Self.lobby(mine: mine, theirs: theirs,
+                                                        singles: false, store: shared))
+            }
         }
         if !previewing.isEmpty { _bringing = State(initialValue: previewing) }
         if let playing {
@@ -114,14 +134,13 @@ struct BattleView: View {
             Group {
                 switch stage {
                 case .setup:
-                    EmptyHint(symbol: "gamecontroller", title: "Play a matchup out",
-                              detail: "Pick your six and theirs, then choose which four you bring and in what order. The engine searches each turn and shows what it is thinking, what it believes they are thinking, and what neither of you can see.")
+                    teamPicking
+                case .versus:
+                    versusPage
                 case .preview:
                     if snapshotMode { previewBoard } else { ScrollView { previewBoard } }
                 case .battle:
-                    if let board {
-                        if snapshotMode { field(board) } else { ScrollView { field(board) } }
-                    }
+                    if let board { field(board) }
                 }
             }
         }
@@ -130,49 +149,24 @@ struct BattleView: View {
     // MARK: Choosing the teams
 
     private var setupBar: some View {
-        HStack(spacing: 10) {
-            Picker("", selection: $myTeamID) {
-                Text("Your team").tag("")
-                ForEach(store.teams) { Text($0.name).tag($0.id.uuidString) }
-            }.labelsHidden().frame(width: 180).controlSize(.small)
-            .onChange(of: myTeamID) { _ in reset() }
-
-            Text("versus").font(.system(size: 10, weight: .semibold)).foregroundStyle(.tertiary)
-
-            Picker("", selection: $opponentID) {
-                Text("Opponent").tag("")
-                SwiftUI.Section("Meta archetypes") {
-                    ForEach(store.data.metaTeams.filter { $0.record == nil }) {
-                        Text($0.name).tag($0.id)
-                    }
-                }
-                SwiftUI.Section("Tournament results") {
-                    ForEach(store.data.metaTeams.filter { $0.record != nil }.prefix(40)) {
-                        Text($0.name).tag($0.id)
-                    }
-                }
-                SwiftUI.Section("My teams") {
-                    ForEach(store.teams) { Text($0.name).tag($0.id.uuidString) }
-                }
-            }.labelsHidden().frame(width: 200).controlSize(.small)
-            .onChange(of: opponentID) { _ in reset() }
-
+        let ready = myTeam != nil && theirTeam != nil
+        return HStack(spacing: 10) {
             Picker("", selection: $singles) {
                 Text("Doubles").tag(false)
                 Text("Singles").tag(true)
             }.pickerStyle(.segmented).labelsHidden().frame(width: 150)
             .onChange(of: singles) { _ in reset() }
 
-            Button("Team Preview") {
-                stage = .preview
-                bringing = []
-            }
-            .controlSize(.small)
-            .disabled(myTeam == nil || theirTeam == nil)
+            Divider().frame(height: 18)
 
-            if stage == .battle {
-                Button("Back to preview") { stage = .preview }.controlSize(.small)
-            }
+            crumb("Teams", .setup, symbol: "person.3", enabled: true)
+            crumbArrow
+            crumb("Versus", .versus, symbol: "bolt.fill", enabled: ready)
+            crumbArrow
+            crumb("Team Preview", .preview, symbol: "list.number", enabled: ready)
+            crumbArrow
+            crumb("Battle", .battle, symbol: "flag.2.crossed", enabled: board != nil)
+
             Spacer()
             if stage == .battle {
                 Text("Turn \(turn)").font(.system(size: 11)).foregroundStyle(.secondary)
@@ -181,9 +175,433 @@ struct BattleView: View {
         .padding(12)
     }
 
+    private var crumbArrow: some View {
+        Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(.quaternary)
+    }
+
+    private func crumb(_ title: String, _ target: Stage, symbol: String, enabled: Bool) -> some View {
+        let current = stage == target
+        return Button { go(to: target) } label: {
+            HStack(spacing: 5) {
+                Image(systemName: symbol).font(.system(size: 10))
+                Text(title).font(.system(size: 11, weight: current ? .semibold : .medium))
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(current ? Palette.accent.opacity(0.16) : Color.clear)
+            .foregroundStyle(current ? AnyShapeStyle(Palette.accent)
+                             : enabled ? AnyShapeStyle(.secondary) : AnyShapeStyle(.quaternary))
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+
+    /// Move between the screens. Going forward works the two sixes out if that
+    /// has not been done yet; going back never loses anything.
+    private func go(to target: Stage) {
+        switch target {
+        case .setup:
+            stage = .setup
+        case .versus:
+            if lobby.verdict == nil { enterVersus() } else { stage = .versus }
+        case .preview:
+            if lobby.verdict == nil, let mine = myTeam, let theirs = theirTeam {
+                lobby = Self.lobby(mine: mine, theirs: theirs, singles: singles, store: store)
+            }
+            stage = .preview
+        case .battle:
+            if board != nil { stage = .battle }
+        }
+    }
+
     private func reset() {
         stage = .setup; bringing = []; focused = nil; board = nil; finished = nil
+        log = []; mySide = []; theirSide = []; lobby = Lobby()
+    }
+
+    // MARK: Choosing the teams
+
+    /// Everything the two sixes say about each other, worked out once both
+    /// are chosen: what you would bring, what they would, and what each side
+    /// has reason to fear.
+    struct Lobby {
+        var verdict: Matchup.Verdict?
+        var myPlan: BringFour.Plan?
+        var theirPlan: BringFour.Plan?
+        /// Yours that nothing on their six beats — what they are staring at.
+        var theirFears: [Form] = []
+        /// Theirs that nothing on your six beats.
+        var myFears: [Form] = []
+        /// The four they will expect you to bring, from their chair.
+        var theirExpectation: [Form] = []
+    }
+
+    static func lobby(mine: Team, theirs: Team, singles: Bool, store: Store) -> Lobby {
+        let field = Field(isDoubles: !singles)
+        let bring = singles ? 3 : 4
+        let grid = Matchup(mine: mine, theirs: theirs, store: store, field: field)
+        // The same arithmetic from the other side of the table: their four
+        // is chosen against your six exactly as yours is against theirs.
+        let flipped = Matchup(mine: theirs, theirs: mine, store: store, field: field)
+        let theirPicker = BringFour(matchup: flipped, store: store, bring: bring)
+        var out = Lobby()
+        let verdict = grid.verdict
+        out.verdict = verdict
+        out.myFears = verdict.unanswered
+        out.myPlan = BringFour(matchup: grid, store: store, bring: bring).plans.first
+        out.theirPlan = theirPicker.plans.first
+        out.theirExpectation = theirPicker.theirLikelyFour
+        out.theirFears = flipped.verdict.unanswered
+        return out
+    }
+
+    private func enterVersus() {
+        guard let mine = myTeam, let theirs = theirTeam else { return }
+        lobby = Self.lobby(mine: mine, theirs: theirs, singles: singles, store: store)
+        bringing = []; focused = nil; board = nil; finished = nil
         log = []; mySide = []; theirSide = []
+        stage = .versus
+    }
+
+    private func choose(mine id: String) {
+        myTeamID = id
+        lobby = Lobby(); board = nil
+        if theirTeam != nil { enterVersus() }
+    }
+
+    private func choose(theirs id: String) {
+        opponentID = id
+        lobby = Lobby(); board = nil
+        if myTeam != nil { enterVersus() }
+    }
+
+    /// Every six you could line up against, with what it is made of.
+    private struct Candidate: Identifiable {
+        let id: String
+        let name: String
+        let tag: String
+        let group: String
+        let forms: [Form?]
+    }
+
+    private var format: String { singles ? "singles" : "doubles" }
+
+    private var opponentCandidates: [Candidate] {
+        var out: [Candidate] = []
+        for meta in store.data.metaTeams where meta.format == format {
+            out.append(Candidate(
+                id: meta.id,
+                name: meta.name,
+                tag: meta.projected ? "projected"
+                    : (meta.record.map { "\($0)\(meta.placement.map { p in " · \(p)" } ?? "")" }
+                       ?? meta.archetype),
+                group: meta.record == nil ? "Meta archetypes" : "Tournament results",
+                forms: meta.members.map { store.form(named: $0.form) }))
+        }
+        for saved in store.teams where saved.id.uuidString != myTeamID {
+            out.append(Candidate(id: saved.id.uuidString, name: saved.name,
+                                 tag: "\(saved.slots.count) Pokémon · \(saved.format)",
+                                 group: "My teams",
+                                 forms: saved.slots.map { $0.battleForm(in: store) }))
+        }
+        guard !opponentSearch.isEmpty else { return out }
+        let needle = opponentSearch.lowercased()
+        return out.filter { candidate in
+            candidate.name.lowercased().contains(needle)
+                || candidate.forms.contains { ($0?.formLabel.lowercased().contains(needle)) == true }
+        }
+    }
+
+    /// Both teams chosen by their six, side by side. Choosing the second one
+    /// goes straight to the versus page.
+    private var teamPicking: some View {
+        HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 10) {
+                pickingHeader("Your team", count: store.teams.count,
+                              hint: "One of your saved teams.")
+                if store.teams.isEmpty {
+                    EmptyHint(symbol: "person.3", title: "No teams yet",
+                              detail: "Build one in Teams first.")
+                } else {
+                    scrolling {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 8)],
+                                  alignment: .leading, spacing: 8) {
+                            ForEach(store.teams) { team in
+                                Button { choose(mine: team.id.uuidString) } label: {
+                                    SixCard(name: team.name,
+                                            tag: "\(team.slots.count) Pokémon · \(team.format)",
+                                            forms: team.slots.map { $0.battleForm(in: store) },
+                                            selected: team.id.uuidString == myTeamID)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(16)
+            .frame(minWidth: 300, idealWidth: 400, maxWidth: 440, maxHeight: .infinity,
+                   alignment: .topLeading)
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top) {
+                    pickingHeader("Opponent", count: opponentCandidates.count,
+                                  hint: "A meta archetype, a real tournament team, or another of yours.")
+                    Spacer()
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass").foregroundStyle(.tertiary)
+                        TextField("Team, player or a Pokémon on it", text: $opponentSearch)
+                            .textFieldStyle(.plain)
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .background(Palette.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Palette.hairline, lineWidth: 1))
+                    .frame(width: 260)
+                }
+                scrolling {
+                    LazyVStack(alignment: .leading, spacing: 14) {
+                        ForEach(["Meta archetypes", "Tournament results", "My teams"], id: \.self) {
+                            group in
+                            // A snapshot has no scroll view to put a hundred
+                            // tournament teams in, so it shows a handful.
+                            let all = opponentCandidates.filter { $0.group == group }
+                            let rows = snapshotMode ? Array(all.prefix(4)) : all
+                            if !rows.isEmpty {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(group.uppercased())
+                                        .font(.system(size: 10, weight: .semibold)).kerning(0.6)
+                                        .foregroundStyle(.tertiary)
+                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 8)],
+                                              alignment: .leading, spacing: 8) {
+                                        ForEach(rows) { candidate in
+                                            Button { choose(theirs: candidate.id) } label: {
+                                                SixCard(name: candidate.name, tag: candidate.tag,
+                                                        forms: candidate.forms,
+                                                        selected: candidate.id == opponentID)
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    @ViewBuilder
+    private func scrolling<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        if snapshotMode { content() } else { ScrollView { content() } }
+    }
+
+    private func pickingHeader(_ title: String, count: Int, hint: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text(title.uppercased())
+                    .font(.system(size: 13, weight: .semibold)).kerning(0.6)
+                    .foregroundStyle(.secondary)
+                Text("\(count)").font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(.tertiary)
+            }
+            Text(hint).font(.system(size: 12)).foregroundStyle(.tertiary)
+        }
+    }
+
+    // MARK: Versus
+
+    private var versusPage: some View {
+        VStack(spacing: 14) {
+            if let mine = myTeam, let theirs = theirTeam {
+                VersusBanner(mine: bannerSide(mine, plan: lobby.myPlan, title: "YOUR TEAM",
+                                              tag: "\(mine.slots.count) Pokémon · \(format)",
+                                              tint: Palette.accent),
+                             theirs: bannerSide(theirs, plan: lobby.theirPlan, title: "THEIR TEAM",
+                                                tag: theirTag, tint: Palette.bad),
+                             score: lobby.verdict?.score ?? 0,
+                             verdict: edgeWords(lobby.verdict?.score ?? 0))
+                    .frame(height: 400)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(.white.opacity(0.12), lineWidth: 1))
+
+                HStack(alignment: .top, spacing: 14) {
+                    yourSideCard
+                    theirSideCard
+                }
+
+                HStack {
+                    Spacer()
+                    Button {
+                        bringing = []; focused = nil
+                        stage = .preview
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "flag.2.crossed.fill")
+                            Text("START BATTLE").font(.system(size: 14, weight: .heavy)).kerning(1.2)
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 28).padding(.vertical, 13)
+                        .background(LinearGradient(colors: [Palette.accent, Palette.bad],
+                                                   startPoint: .leading, endPoint: .trailing))
+                        .clipShape(Capsule())
+                        .shadow(color: Palette.accent.opacity(0.4), radius: 10, y: 4)
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.defaultAction)
+                    .help("On to Team Preview: choose the \(bringCount) you bring and their order, while they choose theirs.")
+                    Spacer()
+                }
+            } else {
+                EmptyHint(symbol: "bolt", title: "Choose both teams first")
+            }
+        }
+        .padding(20)
+    }
+
+    private func bannerSide(_ team: Team, plan: BringFour.Plan?, title: String, tag: String,
+                            tint: Color) -> VersusBanner.Side {
+        let all = team.slots.compactMap { $0.battleForm(in: store) }
+        // The predicted four first, leads leading; the two left home last.
+        let ordered: [Form]
+        if let plan {
+            ordered = plan.bring + all.filter { form in !plan.bring.contains { $0.id == form.id } }
+        } else {
+            ordered = all
+        }
+        return VersusBanner.Side(title: title, name: team.name, tag: tag, forms: ordered,
+                                 leadCount: plan == nil ? 0 : leadCount, tint: tint)
+    }
+
+    private var theirTag: String {
+        if let meta = store.data.metaTeams.first(where: { $0.id == opponentID }) {
+            if meta.projected { return "projected · \(meta.archetype)" }
+            if let record = meta.record {
+                return ([record] + [meta.placement].compactMap { $0 }).joined(separator: " · ")
+            }
+            return meta.archetype
+        }
+        return "\(theirTeam?.slots.count ?? 0) Pokémon · \(theirTeam?.format ?? format)"
+    }
+
+    private var yourSideCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionHeader(title: "Your side", subtitle: "What the engine would bring, and why")
+                if let plan = lobby.myPlan {
+                    fourRow(plan.bring, leads: leadCount, tint: Palette.accent)
+                    bullets(Array(plan.reasons.prefix(2)) + Array(plan.warnings.prefix(1)),
+                            tint: Palette.accent)
+                    if !lobby.myFears.isEmpty {
+                        Label("Nothing on your six beats their \(names(lobby.myFears)). That is the matchup.",
+                              systemImage: "exclamationmark.triangle.fill")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Palette.warn)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else {
+                    Text("Your six are at or under the limit, so everyone comes.")
+                        .font(.system(size: 11)).foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
+
+    private var theirSideCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionHeader(title: "Through their eyes",
+                              subtitle: "What they see when they look at your six")
+                if let plan = lobby.theirPlan {
+                    Text("They will most likely bring")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                    fourRow(plan.bring, leads: leadCount, tint: Palette.bad)
+                    bullets(plan.reasons.prefix(2).map(fromTheirChair), tint: Palette.bad)
+                    if !lobby.theirFears.isEmpty {
+                        Label("Nothing on their six beats your \(names(lobby.theirFears)) — expect them to play around it, not into it.",
+                              systemImage: "eye.fill")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Palette.good)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !lobby.theirExpectation.isEmpty {
+                        Text("They cannot see which four you bring or what anyone holds. From your six they will expect \(names(lobby.theirExpectation)).")
+                            .font(.system(size: 11)).foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else {
+                    Text("Their six are at or under the limit, so everyone comes.")
+                        .font(.system(size: 11)).foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
+
+    private func fourRow(_ forms: [Form], leads: Int, tint: Color) -> some View {
+        HStack(spacing: 10) {
+            ForEach(Array(forms.enumerated()), id: \.offset) { index, form in
+                VStack(spacing: 2) {
+                    ZStack(alignment: .topLeading) {
+                        SpriteImage(form: form, side: 52)
+                        Text("\(index + 1)")
+                            .font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                            .frame(width: 16, height: 16)
+                            .background(index < leads ? tint : Palette.dim)
+                            .clipShape(Circle())
+                    }
+                    Text(form.formLabel)
+                        .font(.system(size: 10, weight: index < leads ? .semibold : .regular))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    if index < leads {
+                        Text("LEAD").font(.system(size: 7, weight: .heavy)).kerning(0.5)
+                            .foregroundStyle(tint)
+                    }
+                }
+                .frame(width: 72)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func bullets(_ lines: [String], tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                HStack(alignment: .top, spacing: 6) {
+                    Circle().fill(tint.opacity(0.5)).frame(width: 4, height: 4).padding(.top, 5)
+                    Text(line).font(.system(size: 11)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func names(_ forms: [Form]) -> String {
+        let labels = forms.map(\.formLabel)
+        if labels.count <= 1 { return labels.first ?? "" }
+        return labels.dropLast().joined(separator: ", ") + " and " + labels.last!
+    }
+
+    /// A reason written for the side that made the plan, read from the other
+    /// chair: their "your" is your "their", and the other way round.
+    private func fromTheirChair(_ text: String) -> String {
+        var out = text
+        out = out.replacingOccurrences(of: "Your ", with: "\u{1}")
+        out = out.replacingOccurrences(of: "your ", with: "\u{2}")
+        out = out.replacingOccurrences(of: "Their ", with: "Your ")
+        out = out.replacingOccurrences(of: "their ", with: "your ")
+        out = out.replacingOccurrences(of: "\u{1}", with: "Their ")
+        out = out.replacingOccurrences(of: "\u{2}", with: "their ")
+        out = out.replacingOccurrences(of: " you left home", with: " they left home")
+        out = out.replacingOccurrences(of: "off you", with: "off them")
+        return out
     }
 
     // MARK: Team Preview
@@ -197,7 +615,7 @@ struct BattleView: View {
                         subtitle: "Choose the \(bringCount) you bring, in order. "
                             + (singles ? "The first leads."
                                        : "The first two lead; the others come in behind.")
-                            + " Their side shows how the one you just picked fares against each.")
+                            + " They are choosing too: their likely four is marked, and each shows how the one you just picked fares against it.")
                     HStack(alignment: .top, spacing: 18) {
                         // Yours down the left, theirs down the right, which is
                         // where the game puts them.
@@ -307,6 +725,9 @@ struct BattleView: View {
     private func opposingRow(_ slot: TeamSlot) -> some View {
         let form = slot.battleForm(in: store)
         let reading = matchupMark(against: slot)
+        // Where this one sits in the four they will most likely bring.
+        let expected = lobby.theirPlan?.bring.firstIndex { $0.id == form?.id }
+        let likelyHome = lobby.theirPlan != nil && expected == nil
         return HStack(spacing: 9) {
             if let reading {
                 HStack(spacing: 2) {
@@ -327,12 +748,20 @@ struct BattleView: View {
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 1) {
                 Text(form?.formLabel ?? slot.formID)
-                    .font(.system(size: 12)).lineLimit(1)
+                    .font(.system(size: 12, weight: expected == nil ? .regular : .semibold)).lineLimit(1)
                 HStack(spacing: 3) {
+                    if let expected {
+                        Text(expected < leadCount ? "LIKELY LEADS" : "LIKELY BRINGS")
+                            .font(.system(size: 8, weight: .bold)).kerning(0.4)
+                            .foregroundStyle(expected < leadCount ? Palette.bad : Palette.warn)
+                    } else if likelyHome {
+                        Text("LIKELY HOME").font(.system(size: 8, weight: .bold)).kerning(0.4)
+                            .foregroundStyle(.quaternary)
+                    }
                     ForEach(form?.pokeTypes ?? []) { TypeChip(type: $0, size: .small) }
                 }
             }
-            if let form { SpriteImage(form: form, side: 42) }
+            if let form { SpriteImage(form: form, side: 42).opacity(likelyHome ? 0.6 : 1) }
         }
         .padding(.horizontal, 8).padding(.vertical, 5)
         .background(Palette.surface)
@@ -400,27 +829,12 @@ struct BattleView: View {
 
     private func begin() {
         guard let mine = myTeam, let theirs = theirTeam else { return }
-        // Only the four, in the order chosen.
-        var brought = mine
-        brought.slots = bringing.compactMap { id in mine.slots.first { $0.formID == id } }
-        guard brought.slots.count >= leadCount else { return }
-
-        // They choose their own four the same way, against your six.
-        let grid = Matchup(mine: theirs, theirs: mine, store: store,
-                           field: Field(isDoubles: !singles))
-        let picker = BringFour(matchup: grid, store: store, bring: bringCount)
-        var theirBrought = theirs
-        if let plan = picker.plans.first {
-            theirBrought.slots = plan.bring.compactMap { form in
-                theirs.slots.first { $0.battleForm(in: store)?.id == form.id }
-            }
-        }
-        if theirBrought.slots.count < leadCount { theirBrought = theirs }
-
-        var made = Board(mine: brought, theirs: theirBrought, store: store,
-                         field: Field(isDoubles: !singles), alreadyEvolved: false)
-        made.activeCount = leadCount
-        board = made
+        guard bringing.count >= leadCount else { return }
+        // Their four is chosen against your six the way you chose yours, and
+        // their back two go on the board as guesses: the game knows the truth
+        // so it can be played, and nothing that advises you gets to read it.
+        board = Board.opening(mine: mine, bringing: bringing, theirs: theirs,
+                              store: store, singles: singles)
         stage = .battle
         turn = 1
         finished = nil
@@ -437,38 +851,110 @@ struct BattleView: View {
         // turn ended up.
         let board = replay.indices.contains(at)
             ? rewound(replayBoard ?? live, to: replay[at]) : live
-        return VStack(alignment: .leading, spacing: 14) {
+        // Laid out to fit the window rather than to scroll: the field across
+        // the top, what you are doing on the left, and everything that reads
+        // — the engine, their side, the log — in one panel on the right, one
+        // reading at a time. A turn should never need scrolling to play.
+        return VStack(alignment: .leading, spacing: 12) {
             if let finished {
-                Card { Label(finished, systemImage: "flag.checkered")
+                Card(padding: 10) { Label(finished, systemImage: "flag.checkered")
                     .font(.system(size: 14, weight: .semibold)) }
             }
             arena(board)
-            if !replay.isEmpty { stepper() }
-            if replay.isEmpty, !sending.isEmpty, finished == nil { replacement(board) }
-            if finished == nil && replay.isEmpty && sending.isEmpty { choices(board) }
-            analysisPanels()
-            if !log.isEmpty {
-                Card {
-                    VStack(alignment: .leading, spacing: 5) {
-                        SectionHeader(title: "What happened")
-                        ForEach(Array(log.enumerated().reversed()), id: \.offset) {
-                            index, line in
-                            let latest = index == log.count - 1
-                            Text(line)
-                                .font(.system(size: 11, weight: latest ? .medium : .regular))
-                                .foregroundStyle(latest ? AnyShapeStyle(.primary)
-                                                        : AnyShapeStyle(.secondary))
-                                .padding(.horizontal, latest ? 8 : 0)
-                                .padding(.vertical, latest ? 5 : 0)
-                                .background(latest ? Palette.accent.opacity(0.10) : .clear)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-                                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .top, spacing: 12) {
+                scrolling {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if !replay.isEmpty { stepper() }
+                        if replay.isEmpty, !sending.isEmpty, finished == nil { replacement(board) }
+                        if finished == nil && replay.isEmpty && sending.isEmpty { choices(board) }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                sidePanel
+                    .frame(width: 340)
+                    .frame(maxHeight: .infinity, alignment: .top)
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+        }
+        .padding(14)
+    }
+
+    /// The readings, one at a time: what the engine makes of your turn, what
+    /// it believes they are weighing, and what has happened so far.
+    private var sidePanel: some View {
+        Card(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 4) {
+                    ForEach(Panel.allCases, id: \.self) { choice in
+                        Button { panel = choice } label: {
+                            Text(choice.rawValue)
+                                .font(.system(size: 11, weight: panel == choice ? .semibold : .medium))
+                                .padding(.horizontal, 10).padding(.vertical, 5)
+                                .background(panel == choice ? Palette.accent.opacity(0.16) : Color.clear)
+                                .foregroundStyle(panel == choice ? AnyShapeStyle(Palette.accent)
+                                                                 : AnyShapeStyle(.secondary))
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Spacer(minLength: 0)
+                    if !searchNote.isEmpty, panel == .engine {
+                        Text(searchNote).font(.system(size: 9)).foregroundStyle(.quaternary)
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.horizontal, 10).padding(.vertical, 8)
+                Divider()
+                scrolling {
+                    VStack(alignment: .leading, spacing: 7) {
+                        switch panel {
+                        case .engine:
+                            reading(mySide, Palette.accent,
+                                    empty: thinking ? "Searching…" : "Press Think, or give orders: the engine searches when a turn begins.")
+                        case .theirs:
+                            reading(theirSide, Palette.warn,
+                                    empty: "What they are probably weighing, and what they cannot see.")
+                        case .log:
+                            if log.isEmpty {
+                                Text("Nothing has happened yet.").font(.system(size: 11))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            ForEach(Array(log.enumerated().reversed()), id: \.offset) {
+                                index, line in
+                                let latest = index == log.count - 1
+                                Text(line)
+                                    .font(.system(size: 11, weight: latest ? .medium : .regular))
+                                    .foregroundStyle(latest ? AnyShapeStyle(.primary)
+                                                            : AnyShapeStyle(.secondary))
+                                    .padding(.horizontal, latest ? 8 : 0)
+                                    .padding(.vertical, latest ? 5 : 0)
+                                    .background(latest ? Palette.accent.opacity(0.10) : .clear)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                     }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
         }
-        .padding(20)
+    }
+
+    @ViewBuilder
+    private func reading(_ lines: [String], _ tint: Color, empty: String) -> some View {
+        if lines.isEmpty {
+            Text(empty).font(.system(size: 11)).foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+            HStack(alignment: .top, spacing: 6) {
+                Circle().fill(tint.opacity(0.5)).frame(width: 4, height: 4)
+                    .padding(.top, 5)
+                Text(line).font(.system(size: 11)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     /// The field itself. Tinted by whatever weather is up, because that is the
@@ -593,20 +1079,61 @@ struct BattleView: View {
                 }
                 if mine { Spacer(minLength: 0) }
             }
+            let hiding = !mine && board.hidesTheirBench
             HStack(spacing: 4) {
                 if !mine { Spacer(minLength: 0) }
                 ForEach(Array(team.dropFirst(board.activeCount).enumerated()), id: \.offset) {
-                    _, fighter in
-                    VStack(spacing: 2) {
-                        SpriteImage(form: fighter.build.form, side: 30)
-                            .opacity(fighter.fainted ? 0.25 : 1)
-                            .saturation(fighter.fainted ? 0 : 1)
-                        Text(fighter.build.form.formLabel)
-                            .font(.system(size: 8)).lineLimit(1).minimumScaleFactor(0.7)
+                    index, fighter in
+                    if hiding && !fighter.seen && !fighter.fainted {
+                        // One of the two they brought behind, not yet shown.
+                        // What it is stays their business until it walks on.
+                        VStack(spacing: 2) {
+                            ZStack {
+                                Circle().strokeBorder(Palette.hairline, style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+                                    .frame(width: 30, height: 30)
+                                Text("?").font(.system(size: 14, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            Text("hidden").font(.system(size: 8)).foregroundStyle(.tertiary)
+                        }
+                        .frame(width: 52)
+                        .help("They brought something here, but it has not come out yet. The engine plays against the likeliest versions rather than peeking.")
+                    } else {
+                        VStack(spacing: 2) {
+                            SpriteImage(form: fighter.build.form, side: 30)
+                                .opacity(fighter.fainted ? 0.25 : 1)
+                                .saturation(fighter.fainted ? 0 : 1)
+                            Text(fighter.build.form.formLabel)
+                                .font(.system(size: 8)).lineLimit(1).minimumScaleFactor(0.7)
+                        }
+                        .frame(width: 52)
                     }
-                    .frame(width: 52)
                 }
                 if mine { Spacer(minLength: 0) }
+            }
+            if hiding {
+                // Who is probably back there, from their six and the two they
+                // led with. Weighed the way they would weigh it: by what hurts.
+                HStack(spacing: 5) {
+                    Spacer(minLength: 0)
+                    Text("probably").font(.system(size: 8, weight: .semibold)).kerning(0.3)
+                        .foregroundStyle(.tertiary)
+                    ForEach(Array(board.theirBenchCandidates.prefix(4).enumerated()), id: \.offset) {
+                        _, candidate in
+                        HStack(spacing: 3) {
+                            SpriteImage(form: candidate.fighter.build.form, side: 16)
+                            Text(String(format: "%.0f%%", candidate.chance * 100))
+                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(candidate.chance >= 0.5 ? AnyShapeStyle(.primary)
+                                                                         : AnyShapeStyle(.secondary))
+                        }
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(Palette.surface)
+                        .clipShape(Capsule())
+                        .help("\(candidate.fighter.build.form.formLabel): \(Int((candidate.chance * 100).rounded()))% likely to be one of the two behind")
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity)
@@ -1537,9 +2064,8 @@ struct BattleView: View {
 
     /// Both orders given: the order they will go in, and the button.
     private func readyToPlay(_ board: Board) -> some View {
-        let mine = Play(left: leftPick ?? .pass,
-                        right: board.activeCount > 1 ? (rightPick ?? .pass) : .pass,
-                        megaSlot: megaSlot)
+        let mine = ordersAsPlay(board)
+            ?? Play(left: leftPick ?? .pass, right: rightPick ?? .pass, megaSlot: megaSlot)
         return VStack(alignment: .leading, spacing: 12) {
             orderPreview(board)
             // Yours against the engine's, before you commit. Both are scored
@@ -1724,35 +2250,33 @@ struct BattleView: View {
         }
     }
 
-    // MARK: The two analyses
-
-    private func analysisPanels() -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            analysis("Your side", mySide, Palette.accent,
-                     empty: thinking ? "Searching…" : "Press Think.")
-            analysis("Their side", theirSide, Palette.warn,
-                     empty: "What they are probably weighing, and what they cannot see.")
-        }
-    }
-
-    private func analysis(_ title: String, _ lines: [String], _ tint: Color,
-                          empty: String) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: 7) {
-                SectionHeader(title: title)
-                if lines.isEmpty {
-                    Text(empty).font(.system(size: 11)).foregroundStyle(.tertiary)
-                }
-                ForEach(lines, id: \.self) { line in
-                    HStack(alignment: .top, spacing: 6) {
-                        Circle().fill(tint.opacity(0.5)).frame(width: 4, height: 4)
-                            .padding(.top, 5)
-                        Text(line).font(.system(size: 11)).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+    /// The pair a good player would expect behind your leads, having seen your
+    /// six at Team Preview and your two out front — the same weighing that
+    /// picks their own four, done from their chair.
+    private func theirGuessOfMyBench(_ board: Board) -> [Form] {
+        guard let mine = myTeam, let theirs = theirTeam else { return [] }
+        let unseen = board.mine.dropFirst(board.activeCount).filter { !$0.seen && !$0.fainted }
+        guard !unseen.isEmpty else { return [] }
+        let grid = Matchup(mine: mine, theirs: theirs, store: store,
+                           field: Field(isDoubles: !singles))
+        // Fighters stand as registered; the grid rates battle forms.
+        var fightsAs: [String: Form] = [:]
+        for slot in mine.slots {
+            if let registered = slot.form(in: store), let battle = slot.battleForm(in: store) {
+                fightsAs[registered.id] = battle
             }
         }
+        let shownIDs = Set(board.mine.filter(\.seen).compactMap { fightsAs[$0.build.form.id]?.id })
+        let shown = grid.myForms.filter { shownIDs.contains($0.id) }
+        let rest = grid.myForms.filter { !shownIDs.contains($0.id) }
+        guard rest.count > unseen.count else { return rest }
+        var best: (pair: [Form], edge: Int)?
+        for pair in Board.choose(rest, unseen.count)
+        where (shown + pair).filter(\.isMega).count <= 1 {
+            let edge = grid.rate(bringing: shown + pair, against: grid.theirForms).score
+            if best == nil || edge > best!.edge { best = (pair, edge) }
+        }
+        return best?.pair ?? []
     }
 
     // MARK: Running a turn
@@ -1764,7 +2288,11 @@ struct BattleView: View {
             await breathe("battle think")
             let engine = BattleEngine(store: store, budget: 0.5)
             let result = engine.think(board)
-            var game = TurnGame(board: board, store: store)
+            // The one-turn read is taken on the likeliest version of the board
+            // rather than the board itself, so nothing shown here can name a
+            // Pokémon of theirs that has not come out.
+            let likeliest = engine.imagine(board, belief: BattleEngine.Belief()).first?.board ?? board
+            var game = TurnGame(board: likeliest, store: store)
             game.width = engine.beam + 2
             let turnSolve = game.solve()
 
@@ -1806,8 +2334,16 @@ struct BattleView: View {
                let becoming = board.mine[wants].pendingMega {
                 ours.append("It wants \(board.mine[wants].build.form.formLabel) to Mega Evolve into \(becoming.formLabel) this turn — the toggle beside its move.")
             }
+            if board.hidesTheirBench {
+                let odds = board.liveBenchGuesses.prefix(2).map { guess in
+                    guess.fighters.map(\.build.form.formLabel).joined(separator: " + ")
+                        + String(format: " %.0f%%", guess.chance * 100)
+                }
+                ours.append("Their back two have not shown. The search plays the likeliest pairs: "
+                            + odds.joined(separator: ", ") + ".")
+            }
             ours += result.principal.prefix(2)
-            mySide = Array(ours.prefix(5))
+            mySide = Array(ours.prefix(6))
             searchNote = "searched \(result.depth) turns, \(result.nodes) positions"
             thought = result
             self.solved = turnSolve
@@ -1825,9 +2361,21 @@ struct BattleView: View {
                 .map { "\($0.build.form.formLabel)'s \($0.build.item)" }
             if !hidden.isEmpty {
                 theirs.append("They cannot see " + hidden.joined(separator: " or ")
-                              + ", nor which four you brought, so they are playing the likeliest version of you.")
+                              + ", so they are playing the likeliest version of you.")
             }
-            theirSide = Array(theirs.prefix(4))
+            // What they make of your back two, which they cannot see either:
+            // from your six and the two you led with, the pair a good player
+            // would expect. It is what they are switching and spreading against.
+            let expected = theirGuessOfMyBench(board)
+            if !expected.isEmpty {
+                let real = board.mine.dropFirst(board.activeCount).filter { !$0.seen && !$0.fainted }
+                    .map(\.build.form.id)
+                let right = expected.filter { real.contains($0.id) }.count
+                theirs.append("They have not seen your back \(real.count == 1 ? "one" : "two"). From your six and your leads they will expect "
+                              + expected.map(\.formLabel).joined(separator: " and ")
+                              + (real.isEmpty ? "." : right == expected.count ? " — and they would be right." : right == 0 ? " — and they would be wrong, which is worth something." : " — half right."))
+            }
+            theirSide = Array(theirs.prefix(5))
             thinking = false
             // Watching: the engine gives my orders as well, and plays.
             if watching, finished == nil, sending.isEmpty {
@@ -1837,8 +2385,20 @@ struct BattleView: View {
         }
     }
 
+    /// The two orders as a play, with an empty or fainted slot passing. Orders
+    /// are only required of the Pokémon actually standing there.
+    private func ordersAsPlay(_ board: Board) -> Play? {
+        let standing = (0..<board.activeCount).filter {
+            board.mine.indices.contains($0) && !board.mine[$0].fainted
+        }
+        guard !standing.isEmpty, standing.allSatisfy({ pick(for: $0) != nil }) else { return nil }
+        return Play(left: standing.contains(0) ? (leftPick ?? .pass) : .pass,
+                    right: standing.contains(1) ? (rightPick ?? .pass) : .pass,
+                    megaSlot: megaSlot)
+    }
+
     private func playTurn() {
-        guard let current = board, let left = leftPick else { return }
+        guard let current = board, let mine = ordersAsPlay(current) else { return }
         var game = TurnGame(board: current, store: store)
         game.width = 10
         let solved = game.solve()
@@ -1852,9 +2412,6 @@ struct BattleView: View {
                 break
             }
         }
-        let mine = Play(left: left,
-                        right: current.activeCount > 1 ? (rightPick ?? .pass) : .pass,
-                        megaSlot: megaSlot)
 
         // What the engine would have done, so the turn can be marked. Both
         // numbers are against their mix, which is the only fair comparison:

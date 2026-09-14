@@ -61,6 +61,10 @@ struct Fighter {
     var asleepFor = 0
     /// Follow Me or Rage Powder this turn: single-target moves come here.
     var drawingFire = false
+    /// It has stood on the field, so the other side knows it came. Until then
+    /// a benched Pokémon is one of the two they might have brought, and the
+    /// game is played against that, not against the answer.
+    var seen = false
 
     var fainted: Bool { hp <= 0 }
     var share: Double { maxHP > 0 ? max(0, Double(hp) / Double(maxHP)) : 0 }
@@ -110,6 +114,57 @@ struct Screens {
 struct Board {
     var mine: [Fighter]
     var theirs: [Fighter]
+
+    /// One way their unseen back two could be, and how likely it is.
+    struct BenchGuess {
+        let fighters: [Fighter]
+        let chance: Double
+    }
+    /// What their back two probably are, from their six and the two they led
+    /// with. `theirs` holds the truth so the game can be played out; nothing
+    /// that advises you is allowed to read past what has been seen, and the
+    /// search plays against these instead. Empty when nothing is hidden — a
+    /// bare analysis board, or a team of exactly four.
+    var theirBenchGuesses: [BenchGuess] = []
+
+    /// Benched slots of theirs that have not shown themselves yet.
+    var theirUnseenBench: [Int] {
+        (activeCount..<theirs.count).filter { !theirs[$0].seen && !theirs[$0].fainted }
+    }
+
+    /// The guesses still possible given what has since been seen: one of the
+    /// pair walking on rules out every pair it was not in.
+    var liveBenchGuesses: [BenchGuess] {
+        // Only what was ever in doubt counts as evidence: a lead that fainted
+        // and slid to the bench has been seen, but it was never a guess.
+        let pool = Set(theirBenchGuesses.flatMap { $0.fighters.map(\.build.form.id) })
+        let shown = Set(theirs.filter { $0.seen && pool.contains($0.build.form.id) }
+                            .map(\.build.form.id))
+        let consistent = theirBenchGuesses.filter { guess in
+            shown.isSubset(of: Set(guess.fighters.map(\.build.form.id)))
+        }
+        let total = consistent.reduce(0) { $0 + $1.chance }
+        guard total > 0 else { return [] }
+        return consistent.map { BenchGuess(fighters: $0.fighters, chance: $0.chance / total) }
+    }
+
+    /// Each Pokémon that might be in their back, with the chance it is there.
+    var theirBenchCandidates: [(fighter: Fighter, chance: Double)] {
+        let shown = Set(theirs.filter(\.seen).map(\.build.form.id))
+        var chance: [String: Double] = [:]
+        var fighter: [String: Fighter] = [:]
+        for guess in liveBenchGuesses {
+            for member in guess.fighters where !shown.contains(member.build.form.id) {
+                chance[member.build.form.id, default: 0] += guess.chance
+                fighter[member.build.form.id] = member
+            }
+        }
+        return chance.keys.compactMap { id in fighter[id].map { ($0, chance[id]!) } }
+            .sorted { $0.1 > $1.1 || ($0.1 == $1.1 && $0.0.build.form.formLabel < $1.0.build.form.formLabel) }
+    }
+
+    /// Whether anything on their side is still a guess.
+    var hidesTheirBench: Bool { !theirUnseenBench.isEmpty && !liveBenchGuesses.isEmpty }
     var field: Field
     /// Turns left on each side's speed control.
     var myTailwind = 0
@@ -145,16 +200,44 @@ struct Board {
     /// a fifth of a solve.
     var narrating = true
 
+    /// Lines being gathered into a single step: everything one action does.
+    /// A spread move used to be five steps — a target, the spread modifier,
+    /// the other target, its modifier, the drop — which is a log, not a move.
+    /// Nil when each line is its own step, as switches and evolutions are.
+    var gathering: [String]?
+
+    /// Start collecting the lines of one action into one step.
+    mutating func beginStep() {
+        closeStep()
+        gathering = []
+    }
+
+    /// Close the step being gathered, if it said anything.
+    mutating func closeStep() {
+        if let lines = gathering, !lines.isEmpty {
+            steps.append(snapshot(lines.joined(separator: "\n")))
+        }
+        gathering = nil
+    }
+
+    private func snapshot(_ text: String) -> Step {
+        Step(text: text,
+             myHP: mine.map(\.hp), theirHP: theirs.map(\.hp),
+             myForms: mine.map(\.build.form.id),
+             theirForms: theirs.map(\.build.form.id),
+             field: field, myTailwind: myTailwind,
+             theirTailwind: theirTailwind, trickRoom: trickRoom)
+    }
+
     /// Say what happened, and remember what the board looked like when it did.
     mutating func note(_ text: String) {
         guard narrating else { return }
         story.append(text)
-        steps.append(Step(text: text,
-                          myHP: mine.map(\.hp), theirHP: theirs.map(\.hp),
-                          myForms: mine.map(\.build.form.id),
-                          theirForms: theirs.map(\.build.form.id),
-                          field: field, myTailwind: myTailwind,
-                          theirTailwind: theirTailwind, trickRoom: trickRoom))
+        if gathering != nil {
+            gathering?.append(text)
+        } else {
+            steps.append(snapshot(text))
+        }
     }
 
     var myActive: ArraySlice<Fighter> { mine.prefix(activeCount) }
@@ -177,6 +260,7 @@ struct Board {
                 else { continue }
                 team.swapAt(slot, next)
                 team[slot].justArrived = true
+                team[slot].seen = true
             }
         }
         if fillMine { refill(&mine) }
@@ -197,6 +281,7 @@ struct Board {
               !mine[bench].fainted, mine[slot].fainted else { return }
         mine.swapAt(slot, bench)
         mine[slot].justArrived = true
+        mine[slot].seen = true
     }
 }
 
@@ -260,9 +345,101 @@ extension Board {
             let rest = made.filter { entry in !leads.contains(entry.0) }.map(\.1)
             return front + rest
         }
-        self.init(mine: build(myTeam, leads: myLeads),
-                  theirs: build(theirTeam, leads: theirLeads),
-                  field: field)
+        var mine = build(myTeam, leads: myLeads)
+        var theirs = build(theirTeam, leads: theirLeads)
+        // The leads are on show from the first moment; the rest are not.
+        let out = field.isDoubles ? 2 : 1
+        for index in mine.indices where index < out { mine[index].seen = true }
+        for index in theirs.indices where index < out { theirs[index].seen = true }
+        self.init(mine: mine, theirs: theirs, field: field)
+    }
+
+    /// A game as it actually starts: your chosen four in order, their four
+    /// chosen the same way against your six, and their back two recorded as
+    /// what they probably are rather than what they are.
+    ///
+    /// Every pair they could be carrying behind the leads they showed is
+    /// weighed by how much it costs you — which is how a good player chooses,
+    /// so it is how the guess is made — and the likeliest pairs are what the
+    /// search plays against until one of them walks on.
+    static func opening(mine myTeam: Team, bringing: [String], theirs theirTeam: Team,
+                        store: Store, singles: Bool) -> Board {
+        let bring = singles ? 3 : 4
+        let leadCount = singles ? 1 : 2
+        let field = Field(isDoubles: !singles)
+
+        var brought = myTeam
+        brought.slots = bringing.compactMap { id in myTeam.slots.first { $0.formID == id } }
+        if brought.slots.count < leadCount { brought = myTeam }
+
+        // They choose their own four the same way, against your six.
+        let theirGrid = Matchup(mine: theirTeam, theirs: myTeam, store: store, field: field)
+        let picker = BringFour(matchup: theirGrid, store: store, bring: bring)
+        var theirBrought = theirTeam
+        if let plan = picker.plans.first {
+            theirBrought.slots = plan.bring.compactMap { form in
+                theirTeam.slots.first { $0.battleForm(in: store)?.id == form.id }
+            }
+        }
+        if theirBrought.slots.count < leadCount { theirBrought = theirTeam }
+
+        var board = Board(mine: brought, theirs: theirBrought, store: store,
+                          field: field, alreadyEvolved: false)
+        board.activeCount = leadCount
+
+        // Every Pokémon on their six as a fighter, so a guess can be played.
+        let whole = Board(mine: brought, theirs: theirTeam, store: store,
+                          field: field, alreadyEvolved: false)
+        // A fighter stands as what was registered; the grid rates what it
+        // fights as. For a stone-holder those are different Pokémon, and
+        // matching them by id silently dropped every pair with a Mega in it.
+        var fightsAs: [String: Form] = [:]
+        for slot in theirTeam.slots {
+            if let registered = slot.form(in: store), let battle = slot.battleForm(in: store) {
+                fightsAs[registered.id] = battle
+            }
+        }
+        let leadIDs = Set(board.theirs.prefix(leadCount).map(\.build.form.id))
+        let leadForms = leadIDs.compactMap { fightsAs[$0] }
+        let rest = whole.theirs.filter { !leadIDs.contains($0.build.form.id) }
+        let behind = bring - leadCount
+        guard rest.count > behind, !leadForms.isEmpty else { return board }
+
+        var guesses: [BenchGuess] = []
+        var weights: [Double] = []
+        for pair in Board.choose(rest, behind) {
+            let forms = pair.compactMap { fightsAs[$0.build.form.id] }
+            guard forms.count == pair.count, forms.filter(\.isMega).count + leadForms.filter(\.isMega).count <= 1
+            else { continue }
+            // How much this four costs you, which is how much they like it.
+            let edge = theirGrid.rate(bringing: leadForms + forms, against: theirGrid.theirForms).score
+            guesses.append(BenchGuess(fighters: pair, chance: 0))
+            weights.append(Double(edge))
+        }
+        guard !guesses.isEmpty else { return board }
+        // A soft preference: the best pair is likeliest, not certain. Twelve
+        // points of edge is one factor of e.
+        let top = weights.max() ?? 0
+        let raw = weights.map { exp(($0 - top) / 12) }
+        let total = raw.reduce(0, +)
+        board.theirBenchGuesses = zip(guesses, raw).map {
+            BenchGuess(fighters: $0.fighters, chance: $1 / total)
+        }.sorted { $0.chance > $1.chance }
+        return board
+    }
+
+    /// Every way of choosing `count` from `items`, order ignored.
+    static func choose<T>(_ items: [T], _ count: Int) -> [[T]] {
+        guard count > 0 else { return [[]] }
+        guard items.count >= count else { return [] }
+        if count == items.count { return [items] }
+        var out: [[T]] = []
+        for (index, item) in items.enumerated() {
+            for rest in choose(Array(items[(index + 1)...]), count - 1) {
+                out.append([item] + rest)
+            }
+        }
+        return out
     }
 }
 
@@ -443,11 +620,17 @@ enum TurnModel {
                 if a.mine && !b.mine { choice = index }
             }
             let entry = pending.remove(at: choice)
+            // One action, one step: whatever it does to however many.
+            out.beginStep()
             apply(entry.choice, byMine: entry.mine, slot: entry.slot, to: &out,
                   store: store, rolling: rolling)
+            out.closeStep()
         }
 
+        // The residuals together, since they land together.
+        out.beginStep()
         endOfTurn(&out, rolling: rolling)
+        out.closeStep()
 
         return out
     }
@@ -627,6 +810,7 @@ enum TurnModel {
         }
         team.swapAt(active, bench)
         team[active].justArrived = true
+        team[active].seen = true
         team[active].isProtected = false
 
         entryAbility(of: team[active].build.ability, team: &team, slot: active,
@@ -933,9 +1117,11 @@ enum TurnModel {
         if mine {
             board.mine.swapAt(slot, next)
             board.mine[slot].justArrived = true
+            board.mine[slot].seen = true
         } else {
             board.theirs.swapAt(slot, next)
             board.theirs[slot].justArrived = true
+            board.theirs[slot].seen = true
         }
         let arrival = (mine ? board.mine : board.theirs)[slot].build.form.formLabel
         board.note("\(name)'s \(team[slot].build.ability) sent it out. \(arrival) came in.")

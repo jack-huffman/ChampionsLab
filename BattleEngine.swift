@@ -86,7 +86,27 @@ struct BattleEngine {
     /// likely one, so a search that runs out of time has still looked at the
     /// version of events most worth looking at.
     func imagine(_ board: Board, belief: Belief) -> [(board: Board, chance: Double)] {
-        var out: [(Board, Double)] = [(board, 1)]
+        // Each world remembers which back two it assumed, so the handful kept
+        // at the end can be made to disagree about that and not only about
+        // items — the likeliest three versions of a board otherwise all carry
+        // the same bench and differ by a Sitrus Berry.
+        var out: [(board: Board, chance: Double, bench: String)] = [(board, 1, "")]
+        // Their back two, which nobody has seen. The truth on the board is
+        // replaced by each of the likeliest pairs, so the search never plays
+        // against a Pokémon it has no business knowing about.
+        let hidden = board.theirUnseenBench
+        let guesses = board.liveBenchGuesses
+        if !hidden.isEmpty, !guesses.isEmpty {
+            let shown = Set(board.theirs.filter(\.seen).map(\.build.form.id))
+            var next: [(Board, Double, String)] = []
+            for guess in guesses.prefix(worlds) {
+                var copy = board
+                let arriving = guess.fighters.filter { !shown.contains($0.build.form.id) }
+                for (slot, fighter) in zip(hidden, arriving) { copy.theirs[slot] = fighter }
+                next.append((copy, guess.chance, arriving.map(\.build.form.id).joined(separator: "+")))
+            }
+            out = next
+        }
         // Their actives, whose items are the thing that changes a turn most.
         for slot in 0..<min(board.activeCount, board.theirs.count) {
             let fighter = board.theirs[slot]
@@ -94,21 +114,34 @@ struct BattleEngine {
             guard belief.revealedItems[id] == nil else { continue }
             let odds = itemOdds(for: fighter.build.form)
             guard odds.count > 1 else { continue }
-            var next: [(Board, Double)] = []
-            for (world, chance) in out {
+            var next: [(Board, Double, String)] = []
+            for (world, chance, bench) in out {
                 for guess in odds.prefix(worlds) {
                     var copy = world
                     copy.theirs[slot].build.item = guess.item
                     copy.theirs[slot].build.itemSpent = false
-                    next.append((copy, chance * guess.chance))
+                    next.append((copy, chance * guess.chance, bench))
                 }
             }
             out = next
         }
-        return out
-            .sorted { $0.1 > $1.1 }
-            .prefix(worlds)
-            .map { (board: $0.0, chance: $0.1) }
+        let ranked = out.sorted { $0.chance > $1.chance }
+        // Likeliest first, then the best version of a *different* back two, so
+        // a switch is judged against more than one idea of who is behind;
+        // whatever room is left goes to the next likeliest of anything.
+        var kept: [(board: Board, chance: Double)] = []
+        var benches: Set<String> = []
+        var used: Set<Int> = []
+        for (index, world) in ranked.enumerated() where kept.count < worlds && benches.count < 2 {
+            guard !benches.contains(world.bench) else { continue }
+            benches.insert(world.bench); used.insert(index)
+            kept.append((world.board, world.chance))
+        }
+        for (index, world) in ranked.enumerated() where kept.count < worlds && !used.contains(index) {
+            used.insert(index)
+            kept.append((world.board, world.chance))
+        }
+        return kept.sorted { $0.chance > $1.chance }
     }
 
     // MARK: - The search

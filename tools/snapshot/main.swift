@@ -160,26 +160,29 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
                           previewing: chosen),
                named: "battle-preview-dark",
                size: CGSize(width: 1180, height: 760), dark: true)
+        // Choosing the teams, with yours chosen and theirs still open.
+        render(BattleView(openTeams: (mine: playing.id.uuidString, theirs: ""), arriving: .setup),
+               named: "battle-setup-dark",
+               size: CGSize(width: 1180, height: 760), dark: true)
+        // And the two sixes facing each other.
+        render(BattleView(openTeams: (mine: playing.id.uuidString, theirs: against.id),
+                          arriving: .versus),
+               named: "battle-versus-dark",
+               size: CGSize(width: 1180, height: 860), dark: true)
 
-        // And the field itself, a turn in.
-        var four = playing
-        four.slots = chosen.compactMap { id in playing.slots.first { $0.formID == id } }
-        // Lead with something holding a stone, so the Mega Evolve toggle shows.
-        if let stoneSlot = four.slots.firstIndex(where: {
-            $0.megaEvolution(in: store) != nil }), stoneSlot > 0 {
-            four.slots.swapAt(0, stoneSlot)
-        } else if let outside = playing.slots.first(where: {
-            $0.megaEvolution(in: store) != nil }),
-            !four.slots.contains(where: { $0.formID == outside.formID }) {
-            four.slots.insert(outside, at: 0)
-            four.slots = Array(four.slots.prefix(4))
+        // And the field itself, a turn in. Lead with something holding a
+        // stone, so the Mega Evolve toggle shows.
+        var order = chosen
+        let stone = playing.slots.first { $0.megaEvolution(in: store) != nil }?.formID
+        if let stone {
+            order.removeAll { $0 == stone }
+            order.insert(stone, at: 0)
+            order = Array(order.prefix(4))
         }
-        var board = Board(mine: four.slots.isEmpty ? playing : four, theirs: theirs,
-                          store: store, field: Field(isDoubles: true),
-                          alreadyEvolved: false)
-        board.activeCount = 2
+        let board = Board.opening(mine: playing, bringing: order, theirs: theirs,
+                                  store: store, singles: false)
         render(BattleView(playing: board), named: "battle-dark",
-               size: CGSize(width: 1180, height: 1500), dark: true)
+               size: CGSize(width: 1280, height: 860), dark: true)
         // And the Fight grid, which is what most turns are spent looking at.
         // With the engine's answer already in, so its badges show on the tiles.
         let engine = BattleEngine(store: store, budget: 0.4)
@@ -188,7 +191,7 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         game.width = engine.beam + 2
         render(BattleView(playing: board, showing: .fight, thinking: (thought, game.solve())),
                named: "battle-fight-dark",
-               size: CGSize(width: 1180, height: 1500), dark: true)
+               size: CGSize(width: 1280, height: 860), dark: true)
     }
     render(SpeedTiersView(), named: "speed-dark",
            size: CGSize(width: 1000, height: 900), dark: true)

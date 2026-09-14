@@ -163,33 +163,8 @@ struct MatchupView: View {
     }
 
     private func candidateCard(_ candidate: Candidate) -> some View {
-        let selected = candidate.id == opponentID
-        return VStack(alignment: .leading, spacing: 5) {
-            Text(candidate.name)
-                .font(.system(size: 12, weight: .medium))
-                .lineLimit(1)
-            Text(candidate.tag)
-                .font(.system(size: 10))
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
-            HStack(spacing: 2) {
-                ForEach(Array(candidate.forms.enumerated()), id: \.offset) { _, form in
-                    if let form {
-                        SpriteImage(form: form, side: 32)
-                            .help(form.formLabel)
-                    } else {
-                        Image(systemName: "questionmark.square.dashed")
-                            .frame(width: 32, height: 32).foregroundStyle(.quaternary)
-                    }
-                }
-            }
-        }
-        .padding(8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(selected ? Palette.accent.opacity(0.16) : Palette.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10)
-            .strokeBorder(selected ? Palette.accent.opacity(0.55) : Palette.hairline, lineWidth: 1))
+        SixCard(name: candidate.name, tag: candidate.tag, forms: candidate.forms,
+                selected: candidate.id == opponentID, spriteSide: 32)
     }
 
     private var picker: some View {
