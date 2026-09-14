@@ -70,9 +70,31 @@ struct Board {
     var myTailwind = 0
     var theirTailwind = 0
     var trickRoom = 0
+    /// How many stand on each side. Two in doubles, one in singles.
+    var activeCount = 2
 
-    var myActive: ArraySlice<Fighter> { mine.prefix(2) }
-    var theirActive: ArraySlice<Fighter> { theirs.prefix(2) }
+    var myActive: ArraySlice<Fighter> { mine.prefix(activeCount) }
+    var theirActive: ArraySlice<Fighter> { theirs.prefix(activeCount) }
+
+    /// Whether a side has anything left to send out.
+    func isOut(mine side: Bool) -> Bool {
+        (side ? mine : theirs).allSatisfy(\.fainted)
+    }
+
+    /// Bring the next healthy Pokémon forward into an empty slot. Replacing a
+    /// fainted Pokémon is not a turn, it happens at the end of one.
+    mutating func fillGaps() {
+        func refill(_ team: inout [Fighter]) {
+            for slot in 0..<min(activeCount, team.count) where team[slot].fainted {
+                guard let next = (activeCount..<team.count).first(where: { !team[$0].fainted })
+                else { continue }
+                team.swapAt(slot, next)
+                team[slot].justArrived = true
+            }
+        }
+        refill(&mine)
+        refill(&theirs)
+    }
 }
 
 @MainActor
@@ -119,9 +141,13 @@ enum Choice: Hashable {
     case attack(move: Int, target: Int)
     case protectSelf(move: Int)
     case swap(to: Int)
+    /// Nobody is standing in the second slot. Singles is this every turn, and
+    /// doubles becomes it once a side is down to its last Pokémon.
+    case pass
 
     var isProtect: Bool { if case .protectSelf = self { return true }; return false }
     var isSwap: Bool { if case .swap = self { return true }; return false }
+    var isPass: Bool { if case .pass = self { return true }; return false }
 }
 
 /// Both actives choosing at once, which is the unit a turn is actually played in.
@@ -176,6 +202,7 @@ enum TurnModel {
 
     private static func priority(of choice: Choice, for fighter: Fighter) -> Int {
         switch choice {
+        case .pass: return -99
         case .swap: return 6
         case .protectSelf(let index), .attack(let index, _):
             return fighter.moves.indices.contains(index) ? fighter.moves[index].priority : 0
@@ -287,6 +314,8 @@ enum TurnModel {
         guard !actor.fainted, !actor.flinched else { return }
 
         switch choice {
+        case .pass:
+            return
         case .swap:
             return
         case .protectSelf:

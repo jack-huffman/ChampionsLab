@@ -42,6 +42,7 @@ enum Section: String, CaseIterable, Identifiable, Hashable {
     case builder = "Builder"
     case dex = "Pokédex"
     case speed = "Speed Tiers"
+    case battle = "Battle Sim"
     case moves = "Moves"
     case items = "Items"
     case abilities = "Abilities"
@@ -58,6 +59,7 @@ enum Section: String, CaseIterable, Identifiable, Hashable {
         case .builder:    return "square.stack.3d.up.fill"
         case .dex:        return "book.closed.fill"
         case .speed:      return "speedometer"
+        case .battle:     return "gamecontroller.fill"
         case .moves:      return "bolt.fill"
         case .items:      return "bag.fill"
         case .abilities:  return "wand.and.stars"
@@ -70,7 +72,8 @@ enum Section: String, CaseIterable, Identifiable, Hashable {
     var group: String {
         switch self {
         case .overview, .meta, .forecast:       return "Regulation"
-        case .teams, .builder, .calculator:     return "Build"
+        case .teams, .builder, .calculator,
+             .battle:                           return "Build"
         case .dex, .moves, .items, .abilities,
              .speed:                            return "Database"
         }
@@ -116,6 +119,7 @@ struct RootView: View {
                 case .builder:    BuilderView()
                 case .dex:        DexView()
                 case .speed:      SpeedTiersView()
+                case .battle:     BattleView()
                 case .moves:      MoveDexView()
                 case .items:      ItemDexView()
                 case .abilities:  AbilityDexView()

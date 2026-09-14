@@ -45,7 +45,8 @@ struct TurnGame {
     func choices(forMine mine: Bool, slot: Int) -> [Choice] {
         let team = mine ? board.mine : board.theirs
         let foes = mine ? board.theirs : board.mine
-        guard team.indices.contains(slot), !team[slot].fainted else { return [] }
+        guard slot < board.activeCount,
+              team.indices.contains(slot), !team[slot].fainted else { return [] }
         let fighter = team[slot]
 
         // Kept apart by kind rather than in one list, because the list has to
@@ -142,10 +143,10 @@ struct TurnGame {
     func plays(forMine mine: Bool) -> [Play] {
         let left = choices(forMine: mine, slot: 0)
         let right = choices(forMine: mine, slot: 1)
-        // A fainted or absent second slot still needs one entry so the matrix
-        // has a row.
-        let leftOptions = left.isEmpty ? [Choice.attack(move: 0, target: 0)] : left
-        let rightOptions = right.isEmpty ? [Choice.attack(move: 0, target: 0)] : right
+        // An empty slot still needs one entry so the matrix has a row, and in
+        // singles the second slot is empty every turn.
+        let leftOptions = left.isEmpty ? [Choice.pass] : left
+        let rightOptions = right.isEmpty ? [Choice.pass] : right
         var out: [Play] = []
         for a in leftOptions {
             for b in rightOptions {
@@ -408,6 +409,8 @@ struct TurnGame {
         case .swap(let bench):
             guard team.indices.contains(bench) else { return "switch out" }
             return "switch to \(team[bench].build.form.formLabel)"
+        case .pass:
+            return ""
         }
     }
 
@@ -415,9 +418,11 @@ struct TurnGame {
         let team = mine ? board.mine : board.theirs
         let foes = mine ? board.theirs : board.mine
         guard team.count >= 2 else { return "—" }
-        let front = Array(foes.prefix(2))
-        return describe(play.left, fighter: team[0], foes: front, team: team)
-            + " and " + describe(play.right, fighter: team[1], foes: front, team: team)
+        let front = Array(foes.prefix(board.activeCount))
+        let first = describe(play.left, fighter: team[0], foes: front, team: team)
+        guard board.activeCount > 1, team.count > 1, !play.right.isPass else { return first }
+        let second = describe(play.right, fighter: team[1], foes: front, team: team)
+        return second.isEmpty ? first : first + " and " + second
     }
 
     /// The turn in the sentences a player would use.

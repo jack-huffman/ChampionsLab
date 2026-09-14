@@ -130,6 +130,70 @@ let fieldMoveNeeds: [String: Set<String>] = [
               worst < frame, String(format: "%.0f ms", worst * 1000))
     }
 
+    // -- searching the game rather than the turn ----------------------------
+    //
+    // Iterative deepening against a clock, over a belief about what the other
+    // side is hiding rather than over a position nobody can actually see.
+    print("\n== the search ==")
+    if let meta = store.data.metaTeams.first(where: { $0.name == "Big Six" }),
+       let mine = store.teams.first(where: { $0.slots.count >= 4 }) {
+        let board = Board(mine: mine, theirs: store.opponentTeam(meta), store: store)
+        var reached: [Int] = []
+        for budget in [0.15, 0.5] {
+            var engine = BattleEngine(store: store, budget: budget)
+            let started = Date()
+            let result = engine.think(board)
+            let took = Date().timeIntervalSince(started)
+            reached.append(result.depth)
+            print(String(format: "  %.2fs budget -> depth %d, %d positions, value %+.3f (took %.2fs)",
+                         budget, result.depth, result.nodes, result.value, took))
+            check("it respects the clock it was given",
+                  took < budget + 1.2, String(format: "%.2fs for a %.2fs budget", took, budget))
+            check("it returns a line it actually rated",
+                  result.mix.count == result.plays.count && !result.plays.isEmpty)
+            check("the mix is a distribution",
+                  abs(result.mix.reduce(0, +) - 1) < 0.01, "\(result.mix.reduce(0, +))")
+        }
+        check("more time reaches at least as deep", reached.last! >= reached.first!,
+              "\(reached)")
+
+        // The belief: what it cannot see, and where the guess comes from.
+        var engine = BattleEngine(store: store, budget: 0.3)
+        let worlds = engine.imagine(board, belief: .init())
+        print("  worlds imagined: \(worlds.count)")
+        check("it imagines more than one version of what they are holding",
+              worlds.count >= 1)
+        check("the likeliest world comes first",
+              zip(worlds, worlds.dropFirst()).allSatisfy { $0.chance >= $1.chance })
+        // A Mega has no item choice, so there is nothing to guess about it.
+        for fighter in board.theirs where fighter.build.form.isMega {
+            let odds = engine.itemOdds(for: fighter.build.form)
+            check("a Mega's stone is not treated as unknown",
+                  odds.count == 1 && odds[0].chance == 1, fighter.build.form.formLabel)
+            break
+        }
+        // And an item that has been seen stops being a guess.
+        var known = BattleEngine.Belief()
+        known.revealedItems[board.theirs[0].build.form.id] = "Life Orb"
+        known.revealedItems[board.theirs[1].build.form.id] = "Sitrus Berry"
+        check("a revealed item collapses the guessing",
+              engine.imagine(board, belief: known).count
+                <= engine.imagine(board, belief: .init()).count)
+
+        // Singles is the same machinery with one slot a side.
+        var solo = board
+        solo.activeCount = 1
+        var soloGame = TurnGame(board: solo, store: store)
+        soloGame.width = 6
+        let soloPlays = soloGame.plays(forMine: true)
+        print("  singles: \(soloPlays.count) lines rather than \(TurnGame(board: board, store: store).plays(forMine: true).count)")
+        check("singles gives one Pokemon its choices and nobody else one",
+              soloPlays.allSatisfy { $0.right.isPass }, "\(soloPlays.count)")
+        check("and it still resolves a turn",
+              !TurnModel.resolve(solo, mine: soloPlays[0], theirs: soloPlays[0],
+                                 store: store).mine.isEmpty)
+    }
+
     // -- what the refiner will and will not suggest -------------------------
     //
     // The move ranker prices a move on its own, which is wrong twice over: it
