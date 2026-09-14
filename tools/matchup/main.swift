@@ -1105,6 +1105,91 @@ Ability: Regenerator
               "\(after.mine[0].hp)/\(orbBoard.mine[0].maxHP)")
     }
 
+    // -- abilities that refuse priority outright -----------------------------
+    //
+    // Armor Tail and Queenly Majesty stop anything with increased priority
+    // reaching that Pokemon or its partner. It is why Farigiraf is on Trick
+    // Room teams: it is what stops a Fake Out taking the setup turn away.
+    print("\n== priority refused ==")
+    let guarded2 = fighters([("Farigiraf", "Mental Herb", ["Trick Room", "Protect"]),
+                             ("Incineroar", "Sitrus Berry", ["Flare Blitz", "Protect"]),
+                             ("Garchomp", "Life Orb", ["Earthquake", "Protect"])])
+    let fakers = fighters([("Rillaboom", "Life Orb", ["Fake Out", "Wood Hammer", "Protect"]),
+                           ("Incineroar", "Sitrus Berry", ["Fake Out", "Flare Blitz", "Protect"]),
+                           ("Kingambit", "Chople Berry", ["Iron Head", "Protect"])])
+    var tailed = Board(mine: guarded2, theirs: fakers, store: store,
+                       field: Field(isDoubles: true), alreadyEvolved: false)
+    tailed.mine[0].build.ability = "Armor Tail"
+    print("  your lead is \(tailed.mine[0].build.form.formLabel) with "
+          + "\(tailed.mine[0].build.ability)")
+    let refused = TurnModel.resolve(
+        tailed,
+        mine: Play(left: .attack(move: at(tailed.mine[0], "Protect"), target: 0),
+                   right: .attack(move: at(tailed.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(tailed.theirs[0], "Fake Out"), target: 0),
+                     right: .attack(move: at(tailed.theirs[1], "Fake Out"), target: 1)),
+        store: store)
+    for line in refused.story.prefix(6) { print("    \(line)") }
+    check("a Fake Out aimed at the Armor Tail is refused",
+          refused.story.contains { $0.contains("refused it") })
+    check("and nothing on that side flinched",
+          !refused.mine[0].flinched && !refused.mine[1].flinched)
+
+    // It must not refuse a priority move aimed at its own side.
+    let ownSide = TurnModel.resolve(
+        tailed,
+        mine: Play(left: .attack(move: at(tailed.mine[0], "Protect"), target: 0),
+                   right: .attack(move: at(tailed.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(tailed.theirs[0], "Protect"), target: 0),
+                     right: .attack(move: at(tailed.theirs[1], "Protect"), target: 0)),
+        store: store)
+    check("but Protect, which is priority aimed at itself, still works",
+          ownSide.story.contains { $0.contains("braced") })
+
+    // And the search stops offering a move that cannot be used.
+    var tailedGame = TurnGame(board: tailed, store: store)
+    tailedGame.width = 8
+    let theirOptions = tailedGame.choices(forMine: false, slot: 0)
+    let stillOffered = theirOptions.contains { choice in
+        if case .attack(let index, _) = choice,
+           tailed.theirs[0].moves.indices.contains(index) {
+            return tailed.theirs[0].moves[index].name == "Fake Out"
+        }
+        return false
+    }
+    check("the search stops offering Fake Out into it", !stillOffered)
+
+    // -- who comes in ---------------------------------------------------------
+    //
+    // The game asks, and it matters: whoever arrives takes whatever lands next
+    // turn without acting first. The battle fills the opponent's gaps and
+    // leaves yours for you.
+    print("\n== sending one in ==")
+    var wounded = Board(mine: supporters, theirs: aggressors, store: store,
+                        field: Field(isDoubles: true), alreadyEvolved: false)
+    wounded.mine[0].hp = 0
+    wounded.theirs[0].hp = 0
+    var asked = wounded
+    asked.fillGaps(mine: false, theirs: true)
+    check("their side fills itself", !asked.theirs[0].fainted,
+          asked.theirs[0].build.form.formLabel)
+    check("yours is left standing empty, to be chosen", asked.mine[0].fainted)
+    check("and it says which slot is waiting", asked.gapsOfMine == [0],
+          "\(asked.gapsOfMine)")
+    let bench = (asked.activeCount..<asked.mine.count).first { !asked.mine[$0].fainted }!
+    let comingIn = asked.mine[bench].build.form.formLabel
+    asked.sendIn(bench, to: 0)
+    check("sending one in puts that one in", asked.mine[0].build.form.formLabel == comingIn,
+          asked.mine[0].build.form.formLabel)
+    check("it arrives having not acted yet", asked.mine[0].justArrived)
+    check("and there is nothing left waiting", asked.gapsOfMine.isEmpty)
+
+    // A search cannot stop to ask, so it still fills both.
+    var searching = wounded
+    searching.fillGaps()
+    check("a search fills both sides so it can keep going",
+          !searching.mine[0].fainted && !searching.theirs[0].fainted)
+
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)
 }

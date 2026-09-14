@@ -48,6 +48,18 @@ struct TurnGame {
         guard slot < board.activeCount,
               team.indices.contains(slot), !team[slot].fainted else { return [] }
         let fighter = team[slot]
+        // Nothing with priority gets past an Armor Tail, so there is no point
+        // the search spending one of its few choices on it.
+        let priorityRefused = (0..<Swift.min(board.activeCount, foes.count)).contains {
+            !foes[$0].fainted
+                && TurnModel.priorityBlockers.contains(foes[$0].build.ability)
+        }
+        func allowed(_ move: Move) -> Bool {
+            if move.drawbacks.firstTurnOnly, !fighter.justArrived { return false }
+            if priorityRefused, move.priority > 0,
+               move.aim == .foe || move.aim == .spread { return false }
+            return true
+        }
 
         // Kept apart by kind rather than in one list, because the list has to
         // be trimmed and trimming it in append order threw away Protect and
@@ -63,8 +75,7 @@ struct TurnGame {
         for target in 0..<min(2, foes.count) where !foes[target].fainted {
             var best: (index: Int, damage: Int)?
             for (index, move) in fighter.moves.enumerated()
-            where move.isDamaging && !move.isSpread
-                && (!move.drawbacks.firstTurnOnly || fighter.justArrived) {
+            where move.isDamaging && !move.isSpread && allowed(move) {
                 let result = DamageCalc.calculate(attacker: fighter.build,
                                                   defender: foes[target].build,
                                                   move: move, field: board.field)
@@ -79,8 +90,7 @@ struct TurnGame {
         // and it is the move that covers a switch, since whatever comes in is
         // standing in it.
         if let index = fighter.moves.firstIndex(where: {
-            $0.isDamaging && $0.isSpread
-                && (!$0.drawbacks.firstTurnOnly || fighter.justArrived) }) {
+            $0.isDamaging && $0.isSpread && allowed($0) }) {
             spread.append(.attack(move: index, target: 0))
         }
         // Protect, unless it was used last turn, when it mostly fails.
@@ -96,7 +106,7 @@ struct TurnGame {
             if already == 0 { setup.append(.attack(move: control, target: 0)) }
         }
         // Fake Out, which only exists on the turn it comes in.
-        if fighter.justArrived,
+        if fighter.justArrived, !priorityRefused,
            let fake = fighter.moves.firstIndex(where: { $0.name == "Fake Out" }),
            !attacks.contains(where: { if case .attack(let m, _) = $0 { return m == fake }
                                       return false }) {

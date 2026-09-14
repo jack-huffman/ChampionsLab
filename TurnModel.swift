@@ -160,7 +160,10 @@ struct Board {
 
     /// Bring the next healthy Pokémon forward into an empty slot. Replacing a
     /// fainted Pokémon is not a turn, it happens at the end of one.
-    mutating func fillGaps() {
+    /// `sides` says whose gaps to fill. A battle asks the player who comes in
+    /// rather than choosing for them, so the interface fills only the opponent
+    /// and then asks; a search fills both, because it has to keep going.
+    mutating func fillGaps(mine fillMine: Bool = true, theirs fillTheirs: Bool = true) {
         func refill(_ team: inout [Fighter]) {
             for slot in 0..<min(activeCount, team.count) where team[slot].fainted {
                 guard let next = (activeCount..<team.count).first(where: { !team[$0].fainted })
@@ -169,8 +172,24 @@ struct Board {
                 team[slot].justArrived = true
             }
         }
-        refill(&mine)
-        refill(&theirs)
+        if fillMine { refill(&mine) }
+        if fillTheirs { refill(&theirs) }
+    }
+
+    /// Slots on my side standing empty with somebody able to fill them.
+    var gapsOfMine: [Int] {
+        (0..<min(activeCount, mine.count)).filter { slot in
+            mine[slot].fainted
+                && (activeCount..<mine.count).contains { !mine[$0].fainted }
+        }
+    }
+
+    /// Bring one specific Pokémon in, which is the choice the game gives you.
+    mutating func sendIn(_ bench: Int, to slot: Int) {
+        guard mine.indices.contains(bench), mine.indices.contains(slot),
+              !mine[bench].fainted, mine[slot].fainted else { return }
+        mine.swapAt(slot, bench)
+        mine[slot].justArrived = true
     }
 }
 
@@ -277,6 +296,9 @@ struct Play: Hashable {
 
 @MainActor
 enum TurnModel {
+
+    /// Abilities that stop priority moves reaching their side at all.
+    static let priorityBlockers: Set<String> = ["Armor Tail", "Queenly Majesty", "Dazzling"]
 
     /// What a board is worth to the side that owns `mine`.
     ///
@@ -658,6 +680,22 @@ enum TurnModel {
                 board.note("Wide Guard blocked it.")
                 return
             }
+            // Armor Tail and Queenly Majesty refuse priority outright: nothing
+            // with increased priority can be aimed at that Pokémon or its
+            // partner. It is the reason Farigiraf is on Trick Room teams — it
+            // is what stops a Fake Out taking the setup turn away.
+            if move.priority > 0, move.aim == .foe || move.aim == .spread {
+                let defenders = byMine ? board.theirs : board.mine
+                if let refused = (0..<Swift.min(board.activeCount, defenders.count)).first(where: {
+                    !defenders[$0].fainted
+                        && TurnModel.priorityBlockers.contains(defenders[$0].build.ability) }) {
+                    board.note("\(defenders[refused].build.form.formLabel)'s "
+                               + "\(defenders[refused].build.ability) refused it. "
+                               + "Nothing with priority gets through.")
+                    return
+                }
+            }
+
             var aimed = move.isSpread ? [0, 1] : [target]
             if !move.isSpread {
                 let defenders = byMine ? board.theirs : board.mine

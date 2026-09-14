@@ -61,6 +61,8 @@ struct BattleView: View {
     @State private var replayBoard: Board?
     /// A move chosen and waiting for a target.
     @State private var aiming: (slot: Int, move: Int)?
+    /// Slots of mine standing empty, waiting for somebody to be sent in.
+    @State private var sending: [Int] = []
 
     /// Seeded state, so tools/snapshot.sh can render a screen nobody has
     /// clicked into. Done through init rather than onAppear, which an
@@ -408,7 +410,7 @@ struct BattleView: View {
         stage = .battle
         turn = 1
         finished = nil
-        history = []; grade = nil; replay = []; at = 0; replayBoard = nil
+        history = []; grade = nil; replay = []; at = 0; replayBoard = nil; sending = []
         leftPick = nil; rightPick = nil; megaSlot = nil; aiming = nil
         log = ["Both sides send out their leads. Neither knows what the other is holding, nor which four came."]
         think()
@@ -428,7 +430,8 @@ struct BattleView: View {
             }
             arena(board)
             if !replay.isEmpty { stepper() }
-            if finished == nil && replay.isEmpty { choices(board) }
+            if replay.isEmpty, !sending.isEmpty, finished == nil { replacement(board) }
+            if finished == nil && replay.isEmpty && sending.isEmpty { choices(board) }
             analysisPanels()
             if !log.isEmpty {
                 Card {
@@ -760,6 +763,119 @@ struct BattleView: View {
         guard let best = engine.itemOdds(for: form).first else { return "item unknown" }
         if best.chance >= 0.99 { return best.item }
         return String(format: "likely %@ (%.0f%%)", best.item, best.chance * 100)
+    }
+
+    // MARK: Sending the next one in
+
+    /// Who comes in, with a reason rather than a shrug.
+    ///
+    /// The game asks this and it matters: whoever arrives takes whatever lands
+    /// next turn without acting first, so it is a choice between what answers
+    /// what is out and what survives arriving. Both halves are worked out and
+    /// the better of them named, but the pick stays yours.
+    private func replacement(_ board: Board) -> some View {
+        let slot = sending.first ?? 0
+        let options = (board.activeCount..<board.mine.count)
+            .filter { !board.mine[$0].fainted }
+            .map { (index: $0, reading: sendInReading(board, bench: $0)) }
+            .sorted { $0.reading.score > $1.reading.score }
+        return Card {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionHeader(title: "Send one in",
+                              subtitle: "It arrives without acting, so it takes whatever lands next turn")
+                if let best = options.first {
+                    Text("Suggested: \(board.mine[best.index].build.form.formLabel) — "
+                         + best.reading.why)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.accent)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 8)],
+                          alignment: .leading, spacing: 8) {
+                    ForEach(Array(options.enumerated()), id: \.offset) { rank, option in
+                        Button {
+                            var next = board
+                            next.sendIn(option.index, to: slot)
+                            self.board = next
+                            sending = next.gapsOfMine
+                            if sending.isEmpty { think() }
+                        } label: {
+                            HStack(spacing: 9) {
+                                SpriteImage(form: board.mine[option.index].build.form, side: 42)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 5) {
+                                        Text(board.mine[option.index].build.form.formLabel)
+                                            .font(.system(size: 12, weight: .medium))
+                                        if rank == 0 {
+                                            Text("BEST")
+                                                .font(.system(size: 8, weight: .bold)).kerning(0.4)
+                                                .padding(.horizontal, 4).padding(.vertical, 1)
+                                                .background(Palette.accent.opacity(0.2))
+                                                .foregroundStyle(Palette.accent)
+                                                .clipShape(Capsule())
+                                        }
+                                    }
+                                    Text(option.reading.why)
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, 9).padding(.vertical, 7)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(rank == 0 ? Palette.accent.opacity(0.12) : Palette.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(
+                                rank == 0 ? Palette.accent.opacity(0.5) : Palette.hairline,
+                                lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    /// How a benched Pokémon would do coming in, and why.
+    private func sendInReading(_ board: Board, bench: Int) -> (score: Double, why: String) {
+        let candidate = board.mine[bench]
+        var worstIn = 0.0, bestOut = 0.0
+        var worstFrom = "", bestInto = ""
+        for foe in 0..<min(board.activeCount, board.theirs.count)
+        where !board.theirs[foe].fainted {
+            let them = board.theirs[foe]
+            // Their item is unknown, so it is left off, as everywhere else here.
+            var attacker = them.build
+            attacker.item = ""
+            for move in them.moves where move.isDamaging {
+                let result = DamageCalc.calculate(attacker: attacker, defender: candidate.build,
+                                                  move: move, field: board.field)
+                let share = Double(result.maxDamage) / Double(max(1, candidate.maxHP))
+                if share > worstIn { worstIn = share; worstFrom = them.build.form.formLabel }
+            }
+            var defender = them.build
+            defender.item = ""
+            for move in candidate.moves where move.isDamaging {
+                let result = DamageCalc.calculate(attacker: candidate.build, defender: defender,
+                                                  move: move, field: board.field)
+                let share = Double(result.maxDamage) / Double(max(1, them.maxHP))
+                if share > bestOut { bestOut = share; bestInto = them.build.form.formLabel }
+            }
+        }
+        // Surviving the way in counts for more than hitting hard, because it
+        // does not get to act on the turn it arrives.
+        let score = min(1, bestOut) - 1.4 * min(1, worstIn)
+        var why: String
+        if worstIn >= 1 { why = "\(worstFrom) knocks it out as it lands" }
+        else if worstIn > 0 {
+            why = "takes \(Int((worstIn * 100).rounded()))% from \(worstFrom) coming in"
+        } else { why = "nothing out there hurts it" }
+        if bestOut >= 1 { why += ", and removes \(bestInto) in one." }
+        else if bestOut > 0 {
+            why += ", and hits \(bestInto) for \(Int((bestOut * 100).rounded()))%."
+        } else { why += ", and cannot hurt either of them." }
+        return (score, why)
     }
 
     // MARK: Choosing
@@ -1292,7 +1408,9 @@ struct BattleView: View {
                                      store: store, rolling: true)
         let told = next.story
         let recorded = next
-        next.fillGaps()
+        // Theirs fills itself. Mine is a decision, and one of the sharper ones
+        // in the game, so it is asked rather than assumed.
+        next.fillGaps(mine: false, theirs: true)
 
         log.append("Turn \(turn) — you \(game.describe(mine, mine: true)); "
                    + "they \(game.describe(theirPlay, mine: false)).")
@@ -1309,6 +1427,7 @@ struct BattleView: View {
         replay = told.isEmpty ? [] : recorded.steps
         replayBoard = recorded
         at = 0
+        sending = next.gapsOfMine
         leftPick = nil; rightPick = nil; megaSlot = nil; aiming = nil
         struck = hitMine; struckTheirs = hitTheirs
         Task { @MainActor in
@@ -1329,7 +1448,7 @@ struct BattleView: View {
         finished = nil
         leftPick = nil; rightPick = nil; megaSlot = nil; aiming = nil
         struck = []; struckTheirs = []
-        grade = nil; replay = []; at = 0; replayBoard = nil
+        grade = nil; replay = []; at = 0; replayBoard = nil; sending = []
         think()
     }
 }
