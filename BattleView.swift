@@ -27,6 +27,14 @@ struct BattleView: View {
     @State private var opponentID = ""
     @State private var opponentSearch = ""
     @State private var startHover = false
+    /// The start of the game, being shown: the flash, the leads coming out,
+    /// their abilities going off. Nil once orders can be given.
+    @State private var opening = false
+    @State private var startFlash = false
+    /// Which fighters have come out so far, as "m0", "t1".
+    @State private var shown: Set<String> = []
+    /// The line being called out over the field right now.
+    @State private var callout: String?
     /// Replacements chosen so far this turn, sent in together once every gap
     /// has one, in Speed order alongside theirs.
     @State private var chosenSends: [(slot: Int, bench: Int)] = []
@@ -994,16 +1002,63 @@ struct BattleView: View {
         // Their four is chosen against your six the way you chose yours, and
         // their back two go on the board as guesses: the game knows the truth
         // so it can be played, and nothing that advises you gets to read it.
-        board = Board.opening(mine: mine, bringing: bringing, theirs: theirs,
-                              store: store, singles: singles)
+        var start = Board.opening(mine: mine, bringing: bringing, theirs: theirs,
+                                  store: store, singles: singles, sendOut: false)
         stage = .battle
         turn = 1
         finished = nil
         history = []; grade = nil; replay = []; at = 0; replayBoard = nil; sending = []
         leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
         chosenSends = []
-        log = [BattleView.opener] + (board?.story ?? [])
-        think()
+        log = [BattleView.opener]
+        if snapshotMode {
+            start.sendOutLeads()
+            board = start
+            log += start.story
+            think()
+            return
+        }
+        // The start of the game, shown as it happens: the flash, the leads
+        // coming out one by one, then their abilities in Speed order — the
+        // slower weather landing second and staying, an Intimidate cutting
+        // what is already out. Orders wait until it is done.
+        board = start
+        opening = true
+        shown = []
+        callout = nil
+        startFlash = true
+        let order = start.leadOrder
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_100_000_000)
+            withAnimation(.easeOut(duration: 0.35)) { startFlash = false }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            // Yours and theirs alternate coming out, the way the game shows it.
+            let arrivals = (0..<start.activeCount).flatMap { slot in
+                ["m\(slot)", "t\(slot)"]
+            }
+            for key in arrivals {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.62)) { _ = shown.insert(key) }
+                try? await Task.sleep(nanoseconds: 380_000_000)
+            }
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            var running = start
+            for entry in order {
+                let before = running.story.count
+                running.landed(mine: entry.mine, slot: entry.slot)
+                let said = Array(running.story.dropFirst(before))
+                guard !said.isEmpty else { continue }
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    board = running
+                    callout = said.joined(separator: " ")
+                }
+                log += said
+                try? await Task.sleep(nanoseconds: 1_300_000_000)
+            }
+            withAnimation(.easeOut(duration: 0.3)) { callout = nil }
+            board = running
+            opening = false
+            think()
+        }
     }
 
     // MARK: The field
@@ -1029,7 +1084,8 @@ struct BattleView: View {
                 arena(board).frame(height: half)
                 HStack(alignment: .top, spacing: gap) {
                     Group {
-                        if !replay.isEmpty { stepper() }
+                        if opening { openingCard }
+                        else if !replay.isEmpty { stepper() }
                         else if !sending.isEmpty, finished == nil { replacement(board) }
                         else if finished == nil { choices(board) }
                         else { afterGame }
@@ -1043,6 +1099,25 @@ struct BattleView: View {
             }
         }
         .padding(14)
+    }
+
+    /// While the leads come out and their abilities go off.
+    private var openingCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionHeader(title: "Battle start",
+                              subtitle: "Both sides send out their leads. Abilities go off in Speed order — the slower weather is the one that stays.")
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(callout ?? (shown.isEmpty ? "Go!" : "Sending out…"))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
     }
 
     /// The game is over; what is left to do is look back or go again.
@@ -1230,18 +1305,48 @@ struct BattleView: View {
 
                 // Yours: first up and left, second diagonally down and in.
                 ForEach(0..<min(board.activeCount, board.mine.count), id: \.self) { slot in
+                    let out = !opening || shown.contains("m\(slot)")
                     fighterCard(board.mine[slot], mine: true, slot: slot, field: board.field)
+                        .opacity(out ? 1 : 0)
+                        .scaleEffect(out ? 1 : 0.4)
                         .position(x: w * (singlesGame ? 0.26 : (slot == 0 ? 0.17 : 0.35)),
                                   y: h * (singlesGame ? 0.50 : (slot == 0 ? 0.40 : 0.64)))
                 }
                 // Theirs: first up and left of their side, second down and right.
                 ForEach(0..<min(board.activeCount, board.theirs.count), id: \.self) { slot in
+                    let out = !opening || shown.contains("t\(slot)")
                     fighterCard(board.theirs[slot], mine: false, slot: slot, field: board.field)
+                        .opacity(out ? 1 : 0)
+                        .scaleEffect(out ? 1 : 0.4)
                         .position(x: w * (singlesGame ? 0.74 : (slot == 0 ? 0.65 : 0.83)),
                                   y: h * (singlesGame ? 0.50 : (slot == 0 ? 0.36 : 0.60)))
                 }
+                if startFlash {
+                    Text("BATTLE START")
+                        .font(.system(size: 44, weight: .black)).italic().kerning(2)
+                        .foregroundStyle(.white)
+                        .shadow(color: tint.opacity(0.9), radius: 24)
+                        .shadow(color: .black.opacity(0.7), radius: 6, y: 3)
+                        .transition(.scale(scale: 1.6).combined(with: .opacity))
+                        .position(x: w / 2, y: h / 2)
+                }
             }
-            .overlay(alignment: .top) { fieldState(board).padding(.top, 10) }
+            .overlay(alignment: .top) {
+                VStack(spacing: 8) {
+                    fieldState(board)
+                    if let callout {
+                        Text(callout)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14).padding(.vertical, 7)
+                            .background(Capsule().fill(tint.opacity(0.9)))
+                            .shadow(color: tint.opacity(0.6), radius: 12, y: 4)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .id(callout)
+                    }
+                }
+                .padding(.top, 10)
+            }
             .overlay(alignment: .topLeading) {
                 Text("YOURS").font(.system(size: 9, weight: .bold)).kerning(0.6)
                     .foregroundStyle(.tertiary).padding(14)

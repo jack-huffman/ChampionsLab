@@ -310,6 +310,13 @@ struct Board {
     /// abilities go off in Speed order, which is what decides whose weather
     /// the first turn is played in.
     mutating func sendOutLeads() {
+        for entry in leadOrder { landed(mine: entry.mine, slot: entry.slot) }
+    }
+
+    /// The order the leads' abilities go off in: fastest first, a tie to you,
+    /// the same way every time. The battle screen walks this one at a time
+    /// so the start of the game can be watched rather than read.
+    var leadOrder: [(mine: Bool, slot: Int)] {
         var order: [(mine: Bool, slot: Int, speed: Int)] = []
         for slot in 0..<min(activeCount, mine.count) where !mine[slot].fainted {
             order.append((true, slot, mine[slot].build.speed(in: field)))
@@ -317,9 +324,8 @@ struct Board {
         for slot in 0..<min(activeCount, theirs.count) where !theirs[slot].fainted {
             order.append((false, slot, theirs[slot].build.speed(in: field)))
         }
-        // Fastest first; a tie goes to you, the same way every time.
         order.sort { $0.speed > $1.speed || ($0.speed == $1.speed && $0.mine && !$1.mine) }
-        for entry in order { landed(mine: entry.mine, slot: entry.slot) }
+        return order.map { ($0.mine, $0.slot) }
     }
 
     /// Their pick for a gap: the benched one that takes least from whatever
@@ -466,8 +472,10 @@ extension Board {
     /// weighed by how much it costs you — which is how a good player chooses,
     /// so it is how the guess is made — and the likeliest pairs are what the
     /// search plays against until one of them walks on.
+    /// `sendOut` false leaves the leads' abilities for the caller to fire, one
+    /// at a time, which is how the battle screen shows them happening.
     static func opening(mine myTeam: Team, bringing: [String], theirs theirTeam: Team,
-                        store: Store, singles: Bool) -> Board {
+                        store: Store, singles: Bool, sendOut: Bool = true) -> Board {
         let bring = singles ? 3 : 4
         let leadCount = singles ? 1 : 2
         let field = Field(isDoubles: !singles)
@@ -490,7 +498,7 @@ extension Board {
         var board = Board(mine: brought, theirs: theirBrought, store: store,
                           field: field, alreadyEvolved: false)
         board.activeCount = leadCount
-        board.sendOutLeads()
+        if sendOut { board.sendOutLeads() }
 
         // Every Pokémon on their six as a fighter, so a guess can be played.
         let whole = Board(mine: brought, theirs: theirTeam, store: store,
