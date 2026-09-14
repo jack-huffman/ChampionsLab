@@ -149,34 +149,46 @@ struct Board {
     /// search plays against these instead. Empty when nothing is hidden — a
     /// bare analysis board, or a team of exactly four.
     var theirBenchGuesses: [BenchGuess] = []
+    /// And the same from their chair: what they expect *your* back two to be,
+    /// worked out from your six and the two you led with. The engine gives
+    /// them their orders out of this, so they cannot see what you kept back
+    /// any more than you can see what they did.
+    var myBenchGuesses: [BenchGuess] = []
 
-    /// Benched slots of theirs that have not shown themselves yet.
-    var theirUnseenBench: [Int] {
-        (activeCount..<theirs.count).filter { !theirs[$0].seen && !theirs[$0].fainted }
+    /// Benched slots that have not shown themselves yet.
+    func unseenBench(mine side: Bool) -> [Int] {
+        let team = side ? mine : theirs
+        return (activeCount..<team.count).filter { !team[$0].seen && !team[$0].fainted }
     }
+    var theirUnseenBench: [Int] { unseenBench(mine: false) }
+    var myUnseenBench: [Int] { unseenBench(mine: true) }
 
     /// The guesses still possible given what has since been seen: one of the
     /// pair walking on rules out every pair it was not in.
-    var liveBenchGuesses: [BenchGuess] {
+    func liveGuesses(mine side: Bool) -> [BenchGuess] {
+        let all = side ? myBenchGuesses : theirBenchGuesses
+        let team = side ? mine : theirs
         // Only what was ever in doubt counts as evidence: a lead that fainted
         // and slid to the bench has been seen, but it was never a guess.
-        let pool = Set(theirBenchGuesses.flatMap { $0.fighters.map(\.build.form.id) })
-        let shown = Set(theirs.filter { $0.seen && pool.contains($0.build.form.id) }
+        let pool = Set(all.flatMap { $0.fighters.map(\.build.form.id) })
+        let shown = Set(team.filter { $0.seen && pool.contains($0.build.form.id) }
                             .map(\.build.form.id))
-        let consistent = theirBenchGuesses.filter { guess in
+        let consistent = all.filter { guess in
             shown.isSubset(of: Set(guess.fighters.map(\.build.form.id)))
         }
         let total = consistent.reduce(0) { $0 + $1.chance }
         guard total > 0 else { return [] }
         return consistent.map { BenchGuess(fighters: $0.fighters, chance: $0.chance / total) }
     }
+    var liveBenchGuesses: [BenchGuess] { liveGuesses(mine: false) }
 
-    /// Each Pokémon that might be in their back, with the chance it is there.
-    var theirBenchCandidates: [(fighter: Fighter, chance: Double)] {
-        let shown = Set(theirs.filter(\.seen).map(\.build.form.id))
+    /// Each Pokémon that might be in a back, with the chance it is there.
+    func benchCandidates(mine side: Bool) -> [(fighter: Fighter, chance: Double)] {
+        let team = side ? mine : theirs
+        let shown = Set(team.filter(\.seen).map(\.build.form.id))
         var chance: [String: Double] = [:]
         var fighter: [String: Fighter] = [:]
-        for guess in liveBenchGuesses {
+        for guess in liveGuesses(mine: side) {
             for member in guess.fighters where !shown.contains(member.build.form.id) {
                 chance[member.build.form.id, default: 0] += guess.chance
                 fighter[member.build.form.id] = member
@@ -185,9 +197,29 @@ struct Board {
         return chance.keys.compactMap { id in fighter[id].map { ($0, chance[id]!) } }
             .sorted { $0.1 > $1.1 || ($0.1 == $1.1 && $0.0.build.form.formLabel < $1.0.build.form.formLabel) }
     }
+    var theirBenchCandidates: [(fighter: Fighter, chance: Double)] { benchCandidates(mine: false) }
+    var myBenchCandidates: [(fighter: Fighter, chance: Double)] { benchCandidates(mine: true) }
 
-    /// Whether anything on their side is still a guess.
-    var hidesTheirBench: Bool { !theirUnseenBench.isEmpty && !liveBenchGuesses.isEmpty }
+    /// Whether anything on a side is still a guess.
+    func hidesBench(mine side: Bool) -> Bool {
+        !unseenBench(mine: side).isEmpty && !liveGuesses(mine: side).isEmpty
+    }
+    var hidesTheirBench: Bool { hidesBench(mine: false) }
+
+    /// The board as the other side sees it: your unseen back two replaced by
+    /// the pair they most expect. This is what their half of the matrix is
+    /// solved on, so their orders are an answer to what they believe rather
+    /// than to what is actually sitting on your bench.
+    var asTheySeeIt: Board {
+        let hidden = myUnseenBench
+        guard !hidden.isEmpty, let guess = liveGuesses(mine: true).first else { return self }
+        let shown = Set(mine.filter(\.seen).map(\.build.form.id))
+        let arriving = guess.fighters.filter { !shown.contains($0.build.form.id) }
+        guard !arriving.isEmpty else { return self }
+        var out = self
+        for (slot, fighter) in zip(hidden, arriving) { out.mine[slot] = fighter }
+        return out
+    }
     var field: Field
     /// Turns left on each side's speed control.
     var myTailwind = 0
@@ -537,47 +569,69 @@ extension Board {
         board.activeCount = leadCount
         if sendOut { board.sendOutLeads() }
 
-        // Every Pokémon on their six as a fighter, so a guess can be played.
-        let whole = Board(mine: brought, theirs: theirTeam, store: store,
+        // What each side's back two probably are, from both chairs.
+        board.theirBenchGuesses = benchGuesses(
+            for: theirTeam, against: myTeam, opposite: brought,
+            leadIDs: Set(board.theirs.prefix(leadCount).map(\.build.form.id)),
+            behind: bring - leadCount, store: store, field: field)
+        board.myBenchGuesses = benchGuesses(
+            for: myTeam, against: theirTeam, opposite: theirBrought,
+            leadIDs: Set(board.mine.prefix(leadCount).map(\.build.form.id)),
+            behind: bring - leadCount, store: store, field: field)
+        return board
+    }
+
+    /// Every pair one side could be keeping behind its leads, and how likely
+    /// each is — weighed the way that side would weigh it, by how much the
+    /// four it completes is worth against the six it is facing.
+    ///
+    /// `chooser` is the six doing the choosing, `against` the six it is being
+    /// chosen against, and `opposite` a team to stand on the other side while
+    /// the chooser's members are built into fighters.
+    private static func benchGuesses(for chooser: Team, against other: Team,
+                                     opposite: Team, leadIDs: Set<String>,
+                                     behind: Int, store: Store, field: Field) -> [BenchGuess] {
+        let grid = Matchup(mine: chooser, theirs: other, store: store, field: field)
+        // Every Pokémon on the chooser's six as a fighter, so a guess can be
+        // played out rather than only scored.
+        let whole = Board(mine: opposite, theirs: chooser, store: store,
                           field: field, alreadyEvolved: false)
         // A fighter stands as what was registered; the grid rates what it
         // fights as. For a stone-holder those are different Pokémon, and
         // matching them by id silently dropped every pair with a Mega in it.
         var fightsAs: [String: Form] = [:]
-        for slot in theirTeam.slots {
+        for slot in chooser.slots {
             if let registered = slot.form(in: store), let battle = slot.battleForm(in: store) {
                 fightsAs[registered.id] = battle
             }
         }
-        let leadIDs = Set(board.theirs.prefix(leadCount).map(\.build.form.id))
         let leadForms = leadIDs.compactMap { fightsAs[$0] }
         let rest = whole.theirs.filter { !leadIDs.contains($0.build.form.id) }
-        let behind = bring - leadCount
-        guard rest.count > behind, !leadForms.isEmpty else { return board }
+        guard behind > 0, rest.count > behind, !leadForms.isEmpty else { return [] }
 
         var guesses: [BenchGuess] = []
         var weights: [Double] = []
         for pair in Board.choose(rest, behind) {
             let forms = pair.compactMap { fightsAs[$0.build.form.id] }
-            guard forms.count == pair.count, forms.filter(\.isMega).count + leadForms.filter(\.isMega).count <= 1
+            guard forms.count == pair.count,
+                  forms.filter(\.isMega).count + leadForms.filter(\.isMega).count <= 1
             else { continue }
-            // How much this four costs you, which is how much they like it.
-            let edge = theirGrid.rate(bringing: leadForms + forms, against: theirGrid.theirForms).score
+            // How much the four it completes is worth, which is how much the
+            // side choosing it likes it.
+            let edge = grid.rate(bringing: leadForms + forms, against: grid.theirForms).score
             guesses.append(BenchGuess(fighters: pair, chance: 0))
             weights.append(Double(edge))
         }
-        guard !guesses.isEmpty else { return board }
+        guard !guesses.isEmpty else { return [] }
         // A soft preference: the best pair is likeliest, not certain. Twelve
         // points of edge is one factor of e.
         let top = weights.max() ?? 0
         let raw = weights.map { exp(($0 - top) / 12) }
         let total = raw.reduce(0, +)
-        board.theirBenchGuesses = zip(guesses, raw).map {
+        return zip(guesses, raw).map {
             BenchGuess(fighters: $0.fighters, chance: $1 / total)
         }.sorted { $0.chance > $1.chance }
-        return board
     }
-
     /// Every way of choosing `count` from `items`, order ignored.
     static func choose<T>(_ items: [T], _ count: Int) -> [[T]] {
         guard count > 0 else { return [[]] }

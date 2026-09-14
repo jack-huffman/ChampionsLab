@@ -39,6 +39,22 @@ struct TurnGame {
     /// "yes", and that doubling is what kept the search from seeing past one
     /// turn.
     var assumeMega = false
+    /// The board as the other side sees it: your unseen back two replaced by
+    /// the pair they expect. Set it and their half of the matrix is solved on
+    /// it, so their orders answer what they believe rather than what is
+    /// actually on your bench. Nil on an analysis board, where both sixes are
+    /// on the table anyway.
+    var theirBelief: Board?
+
+    /// `believingTheirs` turns the two-board solve on: their half is answered
+    /// on what they can see. It costs a second matrix, so it is set where the
+    /// answer becomes somebody's orders — the root of a search, the turn being
+    /// played, the line on screen — and left off inside the recursion, where
+    /// the difference is second order and the cost is a doubling.
+    init(board: Board, believingTheirs: Bool = false) {
+        self.board = board
+        self.theirBelief = believingTheirs ? board.asTheySeeIt : nil
+    }
 
     // MARK: - What each side can plausibly do
 
@@ -342,6 +358,13 @@ struct TurnGame {
     }
 
     /// Build the matrix and solve it.
+    ///
+    /// Your half is solved on this board, which is the truth as you know it.
+    /// Their half is solved on `theirBelief` when one is set — the same board
+    /// with your unseen back two replaced by the pair they expect — so their
+    /// orders are an answer to what they can see. Each side plays the
+    /// equilibrium of its own view, which is what two players with different
+    /// information actually do.
     func solve(iterations: Int = 3000) -> Solution {
         let myPlays = plays(forMine: true)
         let theirPlays = plays(forMine: false)
@@ -356,9 +379,48 @@ struct TurnGame {
                     - forgone(mine, myOffence) + forgone(theirs, theirOffence)
             }
         }
-        let (myMix, theirMix, value) = TurnGame.equilibrium(payoff, iterations: iterations)
+        let (myMix, ownTheirMix, ownValue) = TurnGame.equilibrium(payoff, iterations: iterations)
+        guard let believed = believedMix(iterations: iterations),
+              believed.count == theirPlays.count else {
+            return Solution(myPlays: myPlays, theirPlays: theirPlays, payoff: payoff,
+                            myMix: myMix, theirMix: ownTheirMix, value: ownValue)
+        }
+        // What the turn is worth is what your mix gets against the mix they
+        // will actually play, not against the one they would play if they
+        // could see your bench.
+        var value = 0.0
+        for (i, row) in payoff.enumerated() where myMix.indices.contains(i) {
+            for (j, cell) in row.enumerated() where believed.indices.contains(j) {
+                value += myMix[i] * believed[j] * cell
+            }
+        }
         return Solution(myPlays: myPlays, theirPlays: theirPlays, payoff: payoff,
-                        myMix: myMix, theirMix: theirMix, value: value)
+                        myMix: myMix, theirMix: believed, value: value)
+    }
+
+    /// Their half of the matrix, solved on the board they can actually see.
+    ///
+    /// Both boards carry the same two Pokémon of theirs facing the same two of
+    /// yours, so the two lists of their plays line up index for index. If that
+    /// ever stops being true the mix is refused rather than mismatched.
+    private func believedMix(iterations: Int) -> [Double]? {
+        // Nothing to solve twice if their view of your side is your side.
+        guard let believed = theirBelief,
+              believed.mine.map(\.build.form.id) != board.mine.map(\.build.form.id)
+        else { return nil }
+        var game = TurnGame(board: believed)
+        game.width = width
+        game.tempoCost = tempoCost
+        game.assumeMega = assumeMega
+        game.theirBelief = nil                      // one level deep, never a loop
+        guard game.plays(forMine: false) == plays(forMine: false) else { return nil }
+        return game.solve(iterations: iterations).theirMix
+    }
+
+    /// Every way a cell of the matrix can come out, likeliest first. One
+    /// board unless somebody is trying a Protect that might not hold.
+    func outcomes(_ mine: Play, _ theirs: Play) -> [(board: Board, chance: Double)] {
+        TurnModel.outcomes(board, mine: mine, theirs: theirs)
     }
 
     /// What a cell of the matrix is worth, over every way it can come out,

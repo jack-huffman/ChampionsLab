@@ -126,4 +126,65 @@ print("\n== both of theirs act ==")
 
         print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     }
+
+    /// their half of the matrix is answered on what they can see, not on what
+    /// is actually sitting on your bench
+    @MainActor func testTheyAnswerWhatTheyCanSee() throws {
+        print("== the board as they see it ==")
+        let theirSix = fighters([("Garchomp", "Focus Sash", ["Earthquake", "Rock Slide", "Protect"]),
+                                 ("Rillaboom", "Life Orb", ["Wood Hammer", "Fake Out", "Protect"]),
+                                 ("Kingambit", "Chople Berry", ["Iron Head", "Sucker Punch", "Protect"]),
+                                 ("Incineroar", "Sitrus Berry", ["Fake Out", "Flare Blitz", "Protect"]),
+                                 ("Charizard", "Charizardite Y", ["Heat Wave", "Solar Beam", "Protect"]),
+                                 ("Farigiraf", "Leftovers", ["Trick Room", "Psychic", "Protect"])])
+        let game = Board.opening(mine: mySix, bringing: mySix.slots.prefix(4).map(\.formID),
+                                 theirs: theirSix, store: store, singles: false)
+        check("they have a guess about your back two as well",
+              game.myBenchGuesses.count > 1 && abs(game.myBenchGuesses.reduce(0) { $0 + $1.chance } - 1) < 0.01,
+              "\(game.myBenchGuesses.count)")
+        print("  they expect: " + game.myBenchCandidates.prefix(3).map {
+            "\($0.fighter.build.form.formLabel) \(Int(($0.chance * 100).rounded()))%" }.joined(separator: ", "))
+
+        let believed = game.asTheySeeIt
+        check("their view keeps your leads exactly as they are",
+              believed.mine.prefix(2).map(\.build.form.id) == game.mine.prefix(2).map(\.build.form.id))
+        check("and replaces the back two you have not shown",
+              believed.myUnseenBench.allSatisfy { slot in
+                  game.myBenchCandidates.contains { $0.fighter.build.form.id == believed.mine[slot].build.form.id }
+              })
+
+        // The same position, with a different pair actually hidden behind the
+        // same leads. Nothing they can see has changed.
+        var swapped = game
+        for slot in game.myUnseenBench {
+            let unexpected = fighters([("Milotic", "Leftovers", ["Recover", "Muddy Water", "Protect"])])
+            let other = Board(mine: unexpected, theirs: theirSix, store: store,
+                              field: Field(isDoubles: true), alreadyEvolved: false)
+            swapped.mine[slot] = other.mine[0]
+        }
+        check("the swap is real", swapped.mine[2].build.form.formLabel != game.mine[2].build.form.formLabel)
+
+        let honest = TurnGame(board: game, believingTheirs: true).solve(iterations: 900)
+        let honestSwapped = TurnGame(board: swapped, believingTheirs: true).solve(iterations: 900)
+        let drift = zip(honest.theirMix, honestSwapped.theirMix).map { abs($0 - $1) }.max() ?? 1
+        print(String(format: "  their mix moves by %.4f when your hidden bench changes", drift))
+        check("their orders do not move when your hidden bench changes", drift < 0.001, String(format: "%.4f", drift))
+
+        // And the leak it replaces: read off the real board, the bench is in
+        // the arithmetic, so the two positions are not even the same matrix.
+        let leaky = TurnGame(board: game).solve(iterations: 900)
+        let leakySwapped = TurnGame(board: swapped).solve(iterations: 900)
+        check("reading the real bench would have changed the matrix",
+              leaky.payoff != leakySwapped.payoff)
+
+        // Once it walks on, it is theirs to know.
+        var shown = swapped
+        shown.mine[0].hp = 0
+        shown.fillGaps(mine: true, theirs: false)
+        check("a Pokémon that has come in is no longer a guess",
+              shown.mine[0].seen && !shown.asTheySeeIt.mine[0].build.form.id.isEmpty
+                && shown.asTheySeeIt.mine[0].build.form.id == shown.mine[0].build.form.id)
+
+        print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
+    }
 }

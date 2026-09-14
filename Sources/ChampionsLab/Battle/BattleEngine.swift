@@ -189,7 +189,7 @@ struct BattleEngine: Sendable {
 
             for (world, chance) in versions {
                 guard Date() < deadline else { ranOut = true; break }
-                var game = TurnGame(board: world)
+                var game = TurnGame(board: world, believingTheirs: true)
                 game.width = beam + 2
                 let solved = solve(world, game: game, depth: depth,
                                    deadline: deadline, table: table)
@@ -282,31 +282,44 @@ struct BattleEngine: Sendable {
                                 count: keptMine.count)
         for (i, my) in keptMine.enumerated() {
             for (j, their) in keptTheirs.enumerated() {
-                // Weighed over every way the turn can come out; the search
-                // then looks on from the likeliest of them.
-                let settled = game.settle(my, their)
-                var after = settled.likeliest
-                after.fillGaps()
-                table.nodes += 1
-                let immediate = settled.expected
-                // A side with nothing left has lost; no need to look further.
-                if after.isOut(mine: false) { payoff[i][j] = immediate + 3; continue }
-                if after.isOut(mine: true) { payoff[i][j] = immediate - 3; continue }
+                // Every way the turn can come out, weighed. One board unless
+                // somebody is trying a repeat Protect, and then two: the turns
+                // after are followed down both, because following only the
+                // likelier one was the last place the search still bet on a
+                // coin flip rather than pricing it.
+                let ways = game.outcomes(my, their)
+                let before = TurnModel.value(game.board)
+                let immediate = ways.reduce(0) { $0 + $1.chance * (TurnModel.value($1.board) - before) }
+                var value = immediate
+                var weighed = 0.0
+                for way in ways where way.chance >= 0.15 {
+                    var after = way.board
+                    after.fillGaps()
+                    table.nodes += 1
+                    weighed += way.chance
+                    // A side with nothing left has lost; no need to look further.
+                    if after.isOut(mine: false) { value += way.chance * 3; continue }
+                    if after.isOut(mine: true) { value -= way.chance * 3; continue }
 
-                let key = signature(after) + "@\(depth)"
-                if let cached = table.values[key] {
-                    payoff[i][j] = immediate + 0.75 * cached
-                    continue
+                    let key = signature(after) + "@\(depth)"
+                    if let cached = table.values[key] {
+                        // Discounted, because a turn in hand is worth more than
+                        // one promised, and the deeper the guess the softer it
+                        // should land.
+                        value += way.chance * 0.75 * cached
+                        continue
+                    }
+                    var next = TurnGame(board: after)
+                    next.width = beam
+                    next.assumeMega = true
+                    let deeper = solve(after, game: next, depth: depth - 1,
+                                       deadline: deadline, table: table)
+                    table.values[key] = deeper.value
+                    value += way.chance * 0.75 * deeper.value
                 }
-                var next = TurnGame(board: after)
-                next.width = beam
-                next.assumeMega = true
-                let deeper = solve(after, game: next, depth: depth - 1,
-                                   deadline: deadline, table: table)
-                table.values[key] = deeper.value
-                // Discounted, because a turn in hand is worth more than one
-                // promised, and the deeper the guess the softer it should land.
-                payoff[i][j] = immediate + 0.75 * deeper.value
+                // Branches too unlikely to be worth a node still happened;
+                // their share of the turn is already in `immediate`.
+                payoff[i][j] = weighed > 0 ? value : immediate
             }
         }
         let (beamMix, _, value) = TurnGame.equilibrium(payoff, iterations: 900)
@@ -348,7 +361,7 @@ struct BattleEngine: Sendable {
         var current = board
         var play = plays[first]
         for turn in 0..<min(depth, 3) {
-            var game = TurnGame(board: current)
+            var game = TurnGame(board: current, believingTheirs: true)
             game.width = turn == 0 ? beam + 2 : beam
             game.assumeMega = turn > 0
             let solved = shallow(current, game: game, table: table)

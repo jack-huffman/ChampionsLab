@@ -29,6 +29,9 @@ struct BattleView: View {
     @State private var startHover = false
     /// Which search the view is waiting on; an older one's answer is dropped.
     @State private var thinkTicket = 0
+    /// A turn is being played out: the button waits rather than starting a
+    /// second one on top of the first.
+    @State private var playing = false
     /// The start of the game, being shown: the flash, the leads coming out,
     /// their abilities going off. Nil once orders can be given.
     @State private var opening = false
@@ -1002,8 +1005,10 @@ struct BattleView: View {
         guard let mine = myTeam, let theirs = theirTeam else { return }
         guard bringing.count >= leadCount else { return }
         // Their four is chosen against your six the way you chose yours, and
-        // their back two go on the board as guesses: the game knows the truth
-        // so it can be played, and nothing that advises you gets to read it.
+        // each side's back two go on the board as guesses: the game knows the
+        // truth so it can be played, and neither side's advice reads past what
+        // has been seen. Two bring-four searches and two grids, so the screen
+        // is changed first and the board built a moment later.
         var start = Board.opening(mine: mine, bringing: bringing, theirs: theirs,
                                   store: store, singles: singles, sendOut: false)
         stage = .battle
@@ -2047,6 +2052,8 @@ struct BattleView: View {
         // is still yours to play, so it is scored the same way, against their
         // mix, rather than left blank.
         var total = 0.0
+        // No belief board here: this only resolves cells, it never solves a
+        // matrix, and it runs inside a view body.
         let game = TurnGame(board: board)
         for (column, theirs) in solved.theirPlays.enumerated() where solved.theirMix[column] > 0.001 {
             total += game.settle(play, theirs).expected * solved.theirMix[column]
@@ -2871,6 +2878,8 @@ struct BattleView: View {
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.defaultAction)
+                .disabled(playing)
+                .opacity(playing ? 0.6 : 1)
             }
         }
         .padding(16)
@@ -3001,34 +3010,6 @@ struct BattleView: View {
         }
     }
 
-    /// The pair a good player would expect behind your leads, having seen your
-    /// six at Team Preview and your two out front — the same weighing that
-    /// picks their own four, done from their chair.
-    private func theirGuessOfMyBench(_ board: Board) -> [Form] {
-        guard let mine = myTeam, let theirs = theirTeam else { return [] }
-        let unseen = board.mine.dropFirst(board.activeCount).filter { !$0.seen && !$0.fainted }
-        guard !unseen.isEmpty else { return [] }
-        let grid = Matchup(mine: mine, theirs: theirs, store: store,
-                           field: Field(isDoubles: !singles))
-        // Fighters stand as registered; the grid rates battle forms.
-        var fightsAs: [String: Form] = [:]
-        for slot in mine.slots {
-            if let registered = slot.form(in: store), let battle = slot.battleForm(in: store) {
-                fightsAs[registered.id] = battle
-            }
-        }
-        let shownIDs = Set(board.mine.filter(\.seen).compactMap { fightsAs[$0.build.form.id]?.id })
-        let shown = grid.myForms.filter { shownIDs.contains($0.id) }
-        let rest = grid.myForms.filter { !shownIDs.contains($0.id) }
-        guard rest.count > unseen.count else { return rest }
-        var best: (pair: [Form], edge: Int)?
-        for pair in Board.choose(rest, unseen.count)
-        where (shown + pair).filter(\.isMega).count <= 1 {
-            let edge = grid.rate(bringing: shown + pair, against: grid.theirForms).score
-            if best == nil || edge > best!.edge { best = (pair, edge) }
-        }
-        return best?.pair ?? []
-    }
 
     // MARK: Running a turn
 
@@ -3043,7 +3024,7 @@ struct BattleView: View {
             // rather than the board itself, so nothing shown here can name a
             // Pokémon of theirs that has not come out.
             let likeliest = engine.imagine(board, belief: BattleEngine.Belief()).first?.board ?? board
-            var game = TurnGame(board: likeliest)
+            var game = TurnGame(board: likeliest, believingTheirs: true)
             game.width = engine.beam + 2
             return (result, game.solve(), likeliest)
         }.value
@@ -3062,7 +3043,7 @@ struct BattleView: View {
             guard ticket == thinkTicket else { return }
             let result = searched.result
             let turnSolve = searched.turnSolve
-            var game = TurnGame(board: searched.likeliest)
+            var game = TurnGame(board: searched.likeliest, believingTheirs: true)
             game.width = engine.beam + 2
 
             var ours: [String] = []
@@ -3135,14 +3116,14 @@ struct BattleView: View {
             // What they make of your back two, which they cannot see either:
             // from your six and the two you led with, the pair a good player
             // would expect. It is what they are switching and spreading against.
-            let expected = theirGuessOfMyBench(board)
-            if !expected.isEmpty {
-                let real = board.mine.dropFirst(board.activeCount).filter { !$0.seen && !$0.fainted }
-                    .map(\.build.form.id)
-                let right = expected.filter { real.contains($0.id) }.count
-                theirs.append("They have not seen your back \(real.count == 1 ? "one" : "two"). From your six and your leads they will expect "
-                              + expected.map(\.formLabel).joined(separator: " and ")
-                              + (real.isEmpty ? "." : right == expected.count ? " — and they would be right." : right == 0 ? " — and they would be wrong, which is worth something." : " — half right."))
+            let expected = board.liveGuesses(mine: true).first?.fighters ?? []
+            if !expected.isEmpty, board.hidesBench(mine: true) {
+                let real = Set(board.myUnseenBench.map { board.mine[$0].build.form.id })
+                let right = expected.filter { real.contains($0.build.form.id) }.count
+                theirs.append("They have not seen your back \(real.count == 1 ? "one" : "two"). From your six and your leads they expect "
+                              + expected.map(\.build.form.formLabel).joined(separator: " and ")
+                              + ", and that is the version of you their orders answer"
+                              + (real.isEmpty ? "." : right == expected.count ? " — they have it right." : right == 0 ? " — and they have it wrong, which is worth something." : " — half right."))
             }
             theirSide = Array(theirs.prefix(5))
             thinking = false
@@ -3166,11 +3147,31 @@ struct BattleView: View {
                     megaSlot: megaSlot)
     }
 
+    /// Play the turn out. Their orders come from a solve of the board as they
+    /// see it, which is the most expensive thing that happens on a turn, so it
+    /// happens off the main thread and the window keeps drawing while it does.
     private func playTurn() {
-        guard let current = board, let mine = ordersAsPlay(current) else { return }
+        guard let current = board, let mine = ordersAsPlay(current), !playing else { return }
+        playing = true
+        let playedTurn = turn
+        Task { @MainActor in
+            let solved = await Task.detached(priority: .userInitiated) {
+                var game = TurnGame(board: current, believingTheirs: true)
+                game.width = 10
+                return game.solve()
+            }.value
+            playing = false
+            // The board moved on underneath — an undo, a restart — so this
+            // answer is to a position that no longer exists.
+            guard turn == playedTurn, board != nil else { return }
+            resolve(current, mine: mine, solved: solved)
+        }
+    }
+
+    /// Everything a turn does once it is known what they played.
+    private func resolve(_ current: Board, mine: Play, solved: TurnGame.Solution) {
         var game = TurnGame(board: current)
         game.width = 10
-        let solved = game.solve()
         let roll = Double.random(in: 0...1)
         var running = 0.0
         var theirPlay = solved.theirPlays.first ?? Play(left: .pass, right: .pass)

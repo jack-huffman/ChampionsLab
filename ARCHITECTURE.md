@@ -36,11 +36,16 @@ the analysis caches. Views read it through the environment.
 
 ## Invariants worth knowing
 
-- **Hidden information is hidden.** The board keeps the truth (their real
-  four, their real items) so a turn can be played, but nothing that advises
-  the player reads past what has been seen: their bench shows as `?` with
-  odds, the search plays against the likeliest pairs, their Speed is shown
-  without the item, and the pre-turn read is taken on the likeliest world.
+- **Hidden information is hidden, both ways.** The board keeps the truth
+  (their real four, their real items) so a turn can be played, but nothing
+  that advises the player reads past what has been seen: their bench shows as
+  `?` with odds, the search plays against the likeliest pairs, their Speed is
+  shown without the item, and the pre-turn read is taken on the likeliest
+  world. Their side is solved the same way in reverse: `Board.asTheySeeIt`
+  replaces *your* unseen back two with the pair they expect, and
+  `TurnGame(believingTheirs: true)` answers their half of the matrix on that
+  board. `HiddenInformationTests` pins the invariant — their mix must not
+  move when your hidden bench changes underneath it.
 - **The value is zero-sum by construction** (`TurnModel.value`), so the
   matrix game has an equilibrium; regret matching finds it.
 - **A played turn rolls; the search averages.** Accuracy, criticals,
@@ -56,6 +61,23 @@ the analysis caches. Views read it through the environment.
   moves, drains, secondary effects, target/self stage changes, healing,
   Weather Ball. Closed families that read alike (Protect, the party moves)
   are named.
+
+## Threads
+
+`Store`, `Matchup`, `BringFour` and the views are main-actor. The turn model,
+the matrix game and the search are not, so everything expensive runs off the
+main thread and hands a value back:
+
+| work | where it runs |
+|---|---|
+| `BattleEngine.think` | detached task, result applied on the main actor |
+| the played turn's solve | detached task, then `resolve(_:mine:solved:)` |
+| a turn's resolution, the reads, the previews | main actor; all cheap |
+| building a `Board` from two `Team`s | main actor, once, at the boundary |
+
+Both detached searches carry a ticket — the turn number, or a counter — and
+an answer to a position that has since moved on is dropped rather than
+applied to the wrong board.
 
 ## Checking a change
 
@@ -92,10 +114,9 @@ inherited one. Add a rule, add a check to the case that owns that area.
 
 ## Known debts
 
-- The engine's answer is right for the turn in hand; two plies down it
-  follows the likeliest Protect branch rather than blending both.
-- Their side of the matrix evaluates your switch plays against your real
-  bench. Their switch-in *scoring* sees only your actives; a two-board solve
-  (their view vs yours) would close the gap.
+- The two-board solve costs a second matrix, so it runs where the answer
+  becomes somebody's orders — the root of a search, the turn being played,
+  the line on screen — and not inside the recursion, where the difference is
+  second order and the cost is a doubling.
 - Floette's Eternal Flower form is synthesised by the generator; Serebii's
   Champions listings omit it.
