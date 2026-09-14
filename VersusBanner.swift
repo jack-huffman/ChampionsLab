@@ -158,41 +158,65 @@ struct VersusBanner: View {
         }
     }
 
-    /// Two ranks along lines parallel to the divider, the front rank nearer
-    /// and larger. Positions are read off where the divider is at that height,
-    /// so the whole formation leans the way the line does.
-    private func formation(_ side: Side, in size: CGSize, lean: CGFloat, left: Bool) -> some View {
+    /// Where each of the six stands: two ranks along lines parallel to the
+    /// divider, the front rank nearer and larger.
+    private struct Place {
+        let form: Form
+        let x: CGFloat
+        let y: CGFloat
+        let side: CGFloat
+        let lead: Bool
+    }
+
+    /// Positions are read off where the divider is at that height, so the
+    /// whole formation leans the way the line does.
+    private func places(_ side: Side, in size: CGSize, lean: CGFloat, left: Bool) -> [Place] {
         let h = size.height
         let rows: [CGFloat] = [0.30, 0.56, 0.82]
-        let front = Array(side.forms.prefix(3))
-        let back = Array(side.forms.dropFirst(3).prefix(3))
         func dividerX(_ y: CGFloat) -> CGFloat { size.width / 2 + lean - 2 * lean * (y / h) }
         let sign: CGFloat = left ? -1 : 1
+        var out: [Place] = []
+        for (index, form) in side.forms.dropFirst(3).prefix(3).enumerated() {
+            let y = h * rows[index]
+            out.append(Place(form: form, x: dividerX(y) + sign * 262, y: y, side: 74, lead: false))
+        }
+        for (index, form) in side.forms.prefix(3).enumerated() {
+            let y = h * rows[index]
+            let lead = index < side.leadCount
+            out.append(Place(form: form, x: dividerX(y) + sign * 122, y: y,
+                             side: lead ? 104 : 86, lead: lead))
+        }
+        return out
+    }
+
+    /// The sprites in one layer and every name in a layer above them, so a
+    /// wing in the front rank can overlap the sprite above it but never the
+    /// name under that sprite.
+    private func formation(_ side: Side, in size: CGSize, lean: CGFloat, left: Bool) -> some View {
+        let placed = places(side, in: size, lean: lean, left: left)
         return ZStack {
-            ForEach(Array(back.enumerated()), id: \.offset) { index, form in
-                let y = h * rows[index]
-                sprite(form, side: 74, lead: false, tint: side.tint)
-                    .position(x: dividerX(y) + sign * 262, y: y)
+            ForEach(Array(placed.enumerated()), id: \.offset) { _, place in
+                SpriteImage(form: place.form, side: place.side)
+                    .shadow(color: side.tint.opacity(0.75), radius: 14)
+                    .shadow(color: .black.opacity(0.65), radius: 4, y: 3)
+                    .position(x: place.x, y: place.y)
             }
-            ForEach(Array(front.enumerated()), id: \.offset) { index, form in
-                let y = h * rows[index]
-                let lead = index < side.leadCount
-                sprite(form, side: lead ? 104 : 86, lead: lead, tint: side.tint)
-                    .position(x: dividerX(y) + sign * 122, y: y)
+            ForEach(Array(placed.enumerated()), id: \.offset) { _, place in
+                label(place.form, lead: place.lead, tint: side.tint)
+                    .position(x: place.x, y: place.y + place.side / 2 + (place.lead ? 16 : 8))
             }
+            .zIndex(1)
         }
     }
 
-    private func sprite(_ form: Form, side: CGFloat, lead: Bool, tint: Color) -> some View {
+    private func label(_ form: Form, lead: Bool, tint: Color) -> some View {
         VStack(spacing: 1) {
-            SpriteImage(form: form, side: side)
-                .shadow(color: tint.opacity(0.75), radius: 14)
-                .shadow(color: .black.opacity(0.65), radius: 4, y: 3)
             Text(form.formLabel)
                 .font(.system(size: lead ? 11 : 10, weight: lead ? .bold : .semibold))
                 .foregroundStyle(.white.opacity(lead ? 1 : 0.85))
                 .lineLimit(1)
-                .shadow(color: .black.opacity(0.8), radius: 3)
+                .shadow(color: .black.opacity(0.9), radius: 3)
+                .shadow(color: .black.opacity(0.6), radius: 1)
             if lead {
                 Text("LEAD").font(.system(size: 8, weight: .heavy)).kerning(0.8)
                     .foregroundStyle(.white)

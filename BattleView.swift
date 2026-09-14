@@ -26,6 +26,7 @@ struct BattleView: View {
     @State private var myTeamID = ""
     @State private var opponentID = ""
     @State private var opponentSearch = ""
+    @State private var startHover = false
     /// Which of the three readings the side panel is showing.
     enum Panel: String, CaseIterable { case engine = "Engine", theirs = "Their read", log = "Log" }
     @State private var panel: Panel = .engine
@@ -446,16 +447,30 @@ struct BattleView: View {
                     } label: {
                         HStack(spacing: 10) {
                             Image(systemName: "flag.2.crossed.fill")
-                            Text("START BATTLE").font(.system(size: 14, weight: .heavy)).kerning(1.2)
+                                .rotationEffect(.degrees(startHover ? -12 : 0))
+                                .scaleEffect(startHover ? 1.15 : 1)
+                            Text("START BATTLE").font(.system(size: 14, weight: .heavy))
+                                .kerning(startHover ? 2.2 : 1.2)
                         }
                         .foregroundStyle(.white)
                         .padding(.horizontal, 28).padding(.vertical, 13)
-                        .background(LinearGradient(colors: [Palette.accent, Palette.bad],
-                                                   startPoint: .leading, endPoint: .trailing))
+                        .background(
+                            // The two sides' colours meet in the button; on hover
+                            // the seam slides, the way the divider above leans.
+                            LinearGradient(colors: [Palette.accent, Palette.bad],
+                                           startPoint: startHover ? .topLeading : .leading,
+                                           endPoint: startHover ? .bottomTrailing : .trailing))
                         .clipShape(Capsule())
-                        .shadow(color: Palette.accent.opacity(0.4), radius: 10, y: 4)
+                        .overlay(Capsule().strokeBorder(.white.opacity(startHover ? 0.55 : 0), lineWidth: 1.5))
+                        .shadow(color: Palette.accent.opacity(startHover ? 0.6 : 0.4),
+                                radius: startHover ? 18 : 10, y: startHover ? 6 : 4)
+                        .shadow(color: Palette.bad.opacity(startHover ? 0.45 : 0),
+                                radius: 18, y: 6)
+                        .scaleEffect(startHover ? 1.06 : 1)
+                        .animation(.spring(response: 0.32, dampingFraction: 0.55), value: startHover)
                     }
                     .buttonStyle(.plain)
+                    .onHover { startHover = $0 }
                     .keyboardShortcut(.defaultAction)
                     .help("On to Team Preview: choose the \(bringCount) you bring and their order, while they choose theirs.")
                     Spacer()
