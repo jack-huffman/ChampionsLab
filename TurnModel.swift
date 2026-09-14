@@ -139,8 +139,15 @@ struct Board {
         let trickRoom: Int
     }
 
+    /// Whether anybody is going to read the commentary. A played turn is read;
+    /// the search plays out a thousand boards per solve and reads none of it,
+    /// and snapshotting the whole board on every line of every one of them was
+    /// a fifth of a solve.
+    var narrating = true
+
     /// Say what happened, and remember what the board looked like when it did.
     mutating func note(_ text: String) {
+        guard narrating else { return }
         story.append(text)
         steps.append(Step(text: text,
                           myHP: mine.map(\.hp), theirHP: theirs.map(\.hp),
@@ -338,10 +345,11 @@ enum TurnModel {
     /// for its expected damage. A battle somebody is watching wants the dice:
     /// the roll, the miss, the burn that did or did not take.
     static func resolve(_ board: Board, mine: Play, theirs: Play, store: Store,
-                        rolling: Bool = false) -> Board {
+                        rolling: Bool = false, narrating: Bool = true) -> Board {
         var out = board
         out.story = []
         out.steps = []
+        out.narrating = narrating
         for index in out.mine.indices { out.mine[index].isProtected = false
                                         out.mine[index].flinched = false
                                         out.mine[index].drawingFire = false }
@@ -611,6 +619,12 @@ enum TurnModel {
                                opposing: inout [Fighter], field: inout Field) {
         guard team.indices.contains(active), team.indices.contains(bench),
               !team[bench].fainted else { return }
+        // Regenerator heals a third on the way out, which is what makes a
+        // Regenerator pivot free where another Pokémon's costs it the chip.
+        if team[active].build.ability == "Regenerator", !team[active].fainted {
+            team[active].hp = Swift.min(team[active].maxHP,
+                                        team[active].hp + team[active].maxHP / 3)
+        }
         team.swapAt(active, bench)
         team[active].justArrived = true
         team[active].isProtected = false
@@ -733,12 +747,22 @@ enum TurnModel {
                 defender.atFullHP = defending[index].hp == defending[index].maxHP
                 var field = board.field
                 field.screen = farScreens.blunt(move)
+                // A critical hit, rolled at the move's own rate. The calculator
+                // already knows what one does — half again, and it goes through
+                // screens and the target's defensive boosts — it only needed
+                // telling when one happened.
+                if rolling, move.critRate > 0,
+                   Double.random(in: 0..<100) < move.critRate {
+                    field.critical = true
+                }
                 var attacker = actor.build
+                attacker.lowHP = actor.hp * 3 <= actor.maxHP
                 if actor.status.halvesPhysical, move.category == "Physical" {
                     attacker.boosts[Stat.attack.rawValue] -= 1
                 }
                 let result = DamageCalc.calculate(attacker: attacker, defender: defender,
                                                   move: move, field: field)
+                if field.critical { board.note("  A critical hit!") }
 
                 // 3. What the far side brings to it. These are the calculator's
                 // own notes, so the commentary cannot drift from the maths.
@@ -793,7 +817,12 @@ enum TurnModel {
                 }
                 if sashed { board.note("\(hitName) hung on with its Focus Sash.") }
 
-                // 5. Afterwards: what the move does beyond the damage.
+                // 5. Afterwards: what the move does beyond the damage, and what
+                // the target's own ability does back.
+                contact(move, byMine: byMine, slot: slot, hit: index, rolling: rolling,
+                        board: &board)
+                flee(ifNeeded: index, ofMine: !byMine, wasAt: defending[index].hp,
+                     board: &board)
                 if move.name == "Fake Out" {
                     if byMine { board.theirs[index].flinched = true }
                     else { board.mine[index].flinched = true }
@@ -826,6 +855,90 @@ enum TurnModel {
                            "Focus Sash", "at full HP", "Terrain", "Snow", "Aura Guard",
                            "Supreme Overlord", "Helping Hand", "Spread"]
         return interesting.contains { note.contains($0) }
+    }
+
+    /// What the target's ability does to whatever just touched it — and what
+    /// the attacker's does to whatever it touched.
+    ///
+    /// Rough Skin and Iron Barbs take an eighth off anything that makes contact.
+    /// Flame Body, Static and Poison Point give a contact attacker a condition
+    /// three times in ten. Stamina raises Defense on every hit taken. Poison
+    /// Touch works the other way round, poisoning what the attacker touches.
+    /// None of it fired: an Incineroar could Flare Blitz a Garchomp all day and
+    /// its Rough Skin never cost a point.
+    private static func contact(_ move: Move, byMine: Bool, slot: Int, hit: Int,
+                                rolling: Bool, board: inout Board) {
+        let attackerTeam = byMine ? board.mine : board.theirs
+        let defenderTeam = byMine ? board.theirs : board.mine
+        guard attackerTeam.indices.contains(slot), defenderTeam.indices.contains(hit) else { return }
+        let attacker = attackerTeam[slot], defender = defenderTeam[hit]
+        let attackerName = attacker.build.form.formLabel
+        let defenderName = defender.build.form.formLabel
+
+        // Stamina does not need contact: any hit raises Defense.
+        if defender.build.ability == "Stamina", !defender.fainted {
+            applySelf([.defense: 1], toMine: !byMine, slot: hit, board: &board)
+        }
+        guard move.makesContact, !attacker.fainted else { return }
+
+        switch defender.build.ability {
+        case "Rough Skin", "Iron Barbs":
+            let lost = Swift.max(1, attacker.maxHP / 8)
+            if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - lost) }
+            else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - lost) }
+            board.note("\(attackerName) is hurt by \(defenderName)'s \(defender.build.ability).")
+        case "Flame Body", "Static", "Poison Point":
+            // Three in ten. A search averages, so it does not apply these at
+            // all rather than applying them to everybody.
+            guard rolling, Double.random(in: 0..<1) < 0.3, attacker.status == .none else { break }
+            let ailment: Ailment = defender.build.ability == "Flame Body" ? .burn
+                : defender.build.ability == "Static" ? .paralysis : .poison
+            let immune = (ailment == .burn && attacker.build.form.pokeTypes.contains(.fire))
+                || (ailment == .paralysis && attacker.build.form.pokeTypes.contains(.electric))
+                || (ailment == .poison && attacker.build.form.pokeTypes.contains(where: {
+                    [.poison, .steel].contains($0) }))
+            guard !immune else { break }
+            if byMine { board.mine[slot].status = ailment } else { board.theirs[slot].status = ailment }
+            board.note("\(defenderName)'s \(defender.build.ability) left \(attackerName) \(ailment.rawValue).")
+        default:
+            break
+        }
+
+        if attacker.build.ability == "Poison Touch", rolling, !defender.fainted,
+           defender.status == .none,
+           Double.random(in: 0..<1) < 0.3,
+           !defender.build.form.pokeTypes.contains(where: { [.poison, .steel].contains($0) }) {
+            if byMine { board.theirs[hit].status = .poison } else { board.mine[hit].status = .poison }
+            board.note("\(attackerName)'s Poison Touch poisoned \(defenderName).")
+        }
+    }
+
+    /// Emergency Exit and Wimp Out: dropping below half health sends the
+    /// Pokémon out to whoever is waiting, mid-turn, without asking.
+    ///
+    /// Golisopod runs it, which is most of why anyone in this format meets it,
+    /// and it changes what a turn against one is worth: hit it hard and it
+    /// leaves, hit it for less than half and it stays and hits back.
+    private static func flee(ifNeeded slot: Int, ofMine mine: Bool, wasAt before: Int,
+                             board: inout Board) {
+        let team = mine ? board.mine : board.theirs
+        guard team.indices.contains(slot), !team[slot].fainted,
+              ["Emergency Exit", "Wimp Out"].contains(team[slot].build.ability) else { return }
+        let now = team[slot].hp, maxHP = team[slot].maxHP
+        // Crossed the line this hit, from at-or-above half to below it.
+        guard before * 2 >= maxHP, now * 2 < maxHP else { return }
+        guard let next = (board.activeCount..<team.count).first(where: { !team[$0].fainted })
+        else { return }
+        let name = team[slot].build.form.formLabel
+        if mine {
+            board.mine.swapAt(slot, next)
+            board.mine[slot].justArrived = true
+        } else {
+            board.theirs.swapAt(slot, next)
+            board.theirs[slot].justArrived = true
+        }
+        let arrival = (mine ? board.mine : board.theirs)[slot].build.form.formLabel
+        board.note("\(name)'s \(team[slot].build.ability) sent it out. \(arrival) came in.")
     }
 
     /// What using the move costs the Pokémon that used it.

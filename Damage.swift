@@ -52,6 +52,9 @@ struct Combatant {
     var atFullHP = true
     /// Whether its berry or Sash has already been used this battle.
     var itemSpent = false
+    /// At a third of its health or less, which is when Blaze and its family
+    /// switch on. A build on paper is never low; a battle sets this.
+    var lowHP = false
 
     func stat(_ stat: Stat) -> Int {
         ChampionsStats.value(base: form.stats[stat.rawValue],
@@ -218,6 +221,17 @@ enum DamageCalc {
         }
 
         // -- power modifiers -------------------------------------------------
+        // The pinch abilities: half again on the matching type once the user is
+        // down to a third. Only a battle ever gets there, so only a battle sees
+        // it, but a Charizard that has taken a hit hits back harder.
+        if attacker.lowHP {
+            let pinch: [String: PokeType] = ["Blaze": .fire, "Torrent": .water,
+                                             "Overgrow": .grass, "Swarm": .bug]
+            if let boosted = pinch[attacker.ability], moveType == boosted {
+                power *= 1.5
+                notes.append("\(attacker.ability): +50% while low")
+            }
+        }
         if attacker.ability == "Tough Claws", move.makesContact {
             power *= 1.3
             notes.append("Tough Claws: +30%")

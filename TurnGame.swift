@@ -33,6 +33,14 @@ struct TurnGame {
     /// the size of the matrix, so this is the knob that decides whether a turn
     /// takes ten milliseconds or ten seconds.
     var width = 6
+    /// Offer Mega Evolution as a fact rather than a choice: the stone-holder
+    /// evolves the moment it attacks. The turn being played keeps both versions
+    /// on the table, since holding the stone back so your weather lands second
+    /// is a real play; but inside a search every node past the first was
+    /// doubling both sides' lists to weigh a decision that is nearly always
+    /// "yes", and that doubling is what kept the search from seeing past one
+    /// turn.
+    var assumeMega = false
 
     // MARK: - What each side can plausibly do
 
@@ -174,14 +182,21 @@ struct TurnGame {
                 megaOptions.append(slot)
             }
         }
+        // The slot that evolves when evolving is taken as read.
+        let assumed = megaOptions.count > 1 ? megaOptions[1] : nil
 
         var out: [Play] = []
         for a in leftOptions {
             for b in rightOptions {
                 // Both switching to the same benched Pokémon is not a thing.
                 if case .swap(let x) = a, case .swap(let y) = b, x == y { continue }
-                for mega in megaOptions {
+                if assumeMega {
                     // A Pokémon leaving the field does not evolve on the way out.
+                    let leaving = assumed == 0 ? a.isSwap : assumed == 1 ? b.isSwap : true
+                    out.append(Play(left: a, right: b, megaSlot: leaving ? nil : assumed))
+                    continue
+                }
+                for mega in megaOptions {
                     if let mega, mega == 0, a.isSwap { continue }
                     if let mega, mega == 1, b.isSwap { continue }
                     out.append(Play(left: a, right: b, megaSlot: mega))
@@ -294,7 +309,7 @@ struct TurnGame {
         for (i, mine) in myPlays.enumerated() {
             await breathe("turn matrix")
             for (j, theirs) in theirPlays.enumerated() {
-                let after = TurnModel.resolve(board, mine: mine, theirs: theirs, store: store)
+                let after = TurnModel.resolve(board, mine: mine, theirs: theirs, store: store, narrating: false)
                 payoff[i][j] = TurnModel.value(after) - TurnModel.value(board)
                     - forgone(mine, myOffence) + forgone(theirs, theirOffence)
             }
@@ -324,7 +339,7 @@ struct TurnGame {
                                 count: myPlays.count)
         for (i, mine) in myPlays.enumerated() {
             for (j, theirs) in theirPlays.enumerated() {
-                let after = TurnModel.resolve(board, mine: mine, theirs: theirs, store: store)
+                let after = TurnModel.resolve(board, mine: mine, theirs: theirs, store: store, narrating: false)
                 payoff[i][j] = TurnModel.value(after) - TurnModel.value(board)
                     - forgone(mine, myOffence) + forgone(theirs, theirOffence)
             }
@@ -374,7 +389,7 @@ struct TurnGame {
             for (j, theirIndex) in theirsKept.enumerated() {
                 let after = TurnModel.resolve(board, mine: shallow.myPlays[myIndex],
                                               theirs: shallow.theirPlays[theirIndex],
-                                              store: store)
+                                              store: store, narrating: false)
                 // The turn that follows, worth what its own equilibrium says.
                 // A board where every line is bad is a bad board, whatever the
                 // health bars say about it.

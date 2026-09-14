@@ -40,6 +40,11 @@ struct BattleView: View {
     @State private var rightPick: Choice?
     @State private var thinking = false
     @State private var mySide: [String] = []
+    /// The search itself, kept so the tiles can read it.
+    @State private var thought: BattleEngine.Result?
+    @State private var solved: TurnGame.Solution?
+    /// Let the engine give my orders too, to watch a game out.
+    @State private var watching = false
     @State private var theirSide: [String] = []
     @State private var searchNote = ""
     @State private var finished: String?
@@ -70,8 +75,15 @@ struct BattleView: View {
     init(openTeams: (mine: String, theirs: String)? = nil,
          previewing: [String] = [],
          playing: Board? = nil,
-         showing: Command = .menu) {
+         showing: Command = .menu,
+         thinking seeded: (BattleEngine.Result, TurnGame.Solution)? = nil) {
         _command = State(initialValue: showing)
+        // The search runs as a task, which a snapshot never gets to run, so a
+        // snapshot hands the answer in ready-made.
+        if let seeded {
+            _thought = State(initialValue: seeded.0)
+            _solved = State(initialValue: seeded.1)
+        }
         if let openTeams {
             _myTeamID = State(initialValue: openTeams.mine)
             _opponentID = State(initialValue: openTeams.theirs)
@@ -714,14 +726,16 @@ struct BattleView: View {
     }
 
     private func preview(_ board: Board, fighter: Fighter, slot: Int,
-                         choice: Choice) -> (text: String, tint: Color)? {
+                         choice: Choice, only: Int? = nil) -> (text: String, tint: Color)? {
         guard case .attack(let index, let target) = choice,
               fighter.moves.indices.contains(index) else { return nil }
         let move = fighter.moves[index]
         guard move.isDamaging else { return nil }
         let becoming = evolving(fighter, slot: slot, board: board)
-        let aimed: [Int] = move.isSpread
-            ? Array(0..<min(board.activeCount, board.theirs.count)) : [target]
+        // A spread move is read across everything it reaches, unless one of
+        // them is asked about on its own.
+        let aimed: [Int] = only.map { [$0] }
+            ?? (move.isSpread ? Array(0..<min(board.activeCount, board.theirs.count)) : [target])
         var low = 0, high = 0, best = 1.0
         var hp = 1
         for slot in aimed {
@@ -880,6 +894,74 @@ struct BattleView: View {
         return (score, why)
     }
 
+    // MARK: What the engine would do
+
+    /// How often the engine would click each of this Pokémon's moves, summed
+    /// over every line in its mix that uses it. This is the number that goes
+    /// on the tile, because it is the one worth seeing while choosing.
+    private func engineShare(slot: Int, move: Int) -> Double {
+        guard let thought else { return 0 }
+        var total = 0.0
+        for (index, play) in thought.plays.enumerated() where thought.mix.indices.contains(index) {
+            let choice = slot == 0 ? play.left : play.right
+            if case .attack(let m, _) = choice, m == move { total += thought.mix[index] }
+        }
+        return total
+    }
+
+    /// How often the engine would switch this slot out.
+    private func engineSwitchShare(slot: Int) -> Double {
+        guard let thought else { return 0 }
+        var total = 0.0
+        for (index, play) in thought.plays.enumerated() where thought.mix.indices.contains(index) {
+            if (slot == 0 ? play.left : play.right).isSwap { total += thought.mix[index] }
+        }
+        return total
+    }
+
+    /// The single line the engine likes most.
+    private var enginePick: Play? {
+        guard let thought, let top = thought.mix.indices.max(by: { thought.mix[$0] < thought.mix[$1] }),
+              thought.plays.indices.contains(top) else { return nil }
+        return thought.plays[top]
+    }
+
+    /// What a pair of orders is worth against their mix, on the same scale the
+    /// engine values its own line — so yours and its can sit side by side.
+    private func worth(_ play: Play) -> Double? {
+        guard let solved, let board else { return nil }
+        if let row = solved.myPlays.firstIndex(of: play) {
+            return zip(solved.payoff[row], solved.theirMix).reduce(0) { $0 + $1.0 * $1.1 }
+        }
+        // A line the engine never listed — a third target, a move it trimmed —
+        // is still yours to play, so it is scored the same way, against their
+        // mix, rather than left blank.
+        var total = 0.0
+        for (column, theirs) in solved.theirPlays.enumerated() where solved.theirMix[column] > 0.001 {
+            let after = TurnModel.resolve(board, mine: play, theirs: theirs, store: store,
+                                          narrating: false)
+            total += (TurnModel.value(after) - TurnModel.value(board)) * solved.theirMix[column]
+        }
+        return total
+    }
+
+    /// Give both orders from the engine's mix, sampled so a watched game varies.
+    private func engineOrders(_ board: Board, result: BattleEngine.Result) {
+        guard !result.plays.isEmpty else { return }
+        let roll = Double.random(in: 0...1)
+        var running = 0.0
+        var chosen = result.plays[0]
+        for (index, weight) in result.mix.enumerated() {
+            running += weight
+            if roll <= running, result.plays.indices.contains(index) {
+                chosen = result.plays[index]; break
+            }
+        }
+        leftPick = chosen.left
+        rightPick = board.activeCount > 1 ? chosen.right : nil
+        megaSlot = chosen.megaSlot
+    }
+
     // MARK: Commanding, the way the game does it
 
     /// Where you are in giving orders: one Pokémon at a time, first the choice
@@ -1016,6 +1098,8 @@ struct BattleView: View {
                 }
             }
 
+            engineLine(board)
+
             switch command {
             case .menu:
                 HStack(spacing: 12) {
@@ -1023,7 +1107,10 @@ struct BattleView: View {
                         command = .fight
                     }
                     bigCommand("Party", symbol: "arrow.left.arrow.right", tint: Palette.good,
-                               enabled: !switchOptions(board).isEmpty) {
+                               enabled: !switchOptions(board).isEmpty,
+                               note: engineSwitchShare(slot: slot) >= 0.1
+                                 ? String(format: "engine switches %.0f%%",
+                                          engineSwitchShare(slot: slot) * 100) : nil) {
                         command = .party
                     }
                 }
@@ -1041,14 +1128,104 @@ struct BattleView: View {
         .padding(16)
     }
 
+    /// The line the engine expects from them, with how sure it is.
+    private var theirExpected: (play: Play, share: Double)? {
+        guard let solved, let top = solved.theirMix.indices.max(by: { solved.theirMix[$0] < solved.theirMix[$1] }),
+              solved.theirPlays.indices.contains(top) else { return nil }
+        return (solved.theirPlays[top], solved.theirMix[top])
+    }
+
+    /// The position in a word, so the number next to it means something.
+    private func standing(_ value: Double) -> String {
+        let size = abs(value)
+        let side = value >= 0 ? "ahead" : "behind"
+        if size < 0.15 { return "even" }
+        if size < 0.6 { return "slightly \(side)" }
+        if size < 1.5 { return side }
+        return "well \(side)"
+    }
+
+    /// The engine's answer where you are choosing: what it would do, how
+    /// firmly, what it expects back, and where it thinks you stand. Two short
+    /// lines, because the numbers are the point and the prose is not.
+    @ViewBuilder
+    private func engineLine(_ board: Board) -> some View {
+        if let thought, let pick = enginePick {
+            var game = TurnGame(board: board, store: store)
+            let _ = { game.width = 10 }()
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Image(systemName: "cpu").font(.system(size: 10))
+                        .foregroundStyle(Palette.accent)
+                    Text("Engine:")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Palette.accent)
+                    Text(game.describe(pick, mine: true))
+                        .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
+                    Text(String(format: "· %.0f%%", (thought.mix.max() ?? 0) * 100))
+                        .font(.system(size: 10, weight: .semibold, design: .rounded)).monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .help("How often it would choose this line. Under 100% means it mixes on purpose, so the other side cannot read it.")
+                    Text("· \(standing(thought.value)) (\(String(format: "%+.2f", thought.value)))"
+                         + " · \(thought.depth) turn\(thought.depth == 1 ? "" : "s") deep")
+                        .font(.system(size: 10, design: .rounded)).monospacedDigit()
+                        .foregroundStyle(.tertiary)
+                    if thought.uncertainty > 0.2 {
+                        Text("· depends on their item")
+                            .font(.system(size: 10)).foregroundStyle(Palette.warn)
+                            .help("The answer swings on what they are holding, which nobody can see.")
+                    }
+                    Spacer(minLength: 0)
+                    Button {
+                        engineOrders(board, result: thought)
+                        command = .menu
+                    } label: {
+                        Text("Take its orders").font(.system(size: 10, weight: .semibold))
+                    }
+                    .controlSize(.small)
+                }
+                if let expected = theirExpected {
+                    HStack(spacing: 8) {
+                        Image(systemName: "eye").font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        Text("Expects them to:")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Text(game.describe(expected.play, mine: false))
+                            .font(.system(size: 11)).lineLimit(1)
+                        Text(String(format: "· %.0f%%", expected.share * 100))
+                            .font(.system(size: 10, design: .rounded)).monospacedDigit()
+                            .foregroundStyle(.tertiary)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(Palette.accent.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        } else if thinking {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Engine is searching…").font(.system(size: 10)).foregroundStyle(.tertiary)
+            }
+        }
+    }
+
     /// The two big buttons the game gives you.
     private func bigCommand(_ title: String, symbol: String, tint: Color,
-                            enabled: Bool = true, act: @escaping () -> Void) -> some View {
+                            enabled: Bool = true, note: String? = nil,
+                            act: @escaping () -> Void) -> some View {
         Button(action: act) {
             HStack(spacing: 10) {
                 Image(systemName: symbol).font(.system(size: 18, weight: .semibold))
                 Text(title.uppercased())
                     .font(.system(size: 15, weight: .heavy)).kerning(1.2)
+                if let note {
+                    Text(note).font(.system(size: 10, weight: .semibold))
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(.white.opacity(0.25)).clipShape(Capsule())
+                }
                 Spacer()
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold))
                     .opacity(0.6)
@@ -1067,12 +1244,38 @@ struct BattleView: View {
         .disabled(!enabled)
     }
 
+    /// How often the engine's lines evolve this slot this turn.
+    private func engineMegaShare(slot: Int) -> Double {
+        guard let thought else { return 0 }
+        var total = 0.0
+        for (index, play) in thought.plays.enumerated() where thought.mix.indices.contains(index) {
+            if play.megaSlot == slot { total += thought.mix[index] }
+        }
+        return total
+    }
+
     private func megaToggle(slot: Int, becoming: Form) -> some View {
-        Button { megaSlot = megaSlot == slot ? nil : slot } label: {
+        let share = engineMegaShare(slot: slot)
+        return Button { megaSlot = megaSlot == slot ? nil : slot } label: {
             HStack(spacing: 5) {
                 Image(systemName: megaSlot == slot ? "sparkles" : "circle.dashed")
                     .font(.system(size: 10))
                 Text("Mega Evolve").font(.system(size: 11, weight: .semibold))
+                if thought != nil {
+                    HStack(spacing: 3) {
+                        Image(systemName: "cpu").font(.system(size: 8))
+                        Text(share >= 0.995 ? "yes" : share <= 0.005 ? "not yet"
+                             : String(format: "%.0f%%", share * 100))
+                            .font(.system(size: 10, weight: .heavy, design: .rounded))
+                            .monospacedDigit()
+                    }
+                    .padding(.horizontal, 6).padding(.vertical, 1)
+                    .background(Palette.accent.opacity(0.14))
+                    .clipShape(Capsule())
+                    .help(share <= 0.005
+                          ? "The engine holds the stone this turn — usually so its weather lands second, or to keep the option."
+                          : "How often the engine's lines evolve now")
+                }
             }
             .padding(.horizontal, 10).padding(.vertical, 5)
             .background(megaSlot == slot ? Palette.warn.opacity(0.24) : Palette.surface)
@@ -1105,9 +1308,19 @@ struct BattleView: View {
         let type = PokeType(loose: move.type) ?? .normal
         let aim = move.aim
         let usable = !move.drawbacks.firstTurnOnly || fighter.justArrived
-        let reading = aim == .spread
-            ? preview(board, fighter: fighter, slot: slot,
-                      choice: .attack(move: index, target: 0)) : nil
+        // What it does to each of them, on the tile, before anything is
+        // clicked. The point of a practice board is seeing the numbers — and
+        // a target it cannot touch is said so, not left off.
+        let perTarget: [(name: String, text: String, tint: Color)] = (aim == .foe || aim == .spread) && move.isDamaging
+            ? (0..<min(board.activeCount, board.theirs.count)).compactMap { target in
+                guard !board.theirs[target].fainted else { return nil }
+                let name = board.theirs[target].build.form.formLabel
+                guard let read = preview(board, fighter: fighter, slot: slot,
+                                         choice: .attack(move: index, target: target),
+                                         only: target)
+                else { return (name, "no effect", Palette.dim) }
+                return (name, read.text, read.tint)
+            } : []
         return Button {
             guard usable else { return }
             if aim == .foe {
@@ -1123,6 +1336,19 @@ struct BattleView: View {
                         .font(.system(size: 14, weight: .bold))
                         .lineLimit(1).minimumScaleFactor(0.75)
                     Spacer()
+                    let share = engineShare(slot: slot, move: index)
+                    if share >= 0.1 {
+                        HStack(spacing: 3) {
+                            Image(systemName: "cpu").font(.system(size: 8))
+                            Text(String(format: "%.0f%%", share * 100))
+                                .font(.system(size: 10, weight: .heavy, design: .rounded))
+                                .monospacedDigit()
+                        }
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(.white.opacity(0.28))
+                        .clipShape(Capsule())
+                        .help("How often the engine would click this, across the lines it rates")
+                    }
                     if move.priority != 0 {
                         Text(move.priority > 0 ? "+\(move.priority)" : "\(move.priority)")
                             .font(.system(size: 11, weight: .heavy))
@@ -1145,10 +1371,13 @@ struct BattleView: View {
                 }
                 HStack(spacing: 6) {
                     Image(systemName: aimSymbol(aim)).font(.system(size: 9))
-                    Text(aimLabel(aim)).font(.system(size: 10))
-                    if let reading {
-                        Text("·").opacity(0.5)
-                        Text(reading.text)
+                    if perTarget.isEmpty {
+                        Text(aimLabel(aim)).font(.system(size: 10))
+                    }
+                    ForEach(Array(perTarget.enumerated()), id: \.offset) { position, read in
+                        if position > 0 { Text("·").opacity(0.5) }
+                        Text(read.name).font(.system(size: 10)).lineLimit(1)
+                        Text(read.text)
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
                             .monospacedDigit()
                     }
@@ -1308,14 +1537,47 @@ struct BattleView: View {
 
     /// Both orders given: the order they will go in, and the button.
     private func readyToPlay(_ board: Board) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let mine = Play(left: leftPick ?? .pass,
+                        right: board.activeCount > 1 ? (rightPick ?? .pass) : .pass,
+                        megaSlot: megaSlot)
+        return VStack(alignment: .leading, spacing: 12) {
             orderPreview(board)
+            // Yours against the engine's, before you commit. Both are scored
+            // against their mix, on one scale, so the gap means something.
+            if let pick = enginePick, let yours = worth(mine), let best = worth(pick) {
+                var game = TurnGame(board: board, store: store)
+                let _ = { game.width = 10 }()
+                HStack(spacing: 10) {
+                    Text(String(format: "Your line %+.2f", yours))
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                    Text("·").foregroundStyle(.tertiary)
+                    Text(String(format: "engine's %+.2f", best))
+                        .font(.system(size: 11, design: .rounded)).monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    if best - yours > 0.05 {
+                        Text("· \(String(format: "%.2f", best - yours)) behind — it would \(game.describe(pick, mine: true))")
+                            .font(.system(size: 10)).foregroundStyle(Palette.warn)
+                            .lineLimit(1)
+                    } else {
+                        Text("· as good as the engine's").font(.system(size: 10))
+                            .foregroundStyle(Palette.good)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(Palette.surfaceRaised.opacity(0.6))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
             HStack {
                 if let grade {
                     Text(grade).font(.system(size: 10))
                         .foregroundStyle(grade.hasPrefix("That is")
                                          ? AnyShapeStyle(Palette.good) : AnyShapeStyle(Palette.warn))
                 }
+                Toggle("Let the engine play me", isOn: $watching)
+                    .toggleStyle(.checkbox).controlSize(.small)
+                    .help("The engine gives your orders too, so you can watch a game out and see what it does.")
                 Spacer()
                 Button {
                     playTurn()
@@ -1504,7 +1766,7 @@ struct BattleView: View {
             let result = engine.think(board)
             var game = TurnGame(board: board, store: store)
             game.width = engine.beam + 2
-            let solved = game.solve()
+            let turnSolve = game.solve()
 
             var ours: [String] = []
             if let top = result.mix.indices.max(by: { result.mix[$0] < result.mix[$1] }),
@@ -1544,27 +1806,34 @@ struct BattleView: View {
                let becoming = board.mine[wants].pendingMega {
                 ours.append("It wants \(board.mine[wants].build.form.formLabel) to Mega Evolve into \(becoming.formLabel) this turn — the toggle beside its move.")
             }
-            ours += result.principal
-            mySide = ours
+            ours += result.principal.prefix(2)
+            mySide = Array(ours.prefix(5))
             searchNote = "searched \(result.depth) turns, \(result.nodes) positions"
+            thought = result
+            self.solved = turnSolve
 
             var theirs: [String] = []
-            if let likely = solved.theirMix.indices.max(by: {
-                solved.theirMix[$0] < solved.theirMix[$1] }),
-               solved.theirPlays.indices.contains(likely) {
+            if let likely = turnSolve.theirMix.indices.max(by: {
+                turnSolve.theirMix[$0] < turnSolve.theirMix[$1] }),
+               turnSolve.theirPlays.indices.contains(likely) {
                 theirs.append(String(format: "Most likely: %@, about %.0f%% of the time.",
-                                     game.describe(solved.theirPlays[likely], mine: false),
-                                     solved.theirMix[likely] * 100))
+                                     game.describe(turnSolve.theirPlays[likely], mine: false),
+                                     turnSolve.theirMix[likely] * 100))
             }
-            theirs += game.readingNotes(solved)
+            theirs += game.readingNotes(turnSolve)
             let hidden = board.mine.prefix(board.activeCount)
                 .map { "\($0.build.form.formLabel)'s \($0.build.item)" }
             if !hidden.isEmpty {
                 theirs.append("They cannot see " + hidden.joined(separator: " or ")
                               + ", nor which four you brought, so they are playing the likeliest version of you.")
             }
-            theirSide = theirs
+            theirSide = Array(theirs.prefix(4))
             thinking = false
+            // Watching: the engine gives my orders as well, and plays.
+            if watching, finished == nil, sending.isEmpty {
+                engineOrders(board, result: result)
+                if leftPick != nil { playTurn() }
+            }
         }
     }
 
@@ -1639,6 +1908,7 @@ struct BattleView: View {
         sending = next.gapsOfMine
         leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
         struck = hitMine; struckTheirs = hitTheirs
+        thought = nil; self.solved = nil
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 450_000_000)
             struck = []; struckTheirs = []

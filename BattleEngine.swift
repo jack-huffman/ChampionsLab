@@ -132,6 +132,9 @@ struct BattleEngine {
 
     private final class Table {
         var values: [String: Double] = [:]
+        /// The one-turn solution of each position seen, kept because the
+        /// deeper passes use it to decide which lines are worth following.
+        var shallow: [String: TurnGame.Solution] = [:]
         var nodes = 0
     }
 
@@ -161,7 +164,15 @@ struct BattleEngine {
                 plays = solved.plays
                 values.append(solved.value * chance)
             }
-            guard !ranOut, !values.isEmpty, !plays.isEmpty else { break }
+            // Out of time with nothing finished at this depth: stop, and return
+            // whatever the last depth gave. Out of time with *some* worlds
+            // finished: the first world is always the likeliest, so a partial
+            // average over the worlds that did finish is a real answer and is
+            // kept. This used to discard every finished world and hand back an
+            // empty result whenever the machine was a little slow, which read
+            // on screen as the engine having no opinion at all.
+            if values.isEmpty || plays.isEmpty { break }
+            let finishedAll = !ranOut
 
             // Average the mixes across worlds, weighted by how likely each is.
             let weight = versions.prefix(mixes.count).reduce(0) { $0 + $1.chance }
@@ -188,35 +199,57 @@ struct BattleEngine {
                                                deadline: deadline),
                           drift: value - (shallowValue ?? value),
                           uncertainty: spread)
+            if !finishedAll { break }
         }
         return best ?? Result(mix: [1], plays: [Play(left: .pass, right: .pass)],
                               value: 0, depth: 0, nodes: 0, principal: [],
                               drift: 0, uncertainty: 0)
     }
 
+    /// The one-turn solution of a position, computed once.
+    private func shallow(_ board: Board, game: TurnGame, table: Table) -> TurnGame.Solution {
+        let key = signature(board) + "#\(game.width)\(game.assumeMega)"
+        if let known = table.shallow[key] { return known }
+        let solved = game.solve(iterations: 900)
+        table.shallow[key] = solved
+        return solved
+    }
+
+    /// The lines worth following: the ones the one-turn equilibrium plays,
+    /// likeliest first. Following the first few in list order instead — which
+    /// is what this did — meant the deep search only ever considered attacking
+    /// with both, and found switching and Protect exactly never.
+    private func beamed(_ mix: [Double], count: Int) -> [Int] {
+        Array(mix.indices.sorted { mix[$0] > mix[$1] || (mix[$0] == mix[$1] && $0 < $1) }
+                .prefix(count))
+    }
+
     /// One node: build the matrix, score each cell by looking deeper, solve.
+    /// The mix comes back over every play the position offers, with zero on
+    /// the ones the beam left out, so mixes from different worlds line up.
     private func solve(_ board: Board, game: TurnGame, depth: Int,
                        deadline: Date, table: Table)
         -> (mix: [Double], plays: [Play], value: Double) {
-        let mine = game.plays(forMine: true)
-        let theirs = game.plays(forMine: false)
-        guard !mine.isEmpty, !theirs.isEmpty else { return ([1], [Play(left: .pass, right: .pass)], 0) }
-
         // At the leaf, the turn's own equilibrium is the evaluation. Scoring a
         // position by counting health says a board where every line loses is
         // fine as long as nobody has been hit yet.
+        let leaf = shallow(board, game: game, table: table)
+        let mine = leaf.myPlays
+        let theirs = leaf.theirPlays
+        guard !mine.isEmpty, !theirs.isEmpty else { return ([1], [Play(left: .pass, right: .pass)], 0) }
         if depth <= 1 || Date() >= deadline {
-            let solved = game.solve(iterations: 900)
-            return (solved.myMix, solved.myPlays, solved.value)
+            return (leaf.myMix, mine, leaf.value)
         }
 
-        let keptMine = Array(mine.prefix(beam))
-        let keptTheirs = Array(theirs.prefix(beam))
+        let myBeam = beamed(leaf.myMix, count: beam)
+        let theirBeam = beamed(leaf.theirMix, count: beam)
+        let keptMine = myBeam.map { mine[$0] }
+        let keptTheirs = theirBeam.map { theirs[$0] }
         var payoff = [[Double]](repeating: [Double](repeating: 0, count: keptTheirs.count),
                                 count: keptMine.count)
         for (i, my) in keptMine.enumerated() {
             for (j, their) in keptTheirs.enumerated() {
-                var after = TurnModel.resolve(board, mine: my, theirs: their, store: store)
+                var after = TurnModel.resolve(board, mine: my, theirs: their, store: store, narrating: false)
                 after.fillGaps()
                 table.nodes += 1
                 let immediate = TurnModel.value(after) - TurnModel.value(board)
@@ -231,6 +264,7 @@ struct BattleEngine {
                 }
                 var next = TurnGame(board: after, store: store)
                 next.width = beam
+                next.assumeMega = true
                 let deeper = solve(after, game: next, depth: depth - 1,
                                    deadline: deadline, table: table)
                 table.values[key] = deeper.value
@@ -239,17 +273,34 @@ struct BattleEngine {
                 payoff[i][j] = immediate + 0.75 * deeper.value
             }
         }
-        let (myMix, _, value) = TurnGame.equilibrium(payoff, iterations: 900)
-        return (myMix, keptMine, value)
+        let (beamMix, _, value) = TurnGame.equilibrium(payoff, iterations: 900)
+        var mix = [Double](repeating: 0, count: mine.count)
+        for (slot, index) in myBeam.enumerated() where slot < beamMix.count {
+            mix[index] = beamMix[slot]
+        }
+        return (mix, mine, value)
     }
 
-    /// Enough of a position to recognise it again.
+    /// Enough of a position to recognise it again. Everything a turn's answer
+    /// depends on has to be in here, because a solution is now remembered by
+    /// it: two boards that differ only in the weather, or in whether a
+    /// Pokémon came in this turn, get different answers and must not share one.
     private func signature(_ board: Board) -> String {
-        var out = ""
-        for fighter in board.mine { out += "\(fighter.build.form.id):\(fighter.hp)," }
-        out += "|"
-        for fighter in board.theirs { out += "\(fighter.build.form.id):\(fighter.hp)," }
-        return out + "|\(board.myTailwind)\(board.theirTailwind)\(board.trickRoom)"
+        func side(_ team: [Fighter]) -> String {
+            var out = ""
+            for fighter in team {
+                out += "\(fighter.build.form.id):\(fighter.hp):\(fighter.status)"
+                out += fighter.justArrived ? "a" : fighter.protectedLast ? "p" : "-"
+                out += fighter.pendingMega == nil ? "" : "m"
+                out += "\(fighter.build.boosts)\(fighter.build.itemSpent ? "s" : ""),"
+            }
+            return out
+        }
+        return side(board.mine) + "|" + side(board.theirs)
+            + "|\(board.field.weather)\(board.field.terrain)"
+            + "\(board.myTailwind)\(board.theirTailwind)\(board.trickRoom)"
+            + "\(board.myScreens.reflect)\(board.myScreens.lightScreen)\(board.myScreens.auroraVeil)"
+            + "\(board.theirScreens.reflect)\(board.theirScreens.lightScreen)\(board.theirScreens.auroraVeil)"
     }
 
     /// The line it is actually expecting, written out.
@@ -261,22 +312,24 @@ struct BattleEngine {
         var current = board
         var play = plays[first]
         for turn in 0..<min(depth, 3) {
-            var game = TurnGame(board: current, store: current.mine.isEmpty ? store : store)
-            game.width = beam
-            let theirs = game.plays(forMine: false)
-            let solved = game.solve(iterations: 400)
+            var game = TurnGame(board: current, store: store)
+            game.width = turn == 0 ? beam + 2 : beam
+            game.assumeMega = turn > 0
+            let solved = shallow(current, game: game, table: table)
+            let theirs = solved.theirPlays
             let theirBest = solved.theirMix.indices.max { solved.theirMix[$0] < solved.theirMix[$1] }
             let theirPlay = theirBest.flatMap { theirs.indices.contains($0) ? theirs[$0] : nil }
                 ?? Play(left: .pass, right: .pass)
             out.append("Turn \(turn + 1): \(game.describe(play, mine: true))"
                        + " — they answer \(game.describe(theirPlay, mine: false))")
-            var after = TurnModel.resolve(current, mine: play, theirs: theirPlay, store: store)
+            var after = TurnModel.resolve(current, mine: play, theirs: theirPlay, store: store, narrating: false)
             after.fillGaps()
             if after.isOut(mine: true) || after.isOut(mine: false) { break }
             current = after
             var nextGame = TurnGame(board: current, store: store)
             nextGame.width = beam
-            let nextSolved = nextGame.solve(iterations: 400)
+            nextGame.assumeMega = true
+            let nextSolved = shallow(current, game: nextGame, table: table)
             guard let pick = nextSolved.myMix.indices.max(by: {
                 nextSolved.myMix[$0] < nextSolved.myMix[$1] }),
                 nextSolved.myPlays.indices.contains(pick) else { break }

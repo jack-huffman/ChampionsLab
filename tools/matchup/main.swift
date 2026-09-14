@@ -1190,6 +1190,111 @@ Ability: Regenerator
     check("a search fills both sides so it can keep going",
           !searching.mine[0].fainted && !searching.theirs[0].fainted)
 
+    // -- what an ability does during a turn -----------------------------------
+    print("\n== abilities in the turn ==")
+    // Rough Skin: touching Garchomp costs an eighth.
+    let touchers = fighters([("Incineroar", "Sitrus Berry", ["Flare Blitz", "Protect"]),
+                             ("Whimsicott", "Focus Sash", ["Protect"]),
+                             ("Kingambit", "Chople Berry", ["Protect"])])
+    let barbed = fighters([("Garchomp", "Life Orb", ["Swords Dance", "Earthquake", "Protect"]),
+                           ("Rillaboom", "Life Orb", ["Protect"]),
+                           ("Kingambit", "Chople Berry", ["Protect"])])
+    var barbBoard = Board(mine: touchers, theirs: barbed, store: store,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+    barbBoard.theirs[0].build.ability = "Rough Skin"
+    let scraped = TurnModel.resolve(
+        barbBoard,
+        mine: Play(left: .attack(move: at(barbBoard.mine[0], "Flare Blitz"), target: 0),
+                   right: .attack(move: at(barbBoard.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(barbBoard.theirs[0], "Swords Dance"), target: 0),
+                     right: .attack(move: at(barbBoard.theirs[1], "Protect"), target: 0)),
+        store: store)
+    check("Rough Skin costs a contact attacker health",
+          scraped.story.contains { $0.contains("Rough Skin") },
+          scraped.story.filter { $0.contains("Incineroar") }.joined(separator: " | "))
+
+    // Emergency Exit: cross half and it leaves.
+    let exiting = fighters([("Golisopod", "Sitrus Berry", ["First Impression", "Protect"]),
+                            ("Whimsicott", "Focus Sash", ["Protect"]),
+                            ("Kingambit", "Chople Berry", ["Iron Head", "Protect"])])
+    let hitters = fighters([("Garchomp", "Life Orb", ["Earthquake", "Protect"]),
+                            ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"]),
+                            ("Incineroar", "Sitrus Berry", ["Protect"])])
+    var exitBoard = Board(mine: exiting, theirs: hitters, store: store,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+    exitBoard.mine[0].build.ability = "Emergency Exit"
+    let fled = TurnModel.resolve(
+        exitBoard,
+        mine: Play(left: .attack(move: at(exitBoard.mine[0], "Protect"), target: 0),
+                   right: .attack(move: at(exitBoard.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(exitBoard.theirs[0], "Earthquake"), target: 0),
+                     right: .attack(move: at(exitBoard.theirs[1], "Wood Hammer"), target: 0)),
+        store: store)
+    // Golisopod protected, so it should still be there. Now let it be hit.
+    var exposed = exitBoard
+    exposed.mine[0].moves = [store.data.moves.values.first { $0.name == "Iron Head" }!]
+    let struck = TurnModel.resolve(
+        exposed,
+        mine: Play(left: .attack(move: 0, target: 0),
+                   right: .attack(move: at(exposed.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(exposed.theirs[0], "Protect"), target: 0),
+                     right: .attack(move: at(exposed.theirs[1], "Wood Hammer"), target: 0)),
+        store: store)
+    print("  after being hit, slot 0 is \(struck.mine[0].build.form.formLabel)")
+    check("Emergency Exit sends Golisopod out when it drops below half",
+          struck.story.contains { $0.contains("Emergency Exit") }
+            && struck.mine[0].build.form.formLabel != "Golisopod",
+          struck.story.filter { $0.contains("Golisopod") }.joined(separator: " | "))
+    _ = fled
+
+    // Regenerator heals on the way out.
+    var regen = Board(mine: touchers, theirs: barbed, store: store,
+                      field: Field(isDoubles: true), alreadyEvolved: false)
+    regen.mine[0].build.ability = "Regenerator"
+    regen.mine[0].hp = regen.mine[0].maxHP / 3
+    let pivoted = TurnModel.resolve(
+        regen,
+        mine: Play(left: .swap(to: 2), right: .attack(move: at(regen.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(regen.theirs[0], "Protect"), target: 0),
+                     right: .attack(move: at(regen.theirs[1], "Protect"), target: 0)),
+        store: store)
+    let benched = pivoted.mine.first { $0.build.form.formLabel == "Incineroar" }!
+    print("  Incineroar left on \(regen.mine[0].hp), sits on the bench at \(benched.hp)")
+    check("Regenerator heals a third on the way out",
+          benched.hp > regen.mine[0].hp, "\(benched.hp) vs \(regen.mine[0].hp)")
+
+    // Crits: over many rolls, some land, and the note says so.
+    let blitz = barbBoard.mine[0].moves[at(barbBoard.mine[0], "Flare Blitz")]
+    print("  Flare Blitz critical rate in the data: \(blitz.critRate)%")
+    var crits = 0
+    for _ in 0..<200 {
+        let rolled = TurnModel.resolve(
+            barbBoard,
+            mine: Play(left: .attack(move: at(barbBoard.mine[0], "Flare Blitz"), target: 0),
+                       right: .attack(move: at(barbBoard.mine[1], "Protect"), target: 0)),
+            theirs: Play(left: .attack(move: at(barbBoard.theirs[0], "Swords Dance"), target: 0),
+                         right: .attack(move: at(barbBoard.theirs[1], "Protect"), target: 0)),
+            store: store, rolling: true)
+        if rolled.story.contains(where: { $0.contains("critical") }) { crits += 1 }
+    }
+    print("  200 Flare Blitzes: \(crits) critical hits (about 8 expected at 1 in 24)")
+    check("critical hits happen, at roughly the right rate", crits >= 1 && crits <= 30, "\(crits)")
+
+    // And a pinch ability switches on when low.
+    var low = Combatant(form: form("Charizard"), ability: "Blaze", item: "",
+                        sp: Array(repeating: 0, count: 6), alignment: .neutral)
+    let target = Combatant(form: form("Rillaboom"), ability: "Grassy Surge", item: "",
+                           sp: Array(repeating: 0, count: 6), alignment: .neutral)
+    let flare = store.data.moves.values.first { $0.name == "Flamethrower" }!
+    let healthy = DamageCalc.calculate(attacker: low, defender: target, move: flare,
+                                       field: Field(isDoubles: true)).maxDamage
+    low.lowHP = true
+    let desperate = DamageCalc.calculate(attacker: low, defender: target, move: flare,
+                                         field: Field(isDoubles: true)).maxDamage
+    print("  Blaze Flamethrower: \(healthy) healthy, \(desperate) when low")
+    check("Blaze adds half again once the user is low", desperate > healthy,
+          "\(desperate) vs \(healthy)")
+
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)
 }

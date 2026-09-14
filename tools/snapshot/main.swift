@@ -181,7 +181,13 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         render(BattleView(playing: board), named: "battle-dark",
                size: CGSize(width: 1180, height: 1500), dark: true)
         // And the Fight grid, which is what most turns are spent looking at.
-        render(BattleView(playing: board, showing: .fight), named: "battle-fight-dark",
+        // With the engine's answer already in, so its badges show on the tiles.
+        let engine = BattleEngine(store: store, budget: 0.4)
+        let thought = engine.think(board)
+        var game = TurnGame(board: board, store: store)
+        game.width = engine.beam + 2
+        render(BattleView(playing: board, showing: .fight, thinking: (thought, game.solve())),
+               named: "battle-fight-dark",
                size: CGSize(width: 1180, height: 1500), dark: true)
     }
     render(SpeedTiersView(), named: "speed-dark",
