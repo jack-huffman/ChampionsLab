@@ -63,7 +63,8 @@ struct TurnGame {
         for target in 0..<min(2, foes.count) where !foes[target].fainted {
             var best: (index: Int, damage: Int)?
             for (index, move) in fighter.moves.enumerated()
-            where move.isDamaging && !move.isSpread {
+            where move.isDamaging && !move.isSpread
+                && (!move.drawbacks.firstTurnOnly || fighter.justArrived) {
                 let result = DamageCalc.calculate(attacker: fighter.build,
                                                   defender: foes[target].build,
                                                   move: move, field: board.field)
@@ -77,7 +78,9 @@ struct TurnGame {
         // A spread move is a different decision, not a better version of one —
         // and it is the move that covers a switch, since whatever comes in is
         // standing in it.
-        if let index = fighter.moves.firstIndex(where: { $0.isDamaging && $0.isSpread }) {
+        if let index = fighter.moves.firstIndex(where: {
+            $0.isDamaging && $0.isSpread
+                && (!$0.drawbacks.firstTurnOnly || fighter.justArrived) }) {
             spread.append(.attack(move: index, target: 0))
         }
         // Protect, unless it was used last turn, when it mostly fails.

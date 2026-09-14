@@ -103,7 +103,12 @@ extension Move {
         var out = Drawbacks()
         let text = effect
 
-        if let fraction = Move.fraction(in: text, after: #"user takes ([\d/]+) of the damage dealt"#) {
+        // "The user takes 1/3" and "The user also takes 1/3" are the same move
+        // costing the same thing. Without the "also", Flare Blitz and Volt
+        // Tackle -- the two most-played recoil moves in the format -- were
+        // priced and played as though they cost nothing.
+        if let fraction = Move.fraction(
+            in: text, after: #"user (?:also )?takes ([\d/]+) of the damage dealt"#) {
             out.recoil = fraction
         }
         if let fraction = Move.fraction(

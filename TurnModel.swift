@@ -637,15 +637,27 @@ enum TurnModel {
                 selfKO(move, byMine: byMine, slot: slot, board: &board)
                 return
             }
+
+            // A turn is resolved in the same five phases every time, and each
+            // one says what it did. Declaring the move, then what the far side
+            // brings to it, then the roll, then what it cost, in that order --
+            // so the commentary is the computation rather than a summary of it.
+            //
+            // 1. Declare — and check it can be used at all. First Impression
+            // and Fake Out work on the turn the Pokémon arrives and never
+            // again, which is the whole cost of a 90 base power priority move.
+            if move.drawbacks.firstTurnOnly, !actor.justArrived {
+                board.note("\(name) used \(move.name), but it only works on the turn it comes in.")
+                return
+            }
             board.note("\(name) used \(move.name).")
 
-            // Wide Guard turns a spread move away from the whole side.
-            let theirScreens = byMine ? board.theirScreens : board.myScreens
-            if move.isSpread, theirScreens.wideGuard {
+            // 2. The field: anything that stops it before it starts.
+            let farScreens = byMine ? board.theirScreens : board.myScreens
+            if move.isSpread, farScreens.wideGuard {
                 board.note("Wide Guard blocked it.")
                 return
             }
-            // Redirection: a single-target move goes where the powder is.
             var aimed = move.isSpread ? [0, 1] : [target]
             if !move.isSpread {
                 let defenders = byMine ? board.theirs : board.mine
@@ -655,10 +667,18 @@ enum TurnModel {
                     board.note("It was drawn to \(defenders[pulled].build.form.formLabel).")
                 }
             }
-
             if rolling, !move.neverMisses, move.accuracy > 0,
                Double.random(in: 0...100) > Double(move.accuracy) {
                 board.note("It missed.")
+                // A move that hurts you when it misses hurts you when it misses.
+                let costs = move.drawbacks
+                if costs.crash > 0 {
+                    let maxHP = actor.maxHP
+                    let lost = Swift.max(1, Int(Double(maxHP) * costs.crash))
+                    if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - lost) }
+                    else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - lost) }
+                    board.note("\(name) kept going and crashed.")
+                }
                 return
             }
 
@@ -673,67 +693,101 @@ enum TurnModel {
                 }
                 var defender = defending[index].build
                 defender.atFullHP = defending[index].hp == defending[index].maxHP
-                // Screens belong to the side being hit, and a burn halves what a
-                // physical attacker does.
                 var field = board.field
-                field.screen = (byMine ? board.theirScreens : board.myScreens).blunt(move)
+                field.screen = farScreens.blunt(move)
                 var attacker = actor.build
                 if actor.status.halvesPhysical, move.category == "Physical" {
                     attacker.boosts[Stat.attack.rawValue] -= 1
                 }
                 let result = DamageCalc.calculate(attacker: attacker, defender: defender,
                                                   move: move, field: field)
+
+                // 3. What the far side brings to it. These are the calculator's
+                // own notes, so the commentary cannot drift from the maths.
+                for line in result.notes where worthSaying(line) {
+                    board.note("  \(line)")
+                }
+                if actor.status.halvesPhysical, move.category == "Physical" {
+                    board.note("  \(name) is burned, so it hits softer.")
+                }
+                if result.effectiveness == 0 {
+                    board.note("It does not affect \(hitName).")
+                    continue
+                }
+
+                // 4. The roll.
                 let accuracy = move.neverMisses || move.accuracy == 0
                     ? 1.0 : Double(move.accuracy) / 100
-                // Rolling for a battle, averaging for a search.
                 let dealt: Int = rolling
                     ? Int.random(in: Swift.min(result.minDamage, result.maxDamage)
                                  ... Swift.max(result.minDamage, result.maxDamage))
                     : Int((Double(result.minDamage + result.maxDamage) / 2 * accuracy).rounded())
 
                 var landed = dealt
-                var spent = false
-                // A Focus Sash is used once, and only from full health.
+                var sashed = false
                 if defending[index].build.item == "Focus Sash",
                    !defending[index].build.itemSpent,
                    defending[index].hp == defending[index].maxHP,
                    dealt >= defending[index].hp {
                     landed = defending[index].hp - 1
-                    spent = true
+                    sashed = true
                 }
                 totalDealt += landed
+                // A berry that halved the hit is a berry that has been eaten.
+                let ateBerry = result.notes.contains { $0.contains("then is consumed") }
                 if byMine {
                     board.theirs[index].hp = Swift.max(0, board.theirs[index].hp - landed)
-                    if spent {
-                        board.theirs[index].build.itemSpent = true
-                        board.note("\(hitName) hung on with its Focus Sash.")
-                    }
+                    if sashed { board.theirs[index].build.itemSpent = true }
+                    if ateBerry { board.theirs[index].build.itemSpent = true }
                 } else {
                     board.mine[index].hp = Swift.max(0, board.mine[index].hp - landed)
-                    if spent {
-                        board.mine[index].build.itemSpent = true
-                        board.note("\(hitName) hung on with its Focus Sash.")
-                    }
+                    if sashed { board.mine[index].build.itemSpent = true }
+                    if ateBerry { board.mine[index].build.itemSpent = true }
                 }
+                let share = Int((Double(landed) / Double(Swift.max(1, defending[index].maxHP))
+                                 * 100).rounded())
                 if result.effectiveness > 1 {
-                    board.note("It is super effective on \(hitName) — \(landed).")
-                } else if result.effectiveness < 1 && result.effectiveness > 0 {
-                    board.note("\(hitName) resists it — \(landed).")
+                    board.note("It is super effective. \(hitName) took \(landed) (\(share)%).")
+                } else if result.effectiveness < 1 {
+                    board.note("\(hitName) resists it — \(landed) (\(share)%).")
                 } else {
-                    board.note("\(hitName) took \(landed).")
+                    board.note("\(hitName) took \(landed) (\(share)%).")
                 }
+                if sashed { board.note("\(hitName) hung on with its Focus Sash.") }
+
+                // 5. Afterwards: what the move does beyond the damage.
                 if move.name == "Fake Out" {
                     if byMine { board.theirs[index].flinched = true }
                     else { board.mine[index].flinched = true }
                     board.note("\(hitName) flinched.")
                 }
-                // Anything the move takes off the target.
+                if result.notes.contains(where: { $0.contains("Weakness Policy") }) {
+                    applySelf([.attack: 2, .spAttack: 2], toMine: !byMine, slot: index,
+                              board: &board)
+                    if byMine { board.theirs[index].build.itemSpent = true }
+                    else { board.mine[index].build.itemSpent = true }
+                }
                 applyDrops(move.targetDrops, toMine: !byMine, slot: index, board: &board)
+                let after = byMine ? board.theirs[index] : board.mine[index]
+                if after.hp == 0 { board.note("\(hitName) fainted.") }
             }
-            // And anything it does to the user.
             applySelf(move.selfBoosts, toMine: byMine, slot: slot, board: &board)
             cost(of: move, dealt: totalDealt, byMine: byMine, slot: slot, board: &board)
         }
+    }
+
+    /// Whether one of the calculator's notes is worth reading out.
+    ///
+    /// It keeps notes for everything it applies, including arithmetic nobody
+    /// needs narrated. What belongs in a battle log is what the *other* side
+    /// brought to the exchange, because that is the part a player did not know
+    /// and has to learn.
+    private static func worthSaying(_ note: String) -> Bool {
+        let interesting = ["halves", "consumed", "Screen", "immune", "absorbed",
+                           "Thick Fat", "Weakness Policy", "Wide Open", "Sturdy",
+                           "Focus Sash", "at full HP", "Terrain", "Snow", "Aura Guard",
+                           "Supreme Overlord", "Helping Hand", "Spread"]
+        return interesting.contains { note.contains($0) }
     }
 
     /// What using the move costs the Pokémon that used it.

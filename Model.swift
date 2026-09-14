@@ -129,6 +129,59 @@ struct Move: Codable, Identifiable, Hashable {
 
     /// Stages this move gives its own user, read from the effect text —
     /// "Boosts the user's Attack and Speed stats by 1 stage."
+    /// Who a move is pointed at, and therefore whether you get to choose.
+    ///
+    /// The dex's own target field is too coarse to use on its own: "Selected
+    /// Target" covers Protect, Swords Dance, Helping Hand and Thunder Wave,
+    /// which are aimed at four different things. Spread moves it does get
+    /// right, and the rest is read from what the move does.
+    enum Aim {
+        /// One opponent, and you pick which.
+        case foe
+        /// Everything it can reach; no choice to make.
+        case spread
+        /// Itself.
+        case user
+        /// Its partner.
+        case ally
+        /// The side, or the field.
+        case side
+    }
+
+    var aim: Aim {
+        if isSpread { return .spread }
+        if Move.sideMoves.contains(name) { return .side }
+        if Move.allyMoves.contains(name) { return .ally }
+        if Move.selfMoves.contains(name) { return .user }
+        if !isDamaging, !selfBoosts.isEmpty, targetDrops.isEmpty { return .user }
+        return .foe
+    }
+
+    /// Aimed at the user's own side or the whole field.
+    static let sideMoves: Set<String> = [
+        "Tailwind", "Trick Room", "Reflect", "Light Screen", "Aurora Veil",
+        "Wide Guard", "Quick Guard", "Safeguard", "Mist", "Lucky Chant",
+        "Sunny Day", "Rain Dance", "Sandstorm", "Snowscape", "Hail",
+        "Grassy Terrain", "Electric Terrain", "Misty Terrain", "Psychic Terrain",
+        "Gravity", "Magic Room", "Wonder Room", "Perish Song", "Haze",
+    ]
+
+    /// Aimed at the partner.
+    static let allyMoves: Set<String> = [
+        "Helping Hand", "Coaching", "Decorate", "Life Dew", "Aromatic Mist",
+        "Heal Pulse", "After You", "Ally Switch", "Instruct", "Floral Healing",
+    ]
+
+    /// Aimed at itself, beyond anything the boost text already implies.
+    static let selfMoves: Set<String> = [
+        "Protect", "Detect", "Spiky Shield", "Baneful Bunker", "Burning Bulwark",
+        "Silk Trap", "Obstruct", "King's Shield", "Endure", "Substitute",
+        "Rest", "Recover", "Roost", "Soft-Boiled", "Synthesis", "Moonlight",
+        "Morning Sun", "Slack Off", "Shore Up", "Milk Drink", "Follow Me",
+        "Rage Powder", "Baton Pass", "Belly Drum", "Focus Energy", "Stockpile",
+        "Charge", "Ingrain", "Aqua Ring", "Curse", "Destiny Bond",
+    ]
+
     /// Stages this move takes off whatever it is aimed at.
     ///
     /// "Lowers targets' Speed stats by 1 stage" is Icy Wind, which is most of
