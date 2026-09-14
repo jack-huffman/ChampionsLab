@@ -573,10 +573,11 @@ struct MatchupView: View {
                                            isDoubles: team.isDoubles))
             await breathe("turn board")
             let game = TurnGame(board: board, store: store)
-            let solution = await game.solveYielding()
+            let (solution, deep) = await game.solveDeep()
             turnRead = game.read(solution)
             await breathe("turn read")
-            turnReading = game.readingNotes(solution)
+            turnReading = game.lookaheadNotes(shallow: solution, deep: deep)
+                + game.readingNotes(solution)
             turnExploits = game.exploits(solution)
             turnLines = solution.lines.filter { $0.weight > 0.01 }
             turnLabels = Dictionary(

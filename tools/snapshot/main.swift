@@ -146,6 +146,8 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         render(FormDetail(form: form), named: "dex-detail-dark",
                size: CGSize(width: 620, height: 2400), dark: true)
     }
+    render(SpeedTiersView(), named: "speed-dark",
+           size: CGSize(width: 1000, height: 900), dark: true)
     let dexSample = Array(store.data.forms.sorted { $0.dex < $1.dex }.prefix(24))
     render(LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 10)],
                      spacing: 10) {

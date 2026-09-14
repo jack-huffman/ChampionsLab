@@ -110,6 +110,17 @@ let fieldMoveNeeds: [String: Set<String>] = [
         check("a turn solves fast enough to feel instant", warm < 120,
               String(format: "%.1f ms", warm))
 
+        // A second ply, to check what the turn buys by the end of the next one.
+        let deepStart = Date()
+        let pair = await game.solveDeep()
+        let deepMS = Date().timeIntervalSince(deepStart) * 1000
+        print(String(format: "  with a second ply: %.0f ms, one ply %+.3f, two ply %+.3f",
+                     deepMS, pair.shallow.value, pair.deep.value))
+        check("looking a turn further is still quick enough to do on a click",
+              deepMS < 900, String(format: "%.0f ms", deepMS))
+        check("the deeper solve keeps only lines the first one rated",
+              pair.deep.myPlays.count <= pair.shallow.myPlays.count)
+
         BreathLog.begin()
         _ = await game.solveYielding()
         let (count, worst) = BreathLog.end()

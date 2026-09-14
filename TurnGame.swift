@@ -228,7 +228,22 @@ struct TurnGame {
     /// So a Protect is charged most of the damage it declined to deal. Not all
     /// of it: the turn is not simply lost, it buys information and it buys the
     /// partner a turn, which is why the move is on most sets in the first place.
-    private static let tempoCost = 0.6
+    /// Settable so it can be turned off and measured, which is the only way to
+    /// know whether the constant is earning its place or hiding a mistake.
+    ///
+    /// It earns it. The obvious suspicion was that this is a hand-tuned patch
+    /// for a one-turn horizon and that looking a turn further would make it
+    /// unnecessary. Measured across four teams against the same opponent, with
+    /// the charge switched off, the share of their mix containing a Protect ran
+    /// 52%, 14%, 100% and 0% at one ply and 62%, 0%, 100% and 0% at two — on one
+    /// board a second ply made Protect *more* attractive, not less.
+    ///
+    /// Which makes sense: at the second ply the follow-up turn is scored
+    /// statically too, so the same blind spot recurs one level down. The cost
+    /// of giving up a turn only emerges from a horizon far deeper than is
+    /// affordable here. So the charge is not scaffolding for a missing search;
+    /// it is a correction the search cannot make.
+    var tempoCost = 0.6
 
     /// The same, handing the main thread back as it fills the matrix.
     ///
@@ -261,7 +276,7 @@ struct TurnGame {
         var total = 0.0
         if play.left.isProtect { total += offence[0] }
         if play.right.isProtect { total += offence[1] }
-        return total * 0.65 * TurnGame.tempoCost
+        return total * 0.65 * tempoCost
     }
 
     /// Build the matrix and solve it.
@@ -283,6 +298,96 @@ struct TurnGame {
         let (myMix, theirMix, value) = TurnGame.equilibrium(payoff, iterations: iterations)
         return Solution(myPlays: myPlays, theirPlays: theirPlays, payoff: payoff,
                         myMix: myMix, theirMix: theirMix, value: value)
+    }
+
+    // MARK: - Looking one turn further
+
+    /// How many of each side's lines are carried into the second turn.
+    ///
+    /// A full second ply squares the work, which is unaffordable and mostly
+    /// wasted: the lines nobody would play do not need their futures examined.
+    /// Only the ones the first solve actually gives weight to are followed.
+    var lookaheadWidth = 4
+
+    /// Score a board by solving the turn that follows it, rather than by
+    /// counting health.
+    ///
+    /// This is what a one-turn horizon cannot see. Setting Trick Room is a
+    /// terrible turn and a winning game; Protecting takes no damage and gains
+    /// nothing; switching gives up a turn to arrive somewhere better. All three
+    /// are decisions about the *next* turn, and a model that stops at the end
+    /// of this one has to be told about them by hand — which is exactly what
+    /// the tempo charge on Protect is, a constant standing in for a turn nobody
+    /// looked at.
+    ///
+    /// A second ply replaces the guess with a search. It is not cheap, so it is
+    /// spent only on the lines that survived the first solve.
+    func deepen(_ shallow: Solution, iterations: Int = 1500) -> Solution {
+        let mineKept = shallow.myMix.indices
+            .filter { shallow.myMix[$0] > 0.02 }
+            .sorted { shallow.myMix[$0] > shallow.myMix[$1] }
+            .prefix(lookaheadWidth)
+        let theirsKept = shallow.theirMix.indices
+            .filter { shallow.theirMix[$0] > 0.02 }
+            .sorted { shallow.theirMix[$0] > shallow.theirMix[$1] }
+            .prefix(lookaheadWidth)
+        guard mineKept.count > 1, theirsKept.count > 1 else { return shallow }
+
+        var payoff = [[Double]](
+            repeating: [Double](repeating: 0, count: theirsKept.count),
+            count: mineKept.count)
+        for (i, myIndex) in mineKept.enumerated() {
+            for (j, theirIndex) in theirsKept.enumerated() {
+                let after = TurnModel.resolve(board, mine: shallow.myPlays[myIndex],
+                                              theirs: shallow.theirPlays[theirIndex],
+                                              store: store)
+                // The turn that follows, worth what its own equilibrium says.
+                // A board where every line is bad is a bad board, whatever the
+                // health bars say about it.
+                var next = TurnGame(board: after, store: store)
+                next.width = max(3, width - 2)
+                let follow = next.solve(iterations: 600)
+                // Where the turn left things, plus what the turn after is worth
+                // from there, discounted: a turn in hand now is worth more than
+                // one promised later, and the second solve is the less reliable
+                // of the two.
+                payoff[i][j] = TurnModel.value(after) - TurnModel.value(board)
+                    + 0.6 * follow.value
+            }
+        }
+        let (myMix, theirMix, value) = TurnGame.equilibrium(payoff, iterations: iterations)
+        return Solution(myPlays: mineKept.map { shallow.myPlays[$0] },
+                        theirPlays: theirsKept.map { shallow.theirPlays[$0] },
+                        payoff: payoff, myMix: myMix, theirMix: theirMix, value: value)
+    }
+
+    /// Solve the turn, then check the answer against what follows it.
+    func solveDeep(iterations: Int = 3000) async -> (shallow: Solution, deep: Solution) {
+        let shallow = await solveYielding(iterations: iterations)
+        await breathe("lookahead")
+        let deep = deepen(shallow)
+        return (shallow, deep)
+    }
+
+    /// Where looking further changed the answer.
+    func lookaheadNotes(shallow: Solution, deep: Solution) -> [String] {
+        guard deep.myPlays.count > 1, shallow.lines.first != nil else { return [] }
+        var out: [String] = []
+        let shallowTop = shallow.lines.first!
+        let deepTop = deep.lines.first!
+        if deepTop.id != shallowTop.id {
+            out.append("Looking a turn further changes the answer: \(describe(deepTop.play, mine: true)) rather than \(describe(shallowTop.play, mine: true)). The first is worth less this turn and more by the end of the next one.")
+        } else {
+            out.append("Looking a turn further agrees: \(describe(deepTop.play, mine: true)) is still the line.")
+        }
+        let drift = deep.value - shallow.value
+        if abs(drift) > 0.1 {
+            out.append(String(format: "The turn after is worth %+.2f more than this one alone suggests, so %@.",
+                              drift,
+                              drift > 0 ? "the position is better than the health bars say"
+                                        : "this turn buys less than it looks like it does"))
+        }
+        return out
     }
 
     // MARK: - Saying what it means
