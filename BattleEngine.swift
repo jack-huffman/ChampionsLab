@@ -282,10 +282,13 @@ struct BattleEngine {
                                 count: keptMine.count)
         for (i, my) in keptMine.enumerated() {
             for (j, their) in keptTheirs.enumerated() {
-                var after = TurnModel.resolve(board, mine: my, theirs: their, store: store, narrating: false)
+                // Weighed over every way the turn can come out; the search
+                // then looks on from the likeliest of them.
+                let settled = game.settle(my, their)
+                var after = settled.likeliest
                 after.fillGaps()
                 table.nodes += 1
-                let immediate = TurnModel.value(after) - TurnModel.value(board)
+                let immediate = settled.expected
                 // A side with nothing left has lost; no need to look further.
                 if after.isOut(mine: false) { payoff[i][j] = immediate + 3; continue }
                 if after.isOut(mine: true) { payoff[i][j] = immediate - 3; continue }

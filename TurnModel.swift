@@ -207,6 +207,11 @@ struct Board {
         let trickRoom: Int
     }
 
+    /// How a repeat Protect is to come out this turn, when the search wants to
+    /// see one branch rather than roll: "m0" is your left slot, "t1" their
+    /// right. Cleared once the turn has been played.
+    var protectRulings: [String: Bool] = [:]
+
     /// Whether anybody is going to read the commentary. A played turn is read;
     /// the search plays out a thousand boards per solve and reads none of it,
     /// and snapshotting the whole board on every line of every one of them was
@@ -559,6 +564,16 @@ enum Choice: Hashable {
     var isProtect: Bool { if case .protectSelf = self { return true }; return false }
     var isSwap: Bool { if case .swap = self { return true }; return false }
     var isPass: Bool { if case .pass = self { return true }; return false }
+
+    /// A target at or past this is the user's own partner, not an opponent:
+    /// the tech of hitting your own Pokémon — a Weakness Policy, a Justified,
+    /// a Thermal Exchange — on purpose.
+    static let allyTarget = 100
+    static func attackingAlly(move: Int) -> Choice { .attack(move: move, target: allyTarget) }
+    var aimsAtAlly: Bool {
+        if case .attack(_, let target) = self { return target >= Choice.allyTarget }
+        return false
+    }
 }
 
 /// Both actives choosing at once, which is the unit a turn is actually played in.
@@ -693,14 +708,18 @@ enum TurnModel {
         // Only who was actually told to. One per side, because that is the
         // rule, and Speed decides only *when* — which is the part that matters.
         var evolving: [(mine: Bool, slot: Int, speed: Int)] = []
+        // A Pokémon evolves with the move it picks, so one that was switched
+        // in this turn — or switched out — does not.
         if let slot = mine.megaSlot, out.mine.indices.contains(slot),
            slot < out.activeCount, out.mine[slot].pendingMega != nil,
+           !(slot == 0 ? mine.left : mine.right).isSwap,
            !out.mine[slot].fainted, !out.mine.contains(where: \.hasMegaEvolved) {
             evolving.append((true, slot, speed(of: out.mine[slot],
                                                tailwind: out.myTailwind > 0, board: out)))
         }
         if let slot = theirs.megaSlot, out.theirs.indices.contains(slot),
            slot < out.activeCount, out.theirs[slot].pendingMega != nil,
+           !(slot == 0 ? theirs.left : theirs.right).isSwap,
            !out.theirs[slot].fainted, !out.theirs.contains(where: \.hasMegaEvolved) {
             evolving.append((false, slot, speed(of: out.theirs[slot],
                                                 tailwind: out.theirTailwind > 0, board: out)))
@@ -776,8 +795,51 @@ enum TurnModel {
         out.beginStep()
         endOfTurn(&out, rolling: rolling)
         out.closeStep()
+        out.protectRulings = [:]
 
         return out
+    }
+
+    /// Every way the turn can come out when somebody is trying a Protect
+    /// that might not hold, with how likely each is. One board when nobody
+    /// is; two when one Pokémon is on a repeat Protect; four when both are.
+    /// The search weighs these rather than betting on either branch, so a
+    /// second Protect in a row is worth exactly a third of a first one.
+    static func outcomes(_ board: Board, mine: Play, theirs: Play, store: Store)
+        -> [(board: Board, chance: Double)] {
+        var chancy: [(key: String, chance: Double)] = []
+        func consider(_ choice: Choice, fighter: Fighter, key: String) {
+            guard !fighter.fainted, fighter.protectStreak > 0 else { return }
+            switch choice {
+            case .protectSelf:
+                chancy.append((key, fighter.protectChance))
+            case .attack(let index, _):
+                if fighter.moves.indices.contains(index),
+                   DuelEngine.protectMoves.contains(fighter.moves[index].name) {
+                    chancy.append((key, fighter.protectChance))
+                }
+            default: break
+            }
+        }
+        if board.mine.indices.contains(0) { consider(mine.left, fighter: board.mine[0], key: "m0") }
+        if board.mine.indices.contains(1), board.activeCount > 1 { consider(mine.right, fighter: board.mine[1], key: "m1") }
+        if board.theirs.indices.contains(0) { consider(theirs.left, fighter: board.theirs[0], key: "t0") }
+        if board.theirs.indices.contains(1), board.activeCount > 1 { consider(theirs.right, fighter: board.theirs[1], key: "t1") }
+        guard !chancy.isEmpty else {
+            return [(resolve(board, mine: mine, theirs: theirs, store: store, narrating: false), 1)]
+        }
+        var out: [(board: Board, chance: Double)] = []
+        for mask in 0..<(1 << chancy.count) {
+            var ruled = board
+            var chance = 1.0
+            for (bit, entry) in chancy.enumerated() {
+                let holds = mask & (1 << bit) != 0
+                ruled.protectRulings[entry.key] = holds
+                chance *= holds ? entry.chance : 1 - entry.chance
+            }
+            out.append((resolve(ruled, mine: mine, theirs: theirs, store: store, narrating: false), chance))
+        }
+        return out.sorted { $0.chance > $1.chance }
     }
 
     /// Everything that happens after both sides have acted.
@@ -1101,7 +1163,8 @@ enum TurnModel {
             }
 
             // 2. The field: anything that stops it before it starts.
-            let farScreens = byMine ? board.theirScreens : board.myScreens
+            let farScreens = (target >= Choice.allyTarget ? byMine : !byMine)
+                ? board.myScreens : board.theirScreens
             if move.isSpread, farScreens.wideGuard {
                 board.note("Wide Guard blocked it.")
                 return
@@ -1110,7 +1173,7 @@ enum TurnModel {
             // with increased priority can be aimed at that Pokémon or its
             // partner. It is the reason Farigiraf is on Trick Room teams — it
             // is what stops a Fake Out taking the setup turn away.
-            if move.priority > 0, move.aim == .foe || move.aim == .spread {
+            if move.priority > 0, target < Choice.allyTarget, move.aim == .foe || move.aim == .spread {
                 let defenders = byMine ? board.theirs : board.mine
                 if let refused = (0..<Swift.min(board.activeCount, defenders.count)).first(where: {
                     !defenders[$0].fainted
@@ -1122,9 +1185,21 @@ enum TurnModel {
                 }
             }
 
-            var aimed = move.isSpread ? [0, 1] : [target]
-            if !move.isSpread {
-                let defenders = byMine ? board.theirs : board.mine
+            // Aimed at your own partner, for the techs that want it: the hit
+            // lands on your side, with everything that follows from that.
+            let atAlly = target >= Choice.allyTarget
+            let hitMine = atAlly ? byMine : !byMine
+            let partner = slot == 0 ? 1 : 0
+            var aimed = move.isSpread ? [0, 1] : (atAlly ? [partner] : [target])
+            if !move.isSpread, atAlly {
+                let own = byMine ? board.mine : board.theirs
+                if !own.indices.contains(partner) || partner >= board.activeCount || own[partner].fainted {
+                    board.note("But there was no one there to hit.")
+                    return
+                }
+            }
+            if !move.isSpread, !atAlly {
+                let defenders = hitMine ? board.mine : board.theirs
                 // The target went down before this move's turn came: it turns
                 // to whoever is left standing across the field. A Whimsicott on
                 // one point of Focus Sash health is exactly who this finds.
@@ -1158,7 +1233,7 @@ enum TurnModel {
 
             var totalDealt = 0
             for index in aimed {
-                let defending = byMine ? board.theirs : board.mine
+                let defending = hitMine ? board.mine : board.theirs
                 guard defending.indices.contains(index), !defending[index].fainted else { continue }
                 let hitName = defending[index].build.form.formLabel
                 if defending[index].hidden {
@@ -1172,8 +1247,8 @@ enum TurnModel {
                 // Feint: through the Protect, and the Protect is gone — so the
                 // partner's move, coming after, lands on an open target.
                 if defending[index].isProtected, move.breaksProtect {
-                    if byMine { board.theirs[index].isProtected = false }
-                    else { board.mine[index].isProtected = false }
+                    if hitMine { board.mine[index].isProtected = false }
+                    else { board.theirs[index].isProtected = false }
                     board.note("\(move.name) broke through \(hitName)'s protection.")
                 }
                 var defender = defending[index].build
@@ -1230,14 +1305,14 @@ enum TurnModel {
                 totalDealt += landed
                 // A berry that halved the hit is a berry that has been eaten.
                 let ateBerry = result.notes.contains { $0.contains("then is consumed") }
-                if byMine {
-                    board.theirs[index].hp = Swift.max(0, board.theirs[index].hp - landed)
-                    if sashed { board.theirs[index].build.itemSpent = true }
-                    if ateBerry { board.theirs[index].build.itemSpent = true }
-                } else {
+                if hitMine {
                     board.mine[index].hp = Swift.max(0, board.mine[index].hp - landed)
                     if sashed { board.mine[index].build.itemSpent = true }
                     if ateBerry { board.mine[index].build.itemSpent = true }
+                } else {
+                    board.theirs[index].hp = Swift.max(0, board.theirs[index].hp - landed)
+                    if sashed { board.theirs[index].build.itemSpent = true }
+                    if ateBerry { board.theirs[index].build.itemSpent = true }
                 }
                 let share = Int((Double(landed) / Double(Swift.max(1, defending[index].maxHP))
                                  * 100).rounded())
@@ -1252,23 +1327,23 @@ enum TurnModel {
 
                 // 5. Afterwards: what the move does beyond the damage, and what
                 // the target's own ability does back.
-                contact(move, byMine: byMine, slot: slot, hit: index, rolling: rolling,
-                        board: &board)
-                flee(ifNeeded: index, ofMine: !byMine, wasAt: defending[index].hp,
+                contact(move, byMine: byMine, hitMine: hitMine, slot: slot, hit: index,
+                        wasAt: defending[index].hp, rolling: rolling, board: &board)
+                flee(ifNeeded: index, ofMine: hitMine, wasAt: defending[index].hp,
                      board: &board)
                 if move.name == "Fake Out" {
-                    if byMine { board.theirs[index].flinched = true }
-                    else { board.mine[index].flinched = true }
+                    if hitMine { board.mine[index].flinched = true }
+                    else { board.theirs[index].flinched = true }
                     board.note("\(hitName) flinched.")
                 }
                 if result.notes.contains(where: { $0.contains("Weakness Policy") }) {
-                    applySelf([.attack: 2, .spAttack: 2], toMine: !byMine, slot: index,
+                    applySelf([.attack: 2, .spAttack: 2], toMine: hitMine, slot: index,
                               board: &board)
-                    if byMine { board.theirs[index].build.itemSpent = true }
-                    else { board.mine[index].build.itemSpent = true }
+                    if hitMine { board.mine[index].build.itemSpent = true }
+                    else { board.theirs[index].build.itemSpent = true }
                 }
-                applyDrops(move.targetDrops, toMine: !byMine, slot: index, board: &board)
-                let after = byMine ? board.theirs[index] : board.mine[index]
+                applyDrops(move.targetDrops, toMine: hitMine, slot: index, board: &board)
+                let after = hitMine ? board.mine[index] : board.theirs[index]
                 if after.hp == 0 { board.note("\(hitName) fainted.") }
             }
             applySelf(move.selfBoosts, toMine: byMine, slot: slot, board: &board)
@@ -1303,10 +1378,10 @@ enum TurnModel {
     /// Touch works the other way round, poisoning what the attacker touches.
     /// None of it fired: an Incineroar could Flare Blitz a Garchomp all day and
     /// its Rough Skin never cost a point.
-    private static func contact(_ move: Move, byMine: Bool, slot: Int, hit: Int,
-                                rolling: Bool, board: inout Board) {
+    private static func contact(_ move: Move, byMine: Bool, hitMine: Bool, slot: Int, hit: Int,
+                                wasAt: Int, rolling: Bool, board: inout Board) {
         let attackerTeam = byMine ? board.mine : board.theirs
-        let defenderTeam = byMine ? board.theirs : board.mine
+        let defenderTeam = hitMine ? board.mine : board.theirs
         guard attackerTeam.indices.contains(slot), defenderTeam.indices.contains(hit) else { return }
         let attacker = attackerTeam[slot], defender = defenderTeam[hit]
         let attackerName = attacker.build.form.formLabel
@@ -1314,7 +1389,27 @@ enum TurnModel {
 
         // Stamina does not need contact: any hit raises Defense.
         if defender.build.ability == "Stamina", !defender.fainted {
-            applySelf([.defense: 1], toMine: !byMine, slot: hit, board: &board)
+            applySelf([.defense: 1], toMine: hitMine, slot: hit, board: &board)
+        }
+        // Abilities that answer the kind of hit: Thermal Exchange takes Fire
+        // and gives Attack, Justified the same for Dark, Rattled runs from
+        // Bug, Ghost and Dark, Weak Armor trades Defence for Speed on any
+        // physical hit, Berserk answers the hit that took it to half.
+        if !defender.fainted {
+            let hitType = DamageCalc.fieldForm(of: move, in: board.field).type
+            var answer: [Stat: Int] = [:]
+            switch defender.build.ability {
+            case "Thermal Exchange" where hitType == .fire: answer = [.attack: 1]
+            case "Justified" where hitType == .dark: answer = [.attack: 1]
+            case "Rattled" where [.bug, .ghost, .dark].contains(hitType): answer = [.speed: 1]
+            case "Weak Armor" where move.category == "Physical": answer = [.defense: -1, .speed: 2]
+            case "Berserk" where wasAt * 2 > defender.maxHP && defender.hp * 2 <= defender.maxHP:
+                answer = [.spAttack: 1]
+            default: break
+            }
+            if !answer.isEmpty {
+                change(answer, onMine: hitMine, slot: hit, board: &board, because: defender.build.ability)
+            }
         }
         guard move.makesContact, !attacker.fainted else { return }
 
@@ -1345,7 +1440,7 @@ enum TurnModel {
            defender.status == .none,
            Double.random(in: 0..<1) < 0.3,
            !defender.build.form.pokeTypes.contains(where: { [.poison, .steel].contains($0) }) {
-            if byMine { board.theirs[hit].status = .poison } else { board.mine[hit].status = .poison }
+            if hitMine { board.mine[hit].status = .poison } else { board.theirs[hit].status = .poison }
             board.note("\(attackerName)'s Poison Touch poisoned \(defenderName).")
         }
     }
@@ -1464,7 +1559,13 @@ enum TurnModel {
         let name = fighter.build.form.formLabel
         let word = label ?? "Protect"
         let chance = fighter.protectChance
-        let works = rolling ? Double.random(in: 0..<1) < chance : chance >= 0.5
+        // A played turn rolls it. The search asks for one branch at a time
+        // and weighs them itself, so a 33% Protect is worth a third of a
+        // Protect to it rather than nothing — which is what it is worth, and
+        // is why a Gholdengo that has already protected is still not a free
+        // Sucker Punch.
+        let ruling = board.protectRulings[(byMine ? "m" : "t") + "\(slot)"]
+        let works = rolling ? Double.random(in: 0..<1) < chance : (ruling ?? (chance >= 0.5))
         if works {
             if byMine { board.mine[slot].isProtected = true; board.mine[slot].protectStreak += 1 }
             else { board.theirs[slot].isProtected = true; board.theirs[slot].protectStreak += 1 }

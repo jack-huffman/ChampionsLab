@@ -102,8 +102,11 @@ struct VersusBanner: View {
         let title: String
         let name: String
         let tag: String
-        /// The six, leads first, the pair likeliest to be left home last.
+        /// The six as registered — a Charizard, not yet a Mega Charizard —
+        /// leads first, the pair likeliest to be left home last.
         let forms: [Form]
+        /// Which of them hold a stone, marked the way the field marks them.
+        var megas: Set<String> = []
         let leadCount: Int
         let tint: Color
     }
@@ -196,10 +199,19 @@ struct VersusBanner: View {
         let placed = places(side, in: size, lean: lean, left: left)
         return ZStack {
             ForEach(Array(placed.enumerated()), id: \.offset) { _, place in
-                SpriteImage(form: place.form, side: place.side)
-                    .shadow(color: side.tint.opacity(0.75), radius: 14)
-                    .shadow(color: .black.opacity(0.65), radius: 4, y: 3)
-                    .position(x: place.x, y: place.y)
+                ZStack(alignment: .topTrailing) {
+                    SpriteImage(form: place.form, side: place.side)
+                        .shadow(color: side.tint.opacity(0.75), radius: 14)
+                        .shadow(color: .black.opacity(0.65), radius: 4, y: 3)
+                    if side.megas.contains(place.form.id) {
+                        Text("M").font(.system(size: 9, weight: .heavy))
+                            .frame(width: 17, height: 17)
+                            .background(Palette.warn).foregroundStyle(.white)
+                            .clipShape(Circle())
+                            .help("Holding its stone. It starts as itself and Mega Evolves when it uses a move.")
+                    }
+                }
+                .position(x: place.x, y: place.y)
             }
             ForEach(Array(placed.enumerated()), id: \.offset) { _, place in
                 label(place.form, lead: place.lead, tint: side.tint)

@@ -192,6 +192,10 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         render(BattleView(playing: board, showing: .fight, thinking: (thought, game.solve())),
                named: "battle-fight-dark",
                size: CGSize(width: 1280, height: 860), dark: true)
+        // And choosing where a move goes.
+        render(BattleView(playing: board, showing: .aiming(move: 1), thinking: (thought, game.solve())),
+               named: "battle-aim-dark",
+               size: CGSize(width: 1280, height: 860), dark: true)
     }
     render(SpeedTiersView(), named: "speed-dark",
            size: CGSize(width: 1000, height: 900), dark: true)

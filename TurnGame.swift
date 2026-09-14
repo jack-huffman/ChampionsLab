@@ -106,7 +106,10 @@ struct TurnGame {
             spread.append(.attack(move: index, target: 0))
         }
         // Protect, unless it was used last turn, when it mostly fails.
-        if !fighter.protectedLast,
+        // A second Protect in a row is a third as likely to hold, and worth
+        // considering at a third: the Sucker Punch it might still blank is
+        // real. A third in a row, at a ninth, is not worth a slot.
+        if fighter.protectChance >= 0.3,
            let guard_ = fighter.moves.firstIndex(where: {
                DuelEngine.protectMoves.contains($0.name) }) {
             guarding.append(.protectSelf(move: guard_))
@@ -320,8 +323,7 @@ struct TurnGame {
         for (i, mine) in myPlays.enumerated() {
             await breathe("turn matrix")
             for (j, theirs) in theirPlays.enumerated() {
-                let after = TurnModel.resolve(board, mine: mine, theirs: theirs, store: store, narrating: false)
-                payoff[i][j] = TurnModel.value(after) - TurnModel.value(board)
+                payoff[i][j] = settle(mine, theirs).expected
                     - forgone(mine, myOffence) + forgone(theirs, theirOffence)
             }
         }
@@ -350,14 +352,23 @@ struct TurnGame {
                                 count: myPlays.count)
         for (i, mine) in myPlays.enumerated() {
             for (j, theirs) in theirPlays.enumerated() {
-                let after = TurnModel.resolve(board, mine: mine, theirs: theirs, store: store, narrating: false)
-                payoff[i][j] = TurnModel.value(after) - TurnModel.value(board)
+                payoff[i][j] = settle(mine, theirs).expected
                     - forgone(mine, myOffence) + forgone(theirs, theirOffence)
             }
         }
         let (myMix, theirMix, value) = TurnGame.equilibrium(payoff, iterations: iterations)
         return Solution(myPlays: myPlays, theirPlays: theirPlays, payoff: payoff,
                         myMix: myMix, theirMix: theirMix, value: value)
+    }
+
+    /// What a cell of the matrix is worth, over every way it can come out,
+    /// and the likeliest of those boards for anything that has to look on
+    /// from a single position.
+    func settle(_ mine: Play, _ theirs: Play) -> (expected: Double, likeliest: Board) {
+        let outcomes = TurnModel.outcomes(board, mine: mine, theirs: theirs, store: store)
+        let before = TurnModel.value(board)
+        let expected = outcomes.reduce(0) { $0 + $1.chance * (TurnModel.value($1.board) - before) }
+        return (expected, outcomes[0].board)
     }
 
     // MARK: - Looking one turn further
@@ -398,21 +409,18 @@ struct TurnGame {
             count: mineKept.count)
         for (i, myIndex) in mineKept.enumerated() {
             for (j, theirIndex) in theirsKept.enumerated() {
-                let after = TurnModel.resolve(board, mine: shallow.myPlays[myIndex],
-                                              theirs: shallow.theirPlays[theirIndex],
-                                              store: store, narrating: false)
+                let settled = settle(shallow.myPlays[myIndex], shallow.theirPlays[theirIndex])
                 // The turn that follows, worth what its own equilibrium says.
                 // A board where every line is bad is a bad board, whatever the
                 // health bars say about it.
-                var next = TurnGame(board: after, store: store)
+                var next = TurnGame(board: settled.likeliest, store: store)
                 next.width = max(3, width - 2)
                 let follow = next.solve(iterations: 600)
                 // Where the turn left things, plus what the turn after is worth
                 // from there, discounted: a turn in hand now is worth more than
                 // one promised later, and the second solve is the less reliable
                 // of the two.
-                payoff[i][j] = TurnModel.value(after) - TurnModel.value(board)
-                    + 0.6 * follow.value
+                payoff[i][j] = settled.expected + 0.6 * follow.value
             }
         }
         let (myMix, theirMix, value) = TurnGame.equilibrium(payoff, iterations: iterations)
@@ -465,6 +473,11 @@ struct TurnGame {
             }
             if !move.isDamaging { return move.name }
             if move.isSpread { return "\(move.name) (both)" }
+            if target >= Choice.allyTarget {
+                let partner = team.firstIndex { $0.build.form.id == fighter.build.form.id }.map { $0 == 0 ? 1 : 0 } ?? 1
+                let who = team.indices.contains(partner) ? team[partner].build.form.formLabel : "its partner"
+                return "\(move.name) into its own \(who)"
+            }
             let name = foes.indices.contains(target) ? foes[target].build.form.formLabel : "the other"
             if let charge = move.charge {
                 if fighter.charging == index { return "\(move.name) into \(name), firing" }
@@ -474,7 +487,11 @@ struct TurnGame {
             }
             return "\(move.name) into \(name)"
         case .protectSelf(let index):
-            return fighter.moves.indices.contains(index) ? fighter.moves[index].name : "Protect"
+            let name = fighter.moves.indices.contains(index) ? fighter.moves[index].name : "Protect"
+            if fighter.protectStreak > 0 {
+                return "\(name) (\(Int((fighter.protectChance * 100).rounded()))% to hold)"
+            }
+            return name
         case .swap(let bench):
             guard team.indices.contains(bench) else { return "switch out" }
             return "switch to \(team[bench].build.form.formLabel)"

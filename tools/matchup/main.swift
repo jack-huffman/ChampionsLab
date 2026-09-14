@@ -1661,6 +1661,33 @@ Ability: Regenerator
                      right: .attack(move: at(rested.theirs[1], "Protect"), target: 0)),
         store: store)
     check("a turn without Protect resets the streak", afterRest.mine[1].protectStreak == 0)
+    // The search weighs a repeat Protect at its odds, not as a certain miss.
+    let repeatGame = TurnGame(board: once, store: store)
+    let repeatChoices = repeatGame.choices(forMine: true, slot: 1)
+    check("the search still offers a second Protect, at a third",
+          repeatChoices.contains { $0.isProtect }, "\(repeatChoices)")
+    var thrice = once
+    thrice.mine[1].protectStreak = 2
+    check("but not a third one, at a ninth",
+          !TurnGame(board: thrice, store: store).choices(forMine: true, slot: 1).contains { $0.isProtect })
+    // Kingambit charges rather than Protects, or it would be a second chancy
+    // Protect and four branches.
+    let guardPlay = Play(left: .attack(move: at(once.mine[0], "Solar Beam"), target: 1),
+                         right: .protectSelf(move: protect))
+    let hammerPlay = Play(left: .attack(move: at(once.theirs[0], "Swords Dance"), target: 0),
+                          right: .attack(move: at(once.theirs[1], "Wood Hammer"), target: 1))
+    let branches = TurnModel.outcomes(once, mine: guardPlay, theirs: hammerPlay, store: store)
+    print("  branches: " + branches.map { String(format: "%.0f%% -> Whimsicott %d/%d", $0.chance * 100, $0.board.mine[1].hp, $0.board.mine[1].maxHP) }.joined(separator: ", "))
+    check("a repeat Protect is two branches, a third and two thirds",
+          branches.count == 2 && abs(branches[0].chance - 2.0 / 3.0) < 0.01 && abs(branches[1].chance - 1.0 / 3.0) < 0.01)
+    let blend = repeatGame.settle(guardPlay, hammerPlay).expected
+    let before = TurnModel.value(once)
+    let byHand = branches.reduce(0) { $0 + $1.chance * (TurnModel.value($1.board) - before) }
+    let missOnly = TurnModel.value(branches[0].board) - before
+    print(String(format: "  the cell is worth %+.3f blended, %+.3f if the Protect were a certain miss", blend, missOnly))
+    check("and the matrix scores it as the blend", abs(blend - byHand) < 0.0001 && blend > missOnly)
+    check("the engine says how likely it is to hold",
+          repeatGame.describe(Choice.protectSelf(move: protect), fighter: once.mine[1], foes: [], team: once.mine).contains("33%"))
 
     // Feint goes through Protect and takes it down for the partner.
     print("\n== Feint ==")
@@ -1714,6 +1741,60 @@ Ability: Regenerator
     check("and Garchomp's Dragon Claw turned to Kingambit instead of hitting nothing",
           turned.story.contains { $0.contains("turned toward Kingambit") },
           turned.story.joined(separator: " | "))
+
+    // Being hit by the right kind of move is worth a stage to some.
+    print("\n== answering a hit ==")
+    let heaters2 = fighters([("Charizard", "Charizardite Y", ["Heat Wave", "Protect"]),
+                             ("Whimsicott", "Focus Sash", ["Protect"])])
+    let heated2 = fighters([("Baxcalibur", "Loaded Dice", ["Glaive Rush", "Protect"]),
+                            ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"])])
+    var thermal = Board(mine: heaters2, theirs: heated2, store: store,
+                        field: Field(isDoubles: true), alreadyEvolved: false)
+    thermal.theirs[0].build.ability = "Thermal Exchange"
+    let warmed = TurnModel.resolve(thermal,
+        mine: Play(left: .attack(move: at(thermal.mine[0], "Heat Wave"), target: 0),
+                   right: .attack(move: at(thermal.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(thermal.theirs[0], "Glaive Rush"), target: 1),
+                     right: .attack(move: at(thermal.theirs[1], "Wood Hammer"), target: 1)),
+        store: store)
+    for line in warmed.story where line.contains("Thermal") { print("    \(line)") }
+    check("Thermal Exchange raises Attack when hit by a Fire move",
+          warmed.theirs[0].build.boosts[Stat.attack.rawValue] == 1,
+          "\(warmed.theirs[0].build.boosts[Stat.attack.rawValue]) — \(warmed.story.filter { $0.contains("Baxcalibur") })")
+
+    // Hitting your own partner, on purpose.
+    print("\n== the tech ==")
+    var techBoard = Board(mine: heaters2, theirs: heated2, store: store,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+    techBoard.mine[1].build.item = "Weakness Policy"
+    let selfHit = TurnModel.resolve(techBoard,
+        mine: Play(left: .attack(move: at(techBoard.mine[0], "Heat Wave"), target: 0),
+                   right: .attack(move: at(techBoard.mine[1], "Protect"), target: 0)),
+        theirs: Play(left: .attack(move: at(techBoard.theirs[0], "Protect"), target: 0),
+                     right: .attack(move: at(techBoard.theirs[1], "Protect"), target: 0)),
+        store: store)
+    _ = selfHit
+    var ally = techBoard
+    // A small Fire move: enough to set the Policy off, not enough to remove
+    // the partner, since a fainted Pokémon boosts nothing.
+    ally.mine[0].moves = [store.data.moves.values.first { $0.name == "Ember" }
+                          ?? store.data.moves.values.first { $0.type == "Fire" && $0.power > 0 && $0.power <= 50 }!]
+                         + ally.mine[0].moves
+    // The partner attacks rather than Protects, or it would block its own side.
+    ally.mine[1].moves = [store.data.moves.values.first { $0.name == "Moonblast" }!] + ally.mine[1].moves
+    let hitOwn = TurnModel.resolve(ally,
+        mine: Play(left: Choice.attackingAlly(move: 0),
+                   right: .attack(move: 0, target: 0)),
+        theirs: Play(left: .attack(move: at(ally.theirs[0], "Protect"), target: 0),
+                     right: .attack(move: at(ally.theirs[1], "Protect"), target: 0)),
+        store: store)
+    for line in hitOwn.story where line.contains("Whimsicott") { print("    \(line)") }
+    check("a move can be aimed at your own partner",
+          hitOwn.mine[1].hp < hitOwn.mine[1].maxHP && hitOwn.theirs[0].hp == hitOwn.theirs[0].maxHP,
+          "\(hitOwn.mine[1].hp)/\(hitOwn.mine[1].maxHP)")
+    check("and what it carries goes off — the Weakness Policy",
+          hitOwn.mine[1].build.boosts[Stat.attack.rawValue] == 2, "\(hitOwn.mine[1].build.boosts)")
+    print("  described as: \(TurnGame(board: ally, store: store).describe(Choice.attackingAlly(move: 0), fighter: ally.mine[0], foes: Array(ally.theirs.prefix(2)), team: ally.mine))")
 
     print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     exit(fails == 0 ? 0 : 1)

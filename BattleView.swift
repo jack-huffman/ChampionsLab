@@ -489,6 +489,18 @@ struct BattleView: View {
         .padding(20)
     }
 
+    /// What a slot is registered as — a Charizard, not the Mega it becomes.
+    /// Plans and grids speak in battle forms; anything shown before the battle
+    /// speaks in these, because that is what walks out.
+    private func registered(_ battle: Form, in team: Team) -> Form {
+        team.slots.first { $0.battleForm(in: store)?.id == battle.id }?.form(in: store) ?? battle
+    }
+
+    private func stoneHolders(_ team: Team) -> Set<String> {
+        Set(team.slots.filter { $0.megaEvolution(in: store) != nil }
+                      .compactMap { $0.form(in: store)?.id })
+    }
+
     private func bannerSide(_ team: Team, plan: BringFour.Plan?, title: String, tag: String,
                             tint: Color) -> VersusBanner.Side {
         let all = team.slots.compactMap { $0.battleForm(in: store) }
@@ -499,7 +511,9 @@ struct BattleView: View {
         } else {
             ordered = all
         }
-        return VersusBanner.Side(title: title, name: team.name, tag: tag, forms: ordered,
+        return VersusBanner.Side(title: title, name: team.name, tag: tag,
+                                 forms: ordered.map { registered($0, in: team) },
+                                 megas: stoneHolders(team),
                                  leadCount: plan == nil ? 0 : leadCount, tint: tint)
     }
 
@@ -518,8 +532,9 @@ struct BattleView: View {
         Card {
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(title: "Your side", subtitle: "What the engine would bring, and why")
-                if let plan = lobby.myPlan {
-                    fourRow(plan.bring, leads: leadCount, tint: Palette.accent)
+                if let plan = lobby.myPlan, let mine = myTeam {
+                    fourRow(plan.bring.map { registered($0, in: mine) }, megas: stoneHolders(mine),
+                            leads: leadCount, tint: Palette.accent)
                     bullets(Array(plan.reasons.prefix(2)) + Array(plan.warnings.prefix(1)),
                             tint: Palette.accent)
                     if !lobby.myFears.isEmpty {
@@ -542,10 +557,11 @@ struct BattleView: View {
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(title: "Through their eyes",
                               subtitle: "What they see when they look at your six")
-                if let plan = lobby.theirPlan {
+                if let plan = lobby.theirPlan, let theirs = theirTeam {
                     Text("They will most likely bring")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
-                    fourRow(plan.bring, leads: leadCount, tint: Palette.bad)
+                    fourRow(plan.bring.map { registered($0, in: theirs) }, megas: stoneHolders(theirs),
+                            leads: leadCount, tint: Palette.bad)
                     bullets(plan.reasons.prefix(2).map(fromTheirChair), tint: Palette.bad)
                     if !lobby.theirFears.isEmpty {
                         Label("Nothing on their six beats your \(names(lobby.theirFears)) — expect them to play around it, not into it.",
@@ -567,7 +583,7 @@ struct BattleView: View {
         }
     }
 
-    private func fourRow(_ forms: [Form], leads: Int, tint: Color) -> some View {
+    private func fourRow(_ forms: [Form], megas: Set<String> = [], leads: Int, tint: Color) -> some View {
         HStack(spacing: 10) {
             ForEach(Array(forms.enumerated()), id: \.offset) { index, form in
                 VStack(spacing: 2) {
@@ -578,6 +594,13 @@ struct BattleView: View {
                             .frame(width: 16, height: 16)
                             .background(index < leads ? tint : Palette.dim)
                             .clipShape(Circle())
+                        if megas.contains(form.id) {
+                            Text("M").font(.system(size: 8, weight: .heavy)).foregroundStyle(.white)
+                                .frame(width: 14, height: 14)
+                                .background(Palette.warn).clipShape(Circle())
+                                .frame(maxWidth: .infinity, alignment: .topTrailing)
+                                .frame(width: 52)
+                        }
                     }
                     Text(form.formLabel)
                         .font(.system(size: 10, weight: index < leads ? .semibold : .regular))
@@ -733,6 +756,14 @@ struct BattleView: View {
         .padding(14)
     }
 
+    /// The mark the field puts on a stone-holder: it starts as itself.
+    private var megaBadge: some View {
+        Text("M").font(.system(size: 8, weight: .heavy)).foregroundStyle(.white)
+            .frame(width: 14, height: 14)
+            .background(Palette.warn).clipShape(Circle())
+            .help("Holding its stone. It starts as itself and Mega Evolves when it uses a move.")
+    }
+
     private func previewButton(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 5) {
@@ -749,7 +780,8 @@ struct BattleView: View {
 
     /// One of mine, in the order it is being brought.
     private func previewRow(_ slot: TeamSlot) -> some View {
-        let form = slot.battleForm(in: store)
+        let form = slot.form(in: store)
+        let holdsStone = slot.megaEvolution(in: store) != nil
         let id = slot.formID
         let order = bringing.firstIndex(of: id).map { $0 + 1 }
         let isFocus = focused == id || (focused == nil && bringing.last == id)
@@ -773,7 +805,12 @@ struct BattleView: View {
                     Text(order.map(String.init) ?? "")
                         .font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
                 }
-                if let form { SpriteImage(form: form, side: 46).shadow(color: .black.opacity(0.5), radius: 3, y: 2) }
+                if let form {
+                    ZStack(alignment: .topTrailing) {
+                        SpriteImage(form: form, side: 46).shadow(color: .black.opacity(0.5), radius: 3, y: 2)
+                        if holdsStone { megaBadge }
+                    }
+                }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(form?.formLabel ?? id)
                         .font(.system(size: 12, weight: order == nil ? .regular : .semibold))
@@ -807,10 +844,12 @@ struct BattleView: View {
 
     /// One of theirs, marked with how the Pokémon in focus fares against it.
     private func opposingRow(_ slot: TeamSlot) -> some View {
-        let form = slot.battleForm(in: store)
+        let form = slot.form(in: store)
+        let battle = slot.battleForm(in: store)
+        let holdsStone = slot.megaEvolution(in: store) != nil
         let reading = matchupMark(against: slot)
         // Where this one sits in the four they will most likely bring.
-        let expected = lobby.theirPlan?.bring.firstIndex { $0.id == form?.id }
+        let expected = lobby.theirPlan?.bring.firstIndex { $0.id == battle?.id }
         let likelyHome = lobby.theirPlan != nil && expected == nil
         return HStack(spacing: 9) {
             if let reading {
@@ -848,8 +887,11 @@ struct BattleView: View {
                 }
             }
             if let form {
-                SpriteImage(form: form, side: 46).opacity(likelyHome ? 0.6 : 1)
-                    .shadow(color: .black.opacity(0.5), radius: 3, y: 2)
+                ZStack(alignment: .topTrailing) {
+                    SpriteImage(form: form, side: 46).opacity(likelyHome ? 0.6 : 1)
+                        .shadow(color: .black.opacity(0.5), radius: 3, y: 2)
+                    if holdsStone { megaBadge }
+                }
             }
         }
         .padding(.horizontal, 8).padding(.vertical, 5)
@@ -1435,18 +1477,23 @@ struct BattleView: View {
         let move = fighter.moves[index]
         guard move.isDamaging else { return nil }
         let becoming = evolving(fighter, slot: slot, board: board)
+        // Aimed at your own partner: read against it, item and all, since
+        // that one you can see.
+        let atAlly = target >= Choice.allyTarget
+        let side = atAlly ? board.mine : board.theirs
         // A spread move is read across everything it reaches, unless one of
         // them is asked about on its own.
         let aimed: [Int] = only.map { [$0] }
-            ?? (move.isSpread ? Array(0..<min(board.activeCount, board.theirs.count)) : [target])
+            ?? (move.isSpread ? Array(0..<min(board.activeCount, board.theirs.count))
+                : atAlly ? [slot == 0 ? 1 : 0] : [target])
         var low = 0, high = 0, best = 1.0
         var hp = 1
         for slot in aimed {
-            guard board.theirs.indices.contains(slot), !board.theirs[slot].fainted
+            guard side.indices.contains(slot), !side[slot].fainted
             else { continue }
-            var defender = board.theirs[slot].build
-            defender.item = ""            // not something you can see
-            defender.atFullHP = board.theirs[slot].hp == board.theirs[slot].maxHP
+            var defender = side[slot].build
+            if !atAlly { defender.item = "" }            // theirs is not something you can see
+            defender.atFullHP = side[slot].hp == side[slot].maxHP
             var field = becoming.field
             field.screen = board.theirScreens.blunt(move)
             let result = DamageCalc.calculate(attacker: becoming.build, defender: defender,
@@ -1454,7 +1501,7 @@ struct BattleView: View {
             if result.maxDamage > high {
                 low = result.minDamage; high = result.maxDamage
                 best = result.effectiveness
-                hp = board.theirs[slot].hp
+                hp = side[slot].hp
             }
         }
         guard high > 0, hp > 0 else { return nil }
@@ -1649,10 +1696,9 @@ struct BattleView: View {
         // is still yours to play, so it is scored the same way, against their
         // mix, rather than left blank.
         var total = 0.0
+        let game = TurnGame(board: board, store: store)
         for (column, theirs) in solved.theirPlays.enumerated() where solved.theirMix[column] > 0.001 {
-            let after = TurnModel.resolve(board, mine: play, theirs: theirs, store: store,
-                                          narrating: false)
-            total += (TurnModel.value(after) - TurnModel.value(board)) * solved.theirMix[column]
+            total += game.settle(play, theirs).expected * solved.theirMix[column]
         }
         return total
     }
@@ -1840,8 +1886,7 @@ struct BattleView: View {
                 fightGrid(board, slot: slot, fighter: fighter)
             case .aiming(let move):
                 if fighter.moves.indices.contains(move) {
-                    fightGrid(board, slot: slot, fighter: fighter, aiming: move)
-                    targetRow(board, slot: slot, move: fighter.moves[move], index: move)
+                    targetScreen(board, slot: slot, move: fighter.moves[move], index: move)
                 }
             case .party:
                 partyList(board, slot: slot)
@@ -2193,13 +2238,109 @@ struct BattleView: View {
     }
 
     /// Which of them to aim at, with what it would do to each.
+    /// Where a move goes: the whole panel, laid out like the field. Theirs on
+    /// the right, your own partner on the left for the techs that want it,
+    /// each with what the move would do to it.
     @ViewBuilder
-    private func targetRow(_ board: Board, slot: Int, move: Move, index: Int) -> some View {
+    private func targetScreen(_ board: Board, slot: Int, move: Move, index: Int) -> some View {
         if move.aim == .party {
             partyTargets(board, slot: slot, move: move, index: index)
         } else {
-            foeTargets(board, slot: slot, move: move, index: index)
+            let partner = slot == 0 ? 1 : 0
+            let form = DamageCalc.fieldForm(of: move, in: evolving(board.mine[slot], slot: slot, board: board).field)
+            let type = form.type
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    Text(move.name.uppercased())
+                        .font(.system(size: 14, weight: .heavy)).kerning(1)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(type.color)
+                        .clipShape(Capsule())
+                    Text("Aim at")
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                    Button { command = .fight } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left").font(.system(size: 10, weight: .semibold))
+                            Text("Back").font(.system(size: 11, weight: .semibold))
+                        }
+                    }
+                    .controlSize(.small)
+                }
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("YOUR SIDE").font(.system(size: 9, weight: .bold)).kerning(0.6)
+                            .foregroundStyle(.tertiary)
+                        if board.activeCount > 1, board.mine.indices.contains(partner),
+                           !board.mine[partner].fainted {
+                            targetCard(board, slot: slot, index: index, fighter: board.mine[partner],
+                                       choice: Choice.attackingAlly(move: index), tint: Palette.accent,
+                                       note: "your own — for the tech")
+                        } else {
+                            Text("Nobody beside you.").font(.system(size: 11)).foregroundStyle(.tertiary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Rectangle().fill(Palette.hairline).frame(width: 1)
+                    VStack(alignment: .trailing, spacing: 8) {
+                        Text("THEIR SIDE").font(.system(size: 9, weight: .bold)).kerning(0.6)
+                            .foregroundStyle(.tertiary)
+                        ForEach(0..<min(board.activeCount, board.theirs.count), id: \.self) { foe in
+                            if !board.theirs[foe].fainted {
+                                targetCard(board, slot: slot, index: index, fighter: board.theirs[foe],
+                                           choice: .attack(move: index, target: foe), tint: Palette.warn,
+                                           note: nil)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+            .padding(.horizontal, 16).padding(.bottom, 14)
         }
+    }
+
+    private func targetCard(_ board: Board, slot: Int, index: Int, fighter: Fighter,
+                            choice: Choice, tint: Color, note: String?) -> some View {
+        let reading = preview(board, fighter: board.mine[slot], slot: slot, choice: choice)
+        return Button {
+            set(choice, slot: slot)
+            command = .menu
+        } label: {
+            HStack(spacing: 12) {
+                SpriteImage(form: fighter.build.form, side: 56)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(fighter.build.form.formLabel)
+                            .font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                        Text("\(fighter.hp)/\(fighter.maxHP)")
+                            .font(.system(size: 10, design: .rounded)).monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                    if let reading {
+                        Text(reading.text)
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(reading.tint)
+                    } else {
+                        Text("no damage").font(.system(size: 10)).foregroundStyle(.tertiary)
+                    }
+                    if let note {
+                        Text(note).font(.system(size: 10)).foregroundStyle(.tertiary)
+                    }
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "scope").foregroundStyle(tint)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(tint.opacity(0.10))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(tint.opacity(0.6), lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
     }
 
     /// Which of your fallen to bring back.
@@ -2246,52 +2387,6 @@ struct BattleView: View {
         .padding(.horizontal, 16).padding(.bottom, 14)
     }
 
-    private func foeTargets(_ board: Board, slot: Int, move: Move, index: Int) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("AIM \(move.name.uppercased()) AT")
-                .font(.system(size: 9, weight: .bold)).kerning(0.6)
-                .foregroundStyle(.tertiary)
-            HStack(spacing: 10) {
-                ForEach(0..<min(board.activeCount, board.theirs.count), id: \.self) { foe in
-                    if !board.theirs[foe].fainted {
-                        let choice = Choice.attack(move: index, target: foe)
-                        let reading = preview(board, fighter: board.mine[slot],
-                                              slot: slot, choice: choice)
-                        Button {
-                            set(choice, slot: slot)
-                            command = .menu
-                        } label: {
-                            HStack(spacing: 10) {
-                                SpriteImage(form: board.theirs[foe].build.form, side: 40)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(board.theirs[foe].build.form.formLabel)
-                                        .font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                                    if let reading {
-                                        Text(reading.text)
-                                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                                            .monospacedDigit()
-                                            .foregroundStyle(reading.tint)
-                                    } else {
-                                        Text("no damage").font(.system(size: 10))
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                }
-                                Spacer(minLength: 0)
-                                Image(systemName: "scope").foregroundStyle(Palette.warn)
-                            }
-                            .padding(.horizontal, 12).padding(.vertical, 9)
-                            .frame(maxWidth: .infinity)
-                            .background(Palette.warn.opacity(0.10))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(Palette.warn.opacity(0.6), lineWidth: 1.5))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-    }
 
     /// The bench, to switch to.
     private func partyList(_ board: Board, slot: Int) -> some View {
