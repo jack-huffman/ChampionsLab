@@ -55,6 +55,9 @@ struct Combatant {
     /// At a third of its health or less, which is when Blaze and its family
     /// switch on. A build on paper is never low; a battle sets this.
     var lowHP = false
+    /// Its last move missed, failed or never happened, which is what
+    /// Stomping Tantrum is waiting for.
+    var lastMoveFailed = false
 
     func stat(_ stat: Stat) -> Int {
         ChampionsStats.value(base: form.stats[stat.rawValue],
@@ -239,6 +242,17 @@ enum DamageCalc {
         // The pinch abilities: half again on the matching type once the user is
         // down to a third. Only a battle ever gets there, so only a battle sees
         // it, but a Charizard that has taken a hit hits back harder.
+        // Last Respects: 50, and 50 more for every teammate that has gone down.
+        if move.id == "lastrespects" {
+            power = Double(50 * (1 + attacker.fallenAllies))
+            if attacker.fallenAllies > 0 {
+                notes.append("Last Respects: \(Int(power)) power for \(attacker.fallenAllies) fallen")
+            }
+        }
+        if move.doublesAfterFailure, attacker.lastMoveFailed {
+            power *= 2
+            notes.append("\(move.name): double power after last turn's failed move")
+        }
         if attacker.lowHP {
             let pinch: [String: PokeType] = ["Blaze": .fire, "Torrent": .water,
                                              "Overgrow": .grass, "Swarm": .bug]
@@ -381,7 +395,8 @@ enum DamageCalc {
             modifier *= 0.5
             notes.append("Aura Guard: contact halved")
         }
-        if defender.ability == "Multiscale" || defender.ability == "Shadow Shield" {
+        // Only while the bar is full: the first hit is halved, the rest are not.
+        if defender.ability == "Multiscale" || defender.ability == "Shadow Shield", defender.atFullHP {
             modifier *= 0.5
             notes.append("\(defender.ability) at full HP: ×0.5")
         }

@@ -271,6 +271,23 @@ struct Move: Codable, Identifiable, Hashable {
         return Charge(hides: hides, skipsIn: skipsIn, boosts: boosts)
     }
 
+    /// The share of the damage dealt that comes back to the user: Leech Life,
+    /// Drain Punch, Giga Drain and Horn Leech at half, Draining Kiss at three
+    /// quarters. Read from the text.
+    var drainShare: Double? {
+        guard let match = effect.range(of: #"restored by (\d+)/(\d+) of the damage dealt"#,
+                                       options: .regularExpression) else { return nil }
+        let numbers = effect[match].split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+        guard numbers.count == 2, numbers[1] > 0 else { return nil }
+        return Double(numbers[0]) / Double(numbers[1])
+    }
+
+    /// Stomping Tantrum: twice the power after a turn the user's move missed,
+    /// failed, or never happened.
+    var doublesAfterFailure: Bool {
+        effect.lowercased().contains("doubled if the user couldn't act or its move missed or failed")
+    }
+
     var selfBoosts: [Stat: Int] { ownChanges(verb: "Boosts") }
 
     /// What a move costs the user in stages: Close Combat's Defence and

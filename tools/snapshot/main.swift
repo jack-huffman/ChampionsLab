@@ -179,8 +179,11 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
             order.insert(stone, at: 0)
             order = Array(order.prefix(4))
         }
-        let board = Board.opening(mine: playing, bringing: order, theirs: theirs,
+        var board = Board.opening(mine: playing, bringing: order, theirs: theirs,
                                   store: store, singles: false)
+        // Weather and terrain with their clocks running, so the field shows them.
+        if board.field.weather == .none { board.field.weather = .rain; board.weatherTurns = 4 }
+        if board.field.terrain == .none { board.field.terrain = .grassy; board.terrainTurns = 3 }
         render(BattleView(playing: board), named: "battle-dark",
                size: CGSize(width: 1280, height: 860), dark: true)
         // And the Fight grid, which is what most turns are spent looking at.

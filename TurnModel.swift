@@ -75,6 +75,9 @@ struct Fighter {
     /// Protects landed in a row. Each one after the first has a third of the
     /// chance of the one before, and a turn without one starts the count over.
     var protectStreak = 0
+    /// Its last move missed, failed, or never happened. Stomping Tantrum
+    /// doubles on it.
+    var lastMoveFailed = false
 
     /// The chance Protect works right now.
     var protectChance: Double { pow(1.0 / 3.0, Double(protectStreak)) }
@@ -207,6 +210,18 @@ struct Board {
         let trickRoom: Int
     }
 
+    /// Turns of weather and terrain left. Five when something sets them; zero
+    /// with nothing up — or with something up indefinitely, which is how an
+    /// analysis board is handed a field and left alone.
+    var weatherTurns = 0
+    var terrainTurns = 0
+
+    /// Whatever just happened to the field, start its clock if it changed.
+    mutating func fieldSettled(from old: Field) {
+        if field.weather != old.weather { weatherTurns = field.weather == .none ? 0 : 5 }
+        if field.terrain != old.terrain { terrainTurns = field.terrain == .none ? 0 : 5 }
+    }
+
     /// How a repeat Protect is to come out this turn, when the search wants to
     /// see one branch rather than roll: "m0" is your left slot, "t1" their
     /// right. Cleared once the turn has been played.
@@ -287,10 +302,12 @@ struct Board {
     /// A Pokémon has just reached the field: it is seen, it can Fake Out, and
     /// whatever it does on arrival happens now.
     mutating func landed(mine side: Bool, slot: Int) {
+        let before = field
         if side {
             mine[slot].justArrived = true
             mine[slot].seen = true
             mine[slot].isProtected = false
+            mine[slot].lastMoveFailed = false
             if let said = TurnModel.entryAbility(of: mine[slot].build.ability, team: &mine,
                                                  slot: slot, opposing: &theirs, field: &field) {
                 note(said)
@@ -299,11 +316,13 @@ struct Board {
             theirs[slot].justArrived = true
             theirs[slot].seen = true
             theirs[slot].isProtected = false
+            theirs[slot].lastMoveFailed = false
             if let said = TurnModel.entryAbility(of: theirs[slot].build.ability, team: &theirs,
                                                  slot: slot, opposing: &mine, field: &field) {
                 note(said)
             }
         }
+        fieldSettled(from: before)
     }
 
     /// The start of the game: everyone out front arrives at once, and their
@@ -735,6 +754,7 @@ enum TurnModel {
         // Trick Room does not invert this: Mega Evolution is worked out on raw
         // Speed regardless of what is on the field.
         for entry in evolving.sorted(by: { $0.speed > $1.speed }) {
+            let before = out.field
             if entry.mine {
                 megaEvolve(&out.mine, slot: entry.slot, opposing: &out.theirs,
                            field: &out.field)
@@ -742,6 +762,7 @@ enum TurnModel {
                 megaEvolve(&out.theirs, slot: entry.slot, opposing: &out.mine,
                            field: &out.field)
             }
+            out.fieldSettled(from: before)
         }
 
         // -- everything else, in order ---------------------------------------
@@ -920,6 +941,30 @@ enum TurnModel {
         board.myTailwind = Swift.max(0, board.myTailwind - 1)
         board.theirTailwind = Swift.max(0, board.theirTailwind - 1)
         board.trickRoom = Swift.max(0, board.trickRoom - 1)
+        // Weather and terrain run out. A clock at zero with something up is
+        // an analysis board's field, left alone.
+        if board.weatherTurns > 0 {
+            board.weatherTurns -= 1
+            if board.weatherTurns == 0 {
+                let ended = board.field.weather
+                board.field.weather = .none
+                switch ended {
+                case .sun: board.note("The sunlight faded.")
+                case .rain: board.note("The rain stopped.")
+                case .sand: board.note("The sandstorm subsided.")
+                case .snow: board.note("The snow stopped.")
+                case .none: break
+                }
+            }
+        }
+        if board.terrainTurns > 0 {
+            board.terrainTurns -= 1
+            if board.terrainTurns == 0 {
+                let ended = board.field.terrain
+                board.field.terrain = .none
+                if ended != .none { board.note("The \(ended.rawValue.lowercased()) terrain disappeared.") }
+            }
+        }
         board.myScreens.tick()
         board.theirScreens.tick()
         for index in board.mine.indices {
@@ -1093,6 +1138,7 @@ enum TurnModel {
         if actor.flinched {
             board.note("\(name) flinched and could not move.")
             dropCharge(byMine: byMine, slot: slot, board: &board)
+            markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return
         }
         // Sleep and paralysis cost turns, which is the whole reason they are
@@ -1100,11 +1146,13 @@ enum TurnModel {
         if actor.status == .sleep {
             board.note("\(name) is fast asleep.")
             dropCharge(byMine: byMine, slot: slot, board: &board)
+            markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return
         }
         if actor.status == .paralysis, rolling, Double.random(in: 0...1) < 0.25 {
             board.note("\(name) is paralysed and cannot move.")
             dropCharge(byMine: byMine, slot: slot, board: &board)
+            markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return
         }
 
@@ -1115,13 +1163,18 @@ enum TurnModel {
             return
         case .protectSelf(let index):
             let label = actor.moves.indices.contains(index) ? actor.moves[index].name : "Protect"
-            tryProtect(label, byMine: byMine, slot: slot, board: &board, rolling: rolling)
+            let held = tryProtect(label, byMine: byMine, slot: slot, board: &board, rolling: rolling)
+            markFailed(byMine: byMine, slot: slot, board: &board, failed: !held)
         case .attack(let moveIndex, let target):
             guard actor.moves.indices.contains(moveIndex) else { return }
             let move = actor.moves[moveIndex]
             guard move.isDamaging else {
+                let before = board.story.count
                 support(move, byMine: byMine, slot: slot, target: target,
                         to: &board, rolling: rolling)
+                // A support move that only had "but" to say for itself failed.
+                let failed = board.story.dropFirst(before).contains { $0.hasPrefix("But ") || $0.contains("but it failed") }
+                markFailed(byMine: byMine, slot: slot, board: &board, failed: failed)
                 selfKO(move, byMine: byMine, slot: slot, board: &board)
                 return
             }
@@ -1224,22 +1277,8 @@ enum TurnModel {
                     board.note("It was drawn to \(defenders[pulled].build.form.formLabel).")
                 }
             }
-            if rolling, !move.neverMisses, move.accuracy > 0,
-               Double.random(in: 0...100) > Double(move.accuracy) {
-                board.note("It missed.")
-                // A move that hurts you when it misses hurts you when it misses.
-                let costs = move.drawbacks
-                if costs.crash > 0 {
-                    let maxHP = actor.maxHP
-                    let lost = Swift.max(1, Int(Double(maxHP) * costs.crash))
-                    if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - lost) }
-                    else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - lost) }
-                    board.note("\(name) kept going and crashed.")
-                }
-                return
-            }
-
             var totalDealt = 0
+            var reached = 0
             for index in aimed {
                 let defending = hitMine ? board.mine : board.theirs
                 guard defending.indices.contains(index), !defending[index].fainted else { continue }
@@ -1259,6 +1298,15 @@ enum TurnModel {
                     else { board.theirs[index].isProtected = false }
                     board.note("\(move.name) broke through \(hitName)'s protection.")
                 }
+                // Accuracy is rolled for each one it reaches for: Muddy Water at
+                // 85% can hit one of them and miss the other. The search's
+                // averages were always per target; only the dice were not.
+                if rolling, !move.neverMisses, move.accuracy > 0,
+                   Double.random(in: 0...100) > Double(move.accuracy) {
+                    board.note(aimed.count > 1 ? "\(hitName) avoided it." : "It missed.")
+                    continue
+                }
+                reached += 1
                 var defender = defending[index].build
                 defender.atFullHP = defending[index].hp == defending[index].maxHP
                 var field = board.field
@@ -1273,6 +1321,10 @@ enum TurnModel {
                 }
                 var attacker = actor.build
                 attacker.lowHP = actor.hp * 3 <= actor.maxHP
+                attacker.lastMoveFailed = actor.lastMoveFailed
+                // Supreme Overlord and Last Respects count the fallen. Never
+                // filled in before, so neither ever went off in a battle.
+                attacker.fallenAllies = (byMine ? board.mine : board.theirs).filter(\.fainted).count
                 if actor.status.halvesPhysical, move.category == "Physical" {
                     attacker.boosts[Stat.attack.rawValue] -= 1
                 }
@@ -1353,6 +1405,34 @@ enum TurnModel {
                 applyDrops(move.targetDrops, toMine: hitMine, slot: index, board: &board)
                 let after = hitMine ? board.mine[index] : board.theirs[index]
                 if after.hp == 0 { board.note("\(hitName) fainted.") }
+            }
+            // A move that reached nobody failed: missed, blocked, or nothing
+            // there to hit. Stomping Tantrum remembers, and a move that hurts
+            // its user when it fails hurts its user now — High Jump Kick into
+            // a Protect crashes just as it does into thin air.
+            markFailed(byMine: byMine, slot: slot, board: &board, failed: reached == 0)
+            if reached == 0 {
+                let costs = move.drawbacks
+                if costs.crash > 0 {
+                    let lost = Swift.max(1, Int(Double(actor.maxHP) * costs.crash))
+                    if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - lost) }
+                    else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - lost) }
+                    board.note("\(name) kept going and crashed.")
+                }
+                return
+            }
+            // What comes back: Leech Life and its kind restore a share of what
+            // they took.
+            if let share = move.drainShare, totalDealt > 0 {
+                let team = byMine ? board.mine : board.theirs
+                if !team[slot].fainted {
+                    let gained = Swift.min(team[slot].maxHP - team[slot].hp,
+                                           Swift.max(1, Int(Double(totalDealt) * share)))
+                    if gained > 0 {
+                        if byMine { board.mine[slot].hp += gained } else { board.theirs[slot].hp += gained }
+                        board.note("\(name) drained \(gained) health back.")
+                    }
+                }
             }
             applySelf(move.selfBoosts, toMine: byMine, slot: slot, board: &board)
             // What the move takes off its user: Close Combat's defences,
@@ -1559,10 +1639,17 @@ enum TurnModel {
     /// fails or a turn goes by without one. A played turn rolls it; the search
     /// takes anything under even as a miss, so it never counts on a second
     /// Protect in a row — which is exactly the read a good player makes.
+    /// Whether a Pokémon's last move came off, for Stomping Tantrum.
+    private static func markFailed(byMine: Bool, slot: Int, board: inout Board, failed: Bool) {
+        if byMine, board.mine.indices.contains(slot) { board.mine[slot].lastMoveFailed = failed }
+        if !byMine, board.theirs.indices.contains(slot) { board.theirs[slot].lastMoveFailed = failed }
+    }
+
+    @discardableResult
     private static func tryProtect(_ label: String?, byMine: Bool, slot: Int,
-                                   board: inout Board, rolling: Bool) {
+                                   board: inout Board, rolling: Bool) -> Bool {
         let team = byMine ? board.mine : board.theirs
-        guard team.indices.contains(slot) else { return }
+        guard team.indices.contains(slot) else { return false }
         let fighter = team[slot]
         let name = fighter.build.form.formLabel
         let word = label ?? "Protect"
@@ -1580,9 +1667,11 @@ enum TurnModel {
             board.note(chance < 1
                 ? "\(name) used \(word) and braced — a \(Int((chance * 100).rounded()))% chance, and it held."
                 : "\(name) used \(word) and braced.")
+            return true
         } else {
             if byMine { board.mine[slot].protectStreak = 0 } else { board.theirs[slot].protectStreak = 0 }
             board.note("\(name) used \(word), but it failed — \(Int((chance * 100).rounded()))% after using it last turn.")
+            return false
         }
     }
 
@@ -1724,15 +1813,23 @@ enum TurnModel {
         // Weather and terrain, which any of several moves set.
         if let weather: Weather = ["Sunny Day": .sun, "Rain Dance": .rain,
                                    "Sandstorm": .sand, "Snowscape": .snow][move.name] {
+            let before = board.field
             board.field.weather = weather
-            board.note("The weather turned.")
+            board.fieldSettled(from: before)
+            // Setting what is already up does not restart the clock; in the
+            // game the move simply fails.
+            if before.weather == weather { board.note("But the \(weather.rawValue.lowercased()) was already up.") }
+            else { board.note("The weather turned to \(weather.rawValue.lowercased()) for five turns.") }
             return
         }
         if let terrain: Terrain = ["Grassy Terrain": .grassy, "Electric Terrain": .electric,
                                    "Misty Terrain": .misty,
                                    "Psychic Terrain": .psychic][move.name] {
+            let before = board.field
             board.field.terrain = terrain
-            board.note("The ground shifted.")
+            board.fieldSettled(from: before)
+            if before.terrain == terrain { board.note("But the terrain was already \(terrain.rawValue.lowercased()).") }
+            else { board.note("\(terrain.rawValue) Terrain covered the field for five turns.") }
             return
         }
 

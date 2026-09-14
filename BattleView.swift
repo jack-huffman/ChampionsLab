@@ -1353,6 +1353,7 @@ struct BattleView: View {
             }
             .overlay(alignment: .bottomLeading) { bench(board, mine: true).padding(12) }
             .overlay(alignment: .topTrailing) { bench(board, mine: false).padding(12) }
+            .overlay(alignment: .bottom) { terrainState(board).padding(.bottom, 10) }
         }
         .background(
             LinearGradient(colors: [tint.opacity(lit ? 0.18 : 0.07),
@@ -1457,29 +1458,58 @@ struct BattleView: View {
         return out
     }
 
+    /// The weather and the speed control, over the top of the field. Weather
+    /// carries its clock: it runs out, and knowing when is a turn's plan.
     @ViewBuilder
     private func fieldState(_ board: Board) -> some View {
-        let bits = [board.field.weather != .none ? board.field.weather.rawValue : nil,
-                    board.field.terrain != .none ? "\(board.field.terrain.rawValue) Terrain" : nil,
-                    board.myTailwind > 0 ? "your Tailwind \(board.myTailwind)" : nil,
-                    board.theirTailwind > 0 ? "their Tailwind \(board.theirTailwind)" : nil,
-                    board.trickRoom > 0 ? "Trick Room \(board.trickRoom)" : nil]
+        let control = [board.myTailwind > 0 ? "your Tailwind · \(board.myTailwind) left" : nil,
+                       board.theirTailwind > 0 ? "their Tailwind · \(board.theirTailwind) left" : nil,
+                       board.trickRoom > 0 ? "Trick Room · \(board.trickRoom) left" : nil]
             .compactMap { $0 }
-        if bits.isEmpty {
-            Text("clear field")
+        if board.field.weather == .none && control.isEmpty {
+            Text("clear skies")
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
         } else {
-            HStack(spacing: 5) {
-                Image(systemName: weatherSymbol(board.field))
-                    .font(.system(size: 10))
-                Text(bits.joined(separator: " · "))
-                    .font(.system(size: 10, weight: .semibold))
+            HStack(spacing: 8) {
+                if board.field.weather != .none {
+                    fieldClock(symbol: weatherSymbol(board.field), title: board.field.weather.rawValue,
+                               turns: board.weatherTurns)
+                }
+                ForEach(control, id: \.self) { line in
+                    Text(line).font(.system(size: 10, weight: .semibold))
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Capsule())
+                        .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 1))
+                }
             }
-            .padding(.horizontal, 10).padding(.vertical, 4)
-            .background(.ultraThinMaterial)
-            .clipShape(Capsule())
-            .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 1))
         }
+    }
+
+    /// Terrain, along the bottom of the field, with its clock.
+    @ViewBuilder
+    private func terrainState(_ board: Board) -> some View {
+        if board.field.terrain != .none {
+            fieldClock(symbol: "square.grid.3x3.bottomleft.filled",
+                       title: "\(board.field.terrain.rawValue) Terrain", turns: board.terrainTurns)
+        }
+    }
+
+    private func fieldClock(symbol: String, title: String, turns: Int) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: symbol).font(.system(size: 12))
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title).font(.system(size: 11, weight: .bold))
+                Text(turns > 0 ? "\(turns) turn\(turns == 1 ? "" : "s") remaining" : "until something changes it")
+                    .font(.system(size: 9, design: .rounded)).monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 4)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .strokeBorder(Palette.hairline, lineWidth: 1))
     }
 
     private func weatherSymbol(_ field: Field) -> String {
@@ -1622,7 +1652,7 @@ struct BattleView: View {
             ?? (move.isSpread ? Array(0..<min(board.activeCount, board.theirs.count))
                 : atAlly ? [slot == 0 ? 1 : 0] : [target])
         var low = 0, high = 0, best = 1.0
-        var hp = 1
+        var hp = 1, fullHP = 1
         for slot in aimed {
             guard side.indices.contains(slot), !side[slot].fainted
             else { continue }
@@ -1631,17 +1661,23 @@ struct BattleView: View {
             defender.atFullHP = side[slot].hp == side[slot].maxHP
             var field = becoming.field
             field.screen = board.theirScreens.blunt(move)
-            let result = DamageCalc.calculate(attacker: becoming.build, defender: defender,
+            var attacker = becoming.build
+            attacker.lastMoveFailed = fighter.lastMoveFailed
+            attacker.fallenAllies = board.mine.filter(\.fainted).count
+            let result = DamageCalc.calculate(attacker: attacker, defender: defender,
                                               move: move, field: field)
             if result.maxDamage > high {
                 low = result.minDamage; high = result.maxDamage
                 best = result.effectiveness
                 hp = side[slot].hp
+                fullHP = side[slot].maxHP
             }
         }
         guard high > 0, hp > 0 else { return nil }
-        let lowShare = Int((Double(low) / Double(hp) * 100).rounded())
-        let highShare = Int((Double(high) / Double(hp) * 100).rounded())
+        // Shares of the whole bar, so a Pokémon on three points reads as the
+        // knockout it is rather than as two thousand per cent.
+        let lowShare = Int((Double(low) / Double(max(1, fullHP)) * 100).rounded())
+        let highShare = Int((Double(high) / Double(max(1, fullHP)) * 100).rounded())
         let hits = Int(ceil(Double(hp) / Double(max(1, high))))
         let knockout = low >= hp ? "KO" : (high >= hp ? "may KO" : "\(hits)HKO")
         let tint: Color = best > 1 ? Palette.good
@@ -2212,7 +2248,9 @@ struct BattleView: View {
         // under sun, not the Normal and 50 printed on it.
         let ahead = evolving(fighter, slot: slot, board: board)
         let form = DamageCalc.fieldForm(of: move, in: ahead.field)
-        let type = form.type
+        let ate = AteAbility.resolve(type: form.type, ability: ahead.build.ability)
+        let type = move.isDamaging ? ate.type : form.type
+        let retyped = move.isDamaging && ate.type != form.type
         let aim = move.aim
         // Revival Blessing has nobody to bring back until somebody has gone.
         let fallen = (board.activeCount..<board.mine.count).filter { board.mine[$0].fainted }
@@ -2282,6 +2320,14 @@ struct BattleView: View {
                             .background(.white.opacity(0.22))
                             .clipShape(Capsule())
                             .help("Read from the field as the move would be used, so whatever weather is up when it resolves is what it becomes.")
+                    }
+                    if retyped {
+                        Text("\(ahead.build.ability): \(type.rawValue)")
+                            .font(.system(size: 9, weight: .semibold))
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(.white.opacity(0.22))
+                            .clipShape(Capsule())
+                            .help("\(ahead.build.ability) turns this Normal move into a \(type.rawValue) move and adds a fifth to its power.")
                     }
                     if let charge = move.charge {
                         let waived = charge.skipsIn != nil && ahead.field.weather == charge.skipsIn
@@ -2382,8 +2428,9 @@ struct BattleView: View {
             partyTargets(board, slot: slot, move: move, index: index)
         } else {
             let partner = slot == 0 ? 1 : 0
-            let form = DamageCalc.fieldForm(of: move, in: evolving(board.mine[slot], slot: slot, board: board).field)
-            let type = form.type
+            let ahead = evolving(board.mine[slot], slot: slot, board: board)
+            let form = DamageCalc.fieldForm(of: move, in: ahead.field)
+            let type = move.isDamaging ? AteAbility.resolve(type: form.type, ability: ahead.build.ability).type : form.type
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     Text(move.name.uppercased())
