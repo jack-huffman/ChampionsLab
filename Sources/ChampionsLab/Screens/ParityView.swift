@@ -24,7 +24,9 @@ final class ParityModel: ObservableObject {
     /// meaningless, so the screen says so instead of showing them.
     @Published private(set) var controlFailure: String?
 
-    private var task: Task<Void, Never>?
+    /// Nonisolated so `deinit` can reach it. Only the main actor ever writes
+    /// it, and by the time deinit runs nothing else holds a reference.
+    nonisolated(unsafe) private var task: Task<Void, Never>?
 
     var isWorking: Bool { phase == .working }
 
@@ -69,6 +71,14 @@ final class ParityModel: ObservableObject {
         step = nil
     }
 
+    /// Leaving the screen stops the work.
+    ///
+    /// Without this the audit carried on after the view was gone: a quarter of
+    /// a million turns, a minute and a half of saturated cores, with the Stop
+    /// button no longer on screen and nothing to say it was still going. The
+    /// app just felt stuttery for no visible reason.
+    deinit { task?.cancel() }
+
     /// Put a finished report on screen without running one, so the snapshot
     /// tool can check the results layout without spending a minute on it.
     func show(_ report: ParityAudit.Report) {
@@ -97,7 +107,11 @@ struct ParityView: View {
     // ImageRenderer lays out a plain stack but produces an empty image for a
     // ScrollView, so the snapshot tool gets the content without one.
     @ViewBuilder var body: some View {
-        if snapshotMode { seeded } else { ScrollView { content }.background(Palette.canvas) }
+        if snapshotMode { seeded } else {
+            ScrollView { content }
+                .background(Palette.canvas)
+                .onDisappear { model.cancel() }
+        }
     }
 
     private var seeded: some View {
@@ -228,8 +242,13 @@ struct ParityView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Divider()
-                Button("Stop") { model.cancel() }
-                    .buttonStyle(.bordered)
+                HStack(spacing: 12) {
+                    Button("Stop") { model.cancel() }
+                        .buttonStyle(.bordered)
+                    Text("Leaving this screen stops the check.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.fainter)
+                }
             }
         }
     }

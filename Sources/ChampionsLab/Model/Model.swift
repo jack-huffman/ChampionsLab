@@ -26,11 +26,37 @@ struct Form: Codable, Identifiable, Hashable, Sendable {
     /// does not carry one, and a missing weight must not stop the app opening.
     let weight: Double?
 
+    /// `types` as the enum, worked out once when the dex is read.
+    ///
+    /// Not in `CodingKeys` — it is derived, not stored in the file — which is
+    /// why this type decodes by hand. Every damage roll, status check and
+    /// hazard asks for it several times, so it is one of the hottest reads in
+    /// the app and it has to be a plain array read: parsing the strings each
+    /// time allocated, and putting a lock in front of that was worse again.
+    let pokeTypes: [PokeType]
+
     var id: String { icon.isEmpty ? "\(species)-\(suffix)" : icon }
 
     enum CodingKeys: String, CodingKey {
         case dex, species, name, icon, suffix, types, stats, abilities, moves, stone, weight
         case formLabel = "form_label"
+    }
+
+    init(from decoder: Decoder) throws {
+        let box = try decoder.container(keyedBy: CodingKeys.self)
+        dex = try box.decode(Int.self, forKey: .dex)
+        species = try box.decode(String.self, forKey: .species)
+        name = try box.decode(String.self, forKey: .name)
+        icon = try box.decode(String.self, forKey: .icon)
+        suffix = try box.decode(String.self, forKey: .suffix)
+        types = try box.decode([String].self, forKey: .types)
+        stats = try box.decode([Int].self, forKey: .stats)
+        abilities = try box.decode([Ability].self, forKey: .abilities)
+        formLabel = try box.decode(String.self, forKey: .formLabel)
+        moves = try box.decode([String].self, forKey: .moves)
+        stone = try box.decodeIfPresent(String.self, forKey: .stone)
+        weight = try box.decodeIfPresent(Double.self, forKey: .weight)
+        pokeTypes = types.compactMap { PokeType(loose: $0) }
     }
 
     /// Weight in kilograms, which Low Kick, Grass Knot, Heavy Slam and Heat
