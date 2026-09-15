@@ -102,6 +102,28 @@ struct BattleView: View {
     /// Who took a hit on the last turn, so they can flinch on screen.
     @State private var struck: Set<Int> = []
     @State private var struckTheirs: Set<Int> = []
+
+    // -- a turn, played rather than printed ----------------------------------
+    //
+    // A turn resolves all at once; it used to appear all at once too, with one
+    // flash on whatever had lost health. These walk the steps the model
+    // recorded and show them in the order they happened.
+
+    /// How long one move takes on screen. Four actions a turn, so this is the
+    /// number that decides whether a turn feels brisk or slow.
+    static let flourishSeconds: Double = 0.44
+
+    /// The move being shown right now, and when it started. The start date is
+    /// what the animation reads, so nothing in this view changes per frame.
+    @State private var flourish: Flourish?
+    @State private var flourishFrom = Date()
+    /// The Pokémon leaning into a physical move, and how far.
+    @State private var lunging: Seat?
+    @State private var lungeBy: CGSize = .zero
+    /// The walk through a turn's steps. Held so that leaving the screen, or
+    /// taking a turn back, stops it: a detached task nobody cancelled is what
+    /// made this app stutter once already.
+    @State private var playback: Task<Void, Never>?
     /// Every board so far, so a turn can be taken back and tried again.
     @State private var history: [(board: Board, log: [String], turn: Int)] = []
     /// What the engine wanted, against what was actually played.
@@ -1171,6 +1193,14 @@ struct BattleView: View {
             }
         }
         .padding(14)
+        // Leaving the screen stops the turn being played out. The parity audit
+        // taught this one: a detached task that outlived the view it belonged
+        // to is what made the app stutter, and it was invisible because the
+        // work was correct — it was just still going.
+        .onDisappear {
+            playback?.cancel(); playback = nil
+            flourish = nil; lunging = nil; lungeBy = .zero
+        }
     }
 
     /// While the leads come out and their abilities go off.
@@ -1500,6 +1530,43 @@ struct BattleView: View {
     /// Pokémon up and to the left, the second diagonally down from it, and
     /// theirs the same way across the line. Tinted by whatever weather is up,
     /// because that is the single most useful thing to see without reading.
+    /// How far a card leans when it is throwing a physical move: a short step
+    /// toward whoever it is hitting, and back.
+    private func lunge(_ seat: Seat) -> CGSize {
+        lunging == seat ? lungeBy : .zero
+    }
+
+    /// Weather thinning out as its clock runs down, so the last turn of a rain
+    /// looks like the last turn of a rain. Zero turns left means it was handed
+    /// a field and told to hold it, which is full strength.
+    private func fade(_ turns: Int) -> Double {
+        switch turns {
+        case 0:  return 1
+        case 1:  return 0.45
+        case 2:  return 0.75
+        default: return 1
+        }
+    }
+
+    /// Where a Pokémon's card sits in the arena, as a fraction of it.
+    ///
+    /// The cards and the animations both read this. They used to be two copies
+    /// of the same four pairs of numbers, which is fine until one of them is
+    /// edited and a Flamethrower starts arriving a little above Garchomp.
+    private static func seatFraction(_ seat: Seat, singles: Bool) -> CGPoint {
+        if singles { return CGPoint(x: seat.mine ? 0.26 : 0.74, y: 0.50) }
+        if seat.mine { return seat.slot == 0 ? CGPoint(x: 0.17, y: 0.40) : CGPoint(x: 0.35, y: 0.64) }
+        return seat.slot == 0 ? CGPoint(x: 0.65, y: 0.36) : CGPoint(x: 0.83, y: 0.60)
+    }
+
+    /// The same place in points — and raised, because a move is aimed at the
+    /// Pokémon and the sprite sits above the middle of its card.
+    private static func seatPoint(_ seat: Seat, w: CGFloat, h: CGFloat,
+                                  singles: Bool) -> CGPoint {
+        let fraction = seatFraction(seat, singles: singles)
+        return CGPoint(x: w * fraction.x, y: h * fraction.y - 30)
+    }
+
     private func arena(_ board: Board) -> some View {
         let tint: Color = {
             switch board.field.weather {
@@ -1523,6 +1590,13 @@ struct BattleView: View {
             let w = geo.size.width, h = geo.size.height
             let lean = h * 0.18
             ZStack {
+                // The room the battle happens in, behind everything else. It
+                // thins out as the weather runs down, so a rain about to stop
+                // looks like one.
+                TerrainLayer(terrain: board.field.terrain,
+                             strength: fade(board.terrainTurns))
+                WeatherLayer(weather: board.field.weather,
+                             strength: fade(board.weatherTurns))
                 // The line down the middle, leaning the way the versus page does.
                 SlantLines(lean: lean, spacing: 72)
                     .stroke(tint.opacity(lit ? 0.09 : 0.05), lineWidth: 1)
@@ -1545,8 +1619,11 @@ struct BattleView: View {
                                 tailwind: board.myTailwind > 0, trickRoom: board.trickRoom > 0)
                         .opacity(out ? 1 : 0)
                         .scaleEffect(out ? 1 : 0.4)
-                        .position(x: w * (singlesGame ? 0.26 : (slot == 0 ? 0.17 : 0.35)),
-                                  y: h * (singlesGame ? 0.50 : (slot == 0 ? 0.40 : 0.64)))
+                        .offset(lunge(Seat(mine: true, slot: slot)))
+                        .position(x: w * BattleView.seatFraction(Seat(mine: true, slot: slot),
+                                                                 singles: singlesGame).x,
+                                  y: h * BattleView.seatFraction(Seat(mine: true, slot: slot),
+                                                                 singles: singlesGame).y)
                 }
                 // Theirs: first up and left of their side, second down and right.
                 ForEach(0..<min(board.activeCount, board.theirs.count), id: \.self) { slot in
@@ -1555,11 +1632,37 @@ struct BattleView: View {
                                 tailwind: board.theirTailwind > 0, trickRoom: board.trickRoom > 0)
                         .opacity(out ? 1 : 0)
                         .scaleEffect(out ? 1 : 0.4)
-                        .position(x: w * (singlesGame ? 0.74 : (slot == 0 ? 0.65 : 0.83)),
-                                  y: h * (singlesGame ? 0.50 : (slot == 0 ? 0.36 : 0.60)))
+                        .offset(lunge(Seat(mine: false, slot: slot)))
+                        .position(x: w * BattleView.seatFraction(Seat(mine: false, slot: slot),
+                                                                 singles: singlesGame).x,
+                                  y: h * BattleView.seatFraction(Seat(mine: false, slot: slot),
+                                                                 singles: singlesGame).y)
                 }
                 sideState(board, mine: true).position(x: w * 0.25, y: 18)
                 sideState(board, mine: false).position(x: w * 0.75, y: 18)
+                // The move being used, over the cards: a beam for a special,
+                // a burst where a physical one lands, a ring for a status move.
+                // Driven off a start date rather than a per-frame @State, so
+                // the arena is not rebuilt sixty times a second.
+                if let flourish {
+                    TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { slice in
+                        let progress = min(1, max(0, slice.date.timeIntervalSince(flourishFrom)
+                                                     / BattleView.flourishSeconds))
+                        let place: (Seat) -> CGPoint = {
+                            BattleView.seatPoint($0, w: w, h: h, singles: singlesGame)
+                        }
+                        ZStack {
+                            if flourish.isSpecial {
+                                BeamLayer(flourish: flourish, progress: progress, place: place)
+                            } else if flourish.isPhysical {
+                                ImpactLayer(flourish: flourish, progress: progress, place: place)
+                            } else if !flourish.isSwitch {
+                                AuraLayer(flourish: flourish, progress: progress, place: place)
+                            }
+                        }
+                    }
+                    .allowsHitTesting(false)
+                }
                 if startFlash {
                     Text("BATTLE START")
                         .font(.system(size: 44, weight: .black)).italic().kerning(2)
@@ -3616,15 +3719,109 @@ struct BattleView: View {
         sending = next.gapsOfMine
         chosenSends = []
         leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
-        struck = hitMine; struckTheirs = hitTheirs
         thought = nil; self.solved = nil
+        play(recorded.steps, hitMine: hitMine, hitTheirs: hitTheirs)
+        if next.isOut(mine: false) { finished = "They have nothing left. You win." }
+        else if next.isOut(mine: true) { finished = "You have nothing left. They win." }
+        else { think() }
+    }
+
+    /// Walk a turn's steps and show each move as it happened.
+    ///
+    /// The model records one step per action, carrying who acted and with
+    /// what, and the health of everything at that moment. Whoever lost health
+    /// between one step and the one before it is who that move reached — which
+    /// gets a spread move's two targets, a redirected move's real one, and a
+    /// miss's none, without the model having to predict any of them.
+    ///
+    /// `hitMine` and `hitTheirs` are the whole turn's damage, kept for the end:
+    /// once the moves have played, whatever took a hit flashes, which is the
+    /// summary the screen used to show on its own.
+    private func play(_ steps: [Board.Step], hitMine: Set<Int>, hitTheirs: Set<Int>) {
+        playback?.cancel()
+        struck = []; struckTheirs = []
+        let actions = steps.enumerated().compactMap { index, step -> (Int, Board.Step)? in
+            step.action == nil ? nil : (index, step)
+        }
+        guard !actions.isEmpty else {
+            flourish = nil
+            flash(hitMine: hitMine, hitTheirs: hitTheirs)
+            return
+        }
+        playback = Task { @MainActor in
+            for (order, (index, step)) in actions.enumerated() {
+                guard !Task.isCancelled, let action = step.action else { return }
+                // Health before this step: the step before it, or the health
+                // the turn started at for the first one.
+                let earlier = index > 0 ? steps[index - 1] : nil
+                var reached: [Seat] = []
+                for slot in step.myHP.indices where slot < 2 {
+                    let was = earlier?.myHP.indices.contains(slot) == true
+                        ? earlier!.myHP[slot] : step.myHP[slot]
+                    if step.myHP[slot] < was { reached.append(Seat(mine: true, slot: slot)) }
+                }
+                for slot in step.theirHP.indices where slot < 2 {
+                    let was = earlier?.theirHP.indices.contains(slot) == true
+                        ? earlier!.theirHP[slot] : step.theirHP[slot]
+                    if step.theirHP[slot] < was { reached.append(Seat(mine: false, slot: slot)) }
+                }
+                // A move never animates as reaching the Pokémon that used it,
+                // even when that Pokémon lost health doing it: recoil, a Life
+                // Orb and Belly Drum all come off the user, and a Flare Blitz
+                // that bursts on its own face reads as a bug.
+                let user = Seat(mine: action.byMine, slot: action.slot)
+                reached.removeAll { $0 == user }
+
+                flourish = Flourish(id: order, action: action, targets: reached)
+                flourishFrom = Date()
+                leanIn(action: action, at: reached, singles: board?.activeCount == 1)
+                try? await Task.sleep(nanoseconds: UInt64(BattleView.flourishSeconds * 1_000_000_000))
+            }
+            guard !Task.isCancelled else { return }
+            flourish = nil
+            lunging = nil
+            flash(hitMine: hitMine, hitTheirs: hitTheirs)
+        }
+    }
+
+    /// A physical move is the Pokémon arriving in person, so the card leans
+    /// into it and comes back. Two animated state changes for the whole thing
+    /// rather than an offset recomputed every frame.
+    private func leanIn(action: Board.Action, at targets: [Seat], singles: Bool) {
+        guard action.category == "Physical" else {
+            withAnimation(.easeOut(duration: 0.12)) { lunging = nil }
+            return
+        }
+        let user = Seat(mine: action.byMine, slot: action.slot)
+        // Toward whoever it reached; toward the other side when it reached
+        // nobody, because the Pokémon still swung.
+        let from = BattleView.seatFraction(user, singles: singles)
+        let toward = targets.first.map { BattleView.seatFraction($0, singles: singles) }
+            ?? CGPoint(x: user.mine ? 0.75 : 0.25, y: from.y)
+        let dx = toward.x - from.x, dy = toward.y - from.y
+        let length = max(0.0001, (dx * dx + dy * dy).squareRoot())
+        let reach: CGFloat = 20
+        let step = CGSize(width: dx / length * reach, height: dy / length * reach)
+        // `lunging` first and unanimated, so the card is eligible to move but
+        // has not moved; then the offset animates from nothing to the lean.
+        // Setting both at once put the card there without the step.
+        lunging = user
+        lungeBy = .zero
+        withAnimation(.easeOut(duration: 0.13)) { lungeBy = step }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard lunging == user else { return }
+            withAnimation(.easeIn(duration: 0.20)) { lungeBy = .zero }
+        }
+    }
+
+    /// What took a hit over the whole turn, flashed once at the end.
+    private func flash(hitMine: Set<Int>, hitTheirs: Set<Int>) {
+        struck = hitMine; struckTheirs = hitTheirs
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 450_000_000)
             struck = []; struckTheirs = []
         }
-        if next.isOut(mine: false) { finished = "They have nothing left. You win." }
-        else if next.isOut(mine: true) { finished = "You have nothing left. They win." }
-        else { think() }
     }
 
     /// Put the last turn back, so a line can be tried a different way.
@@ -3647,6 +3844,9 @@ struct BattleView: View {
     }
 
     private func restore(_ board: Board, log: [String], turn: Int) {
+        // Whatever was being played belongs to a turn that no longer happened.
+        playback?.cancel(); playback = nil
+        flourish = nil; lunging = nil; lungeBy = .zero
         self.board = board
         self.log = log
         self.turn = turn

@@ -74,7 +74,7 @@ final class StatsAndDamageTests: XCTestCase {
 
         // Max-Attack Jolly Mega Salamence, Aerilate Double-Edge, into a neutral
         // 0-SP Serious Garchomp. Aerilate makes it Flying and adds 20%.
-        var salamence = Combatant(form: megaSalamence, ability: "Aerilate", item: "",
+        let salamence = Combatant(form: megaSalamence, ability: "Aerilate", item: "",
                                   sp: [0, 32, 0, 0, 0, 32],
                                   alignment: Alignment.named("Jolly"))
         let garchomp = Combatant(form: forms["Garchomp"]!, ability: "Rough Skin", item: "")
@@ -100,7 +100,7 @@ final class StatsAndDamageTests: XCTestCase {
 
         // Grassy Terrain must halve Earthquake — the core anti-Garchomp claim.
         let earthquake = movesByName["Earthquake"]!
-        var chompAttacker = Combatant(form: forms["Garchomp"]!, ability: "Rough Skin", item: "",
+        let chompAttacker = Combatant(form: forms["Garchomp"]!, ability: "Rough Skin", item: "",
                                       sp: [0, 32, 0, 0, 0, 32],
                                       alignment: Alignment.named("Jolly"))
         let plain = DamageCalc.calculate(attacker: chompAttacker, defender: tyranitar,
@@ -114,7 +114,7 @@ final class StatsAndDamageTests: XCTestCase {
 
         // Tough Claws on a contact move, +30%.
         let liquidation = movesByName["Liquidation"]!
-        var golisopod = Combatant(form: megaGolisopod, ability: "Tough Claws", item: "",
+        let golisopod = Combatant(form: megaGolisopod, ability: "Tough Claws", item: "",
                                   sp: [0, 32, 0, 0, 0, 0], alignment: Alignment.named("Adamant"))
         var golisopodPlain = golisopod
         golisopodPlain.ability = "Emergency Exit"
@@ -128,7 +128,7 @@ final class StatsAndDamageTests: XCTestCase {
 
         // Aura Guard halves contact — the Mega Lucario Z wall.
         let lucarioZ = forms["Mega Lucario Z"]!
-        var guarded = Combatant(form: lucarioZ, ability: "Aura Guard", item: "")
+        let guarded = Combatant(form: lucarioZ, ability: "Aura Guard", item: "")
         var unguarded = guarded
         unguarded.ability = "Steadfast"
         let vsGuard = DamageCalc.calculate(attacker: golisopod, defender: guarded,
@@ -243,7 +243,7 @@ final class StatsAndDamageTests: XCTestCase {
         // used to read the printed power and stop -- Icicle Spear came out as a single
         // 25 BP hit.
         let sashTarget = forms["Whimsicott"]!
-        var bare = Combatant(form: sashTarget, ability: "Prankster", item: "",
+        let bare = Combatant(form: sashTarget, ability: "Prankster", item: "",
                              sp: [2, 0, 0, 0, 0, 32], alignment: Alignment.named("Timid"))
         var sashed = bare
         sashed.item = "Focus Sash"

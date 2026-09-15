@@ -380,4 +380,75 @@ extension SecondaryEffectTests {
 
         print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     }
+
+    /// Every step says who was acting and with what
+    ///
+    /// The battlefield animates a turn off this: a physical move makes the card
+    /// lean in, a special one sends a beam in the move's type colour, and who
+    /// it reached is worked out by diffing health across the step. All of that
+    /// is silent if the metadata is wrong — the turn would simply resolve with
+    /// nothing drawn — so it is worth a test rather than an eyeball.
+    @MainActor func testEveryStepSaysWhoWasActing() throws {
+        print("\n== a step knows whose it is ==")
+        let mine = fighters([("Garchomp", "Leftovers", ["Earthquake", "Protect"]),
+                             ("Charizard", "Charizardite Y", ["Heat Wave", "Protect"]),
+                             ("Farigiraf", "Mental Herb", ["Psychic", "Protect"])])
+        let theirs = fighters([("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"]),
+                               ("Whimsicott", "Focus Sash", ["Tailwind", "Protect"]),
+                               ("Kingambit", "Leftovers", ["Sucker Punch", "Protect"])])
+        let start = Board(mine: mine, theirs: theirs, rules: store.rulebook,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+
+        let played = TurnModel.resolve(start,
+            mine: Play(left: .attack(move: at(start.mine[0], "Earthquake"), target: 0),
+                       right: .attack(move: at(start.mine[1], "Heat Wave"), target: 0)),
+            theirs: Play(left: .attack(move: at(start.theirs[0], "Wood Hammer"), target: 0),
+                         right: .attack(move: at(start.theirs[1], "Tailwind"), target: 0)),
+            rolling: false)
+
+        let acts = played.steps.compactMap(\.action)
+        for act in acts {
+            print("    \(act.byMine ? "you" : "they") slot \(act.slot): "
+                  + "\(act.move.isEmpty ? "(switch)" : act.move) — \(act.category) \(act.type)")
+        }
+        check("every move played left a step that names it", acts.count >= 4, "\(acts.count)")
+
+        let quake = acts.first { $0.move == "Earthquake" }
+        check("Earthquake is recorded as a physical Ground move by you",
+              quake?.category == "Physical" && quake?.type == "Ground" && quake?.byMine == true,
+              "\(String(describing: quake))")
+        let wave = acts.first { $0.move == "Heat Wave" }
+        check("Heat Wave as a special Fire move",
+              wave?.category == "Special" && wave?.type == "Fire", "\(String(describing: wave))")
+        // The dataset files a status move under "Other", which is the word the
+        // screen matches on: anything that is neither Physical nor Special
+        // draws the ring rather than a beam.
+        let wind = acts.first { $0.move == "Tailwind" }
+        check("Tailwind as a status move of theirs",
+              wind?.category == "Other" && wind?.byMine == false, "\(String(describing: wind))")
+
+        // The type has to be one the interface can colour, or the beam falls
+        // back to the accent and every move looks the same.
+        let colourable = acts.filter { !$0.type.isEmpty }
+        check("every recorded type is a real type",
+              colourable.allSatisfy { PokeType(loose: $0.type) != nil },
+              colourable.map(\.type).joined(separator: ", "))
+
+        // The residual step at the end of a turn belongs to nobody, and must
+        // not be drawn as somebody's move. Garchomp holds Leftovers precisely
+        // so there is one: with nothing to report the residual step is never
+        // opened, and the last step would be the last move instead.
+        let residual = played.steps.last
+        check("the end-of-turn step names no actor", residual?.action == nil,
+              "\(residual?.text ?? "no step") / \(String(describing: residual?.action))")
+
+        // And a switch reads as a switch, which draws nothing.
+        let swapped = TurnModel.resolve(start,
+            mine: Play(left: .swap(to: 2), right: .pass),
+            theirs: Play(left: .pass, right: .pass), rolling: false)
+        let switches = swapped.steps.compactMap(\.action).filter { $0.category == "Switch" }
+        check("a switch is recorded as one", switches.count == 1, "\(switches.count)")
+
+        print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
+    }
 }

@@ -326,9 +326,56 @@ struct Board {
     var steps: [Step] = []
 
     /// A moment inside a turn.
+    /// What a Pokémon was doing when a step happened, for the screen to draw.
+    ///
+    /// The step already carried the text and the board; it did not carry who
+    /// was acting, so the only thing the battlefield could show was a flash on
+    /// whatever lost health. A physical move and a special one look nothing
+    /// alike, and neither looks like a switch.
+    ///
+    /// Targets are deliberately absent: a spread move hits two, a redirect
+    /// moves the one it was aimed at, and a miss hits none. The screen works
+    /// out who was struck by diffing this step's health against the step
+    /// before, which gets all three right without the model predicting them.
+    struct Action: Equatable {
+        let byMine: Bool
+        let slot: Int
+        let move: String
+        /// "Physical", "Special" or "Other", as the dataset writes it — a
+        /// status move is "Other" there, and one vocabulary is worth more than
+        /// a nicer word. "Switch" is the one value added on top, for the one
+        /// action that is not a move.
+        let category: String
+        let type: String
+
+        /// The action behind a choice, read off the move it actually plays.
+        /// A switch, a Protect and a pass each read as themselves.
+        init(played: Choice, by actor: Fighter, byMine: Bool, slot: Int) {
+            self.byMine = byMine
+            self.slot = slot
+            switch played {
+            case .attack(let index, _), .protectSelf(let index):
+                let move = actor.moves.indices.contains(index) ? actor.moves[index] : nil
+                self.move = move?.name ?? ""
+                self.category = move?.category ?? "Other"
+                self.type = move?.type ?? ""
+            case .swap:
+                self.move = ""; self.category = "Switch"; self.type = ""
+            case .pass:
+                self.move = ""; self.category = "Other"; self.type = ""
+            }
+        }
+
+        init(byMine: Bool, slot: Int, move: String, category: String, type: String) {
+            self.byMine = byMine; self.slot = slot
+            self.move = move; self.category = category; self.type = type
+        }
+    }
+
     struct Step: Identifiable {
         let id = UUID()
         let text: String
+        var action: Action?
         let myHP: [Int]
         let theirHP: [Int]
         let myForms: [String]
@@ -432,9 +479,15 @@ struct Board {
     /// Nil when each line is its own step, as switches and evolutions are.
     var gathering: [String]?
 
+    /// Whose action the lines being gathered belong to. Set for the length of
+    /// one action and cleared with it, so the residual step at the end of a
+    /// turn — which belongs to nobody — carries none.
+    var acting: Action?
+
     /// Start collecting the lines of one action into one step.
-    mutating func beginStep() {
+    mutating func beginStep(_ action: Action? = nil) {
         closeStep()
+        acting = action
         gathering = []
     }
 
@@ -444,10 +497,11 @@ struct Board {
             steps.append(snapshot(lines.joined(separator: "\n")))
         }
         gathering = nil
+        acting = nil
     }
 
     private func snapshot(_ text: String) -> Step {
-        Step(text: text,
+        Step(text: text, action: acting,
              myHP: mine.map(\.hp), theirHP: theirs.map(\.hp),
              myForms: mine.map(\.build.form.id),
              theirForms: theirs.map(\.build.form.id),
@@ -1104,7 +1158,8 @@ enum TurnModel {
             return a.mine && !b.mine
         }
         for entry in leaving {
-            out.beginStep()
+            out.beginStep(Board.Action(byMine: entry.mine, slot: entry.slot,
+                                       move: "", category: "Switch", type: ""))
             if entry.mine {
                 out.note("You switched \(out.mine[entry.slot].build.form.formLabel) out for \(out.mine[entry.bench].build.form.formLabel).")
                 let said = swapIn(mine: true, active: entry.slot, bench: entry.bench, board: &out)
@@ -1246,8 +1301,13 @@ enum TurnModel {
             if entry.mine { out.mine[entry.slot].goesNext = false; out.mine[entry.slot].goesLast = false }
             else { out.theirs[entry.slot].goesNext = false; out.theirs[entry.slot].goesLast = false }
             out.acted.insert((entry.mine ? "m" : "t") + "\(entry.slot)")
-            out.beginStep()
-            apply(forced(actor, entry.choice), byMine: entry.mine, slot: entry.slot, to: &out, rolling: rolling)
+            // What is actually played, not what was asked for: an Encore or a
+            // Choice lock substitutes a different move, and the screen should
+            // draw the one that happens.
+            let playing = forced(actor, entry.choice)
+            out.beginStep(Board.Action(played: playing, by: actor,
+                                       byMine: entry.mine, slot: entry.slot))
+            apply(playing, byMine: entry.mine, slot: entry.slot, to: &out, rolling: rolling)
             out.closeStep()
         }
 

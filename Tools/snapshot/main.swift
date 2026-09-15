@@ -283,6 +283,12 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
                named: "battle-aim-dark",
                size: CGSize(width: 1280, height: 860), dark: true)
     }
+    // The move effects, laid out side by side at the moment each reads best.
+    // The real ones happen over four tenths of a second inside a battle, which
+    // is not a thing a still can catch, so this puts them on a grid instead.
+    render(EffectSheet(), named: "battle-effects-dark", size: CGSize(width: 1100, height: 760), dark: true)
+    render(WeatherSheet(), named: "battle-weather-dark", size: CGSize(width: 1100, height: 700), dark: true)
+
     render(SpeedTiersView(), named: "speed-dark",
            size: CGSize(width: 1000, height: 900), dark: true)
     let dexSample = Array(store.data.forms.sorted { $0.dex < $1.dex }.prefix(24))
@@ -298,3 +304,139 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
 }
 
 MainActor.assumeIsolated { renderAll() }
+
+
+// MARK: - The effect layers, on a grid
+
+/// Four seats, the way the arena lays them out.
+@MainActor
+private func demoPlace(_ size: CGSize) -> (Seat) -> CGPoint {
+    { seat in
+        let x: CGFloat = seat.mine ? (seat.slot == 0 ? 0.17 : 0.35) : (seat.slot == 0 ? 0.65 : 0.83)
+        let y: CGFloat = seat.mine ? (seat.slot == 0 ? 0.40 : 0.64) : (seat.slot == 0 ? 0.36 : 0.60)
+        return CGPoint(x: size.width * x, y: size.height * y)
+    }
+}
+
+private struct EffectCell<Content: View>: View {
+    let title: String
+    let content: Content
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+            GeometryReader { geo in
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10).fill(Palette.surfaceRaised.opacity(0.4))
+                    // Markers where the four Pokémon would be standing.
+                    ForEach([Seat(mine: true, slot: 0), Seat(mine: true, slot: 1),
+                             Seat(mine: false, slot: 0), Seat(mine: false, slot: 1)], id: \.self) { seat in
+                        let at = demoPlace(geo.size)(seat)
+                        Circle().strokeBorder(Palette.dim.opacity(0.35), lineWidth: 1)
+                            .frame(width: 30, height: 30).position(at)
+                    }
+                    content
+                }
+            }
+        }
+    }
+}
+
+private struct EffectSheet: View {
+    private func shot(_ name: String, category: String, type: String,
+                      targets: [Seat]) -> Flourish {
+        Flourish(id: 0,
+                 action: Board.Action(byMine: true, slot: 0, move: name,
+                                      category: category, type: type),
+                 targets: targets)
+    }
+
+    var body: some View {
+        let one = [Seat(mine: false, slot: 0)]
+        let both = [Seat(mine: false, slot: 0), Seat(mine: false, slot: 1)]
+        return VStack(alignment: .leading, spacing: 14) {
+            Text("What a move looks like")
+                .font(.system(size: 18, weight: .bold))
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 3),
+                      spacing: 14) {
+                ForEach([0.30, 0.58, 0.85], id: \.self) { at in
+                    EffectCell("Special, one target — Flamethrower, \(Int(at * 100))%") {
+                        GeometryReader { geo in
+                            BeamLayer(flourish: shot("Flamethrower", category: "Special", type: "Fire",
+                                                     targets: one),
+                                      progress: at, place: demoPlace(geo.size))
+                        }
+                    }
+                    .frame(height: 210)
+                }
+                ForEach([0.45, 0.70], id: \.self) { at in
+                    EffectCell("Special, both — Surf, \(Int(at * 100))%") {
+                        GeometryReader { geo in
+                            BeamLayer(flourish: shot("Surf", category: "Special", type: "Water",
+                                                     targets: both),
+                                      progress: at, place: demoPlace(geo.size))
+                        }
+                    }
+                    .frame(height: 210)
+                }
+                EffectCell("Special, missed — Thunder, 70%") {
+                    GeometryReader { geo in
+                        BeamLayer(flourish: shot("Thunder", category: "Special", type: "Electric",
+                                                 targets: []),
+                                  progress: 0.70, place: demoPlace(geo.size))
+                    }
+                }
+                .frame(height: 210)
+                ForEach([0.55, 0.80], id: \.self) { at in
+                    EffectCell("Physical impact — Earthquake, \(Int(at * 100))%") {
+                        GeometryReader { geo in
+                            ImpactLayer(flourish: shot("Earthquake", category: "Physical",
+                                                       type: "Ground", targets: both),
+                                        progress: at, place: demoPlace(geo.size))
+                        }
+                    }
+                    .frame(height: 210)
+                }
+                EffectCell("Status on self — Swords Dance, 60%") {
+                    GeometryReader { geo in
+                        AuraLayer(flourish: shot("Swords Dance", category: "Status", type: "Normal",
+                                                 targets: []),
+                                  progress: 0.60, place: demoPlace(geo.size))
+                    }
+                }
+                .frame(height: 210)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(18)
+    }
+}
+
+private struct WeatherSheet: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Weather and terrain")
+                .font(.system(size: 18, weight: .bold))
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 4),
+                      spacing: 14) {
+                ForEach([Weather.rain, .snow, .sand, .sun], id: \.self) { sky in
+                    EffectCell("\(sky)") {
+                        WeatherLayer(weather: sky)
+                    }
+                    .frame(height: 230)
+                }
+                ForEach([Terrain.grassy, .electric, .psychic, .misty], id: \.self) { floor in
+                    EffectCell("\(floor) terrain") {
+                        TerrainLayer(terrain: floor)
+                    }
+                    .frame(height: 230)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(18)
+    }
+}
