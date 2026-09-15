@@ -13,11 +13,16 @@ final class WorthTests: HarnessCase {
 
     /// A counter is worth keeping only while the thing it counters is alive
     ///
-    /// The reasoning this is for is the one people say out loud while they
-    /// play: "I'd like to preserve this for later, into their Swampert." It is
-    /// a statement about a particular opposing Pokémon, and it stops being true
-    /// the moment that Pokémon faints. A weight worked out once at team preview
-    /// cannot tell those two positions apart.
+    /// The reasoning here is the one people say out loud while they play: "I'd
+    /// like to preserve this for later, into their Swampert." It is a statement
+    /// about a particular opposing Pokémon and stops being true the moment that
+    /// Pokémon faints.
+    ///
+    /// The engine does *not* currently re-derive its weights as the game goes,
+    /// because doing so measured worse — 55.0% against 57.3%, both give or take
+    /// 2.2 — and the reasoning is written up on `Board.refreshWorth`. What this
+    /// checks is that the machinery still does what it claims, so that turning
+    /// it back on is a one-line change and not a rebuild.
     @MainActor func testACounterIsWorthLessOnceItsTargetIsGone() throws {
         print("\n== worth follows who is left ==")
         let mine = fighters([("Rillaboom", "Leftovers", ["Wood Hammer", "Protect"]),
@@ -67,7 +72,7 @@ final class WorthTests: HarnessCase {
         print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     }
 
-    /// The board re-derives its weights as the game goes
+    /// The board can re-derive its weights, whether or not play does
     @MainActor func testTheBoardRefreshesWhatItsPokemonAreWorth() throws {
         print("\n== the board keeps up ==")
         let mine = fighters([("Rillaboom", "Leftovers", ["Wood Hammer", "Protect"]),

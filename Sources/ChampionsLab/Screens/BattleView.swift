@@ -3753,8 +3753,6 @@ struct BattleView: View {
         for index in next.theirs.indices where index < current.theirs.count
             && next.theirs[index].hp < current.theirs[index].hp { hitTheirs.insert(index) }
 
-        // Whoever fell this turn changes what everyone left is worth.
-        next.refreshWorth()
         board = next
         turn += 1
         replay = told.isEmpty ? [] : recorded.steps

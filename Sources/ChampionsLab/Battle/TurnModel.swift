@@ -369,18 +369,25 @@ struct Board {
     var myRoster: [String] = []
     var theirRoster: [String] = []
 
-    /// Re-derive both sides' weights from who is still standing.
+    /// Derive both sides' weights from the duel table.
     ///
-    /// The point of doing this again rather than once: "preserve Basculegion
-    /// for later, into their Swampert" is a thing worth doing only while the
-    /// Swampert is there. The moment it faints, Basculegion is an ordinary
-    /// Pokémon and should be spent like one — and a weight fixed at the start
-    /// of the game cannot tell those two positions apart.
+    /// Called once, when the board is made. It was called again after every
+    /// turn for a while, so that a counter stopped being precious once the
+    /// thing it countered had fainted — "preserve Basculegion for later, into
+    /// their Swampert" is only true while the Swampert is there, and that is
+    /// real reasoning that people really do.
     ///
-    /// Counted against what is alive *and has been seen*, which is the same
-    /// rule the weights are read under. Cheap enough to run when a turn is
-    /// committed; deliberately not run inside the search, where it would cost
-    /// a table walk per node to buy a distinction that lasts one turn.
+    /// It measured worse. Against a flat engine the fixed weights took 57.3%
+    /// of 2,000 games and the moving ones 55.0% of another 2,000, both give or
+    /// take 2.2 — no gain, and a point estimate that went the wrong way. The
+    /// likeliest reason is that the set it counts against shrinks: with one
+    /// opponent left every weight is driven to one end of its range or the
+    /// other, so the late game, where the position is tightest, is exactly
+    /// where the numbers get loudest and least reliable. Damping that is a
+    /// parameter to tune and was not worth it on this evidence.
+    ///
+    /// Kept as a single call so the behaviour is one line away if somebody
+    /// wants to try again with the late game handled.
     mutating func refreshWorth() {
         // The roster everyone saw, less whoever has visibly fallen. Counting
         // only what has been *seen* was the first attempt and starved it: two

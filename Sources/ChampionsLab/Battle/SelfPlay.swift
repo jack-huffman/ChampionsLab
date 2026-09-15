@@ -369,8 +369,6 @@ enum SelfPlay {
             board = TurnModel.resolve(board, mine: ours, theirs: theirsPlay, rolling: true)
             readSteps(board)
             board.fillGaps()
-            // Who is left has changed, so what each Pokémon is worth has too.
-            board.refreshWorth()
             sawTheField()
         }
         // Nobody finished it. Whoever is further ahead on the board takes it,
