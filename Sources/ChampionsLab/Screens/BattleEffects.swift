@@ -119,12 +119,20 @@ struct WeatherLayer: View {
             // fmod rather than a wrap check: a drop that reaches the bottom is
             // the same drop starting again at the top, one row over.
             let fall = (t * speed + scatter(index &+ 77)).truncatingRemainder(dividingBy: 1)
-            let y = fall * (size.height + 40) - 20
+            let fell = size.height + 40
+            let y = fall * fell - 20
             let x = column * (size.width + lean * 2) - lean + fall * lean
             let length = 8 + scatter(index &+ 313) * 9
+            // The streak has to lie along the way the drop is actually going,
+            // and trail behind it. It used to be drawn at a steep angle of its
+            // own, leaning the opposite way to the travel — so the rain fell
+            // more or less straight down while every drop looked like it was
+            // being blown sideways.
+            let run = (lean * lean + fell * fell).squareRoot()
+            let alongX = lean / run, alongY = fell / run
             var streak = Path()
-            streak.move(to: CGPoint(x: x, y: y))
-            streak.addLine(to: CGPoint(x: x - lean * 0.06 * length, y: y + length))
+            streak.move(to: CGPoint(x: x - alongX * length, y: y - alongY * length))
+            streak.addLine(to: CGPoint(x: x, y: y))
             context.stroke(streak, with: .color(colour.opacity(0.05 + scatter(index &+ 5) * 0.07)),
                            lineWidth: 1)
         }

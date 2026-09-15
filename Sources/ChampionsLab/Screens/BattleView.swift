@@ -1799,16 +1799,18 @@ struct BattleView: View {
     ///
     /// Confusion stays a word, because it is not a stat and has nowhere to
     /// point. The condition has moved to the end of the name.
-    private func stages(_ fighter: Fighter) -> AnyView {
-        // Speed last: it is the one that decides the turn, so it reads at the
-        // bottom where the eye finishes.
-        let order: [Stat] = [.attack, .spAttack, .defense, .spDefense, .speed]
-        let changed = order.filter {
+    /// Which stats have moved, in the order they are read. Speed last: it is
+    /// the one that decides the turn, so it reads at the bottom where the eye
+    /// finishes.
+    private func changedStats(_ fighter: Fighter) -> [Stat] {
+        [.attack, .spAttack, .defense, .spDefense, .speed].filter {
             fighter.build.boosts.indices.contains($0.rawValue)
                 && fighter.build.boosts[$0.rawValue] != 0
         }
-        guard !changed.isEmpty || fighter.isConfused else { return AnyView(EmptyView()) }
-        return AnyView(VStack(alignment: .trailing, spacing: 1) {
+    }
+
+    private func stages(_ fighter: Fighter, changed: [Stat]) -> some View {
+        VStack(alignment: .trailing, spacing: 1) {
             ForEach(changed, id: \.rawValue) { stat in
                 let stage = fighter.build.boosts[stat.rawValue]
                 let up = stage > 0
@@ -1833,7 +1835,7 @@ struct BattleView: View {
                           + "\(fighter.confusedFor == 1 ? "" : "s"): one action in three goes "
                           + "into its own face. Switching out clears it.")
             }
-        })
+        }
     }
 
     private func stageMultiplier(_ stage: Int) -> Double {
@@ -2102,14 +2104,24 @@ struct BattleView: View {
         // exactly this space — and a stat change is something you check at a
         // glance rather than squint at.
         .overlay(alignment: .topTrailing) {
-            stages(fighter)
-                .padding(.horizontal, 4).padding(.vertical, 2)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Palette.surface.opacity(0.88))
-                )
-                .padding(2)
-                .opacity(fighter.fainted ? 0 : 1)
+            // Only when there is something to draw. This used to hand the
+            // backdrop an `AnyView(EmptyView())` when nothing had changed —
+            // and an AnyView is not an EmptyView: the erasure hides the
+            // emptiness, so the view had no size of its own, stretched to fill
+            // the overlay, and painted its near-black backdrop over the whole
+            // card. Every Pokémon with no stat change wore a dark sheet, which
+            // lifted the moment an Intimidate gave it one.
+            let changed = changedStats(fighter)
+            if !changed.isEmpty || fighter.isConfused {
+                stages(fighter, changed: changed)
+                    .padding(.horizontal, 4).padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Palette.surface.opacity(0.88))
+                    )
+                    .padding(2)
+                    .opacity(fighter.fainted ? 0 : 1)
+            }
         }
         // The stone marker takes the other corner. It used to share the right
         // one with the stat column, which is fine at one stat changed and

@@ -231,9 +231,10 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         board.mine[0].build.boosts[Stat.spAttack.rawValue] = 2
         board.mine[1].build.boosts[Stat.defense.rawValue] = -2
         board.mine[1].build.boosts[Stat.speed.rawValue] = 1
-        board.theirs[0].build.boosts[Stat.attack.rawValue] = -1
-        board.theirs[0].build.boosts[Stat.spDefense.rawValue] = -3
-        board.theirs[0].status = .paralysis
+        // theirs[0] deliberately carries nothing: no stat change, no condition.
+        // That is the case the fixture used to miss, and the one that was
+        // broken — a card with an empty stat column wore a black sheet. Leave
+        // it bare so the shot keeps checking it.
         board.theirs[1].status = .burn
         // A real turn played out, so the log shows its reasons nested under
         // the thing they explain rather than as a column of equal boxes.
