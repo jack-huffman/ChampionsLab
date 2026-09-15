@@ -15,58 +15,52 @@ enum SelfPlay {
         let turns: Int
     }
 
-    /// Six drawn from a pool, no repeats, with a plausible set on each.
+    /// The teams people actually registered, turned into something playable.
     ///
-    /// Not a good team — a good team is the team builder's job — but a legal
-    /// and varied one, which is what an evaluation needs. Both engines face the
-    /// same draws, so any weakness in the drawing hurts them equally.
-    static func team<G: RandomNumberGenerator>(
-        from pool: [Form], rules: Rulebook, using dice: inout G) -> Team {
-        var out = Team()
-        out.format = "doubles"
-        var taken = Set<String>()
-        var slots: [TeamSlot] = []
-        var guard_ = 0
-        while slots.count < 6, guard_ < 400 {
-            guard_ += 1
-            guard let form = pool.randomElement(using: &dice) else { break }
-            // One of a species, the way a real list is built.
-            if !taken.insert(form.species).inserted { continue }
-            var slot = TeamSlot(formID: form.id)
-            slot.ability = form.abilities.first?.name ?? ""
-            slot.item = form.stone ?? "Leftovers"
-            // Four damaging moves it can actually learn, plus Protect when it
-            // has it: enough to make the turns mean something.
-            let known = form.moves.compactMap { rules.move($0) }
-            // Moves it can actually put its stat behind, for the same reason.
-            let wants = form.attack >= form.spAttack ? "Physical" : "Special"
-            let hits = known.filter { $0.isDamaging && $0.power >= 60 && $0.category == wants }
-            var picked = (hits.isEmpty ? known.filter { $0.isDamaging && $0.power >= 60 } : hits)
-                .sorted { $0.power > $1.power }.prefix(3).map(\.id)
-            if let protect = known.first(where: { $0.name == "Protect" }) {
-                picked.append(protect.id)
+    /// The first version of this drew six Pokémon from the usage table and gave
+    /// each one its three strongest attacks. It was fair — both engines faced
+    /// the same draws — but it produced damage races, and a damage race is a
+    /// position where thinking harder barely helps. That is a bad place to
+    /// measure an engine from.
+    ///
+    /// The dataset already carries a hundred and twelve real lists, with the
+    /// items, abilities and movesets their owners chose: Fake Out, U-turn,
+    /// Tailwind, Choice Scarf, the support moves that make a turn a decision
+    /// rather than an exchange. Those are the games worth learning from.
+    ///
+    /// Stat spreads are the one thing a registered list never publishes, so
+    /// they are still worked out here — towards whichever side the Pokémon
+    /// actually attacks from.
+    static func teams(from dataset: Dataset, rules: Rulebook) -> [Team] {
+        dataset.metaTeams.compactMap { entry -> Team? in
+            var out = Team()
+            out.format = entry.format.isEmpty ? "doubles" : entry.format
+            out.name = entry.name
+            out.slots = entry.members.compactMap { member -> TeamSlot? in
+                guard let form = rules.forms.first(where: {
+                    $0.formLabel == member.form || $0.name == member.form
+                }) else { return nil }
+                var slot = TeamSlot(formID: form.id)
+                slot.item = member.item
+                slot.ability = member.ability.isEmpty
+                    ? (form.abilities.first?.name ?? "") : member.ability
+                slot.moves = member.moves.compactMap { name in
+                    rules.moves.values.first { $0.name == name }?.id
+                }
+                if slot.moves.isEmpty { return nil }
+                let physical = form.attack >= form.spAttack
+                var sp = Array(repeating: 0, count: 6)
+                sp[Stat.hp.rawValue] = 20
+                sp[(physical ? Stat.attack : Stat.spAttack).rawValue] = 23
+                sp[Stat.speed.rawValue] = 23
+                slot.sp = sp
+                slot.alignmentName = member.nature ?? (physical ? "Adamant" : "Modest")
+                return slot
             }
-            if picked.count < 4 {
-                picked += known.filter { !picked.contains($0.id) }.prefix(4 - picked.count).map(\.id)
-            }
-            slot.moves = Array(picked.prefix(4))
-
-            // Built towards whichever side it actually hits from. Putting every
-            // Pokémon on Attack was fair, because both engines faced the same
-            // teams, but it made half the field play like nothing anybody
-            // brings — a Special Attack Pokémon with no Special Attack is not
-            // a position worth learning from.
-            let physical = form.attack >= form.spAttack
-            var sp = Array(repeating: 0, count: 6)
-            sp[Stat.hp.rawValue] = 20
-            sp[(physical ? Stat.attack : Stat.spAttack).rawValue] = 23
-            sp[Stat.speed.rawValue] = 23
-            slot.sp = sp
-            slot.alignmentName = physical ? "Adamant" : "Modest"
-            slots.append(slot)
+            // A list that lost most of itself to a form or move this dataset
+            // does not carry is not a game worth playing.
+            return out.slots.count >= 4 ? out : nil
         }
-        out.slots = slots
-        return out
     }
 
     /// A configuration in one of the two chairs.

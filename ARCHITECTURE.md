@@ -194,6 +194,14 @@ read as missing for exactly this reason. `ParityAuditTests` counts the
 properties on `Fighter`, `Screens` and `Combatant` and fails when one is added
 without the fingerprint learning to see it.
 
+**What it still cannot see.** The battery does not roll dice, so a rule that
+only ever happens on a roll has no moment it can be caught in. Poison Touch is
+30% on contact and Quick Claw is 20% to move first, and both are implemented
+and both read as unproven; a Leek only works for a Farfetch'd, which is not on
+the bench. Those three are the whole of the remaining gap among things people
+actually bring, and none of them is a missing rule. Anything else that reads
+as unproven is worth opening.
+
 ## Measuring whether a change made it play better
 
 Every other check here measures something other than playing strength.

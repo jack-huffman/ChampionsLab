@@ -99,11 +99,12 @@ func pair(_ flag: String, _ fallback: (Double, Double)) -> (Double, Double) {
         print("  the harness, not a finding.\n")
     }
 
-    // Teams drawn from what people actually bring, so the games look like games.
-    let pool = store.data.usage.prefix(40).compactMap { entry in
-        rules.forms.first { $0.formLabel == entry.name || $0.name == entry.name }
-    }
-    guard pool.count >= 12 else { print("  not enough forms to draw teams from"); exit(1) }
+    // The lists people actually registered, with the items, abilities and
+    // movesets they chose. A team drawn at random from the usage table plays a
+    // damage race, and a damage race is a bad place to measure an engine from.
+    let pool = SelfPlay.teams(from: store.data, rules: rules)
+    guard pool.count >= 4 else { print("  not enough registered teams to draw from"); exit(1) }
+    print("  drawing from \(pool.count) registered teams\n")
 
     var wins = (a: 0, b: 0)
     var draws = 0
@@ -120,8 +121,14 @@ func pair(_ flag: String, _ fallback: (Double, Double)) -> (Double, Double) {
         // times, so the pair faces the same luck and only the seating differs.
         let gameSeed = dice.next()
         var picker = Seeded(seed: gameSeed)
-        let left = SelfPlay.team(from: pool, rules: rules, using: &picker)
-        let right = SelfPlay.team(from: pool, rules: rules, using: &picker)
+        let left = pool.randomElement(using: &picker) ?? pool[0]
+        var right = pool.randomElement(using: &picker) ?? pool[0]
+        // Two different lists, or the mirror teaches nothing.
+        var tries = 0
+        while right.id == left.id, tries < 20 {
+            right = pool.randomElement(using: &picker) ?? pool[0]
+            tries += 1
+        }
 
         // The same two teams both times, the same dice both times, and only
         // the engines change chairs.
