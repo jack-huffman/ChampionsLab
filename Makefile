@@ -5,6 +5,10 @@
 #   make coverage   what the battle model implements, and what it does not
 #   make profile    where a search spends its time
 #   make accuracy   the engine against real games (slow; needs data/matches.json)
+#   make duel       two engines play each other; the only check that measures
+#                   playing strength rather than whether a rule fires
+#   make delta      pick up a new Champions release without re-scraping the world
+#   make full-sync  re-fetch every page
 #   make snapshot   render every screen to build/shots/*.png
 #   make app        build ChampionsLab.app into ~/Applications
 #   make dmg        a signed disk image

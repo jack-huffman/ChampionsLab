@@ -2715,14 +2715,14 @@ enum TurnModel {
             else { happens = chance >= 100 }
             guard happens else { continue }
             apply(effect, chance: chance, of: move, byMine: byMine, hitMine: hitMine,
-                  slot: slot, hit: hit, name: name, board: &board)
+                  slot: slot, hit: hit, name: name, rolling: rolling, board: &board)
         }
     }
 
     /// One secondary effect landing.
     private static func apply(_ effect: Move.Secondary, chance: Int, of move: Move,
                               byMine: Bool, hitMine: Bool, slot: Int, hit: Int,
-                              name: String, board: inout Board) {
+                              name: String, rolling: Bool, board: inout Board) {
         let defenderTeam = hitMine ? board.mine : board.theirs
         let attackerTeam = byMine ? board.mine : board.theirs
         guard defenderTeam.indices.contains(hit), attackerTeam.indices.contains(slot) else { return }
@@ -2773,7 +2773,10 @@ enum TurnModel {
         case .selfDrops(let drops):
             applyDrops(drops, toMine: byMine, slot: slot, board: &board)
         case .confuse:
-            confuse(onMine: hitMine, slot: hit, board: &board, rolling: false, chance: chance)
+            // Whether the confusion lands was settled above; `rolling` here
+            // only decides how long it lasts, and a played turn should roll
+            // that rather than always taking the two turns the search assumes.
+            confuse(onMine: hitMine, slot: hit, board: &board, rolling: rolling, chance: chance)
         }
     }
 
