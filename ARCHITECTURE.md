@@ -207,7 +207,7 @@ as unproven is worth opening.
 Every other check here measures something other than playing strength.
 `make test` says a rule fires. `make coverage` says a rule exists. `make
 accuracy` predicts who wins from two team lists and never watches a turn — it
-reads 5.3 points whatever the battle model does, which was discovered the hard
+reads 5.2 to 5.3 points whatever the battle model does, which was found the hard
 way while trying to decide how many dice rolls the search should branch on.
 
 `make duel` plays. Two engines, one game, to the end, many times over.
@@ -301,9 +301,14 @@ Serebii is wrong and every sibling move agrees it is wrong.
 make test        # the suite — must pass
 make hitch       # no main-thread stretch past four frames; search reaches depth ≥ 2
 make snapshot    # look at build/shots/ — the renders catch layout regressions
-make accuracy    # 55.2% on 1,454 games is the floor; a drop is a regression
+make accuracy    # 55.2% on ~1,455 games is the floor; a drop is a regression
 make coverage    # the parity audit; the control must pass or the rest is noise
 ```
+
+Read `make accuracy` to one decimal and no further. It resolves a slightly
+different set of games as the data moves — 1,453 one day and 1,455 the next —
+so a tenth of a point between two runs is about a game and a half and means
+nothing. A drop of half a point would be worth opening.
 
 `make hitch` is only meaningful on a quiet machine. The same commit reads 23 ms
 alone, 36 ms with a build running alongside it and 124 ms under real
