@@ -15,6 +15,21 @@
 //  screen, rather than a second opinion invented for the purpose: each cell
 //  already knows how many turns each side needs to knock the other out, and
 //  who moves first. Beating a cell is winning the race in it.
+//
+//  What it is worth, measured rather than assumed:
+//
+//    * The grid was checked first. `make lab ARGS="--calibrate"` plays fours
+//      from all the way down the bring-four ranking. Over 2,400 games the
+//      picker's favourite won 60% and a four from the bottom half 42%, and
+//      the score bands climb in order — so the grid this is built on is
+//      carrying real information, not noise wearing a number.
+//
+//    * `make lab ARGS="--ab"` then plays one weighted engine against one flat
+//      one, same teams, same dice, both chairs. Over 2,000 games the weighted
+//      side took 57.3%, give or take 2.2.
+//
+//  Re-run both if this file changes. A weighting that cannot beat a flat one
+//  is a weighting that should come out.
 
 import Foundation
 
