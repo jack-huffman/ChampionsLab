@@ -163,6 +163,7 @@ struct ParityAudit: Sendable {
         "Cursed Body": "Disables a move by spending its Power Points, which are not tracked.",
         "Rivalry": "Turns on the two Pokémon's genders, which the dataset does not carry.",
         "Gluttony": "Brings a pinch berry forward to half health. Only the Sitrus is modelled, and it already fires there.",
+        "Minimize": "Two stages of evasion, and evasion stages are not modelled. What is left of the move — that Body Slam and its kin hit a minimised target twice as hard — is not worth carrying on its own.",
     ]
 
     // MARK: - Running it
@@ -464,7 +465,9 @@ private struct Bench {
                 out += "/\(f.build.typeOverride ?? [])"
                 out += "/\((f.build.statOverride ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" })"
                 out += "/\(f.asleepFor)/\(f.protectStreak)/\(f.lastMoveFailed)/\(f.seen)"
-                out += "/\(f.build.status.rawValue)|"
+                out += "/\(f.build.status.rawValue)"
+                out += "/\(f.perishIn)/\(f.drowsyFor)/\(f.disabled ?? -1)/\(f.disabledFor)"
+                out += "/\(f.destinyBound)/\(f.octolocked)|"
             }
         }
         out += "\(b.field.weather)\(b.field.terrain)\(b.myTailwind)\(b.theirTailwind)\(b.trickRoom)"

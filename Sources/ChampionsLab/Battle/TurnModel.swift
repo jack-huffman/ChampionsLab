@@ -134,9 +134,38 @@ struct Fighter {
     var aquaRing = false
     /// Stockpiles held, which is what Swallow and Spit Up spend.
     var stockpile = 0
+    /// Turns left before Perish Song takes it. Three when the song lands, and
+    /// it faints when the count runs out — the one clock in the game that
+    /// beats a Pokémon nothing can hurt, which is why it is worth having.
+    /// Switching out clears it; the song does not follow to the bench.
+    var perishIn = 0
+    /// Yawn: it falls asleep when this runs out, which is next turn. A Yawn is
+    /// not sleep yet, and the difference is the whole move — the turn in
+    /// between is the one the other side has to answer in.
+    var drowsyFor = 0
+    /// The move Disable has shut off, as an index into `moves`, and for how
+    /// much longer.
+    var disabled: Int?
+    var disabledFor = 0
+    /// Destiny Bond: if this faints before its next action, whatever did it
+    /// goes too.
+    var destinyBound = false
+    /// Octolock: a stage of Defense and Special Defense every turn, and it
+    /// cannot leave. The trapping half lives in `cannotEscape`.
+    var octolocked = false
     /// The types it actually has right now, which is not always what the dex
     /// says: Soak makes its target a pure Water type.
     var types: [PokeType] { build.effectiveTypes }
+    /// Deaf to sound moves, which is what keeps Perish Song off it. Computed,
+    /// so it stays out of the board fingerprint — the ability it reads is
+    /// already in there.
+    var isSoundproof: Bool { build.ability == "Soundproof" }
+    /// Standing on the ground, so the floor can reach it: hazards, the terrain,
+    /// an Earthquake. Was written out twice inline and once without the
+    /// balloon, which is the sort of thing that drifts.
+    var isGrounded: Bool {
+        !types.contains(.flying) && build.ability != "Levitate" && build.item != "Air Balloon"
+    }
     /// What it is held to, if anything.
     var encored: Choice? {
         guard encoredFor > 0, let last = lastMove, moves.indices.contains(last) else { return nil }
@@ -565,8 +594,7 @@ struct Board {
         var who = side ? mine[slot] : theirs[slot]
         guard !who.fainted else { return }
         let name = who.build.form.formLabel
-        let grounded = !who.types.contains(.flying) && who.build.ability != "Levitate"
-            && who.build.item != "Air Balloon"
+        let grounded = who.isGrounded
 
         if field.stealthRock {
             // Stealth Rock is a Rock-type hit, so it reads off the type chart:
@@ -1114,7 +1142,7 @@ enum TurnModel {
             if who.types.contains(.ghost) || who.build.item == "Shed Shell"
                 || who.build.ability == "Run Away" { return false }
             if who.cannotEscape { return true }
-            let grounded = !who.types.contains(.flying) && who.build.ability != "Levitate"
+            let grounded = who.isGrounded
             for other in others.prefix(board.activeCount) where !other.fainted {
                 switch other.build.ability {
                 case "Shadow Tag": if who.build.ability != "Shadow Tag" { return true }
@@ -1793,6 +1821,8 @@ enum TurnModel {
             }
         }
 
+        clocks(&board)
+
         for index in board.mine.indices {
             board.mine[index].protectedLast = board.mine[index].isProtected
             if !board.mine[index].isProtected { board.mine[index].protectStreak = 0 }
@@ -1853,6 +1883,77 @@ enum TurnModel {
                 }
             }
         }
+    }
+
+    /// The clocks that run on a Pokémon standing on the field, both sides at
+    /// once because they all land together at the end of a turn.
+    ///
+    /// Order is the order the game takes them in, and it matters: Octolock
+    /// grinds first, then Yawn takes hold, and the song is last because a
+    /// Pokémon the song takes is not around to be made drowsy.
+    private static func clocks(_ board: inout Board) {
+        for side in [true, false] {
+            let count = Swift.min(board.activeCount, (side ? board.mine : board.theirs).count)
+            for index in 0..<count {
+                guard !(side ? board.mine : board.theirs)[index].fainted else { continue }
+                let name = (side ? board.mine : board.theirs)[index].build.form.formLabel
+
+                // Octolock: a stage off each defence, every turn it stays.
+                if (side ? board.mine : board.theirs)[index].octolocked {
+                    change([.defense: -1, .spDefense: -1], onMine: side, slot: index,
+                           board: &board, because: "Octolock")
+                }
+
+                // Disable runs down and lets the move back.
+                if (side ? board.mine : board.theirs)[index].disabledFor > 0 {
+                    if side { board.mine[index].disabledFor -= 1 } else { board.theirs[index].disabledFor -= 1 }
+                    if (side ? board.mine : board.theirs)[index].disabledFor == 0 {
+                        if side { board.mine[index].disabled = nil } else { board.theirs[index].disabled = nil }
+                        board.note("\(name) can use its move again.")
+                    }
+                }
+
+                // Yawn comes due: drowsy this turn, asleep at the end of the next.
+                if (side ? board.mine : board.theirs)[index].drowsyFor > 0 {
+                    if side { board.mine[index].drowsyFor -= 1 } else { board.theirs[index].drowsyFor -= 1 }
+                    if (side ? board.mine : board.theirs)[index].drowsyFor == 0 {
+                        let who = side ? board.mine[index] : board.theirs[index]
+                        if who.status == .none, !sleepRefused(who, board: board) {
+                            if side { board.mine[index].status = .sleep; board.mine[index].asleepFor = 2 }
+                            else { board.theirs[index].status = .sleep; board.theirs[index].asleepFor = 2 }
+                            board.note("\(name) fell asleep.")
+                        }
+                    }
+                }
+
+                // And the song. Three turns from the singing, whatever is
+                // still standing goes, however much health it has.
+                if (side ? board.mine : board.theirs)[index].perishIn > 0 {
+                    if side { board.mine[index].perishIn -= 1 } else { board.theirs[index].perishIn -= 1 }
+                    let left = (side ? board.mine : board.theirs)[index].perishIn
+                    if left == 0 {
+                        if side { board.mine[index].hp = 0 } else { board.theirs[index].hp = 0 }
+                        board.note("\(name)'s song came due. It fainted.")
+                    } else {
+                        board.note("\(name)'s song: \(left) turn\(left == 1 ? "" : "s") left.")
+                    }
+                }
+
+                // Destiny Bond covers the turn it was used on and no longer.
+                if side { board.mine[index].destinyBound = false }
+                else { board.theirs[index].destinyBound = false }
+            }
+        }
+    }
+
+    /// Whether something cannot be put to sleep — the same rules Spore is held
+    /// to, which is what Yawn has to ask before it comes due.
+    private static func sleepRefused(_ who: Fighter, board: Board) -> Bool {
+        if who.build.ability == "Insomnia" || who.build.ability == "Vital Spirit" { return true }
+        if who.build.ability == "Sweet Veil" || who.build.ability == "Comatose" { return true }
+        if board.field.terrain == .electric && who.isGrounded { return true }
+        if who.build.ability == "Leaf Guard" && board.field.weather == .sun { return true }
+        return false
     }
 
     /// Turn one Pokémon into its Mega, with whatever that brings with it.
@@ -2064,6 +2165,15 @@ enum TurnModel {
         team[active].cannotEscape = false
         team[active].aquaRing = false
         team[active].stockpile = 0
+        // The song does not follow to the bench, which is the whole counter to
+        // Perish Song and the reason it is not simply a win button. The rest
+        // go the same way: they were done to the Pokémon standing there.
+        team[active].perishIn = 0
+        team[active].drowsyFor = 0
+        team[active].disabled = nil
+        team[active].disabledFor = 0
+        team[active].destinyBound = false
+        team[active].octolocked = false
         team[active].build.typeOverride = nil
         team[active].build.statOverride = nil
         team.swapAt(active, bench)
@@ -2092,6 +2202,16 @@ enum TurnModel {
         if actor.flinched {
             board.note("\(name) flinched and could not move.")
             dropCharge(byMine: byMine, slot: slot, board: &board)
+            markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+            return
+        }
+        // A disabled move cannot be used, and trying costs the turn. The
+        // search sees that as a wasted turn and learns to pick something else,
+        // which is the honest way round: the model refuses, rather than the
+        // search quietly substituting a move nobody chose.
+        if case .attack(let index, _) = choice, actor.disabled == index,
+           actor.moves.indices.contains(index) {
+            board.note("\(name)'s \(actor.moves[index].name) is disabled.")
             markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return
         }
@@ -2719,6 +2839,13 @@ enum TurnModel {
                 let after = hitMine ? board.mine[index] : board.theirs[index]
                 if after.hp == 0 {
                     board.detail("\(hitName) fainted.")
+                    // Destiny Bond: it takes whatever did it with it. Checked
+                    // before the knockout abilities below, because a Moxie
+                    // that is about to faint does not get its stage.
+                    if after.destinyBound, !(byMine ? board.mine : board.theirs)[slot].fainted {
+                        if byMine { board.mine[slot].hp = 0 } else { board.theirs[slot].hp = 0 }
+                        board.note("\(hitName)'s Destiny Bond took \(name) with it.")
+                    }
                     // Moxie and its kin take something from the knockout.
                     switch actor.build.ability {
                     case "Moxie", "Chilling Neigh":
@@ -3911,6 +4038,158 @@ enum TurnModel {
             board.note(turns > 0
                        ? "\(move.name) twisted the field for five turns."
                        : "\(move.name) ended.")
+            return
+        }
+
+        // -- moves real games use that this model did not have ---------------
+        //
+        // Every one of these turned up in the replay corpus. They are grouped
+        // because they share a shape: each sets a clock or a flag on somebody
+        // and the turn loop reads it later, rather than doing its work now.
+
+        // Perish Song takes everybody, both sides, the user included. Three
+        // turns later whatever is still standing faints, which is why it is
+        // the answer to a Pokémon that cannot otherwise be beaten — and why
+        // the side that sang it has to have a plan for its own two.
+        if move.name == "Perish Song" {
+            // A sound move, so Soundproof is deaf to it. Everything else on
+            // the field is caught, including the singer's own side.
+            var caught: [String] = []
+            for index in 0..<Swift.min(board.activeCount, board.mine.count)
+            where !board.mine[index].fainted && board.mine[index].perishIn == 0
+                    && !board.mine[index].isSoundproof {
+                board.mine[index].perishIn = 3
+                caught.append(board.mine[index].build.form.formLabel)
+            }
+            for index in 0..<Swift.min(board.activeCount, board.theirs.count)
+            where !board.theirs[index].fainted && board.theirs[index].perishIn == 0
+                    && !board.theirs[index].isSoundproof {
+                board.theirs[index].perishIn = 3
+                caught.append(board.theirs[index].build.form.formLabel)
+            }
+            guard !caught.isEmpty else { board.note("But it failed."); return }
+            board.note("All around, the song took hold: \(caught.joined(separator: ", ")) "
+                       + "will faint in three turns.")
+            return
+        }
+
+        // Coil raises Attack, Defense and accuracy. This model keeps no
+        // accuracy stage — it is a deliberate omission, not an oversight, and
+        // is noted where the omission is made — so two thirds of Coil lands
+        // and the third is recorded here rather than pretended.
+        if move.name == "Coil" {
+            change([.attack: 1, .defense: 1], onMine: byMine, slot: slot, board: &board)
+            return
+        }
+
+        // Yawn does not put anything to sleep. It makes it drowsy, and the
+        // sleep arrives at the end of the following turn, which is the point:
+        // the other side gets one turn to switch out of it.
+        if move.name == "Yawn" {
+            let far = byMine ? board.theirs : board.mine
+            let index = far.indices.contains(target) && target < board.activeCount ? target : 0
+            guard far.indices.contains(index), !far[index].fainted else {
+                board.note("But it failed."); return
+            }
+            let who = far[index].build.form.formLabel
+            guard far[index].status == .none, far[index].drowsyFor == 0 else {
+                board.note("But \(who) cannot be made drowsy."); return
+            }
+            if byMine { board.theirs[index].drowsyFor = 2 } else { board.mine[index].drowsyFor = 2 }
+            board.note("\(who) grew drowsy. It will fall asleep at the end of next turn.")
+            return
+        }
+
+        // Disable shuts off whatever the target used last, for four turns. A
+        // Pokémon with one attack and three support moves is a different
+        // Pokémon once the attack is gone.
+        if move.name == "Disable" {
+            let far = byMine ? board.theirs : board.mine
+            let index = far.indices.contains(target) && target < board.activeCount ? target : 0
+            guard far.indices.contains(index), !far[index].fainted,
+                  let last = far[index].lastMove, far[index].moves.indices.contains(last),
+                  far[index].disabled == nil else {
+                board.note("But it failed."); return
+            }
+            let who = far[index].build.form.formLabel
+            let what = far[index].moves[last].name
+            if byMine { board.theirs[index].disabled = last; board.theirs[index].disabledFor = 4 }
+            else { board.mine[index].disabled = last; board.mine[index].disabledFor = 4 }
+            board.note("\(who)'s \(what) was disabled for four turns.")
+            return
+        }
+
+        // Destiny Bond takes whatever kills it down too. It fails if used
+        // twice running, which is what stops it being a free answer to
+        // everything: the model already tracks a repeated move for Protect.
+        if move.name == "Destiny Bond" {
+            guard !team[slot].destinyBound else { board.note("But it failed."); return }
+            setNear { $0.destinyBound = true }
+            board.note("\(name) is trying to take its attacker with it.")
+            return
+        }
+
+        // Octolock holds the target in place and grinds a stage of each
+        // defence off it every turn it stays there.
+        if move.name == "Octolock" {
+            let far = byMine ? board.theirs : board.mine
+            let index = far.indices.contains(target) && target < board.activeCount ? target : 0
+            guard far.indices.contains(index), !far[index].fainted,
+                  !far[index].octolocked else {
+                board.note("But it failed."); return
+            }
+            let who = far[index].build.form.formLabel
+            if byMine { board.theirs[index].octolocked = true; board.theirs[index].cannotEscape = true }
+            else { board.mine[index].octolocked = true; board.mine[index].cannotEscape = true }
+            board.note("\(who) can no longer escape, and its guard is being worn down.")
+            return
+        }
+
+        // Instruct makes the partner take its last move again, which is how a
+        // Trick Room team gets two Earthquakes out of one Pokémon. It is a
+        // second use of a move that has already happened, so it runs through
+        // the ordinary move path rather than being special-cased: whatever the
+        // move does, it does again.
+        if move.name == "Instruct" {
+            let ally = slot == 0 ? 1 : 0
+            let own = byMine ? board.mine : board.theirs
+            guard board.activeCount > 1, own.indices.contains(ally), !own[ally].fainted,
+                  let last = own[ally].lastMove, own[ally].moves.indices.contains(last)
+            else { board.note("But there was nothing to instruct."); return }
+            let again = own[ally].moves[last]
+            // What cannot be instructed. A charging move is mid-wind-up and
+            // repeating it would finish it twice; Instruct itself would send
+            // the two of them back and forth for the rest of the game.
+            guard own[ally].charging == nil, again.name != "Instruct" else {
+                board.note("But \(own[ally].build.form.formLabel) could not be instructed.")
+                return
+            }
+            board.note("\(name) had \(own[ally].build.form.formLabel) use \(again.name) again.")
+            apply(.attack(move: last, target: own[ally].lastTarget),
+                  byMine: byMine, slot: ally, to: &board, rolling: rolling)
+            return
+        }
+
+        // Shed Tail buys a switch with half the bar: the substitute stays
+        // behind for whatever comes in, which is the difference between it
+        // and an ordinary pivot.
+        if move.name == "Shed Tail" {
+            let cost = team[slot].maxHP / 2
+            let shell = team[slot].maxHP / 4
+            let bench = (byMine ? board.mine : board.theirs).indices.first {
+                $0 >= board.activeCount && !(byMine ? board.mine : board.theirs)[$0].fainted
+            }
+            guard team[slot].hp > cost, team[slot].substitute == 0, let bench else {
+                board.note("But it failed."); return
+            }
+            setNear { $0.hp -= cost; $0.substitute = shell }
+            board.note("\(name) gave up half its health to leave a substitute worth \(shell).")
+            if let said = swapIn(mine: byMine, active: slot, bench: bench, board: &board) {
+                board.note(said)
+            }
+            // The shell belongs to the slot, not to the Pokémon that made it.
+            if byMine { board.mine[slot].substitute = shell }
+            else { board.theirs[slot].substitute = shell }
             return
         }
 
