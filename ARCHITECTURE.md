@@ -126,20 +126,24 @@ main-thread work longer than four frames.
 
 ## How a rule gets into the model
 
-There are five places a rule can live, and which one it belongs in is decided
-by how the dex writes it — not by taste.
+There are six places a rule can live, and which one it belongs in is decided by
+how the dex writes it — not by taste.
 
 | | when | examples |
 |---|---|---|
-| **read from the text** | the dex prints the rule in a regular sentence | two-turn moves, drains, secondary effects, stat changes, healing, target drops |
+| **read from the reference table** | the rule has a shape a sentence cannot pin down | every secondary effect: which ones a move has, at what odds, whether the boost pays the user or costs the target |
+| **read from the text** | the dex prints the rule in a regular sentence | two-turn moves, drains, stat changes, healing, target drops, the self-cost of a Close Combat |
 | **a named closed set** | a small family whose sentences read alike but whose effects differ | `Move.protectMoves`, `partyMoves`, `sideMoves`, `allyMoves`, `selfMoves` |
 | **named by id** | one-off arithmetic no sentence could carry | Weather Ball, Rising Voltage, Last Respects, Stomping Tantrum, Sucker Punch |
 | **a case in the turn model** | a move that changes the shape of a turn | Leech Seed, Taunt, Encore, Parting Shot, Ally Switch, the guards |
 | **an ability or item hook** | abilities have no grammar to parse; each is a `case` where it fires | `entryAbility`, `contact`, the pinch abilities, `speed(in:)`, White Herb |
 
-A move's text is parsed **once** into `Move.Rules` and shared (see Swift 6
-above): reading a rule from the text is what keeps the model honest, and
-memoising it is what makes that affordable.
+A move's rules are worked out **once** into `Move.Rules` and shared (see Swift
+6 above), and the two sources are reconciled there: where the reference table
+supplies an effect, the sentence parser's version of that same effect is
+dropped, or the turn would apply it twice. Only the matching kind is dropped,
+which is why Close Combat still loses its own Defence — the table does not
+model that as a secondary at all.
 
 The hooks a rule can attach to are fixed, and a new rule goes in the one that
 matches: arrival, priority, accuracy, the roll, after the hit, the end of the

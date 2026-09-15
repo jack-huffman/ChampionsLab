@@ -1368,11 +1368,12 @@ enum TurnModel {
                 }
                 if who.build.item == "Sitrus Berry", !who.build.itemSpent,
                    TurnModel.canEatBerry(mine, slot: index, board: board),
-                   // Gluttony eats at half rather than a quarter, which buys a
-                   // turn: the berry lands before the hit that would have
-                   // needed it.
-                   hp > 0, hp <= (who.build.ability == "Gluttony" ? maxHP / 2 : maxHP / 4)
-                       || hp <= maxHP / 2 {
+                   // A Sitrus fires at half, which is already the threshold
+                   // Gluttony would lower a pinch berry to — and pinch berries
+                   // are not modelled separately, so Gluttony has nothing here
+                   // to bring forward. It reads as unproven in the audit, which
+                   // is the honest answer.
+                   hp > 0, hp <= maxHP / 2 {
                     var back = maxHP / 4
                     // Ripen doubles whatever a berry gives.
                     if who.build.ability == "Ripen" { back *= 2 }
@@ -2945,10 +2946,12 @@ enum TurnModel {
             return "Leaf Guard"
         }
         if ailment == .sleep {
+            // Sweet Veil covers the whole side; the other two are personal.
             for who in side.prefix(board.activeCount) where !who.fainted {
                 if who.build.ability == "Sweet Veil" { return "Sweet Veil" }
-                if who.build.ability == "Vital Spirit" || who.build.ability == "Insomnia",
-                   who.build.form.id == side[slot].build.form.id { return who.build.ability }
+            }
+            if ["Vital Spirit", "Insomnia"].contains(side[slot].build.ability) {
+                return side[slot].build.ability
             }
             if board.field.terrain == .electric, side[slot].build.grounded { return "Electric Terrain" }
         }
