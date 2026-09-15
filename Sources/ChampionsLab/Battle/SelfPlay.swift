@@ -50,6 +50,11 @@ enum SelfPlay {
     struct Ledger: Sendable {
         var winner: Winner = .none
         var turns: Int = 0
+        /// The four each side chose at preview, in the order the picker ranked
+        /// them. Distinct from `brought`, which is who actually reached the
+        /// field — a game can end before the back two are ever sent out.
+        var pickedMine: [String] = []
+        var pickedTheirs: [String] = []
         var broughtMine: [String] = []
         var broughtTheirs: [String] = []
         var mine: [String: Tally] = [:]
@@ -140,7 +145,7 @@ enum SelfPlay {
         mine: Team, theirs: Team, rules: Rulebook,
         forMine: Seat, forTheirs: Seat,
         limit: Int = 40, dice: RandomNumberGenerator,
-        logging: Bool = true) -> Ledger {
+        logging: Bool = true, bringSpread: Int = 1) -> Ledger {
 
         // The battle's own dice, not just the engine's play sampling. Handing
         // both halves of a mirrored pair the same stream is what lets the
@@ -155,19 +160,37 @@ enum SelfPlay {
         // team should bring. Each side chooses against the other's six, the
         // same way the team-preview picker does.
         let field = Field(isDoubles: true)
-        func fourOf(_ team: Team, against foe: Team) -> Team {
-            guard team.slots.count > 4 else { return team }
+        //
+        // `bringSpread` is how many of the ranked fours are in play. At 1 the
+        // picker's favourite is taken every time, which is right for measuring
+        // a field but useless for asking which four is actually best: every
+        // game of A against B would replay the identical eight Pokémon. Above
+        // 1 the choice is drawn uniformly from the top N — uniformly rather
+        // than by score, because the point is to give each candidate enough
+        // games to be compared, not to play the favourite most often.
+        func fourOf(_ team: Team, against foe: Team) -> (team: Team, picked: [String]) {
+            guard team.slots.count > 4 else {
+                return (team, team.slots.compactMap { $0.battleForm(in: rules)?.formLabel })
+            }
             let grid = Matchup(mine: team, theirs: foe, rules: rules, field: field)
-            guard let plan = BringFour(matchup: grid, rules: rules, bring: 4).plans.first
-            else { return team }
+            let plans = BringFour(matchup: grid, rules: rules, bring: 4).plans
+            guard !plans.isEmpty else {
+                return (team, team.slots.compactMap { $0.battleForm(in: rules)?.formLabel })
+            }
+            let reach = Swift.max(1, Swift.min(bringSpread, plans.count))
+            let plan = plans[reach == 1 ? 0 : Int.random(in: 0..<reach, using: &TurnModel.dice)]
             var out = team
             out.slots = plan.bring.compactMap { form in
                 team.slots.first { $0.battleForm(in: rules)?.id == form.id }
             }
-            return out.slots.count >= 2 ? out : team
+            guard out.slots.count >= 2 else {
+                return (team, team.slots.compactMap { $0.battleForm(in: rules)?.formLabel })
+            }
+            return (out, plan.bring.map(\.formLabel))
         }
-        var board = Board(mine: fourOf(mine, against: theirs),
-                          theirs: fourOf(theirs, against: mine), rules: rules,
+        let myFour = fourOf(mine, against: theirs)
+        let theirFour = fourOf(theirs, against: mine)
+        var board = Board(mine: myFour.team, theirs: theirFour.team, rules: rules,
                           field: field, alreadyEvolved: false)
         board.activeCount = 2
         // Narration is what records the steps, and the steps are what make the
@@ -178,6 +201,8 @@ enum SelfPlay {
         board.sendOutLeads()
 
         var ledger = Ledger()
+        ledger.pickedMine = myFour.picked
+        ledger.pickedTheirs = theirFour.picked
         /// Who is standing where, so a form can be credited after it has been
         /// switched out. Read off the step rather than the live board.
         // A Mega and the Pokémon it evolved from are one entry. They were two,

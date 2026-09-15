@@ -73,6 +73,7 @@ duel:
 # beat. `make lab` is a quick pass; ARGS passes anything through --
 #   make lab ARGS="--games 800 --workers 6 --json build/lab.json"
 #   make lab ARGS="--team 'Sun / Dual Mega'"
+#   make lab ARGS="--vs 'Big Six' 'Dual Mega Rain' --games 600 --workers 6"
 lab:
 	$(NICE) ./Tools/lab.sh --games 120 $(ARGS)
 

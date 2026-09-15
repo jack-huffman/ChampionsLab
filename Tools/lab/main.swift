@@ -5,6 +5,7 @@
 //      ./Tools/lab.sh --games 600           more of them
 //      ./Tools/lab.sh --team "Sun / Dual Mega"   one team against the field
 //      ./Tools/lab.sh --budget 0.02         faster and shallower
+//      ./Tools/lab.sh --vs "Big Six" "Dual Mega Rain"   two teams, head to head
 //      ./Tools/lab.sh --json out.json       the numbers, for something else
 //
 //  Why this exists.
@@ -86,6 +87,10 @@ struct TeamRecord: Codable {
     var against: [String: [Int]] = [:]
     /// What beat this team's Pokémon, by the opposing Pokémon that did it.
     var killedBy: [String: Int] = [:]
+    /// Each four this team chose at preview, as [wins, games]. The point of a
+    /// head-to-head: which of the fifteen fours actually wins, measured rather
+    /// than ranked by the picker's own scoring.
+    var brings: [String: [Int]] = [:]
 
     mutating func add(_ other: TeamRecord) {
         if name.isEmpty { name = other.name }
@@ -100,6 +105,11 @@ struct TeamRecord: Codable {
             against[foe] = mine
         }
         for (form, count) in other.killedBy { killedBy[form, default: 0] += count }
+        for (four, pair) in other.brings {
+            var mine = brings[four] ?? [0, 0]
+            mine[0] += pair[0]; mine[1] += pair[1]
+            brings[four] = mine
+        }
     }
 }
 
@@ -122,7 +132,7 @@ struct Report: Codable {
 
 @MainActor
 func runShard(index: Int, of shards: Int, games: Int, budget: Double,
-              focus: String?, seed: UInt64) -> Report {
+              focus: String?, versus: [String], spread: Int, seed: UInt64) -> Report {
     let store = Store.shared
     if let error = store.loadError { FileHandle.standardError.write(Data("dataset: \(error)\n".utf8)); exit(1) }
     let rules = store.rulebook
@@ -136,10 +146,21 @@ func runShard(index: Int, of shards: Int, games: Int, budget: Double,
     // taken by this shard when its number falls in this shard's slice, which
     // spreads the work without the shards having to talk to each other.
     var pairings: [(Int, Int)] = []
-    for a in teams.indices {
-        for b in teams.indices where a != b {
-            if let focus, teams[a].name != focus && teams[b].name != focus { continue }
-            pairings.append((a, b))
+    if versus.count == 2 {
+        // A head-to-head. Both orderings, so neither team is always the one
+        // whose four is chosen first.
+        guard let a = teams.firstIndex(where: { $0.name == versus[0] }),
+              let b = teams.firstIndex(where: { $0.name == versus[1] }) else {
+            FileHandle.standardError.write(Data("no such team: \(versus.joined(separator: " / "))\n".utf8))
+            exit(1)
+        }
+        pairings = [(a, b), (b, a)]
+    } else {
+        for a in teams.indices {
+            for b in teams.indices where a != b {
+                if let focus, teams[a].name != focus && teams[b].name != focus { continue }
+                pairings.append((a, b))
+            }
         }
     }
     guard !pairings.isEmpty else { return Report() }
@@ -156,7 +177,8 @@ func runShard(index: Int, of shards: Int, games: Int, budget: Double,
         let dice = SplitMix64(seed: seed &+ UInt64(order) &* 0x9E37_79B9_7F4A_7C15)
         let ledger = SelfPlay.playLogged(
             mine: teams[a], theirs: teams[b], rules: rules,
-            forMine: seat, forTheirs: seat, limit: 40, dice: dice)
+            forMine: seat, forTheirs: seat, limit: 40, dice: dice,
+            bringSpread: spread)
 
         record(ledger, mine: teams[a].name, theirs: teams[b].name, into: &report)
         played += 1
@@ -172,7 +194,7 @@ func runShard(index: Int, of shards: Int, games: Int, budget: Double,
 /// Fold one game into the report, from both sides.
 func record(_ ledger: SelfPlay.Ledger, mine: String, theirs: String, into report: inout Report) {
     func side(_ name: String, _ foe: String, _ tallies: [String: SelfPlay.Tally],
-              won: Bool, drew: Bool) {
+              picked: [String], won: Bool, drew: Bool) {
         var team = report.teams[name] ?? TeamRecord()
         team.name = name
         team.games += 1
@@ -183,6 +205,13 @@ func record(_ ledger: SelfPlay.Ledger, mine: String, theirs: String, into report
         pair[0] += won ? 1 : 0
         pair[1] += 1
         team.against[foe] = pair
+        if !picked.isEmpty {
+            let four = picked.sorted().joined(separator: " + ")
+            var seen = team.brings[four] ?? [0, 0]
+            seen[0] += won ? 1 : 0
+            seen[1] += 1
+            team.brings[four] = seen
+        }
         for (form, tally) in tallies {
             var record = team.members[form] ?? Record()
             record.games += 1
@@ -199,8 +228,10 @@ func record(_ ledger: SelfPlay.Ledger, mine: String, theirs: String, into report
         report.teams[name] = team
     }
     let drew = ledger.winner == .none
-    side(mine, theirs, ledger.mine, won: ledger.winner == .mine, drew: drew)
-    side(theirs, mine, ledger.theirs, won: ledger.winner == .theirs, drew: drew)
+    side(mine, theirs, ledger.mine, picked: ledger.pickedMine,
+         won: ledger.winner == .mine, drew: drew)
+    side(theirs, mine, ledger.theirs, picked: ledger.pickedTheirs,
+         won: ledger.winner == .theirs, drew: drew)
 }
 
 /// A small, fast, seedable generator. The system one cannot be seeded, and a
@@ -294,6 +325,54 @@ func describe(_ report: Report, focus: String?, seconds: Double) {
     }
 }
 
+/// Two teams, many games, and which four each should have brought.
+@MainActor
+func describeVersus(_ report: Report, versus: [String], seconds: Double) {
+    guard let a = report.teams[versus[0]], let b = report.teams[versus[1]] else {
+        print("no games"); return
+    }
+    print("\n== \(a.games) games, \(String(format: "%.1f", seconds))s "
+          + "(\(String(format: "%.0f", Double(report.games) / Swift.max(0.001, seconds))) a second) ==\n")
+    let turns = a.games == 0 ? 0 : Double(a.turns) / Double(a.games)
+    print("  \(pad(versus[0], 38)) \(percent(a.wins, a.games)) of \(a.games)")
+    print("  \(pad(versus[1], 38)) \(percent(b.wins, b.games)) of \(b.games)")
+    if a.draws > 0 { print("  \(pad("went the distance", 38)) \(a.draws)") }
+    print(String(format: "  %@ %.1f", pad("turns per game", 38), turns))
+
+    // The margin, with the error on it. Two teams that are the same strength
+    // will still come apart over a few hundred games, and this says by how
+    // much before a difference is worth believing.
+    let decided = a.games - a.draws
+    if decided > 0 {
+        let rate = Double(a.wins) / Double(decided)
+        let error = (rate * (1 - rate) / Double(decided)).squareRoot() * 1.96
+        print(String(format: "\n  %@ took %.0f%% of the decided games, give or take %.0f",
+                     versus[0], rate * 100, error * 100))
+        if error * 100 > abs(rate * 100 - 50) {
+            print("  That is inside the noise. Run more games before believing it.")
+        }
+    }
+
+    for (team, name) in [(a, versus[0]), (b, versus[1])] {
+        let brings = team.brings.filter { $0.value[1] >= 3 }
+            .sorted { Double($0.value[0]) / Double($0.value[1])
+                      > Double($1.value[0]) / Double($1.value[1]) }
+        guard !brings.isEmpty else { continue }
+        print("\n  which four \(name) should bring")
+        print("  " + String(repeating: "-", count: 62))
+        for (four, pair) in brings.prefix(8) {
+            print("    \(pad(four, 58)) \(percent(pair[0], pair[1])) of \(pair[1])")
+        }
+        if brings.count > 8 {
+            let rest = brings.suffix(from: 8)
+            print("    … \(rest.count) more, worst "
+                  + "\(rest.last.map { "\($0.key) at \(percent($0.value[0], $0.value[1]))" } ?? "")")
+        }
+    }
+    describeTeam(a)
+    describeTeam(b)
+}
+
 @MainActor
 func describeTeam(_ team: TeamRecord) {
     print("\n  \(team.name) — won \(percent(team.wins, team.games)) of \(team.games)")
@@ -345,25 +424,37 @@ func main() {
     let focus = flag("--team")
     let seed = UInt64(flag("--seed") ?? "") ?? 20_260_915
     let workers = Swift.max(1, Int(flag("--workers") ?? "") ?? 4)
+    // Two team names after --vs, e.g. --vs "Big Six" "Dual Mega Rain".
+    var versus: [String] = []
+    if let at = CommandLine.arguments.firstIndex(of: "--vs"), at + 2 < CommandLine.arguments.count {
+        versus = [CommandLine.arguments[at + 1], CommandLine.arguments[at + 2]]
+    }
+    // How many of the ranked fours are in play. A head-to-head defaults to
+    // spreading, because replaying one four a thousand times answers nothing
+    // about which four to bring.
+    let spread = Int(flag("--spread") ?? "") ?? (versus.count == 2 ? 6 : 1)
     let started = Date()
 
     // A child doing its slice: run it, print the JSON, done.
     if let shard = flag("--shard") {
         let parts = shard.split(separator: "/").compactMap { Int($0) }
         guard parts.count == 2 else { exit(2) }
-        let report = runShard(index: parts[0], of: parts[1],
-                              games: games, budget: budget, focus: focus, seed: seed)
+        let report = runShard(index: parts[0], of: parts[1], games: games, budget: budget,
+                              focus: focus, versus: versus, spread: spread, seed: seed)
         let blob = try! JSONEncoder().encode(report)
         FileHandle.standardOutput.write(blob)
         return
     }
 
     print("==> lab: \(games) games, budget \(budget)s, \(workers) worker\(workers == 1 ? "" : "s")"
-          + (focus.map { ", focused on \($0)" } ?? ""))
+          + (versus.count == 2 ? ", \(versus[0]) vs \(versus[1])" : "")
+          + (focus.map { ", focused on \($0)" } ?? "")
+          + (spread > 1 ? ", drawing from the top \(spread) fours" : ""))
 
     var report = Report()
     if workers == 1 {
-        report = runShard(index: 0, of: 1, games: games, budget: budget, focus: focus, seed: seed)
+        report = runShard(index: 0, of: 1, games: games, budget: budget, focus: focus,
+                          versus: versus, spread: spread, seed: seed)
     } else {
         // Each child plays its own slice and hands back a ledger. Sharding by
         // process rather than by thread because the turn model's dice are
@@ -373,9 +464,12 @@ func main() {
         for index in 0..<workers {
             let task = Process()
             task.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
+            // A different seed per worker, or every shard plays the same games.
             var argv = ["--shard", "\(index)/\(workers)", "--games", "\(each)",
-                        "--budget", "\(budget)", "--seed", "\(seed)"]
+                        "--budget", "\(budget)", "--spread", "\(spread)",
+                        "--seed", "\(seed &+ UInt64(index) &* 1_000_003)"]
             if let focus { argv += ["--team", focus] }
+            if versus.count == 2 { argv += ["--vs", versus[0], versus[1]] }
             task.arguments = argv
             let pipe = Pipe()
             task.standardOutput = pipe
@@ -395,7 +489,8 @@ func main() {
 
     let seconds = Date().timeIntervalSince(started)
     report.seconds = seconds
-    describe(report, focus: focus, seconds: seconds)
+    if versus.count == 2 { describeVersus(report, versus: versus, seconds: seconds) }
+    else { describe(report, focus: focus, seconds: seconds) }
 
     if let path = flag("--json") {
         let encoder = JSONEncoder()
