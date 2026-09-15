@@ -127,4 +127,42 @@ print("\n== the clock ==")
 
         print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     }
+
+    /// Protect covers the turn it was used on, and then it is over
+    ///
+    /// The flag was cleared at the top of the next resolve rather than at the
+    /// end of its own turn. Damage was right either way — nothing got through
+    /// on the following turn — but the board handed back still said protected,
+    /// so the card drew a shield over a Pokémon that was open again, and
+    /// anything reading the board between turns read it wrong.
+    @MainActor func testProtectEndsWithItsTurn() throws {
+        print("\n== protect ends with its turn ==")
+        let mine = fighters([("Whimsicott", "Focus Sash", ["Protect", "Moonblast"]),
+                             ("Farigiraf", "Mental Herb", ["Protect", "Psychic"])])
+        let theirs = fighters([("Garchomp", "Life Orb", ["Earthquake", "Protect"]),
+                               ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"])])
+        let start = Board(mine: mine, theirs: theirs, rules: store.rulebook,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+
+        let guarded = TurnModel.resolve(start,
+            mine: Play(left: .attack(move: at(start.mine[0], "Protect"), target: 0), right: .pass),
+            theirs: Play(left: .attack(move: at(start.theirs[0], "Earthquake"), target: 0),
+                         right: .pass), rolling: false)
+        print("  after the turn: protected \(guarded.mine[0].isProtected), "
+              + "protected last turn \(guarded.mine[0].protectedLast)")
+        check("the shield is down once the turn is over", !guarded.mine[0].isProtected)
+        check("but the turn remembers it, which is what the next Protect is priced off",
+              guarded.mine[0].protectedLast)
+
+        // The point of the flag coming down: the following turn it takes a hit.
+        let after = TurnModel.resolve(guarded,
+            mine: Play(left: .pass, right: .pass),
+            theirs: Play(left: .attack(move: at(guarded.theirs[0], "Earthquake"), target: 0),
+                         right: .pass), rolling: false)
+        let took = guarded.mine[0].hp - after.mine[0].hp
+        print("  the turn after, an Earthquake took \(took)")
+        check("and the Pokémon is open to damage again", took > 0, "took \(took)")
+
+        print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
+    }
 }

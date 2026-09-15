@@ -313,4 +313,71 @@ extension SecondaryEffectTests {
               lent.mine[0].build.boosts.allSatisfy { $0 == 0 })
         check("and the hand itself is gone", !lent.mine[0].helped)
     }
+
+    /// A stage never leaves [-6, +6], whichever route it takes there
+    ///
+    /// The central path clamps, but not everything goes through it: Swallow
+    /// subtracts what was stockpiled directly, and Sticky Web and Intimidate
+    /// each move a stage on their own. One route out of range is enough to
+    /// make a stat multiplier the damage step cannot express.
+    @MainActor func testAStageNeverLeavesItsRange() throws {
+        print("\n== stages stay inside six ==")
+        let lax = fighters([("Snorlax", "Leftovers", ["Stockpile", "Swallow", "Body Slam", "Protect"]),
+                            ("Whimsicott", "Focus Sash", ["Protect"])])
+        let across = fighters([("Garchomp", "Life Orb", ["Earthquake", "Protect"]),
+                               ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"])])
+
+        // The top first: Stockpile three times is +3 and the fourth fails.
+        var rising = Board(mine: lax, theirs: across, rules: store.rulebook,
+                           field: Field(isDoubles: true), alreadyEvolved: false)
+        for _ in 0..<4 {
+            rising = TurnModel.resolve(rising,
+                mine: Play(left: .attack(move: at(rising.mine[0], "Stockpile"), target: 0), right: .pass),
+                theirs: Play(left: .pass, right: .pass), rolling: false)
+        }
+        let stacked = rising.mine[0].build.boosts[Stat.defense.rawValue]
+        print("  four Stockpiles left Defense at \(stacked), holding \(rising.mine[0].stockpile)")
+        check("Stockpile stops at three", rising.mine[0].stockpile == 3 && stacked == 3)
+
+        // And the floor. A Pokémon holding three stockpiles whose Defense has
+        // since been driven to the bottom still owes three stages on Swallow,
+        // and three below the bottom is not a place a stage can be.
+        var sunk = Board(mine: lax, theirs: across, rules: store.rulebook,
+                         field: Field(isDoubles: true), alreadyEvolved: false)
+        sunk.mine[0].stockpile = 3
+        sunk.mine[0].build.boosts[Stat.defense.rawValue] = -6
+        sunk.mine[0].build.boosts[Stat.spDefense.rawValue] = -5
+        sunk.mine[0].hp = sunk.mine[0].maxHP / 2
+        let swallowed = TurnModel.resolve(sunk,
+            mine: Play(left: .attack(move: at(sunk.mine[0], "Swallow"), target: 0), right: .pass),
+            theirs: Play(left: .pass, right: .pass), rolling: false)
+        let def = swallowed.mine[0].build.boosts[Stat.defense.rawValue]
+        let spd = swallowed.mine[0].build.boosts[Stat.spDefense.rawValue]
+        print("  Swallow off a floored Defense left Def \(def), SpD \(spd)")
+        check("Swallow does not push a stage below -6", def >= -6 && spd >= -6,
+              "Def \(def), SpD \(spd)")
+
+        // Sticky Web takes its stage on the way in — and it has to take it
+        // with nothing else on the floor, which is the ordinary case: a web is
+        // set precisely because it is cheap to set alone.
+        var webbed = Board(mine: lax, theirs: across, rules: store.rulebook,
+                           field: Field(isDoubles: true), alreadyEvolved: false)
+        webbed.myScreens.stickyWeb = true
+        webbed.takeHazards(mine: true, slot: 0)
+        let slowed = webbed.mine[0].build.boosts[Stat.speed.rawValue]
+        print("  walking into a web with nothing else down: Speed \(slowed)")
+        check("a web on its own still slows what walks into it", slowed == -1, "Speed \(slowed)")
+
+        // And not past the floor.
+        var floored = Board(mine: lax, theirs: across, rules: store.rulebook,
+                            field: Field(isDoubles: true), alreadyEvolved: false)
+        floored.myScreens.stickyWeb = true
+        floored.mine[0].build.boosts[Stat.speed.rawValue] = -6
+        floored.takeHazards(mine: true, slot: 0)
+        let bottom = floored.mine[0].build.boosts[Stat.speed.rawValue]
+        print("  a floored Speed walking into the web: \(bottom)")
+        check("the web does not push Speed below -6", bottom >= -6, "Speed \(bottom)")
+
+        print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
+    }
 }

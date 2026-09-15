@@ -132,7 +132,10 @@ print("\n== Protect wearing thin ==")
                        right: .protectSelf(move: protect)),
             theirs: Play(left: .attack(move: at(once.theirs[0], "Swords Dance"), target: 0),
                          right: .attack(move: at(once.theirs[1], "Protect"), target: 0)), rolling: true)
-        if rolled.mine[1].isProtected { heldCount += 1 }
+        // `protectedLast` rather than `isProtected`: the shield comes down at
+        // the end of the turn it covered, so once resolve has returned, the
+        // flag that still answers "did it hold" is the one the turn recorded.
+        if rolled.mine[1].protectedLast { heldCount += 1 }
     }
     print("  600 second Protects in a row: \(heldCount) held (about 200 expected)")
     check("a played second Protect holds about a third of the time", heldCount > 140 && heldCount < 260, "\(heldCount)")

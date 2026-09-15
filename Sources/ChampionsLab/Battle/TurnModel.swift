@@ -502,7 +502,12 @@ struct Board {
     /// charged it for the privilege.
     mutating func takeHazards(mine side: Bool, slot: Int) {
         let field = side ? myScreens : theirScreens
-        guard field.spikes > 0 || field.toxicSpikes > 0 || field.stealthRock else { return }
+        // The web belongs in this guard. Without it the Sticky Web handling
+        // below was unreachable unless some other hazard happened to be down —
+        // so a web set on its own, which is the ordinary way it is set, did
+        // nothing at all.
+        guard field.spikes > 0 || field.toxicSpikes > 0 || field.stealthRock
+                || field.stickyWeb else { return }
         var who = side ? mine[slot] : theirs[slot]
         guard !who.fainted else { return }
         let name = who.build.form.formLabel
@@ -1731,6 +1736,11 @@ enum TurnModel {
         for index in board.mine.indices {
             board.mine[index].protectedLast = board.mine[index].isProtected
             if !board.mine[index].isProtected { board.mine[index].protectStreak = 0 }
+            // The turn it was used on is the turn it covers. It used to be
+            // cleared at the top of the next resolve instead, which blocked
+            // nothing — but it left the flag standing on the board handed back,
+            // so the shield stayed drawn over a Pokémon that was open again.
+            board.mine[index].isProtected = false
             board.mine[index].enduring = false
             if board.mine[index].tauntedFor > 0 {
                 board.mine[index].tauntedFor -= 1
@@ -1758,6 +1768,7 @@ enum TurnModel {
         for index in board.theirs.indices {
             board.theirs[index].protectedLast = board.theirs[index].isProtected
             if !board.theirs[index].isProtected { board.theirs[index].protectStreak = 0 }
+            board.theirs[index].isProtected = false
             board.theirs[index].enduring = false
             if board.theirs[index].tauntedFor > 0 {
                 board.theirs[index].tauntedFor -= 1
@@ -3881,9 +3892,14 @@ enum TurnModel {
             let share = held == 1 ? 0.25 : held == 2 ? 0.5 : 1.0
             let gained = Swift.min(team[slot].maxHP - team[slot].hp,
                                    Swift.max(1, Int(Double(team[slot].maxHP) * share)))
+            // Clamped, like every other stage change: three stages off a
+            // Defense already at the bottom is not a place a stage can be, and
+            // the damage step has no multiplier for -9.
             setNear { $0.hp += gained; $0.stockpile = 0
-                      $0.build.boosts[Stat.defense.rawValue] -= held
-                      $0.build.boosts[Stat.spDefense.rawValue] -= held }
+                      $0.build.boosts[Stat.defense.rawValue] =
+                          Swift.max(-6, $0.build.boosts[Stat.defense.rawValue] - held)
+                      $0.build.boosts[Stat.spDefense.rawValue] =
+                          Swift.max(-6, $0.build.boosts[Stat.spDefense.rawValue] - held) }
             board.note("\(name) swallowed \(held) and recovered \(gained) health.")
             return
         }
