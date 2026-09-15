@@ -8,6 +8,14 @@
 import AppKit
 import SwiftUI
 
+// ImageRenderer cannot draw what the app draws, and it is worth knowing why
+// before reaching for a shot to debug a layout. Two things it will not do:
+// lazy content inside a ScrollView never materialises, so every list comes out
+// empty; and AppKit-backed containers — NavigationSplitView, a Picker, a
+// Toggle — come out as a yellow placeholder. That is what snapshotMode is for:
+// the screens swap their ScrollView for a plain stack so a shot can show the
+// whole list. A question about the real window has to be asked of the real
+// window.
 @MainActor
 func render<V: View>(_ view: V, named name: String, size: CGSize, dark: Bool) {
     let host = view
@@ -288,6 +296,7 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
     // is not a thing a still can catch, so this puts them on a grid instead.
     render(EffectSheet(), named: "battle-effects-dark", size: CGSize(width: 1100, height: 760), dark: true)
     render(WeatherSheet(), named: "battle-weather-dark", size: CGSize(width: 1100, height: 700), dark: true)
+
 
     render(SpeedTiersView(), named: "speed-dark",
            size: CGSize(width: 1000, height: 900), dark: true)
