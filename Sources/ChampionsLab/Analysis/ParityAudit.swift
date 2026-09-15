@@ -446,7 +446,8 @@ private struct Bench {
                 if traits { out += "/\(f.build.item)/\(f.build.ability)" }
                 out += "/\(f.seededFrom ?? -1)/\(f.critStage)/\(f.build.form.id)"
                 out += "/\(f.substitute)/\(f.infatuatedWith ?? -1)/\(f.tormented)/\(f.cannotEscape)"
-                out += "/\(f.aquaRing)/\(f.stockpile)/\(f.goesNext)/\(f.build.typeOverride ?? [])"
+                out += "/\(f.aquaRing)/\(f.stockpile)/\(f.goesNext)/\(f.charged)"
+                out += "/\(f.build.typeOverride ?? [])"
                 out += "/\((f.build.statOverride ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" })"
                 out += "/\(f.asleepFor)/\(f.protectStreak)/\(f.lastMoveFailed)/\(f.seen)"
                 out += "/\(f.build.status.rawValue)|"

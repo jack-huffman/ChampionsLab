@@ -105,6 +105,8 @@ struct Fighter {
     /// After You put it to the front of the queue: it acts next regardless of
     /// Speed. Cleared once it has.
     var goesNext = false
+    /// Electromorphosis: the next Electric move it throws is twice as strong.
+    var charged = false
     /// A Substitute standing in front of it, in health points. While it is up
     /// it takes the damage and the status, and the Pokémon behind it takes
     /// neither.
@@ -520,6 +522,15 @@ struct Board {
         let before = field
         takeHazards(mine: side, slot: slot)
         if (side ? mine[slot] : theirs[slot]).fainted { return }
+        // Screen Cleaner takes down both sides' screens on the way in. Done
+        // here rather than in `entryAbility`, which is handed two teams and a
+        // field but never the screens.
+        if (side ? mine[slot] : theirs[slot]).build.ability == "Screen Cleaner",
+           myScreens.any || theirScreens.any {
+            myScreens.reflect = 0; myScreens.lightScreen = 0; myScreens.auroraVeil = 0
+            theirScreens.reflect = 0; theirScreens.lightScreen = 0; theirScreens.auroraVeil = 0
+            note("\((side ? mine[slot] : theirs[slot]).build.form.formLabel)'s Screen Cleaner swept the screens away.")
+        }
         if side {
             mine[slot].justArrived = true
             mine[slot].seen = true
@@ -915,8 +926,12 @@ enum TurnModel {
     /// never counts on it, the way it never counts on a second Protect.
     private static func quickClawed(_ fighter: Fighter, mine: Bool, slot: Int,
                                     board: Board, rolling: Bool) -> Bool {
-        guard fighter.build.item == "Quick Claw" else { return false }
-        if rolling { return Double.random(in: 0..<1, using: &TurnModel.dice) < 0.2 }
+        // Quick Draw is the ability version, three times in ten rather than
+        // two, and it rides the same pre-decided flip.
+        let odds = fighter.build.ability == "Quick Draw" ? 0.3
+            : (fighter.build.item == "Quick Claw" ? 0.2 : 0)
+        guard odds > 0 else { return false }
+        if rolling { return Double.random(in: 0..<1, using: &TurnModel.dice) < odds }
         return board.rulings[Board.flip("quickclaw", mine, slot)] ?? false
     }
 
@@ -932,6 +947,8 @@ enum TurnModel {
             // Whimsicott's Tailwind or Encore ahead of anything without
             // priority of its own — though not ahead of a Fake Out at +3.
             if fighter.build.ability == "Prankster", !move.isDamaging { priority += 1 }
+            // Stall always acts last, whatever it is doing.
+            if fighter.build.ability == "Stall" { priority -= 7 }
             // Gale Wings: Flying moves first, while the bar is full.
             if fighter.build.ability == "Gale Wings", move.type == "Flying",
                fighter.hp == fighter.maxHP { priority += 1 }
@@ -967,7 +984,8 @@ enum TurnModel {
         // Arena Trap across the field. A Ghost walks out of any of it, and so
         // does anything holding a Shed Shell.
         func heldInPlace(_ who: Fighter, by others: [Fighter], board: Board) -> Bool {
-            if who.types.contains(.ghost) || who.build.item == "Shed Shell" { return false }
+            if who.types.contains(.ghost) || who.build.item == "Shed Shell"
+                || who.build.ability == "Run Away" { return false }
             if who.cannotEscape { return true }
             let grounded = !who.types.contains(.flying) && who.build.ability != "Levitate"
             for other in others.prefix(board.activeCount) where !other.fainted {
@@ -1193,8 +1211,12 @@ enum TurnModel {
         var rolls: [(key: String, chance: Double)] = []
         func considerRolls(_ choice: Choice, fighter: Fighter, mine side: Bool, slot: Int) {
             guard !fighter.fainted else { return }
-            if fighter.build.item == "Quick Claw", !choice.isPass {
-                rolls.append((Board.flip("quickclaw", side, slot), 0.2))
+            if !choice.isPass {
+                if fighter.build.ability == "Quick Draw" {
+                    rolls.append((Board.flip("quickclaw", side, slot), 0.3))
+                } else if fighter.build.item == "Quick Claw" {
+                    rolls.append((Board.flip("quickclaw", side, slot), 0.2))
+                }
             }
             guard case .attack(let index, _) = choice,
                   fighter.moves.indices.contains(index) else { return }
@@ -2253,12 +2275,25 @@ enum TurnModel {
                     .contains(actor.build.ability)
                 attacker.lowHP = actor.hp * 3 <= actor.maxHP
                 attacker.status = actor.status
+                // Electromorphosis stored a charge the last time it was hit;
+                // the next Electric move it throws spends it.
+                if actor.charged, DamageCalc.fieldForm(of: move, in: field).type == .electric {
+                    field.charged = true
+                    if byMine { board.mine[slot].charged = false }
+                    else { board.theirs[slot].charged = false }
+                }
                 // Steely Spirit pays for its partner's Steel moves too.
                 let ourAlly = slot == 0 ? 1 : 0
                 let ourSide = byMine ? board.mine : board.theirs
                 field.alliedSteelySpirit = ourSide.indices.contains(ourAlly)
                     && ourAlly < board.activeCount && !ourSide[ourAlly].fainted
                     && ourSide[ourAlly].build.ability == "Steely Spirit"
+                // Plus and Minus pay each other, and only each other.
+                let pairing: Set<String> = ["Plus", "Minus"]
+                field.paired = pairing.contains(actor.build.ability)
+                    && ourSide.indices.contains(ourAlly) && ourAlly < board.activeCount
+                    && !ourSide[ourAlly].fainted
+                    && pairing.contains(ourSide[ourAlly].build.ability)
                 attacker.lastMoveFailed = actor.lastMoveFailed
                 // Supreme Overlord and Last Respects count the fallen. Never
                 // filled in before, so neither ever went off in a battle.
@@ -2579,7 +2614,53 @@ enum TurnModel {
             board.note("\(defenderName)'s Anger Point maximised its Attack.")
         }
 
-        guard move.makesContact, !attacker.fainted else { return }
+        // Long Reach means nothing it throws ever touches anything, which
+        // turns off Rocky Helmet, Static, Rough Skin and the rest of them.
+        let touched = move.makesContact && attacker.build.ability != "Long Reach"
+
+        // Abilities that answer being hit at all, contact or not.
+        if !defender.fainted, !attacker.fainted {
+            switch defender.build.ability {
+            case "Seed Sower" where board.field.terrain != .grassy:
+                let before = board.field
+                board.field.terrain = .grassy
+                board.terrainTurns = 5
+                board.fieldSettled(from: before)
+                board.terrainSeeds()
+                board.note("\(defenderName)'s Seed Sower turned the ground to grass.")
+            case "Toxic Debris":
+                var far = byMine ? board.myScreens : board.theirScreens
+                if far.toxicSpikes < 2 {
+                    far.toxicSpikes += 1
+                    if byMine { board.myScreens = far } else { board.theirScreens = far }
+                    board.note("\(defenderName) scattered toxic spikes.")
+                }
+            case "Electromorphosis":
+                if hitMine { board.mine[hit].charged = true } else { board.theirs[hit].charged = true }
+                board.note("\(defenderName) became charged.")
+            case "Spicy Spray" where attacker.status == .none
+                && !attacker.types.contains(.fire):
+                if byMine { board.mine[slot].status = .burn } else { board.theirs[slot].status = .burn }
+                board.note("\(defenderName)'s Spicy Spray burned \(attackerName).")
+            default: break
+            }
+        }
+        // Aftermath and Innards Out charge whoever landed the finishing hit.
+        if defender.fainted, !attacker.fainted {
+            var lost = 0
+            if defender.build.ability == "Aftermath", touched { lost = attacker.maxHP / 4 }
+            if defender.build.ability == "Innards Out" { lost = wasAt }
+            if lost > 0 {
+                if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - lost) }
+                else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - lost) }
+                board.note("\(attackerName) was hurt by \(defenderName)'s \(defender.build.ability).")
+                if (byMine ? board.mine : board.theirs)[slot].fainted {
+                    board.note("\(attackerName) fainted.")
+                }
+            }
+        }
+
+        guard touched, !attacker.fainted else { return }
 
         // Cute Charm: three in ten that whoever touched it falls for it, and
         // loses half its turns while it is still standing there.
@@ -2649,6 +2730,15 @@ enum TurnModel {
             if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - lost) }
             else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - lost) }
             board.note("\(attackerName) is hurt by \(defenderName)'s \(defender.build.ability).")
+        case "Effect Spore":
+            // One in ten, and one of three things.
+            guard rolling, Double.random(in: 0..<1, using: &TurnModel.dice) < 0.3,
+                  attacker.status == .none, !attacker.types.contains(.grass) else { break }
+            let roll = Double.random(in: 0..<1, using: &TurnModel.dice)
+            let ailment: Ailment = roll < 0.34 ? .paralysis : roll < 0.67 ? .poison : .sleep
+            if byMine { board.mine[slot].status = ailment; board.mine[slot].asleepFor = ailment == .sleep ? 2 : 0 }
+            else { board.theirs[slot].status = ailment; board.theirs[slot].asleepFor = ailment == .sleep ? 2 : 0 }
+            board.note("\(attackerName) was \(ailment.rawValue) by \(defenderName)'s Effect Spore.")
         case "Flame Body", "Static", "Poison Point":
             // Three in ten. A search averages, so it does not apply these at
             // all rather than applying them to everybody.
@@ -2666,10 +2756,10 @@ enum TurnModel {
             break
         }
 
-        let touched: Bool
-        if rolling { touched = Double.random(in: 0..<1, using: &TurnModel.dice) < 0.3 }
-        else { touched = board.rulings[Board.flip("poisontouch", byMine, slot)] ?? false }
-        if attacker.build.ability == "Poison Touch", touched, !defender.fainted,
+        let poisonRoll: Bool
+        if rolling { poisonRoll = Double.random(in: 0..<1, using: &TurnModel.dice) < 0.3 }
+        else { poisonRoll = board.rulings[Board.flip("poisontouch", byMine, slot)] ?? false }
+        if attacker.build.ability == "Poison Touch", poisonRoll, !defender.fainted,
            defender.status == .none,
            !defender.types.contains(where: { [.poison, .steel].contains($0) }) {
             if hitMine { board.mine[hit].status = .poison } else { board.theirs[hit].status = .poison }

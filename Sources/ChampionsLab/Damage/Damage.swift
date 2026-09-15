@@ -51,6 +51,10 @@ struct Field {
     /// The attacker's partner has Steely Spirit, which pays for its Steel
     /// moves as well as its own.
     var alliedSteelySpirit = false
+    /// The attacker stored a charge and is spending it on this Electric move.
+    var charged = false
+    /// The attacker's partner has Plus or Minus and so does it.
+    var paired = false
     /// Cloud Nine or Air Lock is on the field, so the weather is decoration.
     /// Kept separate from clearing the weather outright, because the weather
     /// is still *there* — it comes back the moment the ability leaves.
@@ -419,6 +423,10 @@ enum DamageCalc {
             notes.append("Liquid Voice: the sound becomes Water")
         default: break
         }
+        if field.charged, moveType == .electric {
+            power *= 2
+            notes.append("Electromorphosis: the stored charge doubles it")
+        }
         if attacker.ability == "Fire Mane", moveType == .fire {
             power *= 1.5
             notes.append("Fire Mane: +50%")
@@ -507,6 +515,9 @@ enum DamageCalc {
             attack = Double(ChampionsStats.staged(attacker.stat(atkStat),
                                                   stage: max(0, attacker.boosts[atkStat.rawValue])))
         }
+        // Plus and Minus pay each other, and only each other: half again the
+        // Special Attack when its partner is carrying the matching one.
+        if field.paired, !physical { attack *= 1.5 }
         if attacker.ability == "Huge Power" || attacker.ability == "Pure Power", physical {
             attack *= 2
             notes.append("\(attacker.ability): Attack doubled")

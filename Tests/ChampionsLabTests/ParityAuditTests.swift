@@ -35,7 +35,7 @@ final class ParityAuditTests: HarnessCase {
     @MainActor func testTheFingerprintKeepsUpWithTheBoard() throws {
         print("\n== the audit can see the whole board ==")
         let fighter = Fighter(build: Combatant(form: store.data.forms[0]), moves: [])
-        let counts = [("Fighter", Mirror(reflecting: fighter).children.count, 36),
+        let counts = [("Fighter", Mirror(reflecting: fighter).children.count, 37),
                       ("Screens", Mirror(reflecting: Screens()).children.count, 11),
                       ("Combatant", Mirror(reflecting: fighter.build).children.count, 16)]
         for (name, found, expected) in counts {
