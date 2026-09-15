@@ -220,12 +220,15 @@ enum SelfPlay {
         // Settable per side, which is the whole experiment: one engine that
         // knows what its Pokémon are worth against this opponent, one that
         // prices them all the same, playing the same game with the same dice.
+        board.myRoster = mine.slots.compactMap { $0.battleForm(in: rules)?.id }
+        board.theirRoster = theirs.slots.compactMap { $0.battleForm(in: rules)?.id }
         if weightedMine {
-            board.myWorth = Worth.of(mine, against: theirs, rules: rules, field: field)
+            board.myBeats = Worth.table(for: mine, against: theirs, rules: rules, field: field)
         }
         if weightedTheirs {
-            board.theirWorth = Worth.of(theirs, against: mine, rules: rules, field: field)
+            board.theirBeats = Worth.table(for: theirs, against: mine, rules: rules, field: field)
         }
+        board.refreshWorth()
         // Narration is what records the steps, and the steps are what make the
         // ledger exact. It is on for the played board only: the engine's own
         // search boards are separate and stay silent, which is where the cost
@@ -366,6 +369,8 @@ enum SelfPlay {
             board = TurnModel.resolve(board, mine: ours, theirs: theirsPlay, rolling: true)
             readSteps(board)
             board.fillGaps()
+            // Who is left has changed, so what each Pokémon is worth has too.
+            board.refreshWorth()
             sawTheField()
         }
         // Nobody finished it. Whoever is further ahead on the board takes it,

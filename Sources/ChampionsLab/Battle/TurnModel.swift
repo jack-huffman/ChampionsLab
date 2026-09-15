@@ -354,6 +354,46 @@ struct Board {
     /// behaviour — so a board built without this behaves as it always did.
     var myWorth: [String: Double] = [:]
     var theirWorth: [String: Double] = [:]
+    /// How each side's Pokémon fare against each of the other's, cell by cell.
+    /// Depends only on the two teams, so it is worked out once and the weights
+    /// above are re-derived from it as Pokémon fall.
+    var myBeats: [String: [String: Double]] = [:]
+    var theirBeats: [String: [String: Double]] = [:]
+    /// The six each side registered, which both players saw at team preview.
+    ///
+    /// Public, and that is the point: weights are counted against the roster
+    /// minus whoever has visibly fainted, rather than against the four that
+    /// were actually brought. Which four you brought is the secret; who is on
+    /// your team is not, and a weight built from the roster cannot give the
+    /// secret away.
+    var myRoster: [String] = []
+    var theirRoster: [String] = []
+
+    /// Re-derive both sides' weights from who is still standing.
+    ///
+    /// The point of doing this again rather than once: "preserve Basculegion
+    /// for later, into their Swampert" is a thing worth doing only while the
+    /// Swampert is there. The moment it faints, Basculegion is an ordinary
+    /// Pokémon and should be spent like one — and a weight fixed at the start
+    /// of the game cannot tell those two positions apart.
+    ///
+    /// Counted against what is alive *and has been seen*, which is the same
+    /// rule the weights are read under. Cheap enough to run when a turn is
+    /// committed; deliberately not run inside the search, where it would cost
+    /// a table walk per node to buy a distinction that lasts one turn.
+    mutating func refreshWorth() {
+        // The roster everyone saw, less whoever has visibly fallen. Counting
+        // only what has been *seen* was the first attempt and starved it: two
+        // turns in, a side has revealed two Pokémon, so every weight was an
+        // opinion about half a matchup and barely moved off one.
+        func standing(_ roster: [String], _ team: [Fighter]) -> [String] {
+            let gone = Set(team.filter(\.fainted).map(\.build.form.id))
+            let left = roster.filter { !gone.contains($0) }
+            return left.isEmpty ? roster : left
+        }
+        myWorth = Worth.weights(from: myBeats, against: standing(theirRoster, theirs))
+        theirWorth = Worth.weights(from: theirBeats, against: standing(myRoster, mine))
+    }
 
     var field: Field
     /// Turns left on each side's speed control.
@@ -503,6 +543,8 @@ struct Board {
         swap(&out.myTailwind, &out.theirTailwind)
         swap(&out.theirBenchGuesses, &out.myBenchGuesses)
         swap(&out.myWorth, &out.theirWorth)
+        swap(&out.myBeats, &out.theirBeats)
+        swap(&out.myRoster, &out.theirRoster)
         // The per-slot keys name a side, so they have to be relabelled too.
         func relabel(_ table: [String: Bool]) -> [String: Bool] {
             Dictionary(uniqueKeysWithValues: table.map { key, value in
@@ -931,8 +973,11 @@ extension Board {
         // What each side's Pokémon are worth against the other side. Worked
         // out once here, off the six each side registered rather than the four
         // they brought, and read on every evaluation after.
-        board.myWorth = Worth.of(myTeam, against: theirTeam, rules: rules, field: field)
-        board.theirWorth = Worth.of(theirTeam, against: myTeam, rules: rules, field: field)
+        board.myBeats = Worth.table(for: myTeam, against: theirTeam, rules: rules, field: field)
+        board.theirBeats = Worth.table(for: theirTeam, against: myTeam, rules: rules, field: field)
+        board.myRoster = myTeam.slots.compactMap { $0.battleForm(in: rules)?.id }
+        board.theirRoster = theirTeam.slots.compactMap { $0.battleForm(in: rules)?.id }
+        board.refreshWorth()
         if sendOut { board.sendOutLeads() }
 
         // What each side's back two probably are, from both chairs.
