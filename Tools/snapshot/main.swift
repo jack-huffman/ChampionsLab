@@ -33,6 +33,32 @@ func render<V: View>(_ view: V, named name: String, size: CGSize, dark: Bool) {
     print("  wrote \(out.path)")
 }
 
+/// A stand-in report, so the results layout can be checked without spending a
+/// minute running the real audit.
+func sampleParity() -> ParityAudit.Report {
+    typealias F = ParityAudit.Finding
+    return ParityAudit.Report(findings: [
+        F(kind: .move, name: "Worry Seed", verdict: .noEffect,
+          detail: "Changes the target's Ability to Insomnia.", usage: 37.1),
+        F(kind: .move, name: "Switcheroo", verdict: .noEffect,
+          detail: "The user and the target swap their held items.", usage: 37.0),
+        F(kind: .move, name: "Thunderbolt", verdict: .byRule,
+          detail: "Has a 10% chance of paralyzing the target.", usage: 29.7),
+        F(kind: .move, name: "Protect", verdict: .implemented,
+          detail: "Protects the user from most attacks for the turn.", usage: 71.4),
+        F(kind: .move, name: "Sleep Talk", verdict: .notModelled,
+          detail: "Calls another move at random; the search cannot price a move that becomes a different move.",
+          usage: 4.2),
+        F(kind: .ability, name: "Intimidate", verdict: .implemented,
+          detail: "Changes the game: on entry, healthy.", usage: 41.0),
+        F(kind: .ability, name: "Unburden", verdict: .noEffect, detail: "", usage: 37.0),
+        F(kind: .item, name: "Rocky Helmet", verdict: .implemented,
+          detail: "Damages the attacker on contact.", usage: 0),
+        F(kind: .item, name: "Quick Claw", verdict: .noEffect,
+          detail: "Sometimes lets the holder move first.", usage: 0),
+    ], seconds: 68)
+}
+
 @MainActor
 func renderAll() {
     let appearance = NSAppearance(named: .darkAqua)
@@ -121,6 +147,15 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
                                  fraction: 0.5) {}
            },
            named: "overlay-dark", size: CGSize(width: 700, height: 420), dark: true)
+    // The Parity screen as it opens. The finished state needs a full audit,
+    // which is a minute of work and far too slow to put in a snapshot run.
+    render(ParityView(), named: "parity-dark",
+           size: CGSize(width: 1180, height: 780), dark: true)
+    render(ParityView(), named: "parity-light",
+           size: CGSize(width: 1180, height: 780), dark: false)
+    render(ParityView(preloaded: sampleParity()), named: "parity-results-dark",
+           size: CGSize(width: 1180, height: 820), dark: true)
+
     render(ForecastView(), named: "forecast-top-dark",
            size: CGSize(width: 1180, height: 1150), dark: true)
     render(ForecastView(), named: "forecast-dark",

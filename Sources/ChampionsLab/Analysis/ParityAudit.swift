@@ -66,12 +66,27 @@ struct ParityAudit: Sendable {
         var id: String { "\(kind.rawValue):\(name)" }
     }
 
-    /// How far along, and what it is doing.
-    struct Progress: Sendable {
-        let stage: String
-        let done: Int
-        let total: Int
-        var fraction: Double { total == 0 ? 0 : Double(done) / Double(total) }
+    /// How far along, and what it is doing — in three parts, because a bar
+    /// that only moves tells you nothing about whether to trust the answer.
+    /// `phase` is the pass, `explains` is what that pass proves, and `note` is
+    /// the thing it has in its hands right now.
+    public struct Progress: Sendable {
+        public let phase: String
+        public let explains: String
+        public let note: String
+        public let done: Int
+        public let total: Int
+        public var fraction: Double { total == 0 ? 0 : Double(done) / Double(total) }
+    }
+
+    /// Every pass, in order, as one run with one progress count. The screen and
+    /// the command line both go through here so they cannot drift apart.
+    public static func full(rules: Rulebook, usage: [UsageEntry], items: [Item],
+                            progress: @Sendable (Progress) -> Void = { _ in }) -> Report {
+        let started = Date()
+        let report = run(rules: rules, usage: usage, items: items, progress: progress)
+        return Report(findings: report.findings.sorted { $0.usage > $1.usage },
+                      seconds: Date().timeIntervalSince(started))
     }
 
     /// A control: a name the model has never heard of must come back as
@@ -126,7 +141,7 @@ struct ParityAudit: Sendable {
 
     // MARK: - Running it
 
-    public static func run(rules: Rulebook, usage: [UsageEntry],
+    public static func run(rules: Rulebook, usage: [UsageEntry], items itemList: [Item] = [],
                            progress: @Sendable (Progress) -> Void = { _ in }) -> Report {
         let started = Date()
         var findings: [Finding] = []
@@ -144,14 +159,20 @@ struct ParityAudit: Sendable {
 
         let legalMoves = rules.moves.values.filter(\.learnable).sorted { $0.name < $1.name }
         let abilities = Set(rules.forms.flatMap { $0.abilities.map(\.name) }).sorted()
-        let total = legalMoves.count + abilities.count
+        let seenItems = itemList.filter(\.seenInGame).sorted { $0.name < $1.name }
+        let total = legalMoves.count + abilities.count + seenItems.count
         // One bench for the whole run: building it sorts the entire move table.
         let bench = Bench(rules: rules)
 
         // -- moves ------------------------------------------------------------
         for (index, move) in legalMoves.enumerated() {
+            if Task.isCancelled { break }
             if index % 25 == 0 {
-                progress(Progress(stage: "Using every move — \(move.name)", done: index, total: total))
+                progress(Progress(
+                    phase: "Using every move",
+                    explains: "Each move is played, and the same turn is played without it. "
+                            + "Anything the move did is the difference between the two boards.",
+                    note: move.name, done: index, total: total))
             }
             let carriers = rules.forms.filter { $0.moves.contains(move.id) }
             if let why = notModelled[move.name] {
@@ -170,9 +191,13 @@ struct ParityAudit: Sendable {
 
         // -- abilities --------------------------------------------------------
         for (index, name) in abilities.enumerated() {
+            if Task.isCancelled { break }
             if index % 10 == 0 {
-                progress(Progress(stage: "Trying every ability — \(name)",
-                                  done: legalMoves.count + index, total: total))
+                progress(Progress(
+                    phase: "Trying every ability",
+                    explains: "Every weather, terrain, attack type and provocation is played "
+                            + "twice: once with the ability and once with none at all.",
+                    note: name, done: legalMoves.count + index, total: total))
             }
             let carriers = rules.forms.filter { $0.abilities.contains { $0.name == name } }
             if let why = notModelled[name] {
@@ -187,34 +212,32 @@ struct ParityAudit: Sendable {
                                     usage: weight(carriers: carriers)))
         }
 
-        progress(Progress(stage: "Done", done: total, total: total))
-        return Report(findings: findings.sorted { $0.usage > $1.usage },
-                      seconds: Date().timeIntervalSince(started))
-    }
-
-    /// Adds the items to a report. They need the dataset's item table, which
-    /// the rulebook does not carry, so they come in separately.
-    public static func items(_ list: [Item], rules: Rulebook,
-                             progress: @Sendable (Progress) -> Void = { _ in }) -> [Finding] {
-        let seen = list.filter(\.seenInGame).sorted { $0.name < $1.name }
-        let bench = Bench(rules: rules)
-        var out: [Finding] = []
-        for (index, item) in seen.enumerated() {
+        // -- items -------------------------------------------------------------
+        for (index, item) in seenItems.enumerated() {
+            if Task.isCancelled { break }
             if index % 10 == 0 {
-                progress(Progress(stage: "Holding every item — \(item.name)",
-                                  done: index, total: seen.count))
+                progress(Progress(
+                    phase: "Holding every item",
+                    explains: "The same turns again, with the item in hand and with empty hands, "
+                            + "including one position where it has already been used up.",
+                    note: item.name,
+                    done: legalMoves.count + abilities.count + index, total: total))
             }
             // A Mega Stone's whole effect is letting something Mega Evolve,
             // which the battle does elsewhere and the team builder enforces.
             let stone = item.effect.contains("Mega Evolve")
             let why = stone ? "the team builder grants the evolution" : bench.evidence(item: item.name)
-            out.append(Finding(kind: .item, name: item.name,
-                               verdict: why == nil ? .noEffect : .implemented,
-                               detail: stone ? "Lets its holder Mega Evolve."
-                                             : String(item.effect.prefix(140)),
-                               usage: 0))
+            findings.append(Finding(kind: .item, name: item.name,
+                                    verdict: why == nil ? .noEffect : .implemented,
+                                    detail: stone ? "Lets its holder Mega Evolve."
+                                                  : String(item.effect.prefix(140)),
+                                    usage: 0))
         }
-        return out
+
+        progress(Progress(phase: "Done", explains: "", note: "",
+                          done: total, total: total))
+        return Report(findings: findings.sorted { $0.usage > $1.usage },
+                      seconds: Date().timeIntervalSince(started))
     }
 }
 

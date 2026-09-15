@@ -35,14 +35,12 @@ import SwiftUI
     }
     if failure != nil { exit(1) }
 
-    var report = ParityAudit.run(rules: rules, usage: store.data.usage) { step in
+    let report = ParityAudit.full(rules: rules, usage: store.data.usage,
+                                  items: store.data.items) { step in
         if step.done % 100 == 0 {
-            FileHandle.standardError.write("  \(step.stage)\n".data(using: .utf8)!)
+            FileHandle.standardError.write("  \(step.phase): \(step.note)\n".data(using: .utf8)!)
         }
     }
-    let items = ParityAudit.items(store.data.items, rules: rules)
-    report = ParityAudit.Report(findings: (report.findings + items).sorted { $0.usage > $1.usage },
-                                seconds: report.seconds)
 
     func percent(_ part: Int, _ whole: Int) -> String {
         whole == 0 ? "—" : String(format: "%.0f%%", Double(part) / Double(whole) * 100)

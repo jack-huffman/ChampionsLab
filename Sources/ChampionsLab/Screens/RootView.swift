@@ -56,6 +56,7 @@ enum Section: String, CaseIterable, Identifiable, Hashable {
     case meta = "Usage & Meta"
     case forecast = "Forecast"
     case calculator = "Calculator"
+    case parity = "Parity Check"
 
     var id: String { rawValue }
 
@@ -73,6 +74,7 @@ enum Section: String, CaseIterable, Identifiable, Hashable {
         case .meta:       return "chart.bar.fill"
         case .forecast:   return "chart.line.uptrend.xyaxis"
         case .calculator: return "function"
+        case .parity:     return "checkmark.seal"
         }
     }
 
@@ -83,6 +85,7 @@ enum Section: String, CaseIterable, Identifiable, Hashable {
              .battle:                           return "Build"
         case .dex, .moves, .items, .abilities,
              .speed:                            return "Database"
+        case .parity:                           return "Database"
         }
     }
 }
@@ -132,6 +135,7 @@ struct RootView: View {
                 case .abilities:  AbilityDexView()
                 case .meta:       MetaView()
                 case .forecast:   ForecastView()
+                case .parity:     ParityView()
                 case .calculator:
                     // .id forces a fresh view when a new slot is sent over, so
                     // the seeded @State is rebuilt rather than reused.
