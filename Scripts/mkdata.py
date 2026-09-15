@@ -1072,7 +1072,7 @@ def apply_showdown(moves):
     def key(name):
         return re.sub(r"[^a-z0-9]", "", name.lower())
 
-    matched = carried = flagged = 0
+    matched = carried = flagged = multihit = 0
     disagreed = {}
     rebalanced = []
     global PROVENANCE
@@ -1082,6 +1082,9 @@ def apply_showdown(moves):
             continue
         matched += 1
         move["secondaries"] = champions_odds(move, ref["secondaries"])
+        if ref.get("hits"):
+            move["hits"] = ref["hits"]
+            multihit += 1
         if move["secondaries"]:
             carried += 1
         # Flags decide which ability answers a move. Serebii publishes these
@@ -1117,8 +1120,8 @@ def apply_showdown(moves):
                 disagreed.setdefault(flag, []).append(
                     "%s %s" % ("+" if on else "-", move["name"]))
             move["flags"][flag] = on
-    print("==> showdown: %d moves matched, %d carry a secondary effect, %d flags corrected"
-          % (matched, carried, flagged))
+    print("==> showdown: %d moves matched, %d carry a secondary effect, %d flags corrected,"
+          " %d hit more than once" % (matched, carried, flagged, multihit))
     for flag in sorted(disagreed):
         rows = disagreed[flag]
         print("      %-12s %3d: %s" % (flag, len(rows), ", ".join(rows[:6])))
@@ -1129,6 +1132,7 @@ def apply_showdown(moves):
         "moves_with_secondary": carried,
         "flags_corrected": flagged,
         "moves_rebalanced": len(rebalanced),
+        "moves_multihit": multihit,
     }
     if rebalanced:
         print("    %d moves differ from the main series:" % len(rebalanced))

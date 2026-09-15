@@ -131,6 +131,12 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     /// Empty when the dataset was built without the reference table, which is
     /// the one case the sentence parser is still used for these.
     let secondaryData: [SecondaryData]?
+    /// How many blows it lands, as [fewest, most]. Nil for the ordinary case
+    /// of one. Serebii writes this into its prose and nowhere a parser can
+    /// reach, so Double Hit was played as a single thirty-five power attack
+    /// when it is two of them — half the damage, on a move a third of the
+    /// format carries.
+    let hits: [Int]?
     /// Where Champions differs from the main series, keyed by field: what the
     /// main series has. Present only on the thirty-odd moves it changed.
     ///
@@ -188,7 +194,7 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, name, type, category, power, accuracy, pp, priority, target
-        case flags, effect, learnable, mainline
+        case flags, effect, learnable, mainline, hits
         case secondaryData = "secondaries"
         case neverMisses = "never_misses"
         case critRate = "crit_rate"

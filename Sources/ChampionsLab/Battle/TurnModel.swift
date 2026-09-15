@@ -2410,11 +2410,25 @@ enum TurnModel {
                 let accuracy = move.neverMisses || move.accuracy == 0
                     ? 1.0 : chanceToHit(move, attacker: actor, defender: defending[index],
                                         board: board) / 100
-                let dealt: Int = rolling
+                let oneBlow: Int = rolling
                     ? Int.random(in: Swift.min(result.minDamage, result.maxDamage)
                                  ... Swift.max(result.minDamage, result.maxDamage),
                                  using: &TurnModel.dice)
                     : Int((Double(result.minDamage + result.maxDamage) / 2 * accuracy).rounded())
+
+                // How many times it lands. Parental Bond adds a second blow at
+                // a quarter, which is the ability rather than the move, so the
+                // two are counted together and the log says which is which.
+                let blows = move.blows(for: actor.build.ability, rolling: rolling,
+                                       using: &TurnModel.dice)
+                let bonded = actor.build.ability == "Parental Bond"
+                    && move.isDamaging && !move.isSpread && blows == 1
+                let dealt = Int((Double(oneBlow) * blows).rounded())
+                        + (bonded ? Swift.max(1, oneBlow / 4) : 0)
+                if blows > 1 {
+                    board.note("  \(Int(blows)) hits, \(oneBlow) each.")
+                }
+                if bonded { board.note("  Parental Bond: a second blow at a quarter.") }
 
                 // A one-hit knockout does exactly that, three times in ten,
                 // and nothing at all the rest of the time. It is worked out
@@ -2568,6 +2582,11 @@ enum TurnModel {
                         }
                     }
                 }
+            }
+            // Rapid Spin clears its own side on the way past, which is a
+            // damaging move doing something only a status move otherwise does.
+            if move.name == "Rapid Spin", sweepOwnHazards(byMine: byMine, board: &board) {
+                board.note("\(name) spun the hazards away from its own side.")
             }
             applySelf(move.selfBoosts, toMine: byMine, slot: slot, board: &board)
             // What the move takes off its user: Close Combat's defences,
@@ -3241,6 +3260,20 @@ enum TurnModel {
         }
     }
 
+    /// Sweep one side's own hazards away, and say whether there were any.
+    ///
+    /// Defog and Rapid Spin both do this; Rapid Spin does nothing else to the
+    /// field, which is the whole reason a team picks one over the other.
+    @discardableResult
+    private static func sweepOwnHazards(byMine: Bool, board: inout Board) -> Bool {
+        var own = byMine ? board.myScreens : board.theirScreens
+        let had = own.spikes > 0 || own.toxicSpikes > 0 || own.stealthRock || own.stickyWeb
+        own.spikes = 0; own.toxicSpikes = 0
+        own.stealthRock = false; own.stickyWeb = false
+        if byMine { board.myScreens = own } else { board.theirScreens = own }
+        return had
+    }
+
     /// An ability on that side that turns a condition away, and its name.
     ///
     /// Leaf Guard covers everything but only in the sun. Sweet Veil and Flower
@@ -3805,23 +3838,31 @@ enum TurnModel {
             return
         }
 
-        // Defog clears what is hanging in the air and lying on the floor, on
-        // both sides. Its evasion drop is the part not modelled.
+        // Defog and Rapid Spin both clear the floor, and the difference
+        // between them is the whole reason a team picks one.
+        //
+        // Defog takes the target's screens and hazards, the user's own hazards
+        // but not its screens, and the terrain. Rapid Spin takes only the
+        // user's own hazards, and hits something besides.
+        //
+        // Serebii's Champions text for Defog says "on the target Pokémon's
+        // side of battle" and stops there, which reads like a deliberate
+        // restriction until you notice the same sentence never mentions Sticky
+        // Web — a move that is legal here, and that Rapid Spin's own
+        // description does name. The list is incomplete rather than narrow.
         if move.name == "Defog" {
-            // The target's side, not both. Champions' own text is explicit
-            // about that — "on the target Pokémon's side of battle" — and the
-            // main series is more generous. Champions decides its own game.
+            sweepOwnHazards(byMine: byMine, board: &board)
             var far = byMine ? board.theirScreens : board.myScreens
             far.reflect = 0; far.lightScreen = 0; far.auroraVeil = 0
-            far.safeguard = 0; far.spikes = 0; far.toxicSpikes = 0
+            far.safeguard = 0
+            far.spikes = 0; far.toxicSpikes = 0
             far.stealthRock = false; far.stickyWeb = false
             if byMine { board.theirScreens = far } else { board.myScreens = far }
-            // The terrain goes whoever put it there.
             let hadTerrain = board.field.terrain != .none
             board.field.terrain = .none
             board.terrainTurns = 0
             board.note(hadTerrain ? "The field and the terrain were swept away."
-                                  : "The other side of the field was swept clear.")
+                                  : "The field was swept clear.")
             return
         }
 

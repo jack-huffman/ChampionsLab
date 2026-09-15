@@ -120,6 +120,30 @@ extension Move {
 }
 
 extension Move {
+    /// How many times this lands, given who is throwing it.
+    ///
+    /// A played turn rolls inside the range, weighted the way the game weights
+    /// it: two and three hits are three times as likely as four and five. The
+    /// search takes the average of exactly that, which for a two-to-five move
+    /// is three. Skill Link always lands the most.
+    func blows(for ability: String, rolling: Bool,
+               using dice: inout RandomNumberGenerator) -> Double {
+        guard let hits, hits.count == 2, hits[1] > 1 else { return 1 }
+        let fewest = hits[0], most = hits[1]
+        if ability == "Skill Link" { return Double(most) }
+        guard fewest != most else { return Double(most) }
+        guard rolling else {
+            // The weighted average. For the usual two-to-five it is three.
+            guard fewest == 2, most == 5 else { return Double(fewest + most) / 2 }
+            return 3
+        }
+        guard fewest == 2, most == 5 else {
+            return Double(Int.random(in: fewest...most, using: &dice))
+        }
+        let roll = Double.random(in: 0..<1, using: &dice)
+        return roll < 0.375 ? 2 : roll < 0.75 ? 3 : roll < 0.875 ? 4 : 5
+    }
+
     /// Guillotine, Fissure, Horn Drill, Sheer Cold. Their listed power is 1,
     /// so working them out from power makes them the weakest attacks in the
     /// game rather than the most dangerous.

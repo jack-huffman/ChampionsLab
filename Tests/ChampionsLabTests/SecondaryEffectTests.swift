@@ -112,3 +112,94 @@ final class SecondaryEffectTests: HarnessCase {
         check("Sacred Sword still is", move("Sacred Sword").isSlicing)
     }
 }
+
+extension SecondaryEffectTests {
+    /// A move that hits more than once has to hit more than once.
+    ///
+    /// Double Hit was being played as a single thirty-five power attack when
+    /// it is two of them, and the parity audit could not see it: a damaging
+    /// move registers as implemented the moment it does any damage at all, not
+    /// when it does the right amount.
+    @MainActor func testAMultiHitMoveLandsEveryBlow() throws {
+        print("\n== every blow lands ==")
+        for (name, expected) in [("Double Hit", 2.0), ("Dual Wingbeat", 2.0),
+                                 ("Triple Axel", 3.0), ("Bullet Seed", 3.0)] {
+            var dice: RandomNumberGenerator = SystemRandomNumberGenerator()
+            let blows = move(name).blows(for: "", rolling: false, using: &dice)
+            print("  \(name.padding(toLength: 14, withPad: " ", startingAt: 0))\(blows) blows")
+            check("\(name) lands \(expected) blows to the search", blows == expected)
+        }
+        var dice: RandomNumberGenerator = SystemRandomNumberGenerator()
+        let linked = move("Bullet Seed").blows(for: "Skill Link", rolling: false, using: &dice)
+        check("Skill Link always lands five", linked == 5)
+
+        // And the damage actually doubles on the board.
+        var board = Board(mine: fighters([("Kingambit", "Leftovers", ["Double Hit", "Protect"]),
+                                          ("Milotic", "Leftovers", ["Protect"])]),
+                          theirs: fighters([("Garchomp", "Leftovers", ["Protect"]),
+                                            ("Whimsicott", "Leftovers", ["Protect"])]),
+                          rules: store.rulebook, field: Field(isDoubles: true),
+                          alreadyEvolved: false)
+        board.narrating = false
+        board.sendOutLeads()
+        let after = TurnModel.resolve(board,
+            mine: Play(left: .attack(move: at(board.mine[0], "Double Hit"), target: 0), right: .pass),
+            theirs: Play(left: .pass, right: .pass), rolling: false)
+        let taken = board.theirs[0].hp - after.theirs[0].hp
+        let single = DamageCalc.calculate(attacker: board.mine[0].build,
+                                          defender: board.theirs[0].build,
+                                          move: move("Double Hit"),
+                                          field: Field(isDoubles: true))
+        let once = (single.minDamage + single.maxDamage) / 2
+        print("  Double Hit took \(taken); one blow would be about \(once)")
+        check("it took roughly two blows, not one", taken > once * 3 / 2)
+    }
+
+    /// Defog clears the other side's screens, both sides' hazards, and the
+    /// terrain. Rapid Spin clears only its own side's hazards.
+    @MainActor func testDefogAndRapidSpinClearTheRightThings() throws {
+        print("\n== what Defog and Rapid Spin clear ==")
+        func cluttered(_ user: String, _ moveName: String) -> Board {
+            var b = Board(mine: fighters([(user, "Leftovers", [moveName, "Protect"]),
+                                          ("Milotic", "Leftovers", ["Protect"])]),
+                          theirs: fighters([("Garchomp", "Leftovers", ["Protect"]),
+                                            ("Whimsicott", "Leftovers", ["Protect"])]),
+                          rules: store.rulebook, field: Field(isDoubles: true),
+                          alreadyEvolved: false)
+            b.narrating = false
+            b.myScreens.spikes = 2; b.myScreens.stealthRock = true; b.myScreens.reflect = 5
+            b.theirScreens.spikes = 3; b.theirScreens.stickyWeb = true
+            b.theirScreens.lightScreen = 5
+            b.field.terrain = .grassy; b.terrainTurns = 5
+            b.sendOutLeads()
+            return b
+        }
+
+        let before = cluttered("Whimsicott", "Defog")
+        let defogged = TurnModel.resolve(before,
+            mine: Play(left: .attack(move: at(before.mine[0], "Defog"), target: 0), right: .pass),
+            theirs: Play(left: .pass, right: .pass), rolling: false)
+        print("  after Defog: my spikes \(defogged.myScreens.spikes),"
+              + " my reflect \(defogged.myScreens.reflect),"
+              + " their spikes \(defogged.theirScreens.spikes),"
+              + " their screen \(defogged.theirScreens.lightScreen),"
+              + " terrain \(defogged.field.terrain)")
+        check("my own hazards go", defogged.myScreens.spikes == 0 && !defogged.myScreens.stealthRock)
+        check("my own screens stay", defogged.myScreens.reflect > 0)
+        check("their hazards go", defogged.theirScreens.spikes == 0 && !defogged.theirScreens.stickyWeb)
+        check("their screens go", defogged.theirScreens.lightScreen == 0)
+        check("and the terrain goes", defogged.field.terrain == .none)
+
+        let spinBoard = cluttered("Kingambit", "Rapid Spin")
+        let spun = TurnModel.resolve(spinBoard,
+            mine: Play(left: .attack(move: at(spinBoard.mine[0], "Rapid Spin"), target: 0), right: .pass),
+            theirs: Play(left: .pass, right: .pass), rolling: false)
+        print("  after Rapid Spin: my spikes \(spun.myScreens.spikes),"
+              + " their spikes \(spun.theirScreens.spikes),"
+              + " terrain \(spun.field.terrain)")
+        check("Rapid Spin clears its own hazards",
+              spun.myScreens.spikes == 0 && !spun.myScreens.stealthRock)
+        check("and leaves the other side alone", spun.theirScreens.spikes == 3)
+        check("and leaves the terrain alone", spun.field.terrain == .grassy)
+    }
+}

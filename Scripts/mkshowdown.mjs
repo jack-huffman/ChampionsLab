@@ -87,6 +87,12 @@ for (const move of Object.values(Moves)) {
     // Kept so the generator can say what Champions changed. `accuracy: true`
     // in Showdown means the move cannot miss, which this writes as 0 to match
     // how the dataset already spells it.
+    // How many blows it lands. A number for a fixed count, a pair for a
+    // range. Serebii writes this into its prose and nowhere else -- "Hits 2-5
+    // times" -- so a move like Double Hit was being played as a single
+    // thirty-five power attack when it is two of them.
+    hits: Array.isArray(move.multihit) ? move.multihit
+        : (move.multihit ? [move.multihit, move.multihit] : null),
     power: move.basePower,
     accuracy: move.accuracy === true ? 0 : move.accuracy,
     type: move.type,

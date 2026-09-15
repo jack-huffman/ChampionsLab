@@ -5,6 +5,7 @@
   "10000000voltthunderbolt": {
    "name": "10,000,000 Volt Thunderbolt",
    "secondaries": [],
+   "hits": null,
    "power": 195,
    "accuracy": 0,
    "type": "Electric",
@@ -26,6 +27,7 @@
   "absorb": {
    "name": "Absorb",
    "secondaries": [],
+   "hits": null,
    "power": 20,
    "accuracy": 100,
    "type": "Grass",
@@ -47,6 +49,7 @@
   "accelerock": {
    "name": "Accelerock",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Rock",
@@ -76,6 +79,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Poison",
@@ -97,6 +101,7 @@
   "acidarmor": {
    "name": "Acid Armor",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Poison",
@@ -118,6 +123,7 @@
   "aciddownpour": {
    "name": "Acid Downpour",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Poison",
@@ -147,6 +153,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Poison",
@@ -168,6 +175,7 @@
   "acrobatics": {
    "name": "Acrobatics",
    "secondaries": [],
+   "hits": null,
    "power": 55,
    "accuracy": 100,
    "type": "Flying",
@@ -189,6 +197,7 @@
   "acupressure": {
    "name": "Acupressure",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -210,6 +219,7 @@
   "aerialace": {
    "name": "Aerial Ace",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 0,
    "type": "Flying",
@@ -231,6 +241,7 @@
   "aeroblast": {
    "name": "Aeroblast",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 95,
    "type": "Flying",
@@ -252,6 +263,7 @@
   "afteryou": {
    "name": "After You",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -273,6 +285,7 @@
   "agility": {
    "name": "Agility",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -294,6 +307,7 @@
   "aircutter": {
    "name": "Air Cutter",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 95,
    "type": "Flying",
@@ -320,6 +334,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 75,
    "accuracy": 95,
    "type": "Flying",
@@ -341,6 +356,7 @@
   "alloutpummeling": {
    "name": "All-Out Pummeling",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Fighting",
@@ -362,6 +378,7 @@
   "alluringvoice": {
    "name": "Alluring Voice",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Fairy",
@@ -383,6 +400,7 @@
   "allyswitch": {
    "name": "Ally Switch",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -404,6 +422,7 @@
   "amnesia": {
    "name": "Amnesia",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -425,6 +444,7 @@
   "anchorshot": {
    "name": "Anchor Shot",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Steel",
@@ -458,6 +478,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Rock",
@@ -487,6 +508,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Grass",
@@ -508,6 +530,7 @@
   "aquacutter": {
    "name": "Aqua Cutter",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Water",
@@ -529,6 +552,7 @@
   "aquajet": {
    "name": "Aqua Jet",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Water",
@@ -550,6 +574,7 @@
   "aquaring": {
    "name": "Aqua Ring",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Water",
@@ -579,6 +604,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Water",
@@ -600,6 +626,7 @@
   "aquatail": {
    "name": "Aqua Tail",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 90,
    "type": "Water",
@@ -621,6 +648,7 @@
   "armorcannon": {
    "name": "Armor Cannon",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Fire",
@@ -642,6 +670,10 @@
   "armthrust": {
    "name": "Arm Thrust",
    "secondaries": [],
+   "hits": [
+    2,
+    5
+   ],
    "power": 15,
    "accuracy": 100,
    "type": "Fighting",
@@ -663,6 +695,7 @@
   "aromatherapy": {
    "name": "Aromatherapy",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Grass",
@@ -684,6 +717,7 @@
   "aromaticmist": {
    "name": "Aromatic Mist",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fairy",
@@ -705,6 +739,7 @@
   "assist": {
    "name": "Assist",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -726,6 +761,7 @@
   "assurance": {
    "name": "Assurance",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Dark",
@@ -752,6 +788,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 30,
    "accuracy": 100,
    "type": "Ghost",
@@ -773,6 +810,7 @@
   "astralbarrage": {
    "name": "Astral Barrage",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Ghost",
@@ -794,6 +832,7 @@
   "attackorder": {
    "name": "Attack Order",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Bug",
@@ -815,6 +854,7 @@
   "attract": {
    "name": "Attract",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -836,6 +876,7 @@
   "aurasphere": {
    "name": "Aura Sphere",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 0,
    "type": "Fighting",
@@ -865,6 +906,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 110,
    "accuracy": 100,
    "type": "Electric",
@@ -894,6 +936,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 100,
    "type": "Ice",
@@ -915,6 +958,7 @@
   "auroraveil": {
    "name": "Aurora Veil",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Ice",
@@ -936,6 +980,7 @@
   "autotomize": {
    "name": "Autotomize",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Steel",
@@ -957,6 +1002,7 @@
   "avalanche": {
    "name": "Avalanche",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Ice",
@@ -983,6 +1029,7 @@
      "kind": "confuse"
     }
    ],
+   "hits": null,
    "power": 120,
    "accuracy": 90,
    "type": "Fighting",
@@ -1004,6 +1051,7 @@
   "babydolleyes": {
    "name": "Baby-Doll Eyes",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Fairy",
@@ -1025,6 +1073,7 @@
   "baddybad": {
    "name": "Baddy Bad",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 95,
    "type": "Dark",
@@ -1046,6 +1095,7 @@
   "banefulbunker": {
    "name": "Baneful Bunker",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Poison",
@@ -1073,6 +1123,7 @@
      "status": "poisoned"
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Poison",
@@ -1094,6 +1145,10 @@
   "barrage": {
    "name": "Barrage",
    "secondaries": [],
+   "hits": [
+    2,
+    5
+   ],
    "power": 15,
    "accuracy": 85,
    "type": "Normal",
@@ -1115,6 +1170,7 @@
   "barrier": {
    "name": "Barrier",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -1136,6 +1192,7 @@
   "batonpass": {
    "name": "Baton Pass",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -1157,6 +1214,7 @@
   "beakblast": {
    "name": "Beak Blast",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Flying",
@@ -1178,6 +1236,7 @@
   "beatup": {
    "name": "Beat Up",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Dark",
@@ -1199,6 +1258,7 @@
   "behemothbash": {
    "name": "Behemoth Bash",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Steel",
@@ -1220,6 +1280,7 @@
   "behemothblade": {
    "name": "Behemoth Blade",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Steel",
@@ -1241,6 +1302,7 @@
   "belch": {
    "name": "Belch",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 90,
    "type": "Poison",
@@ -1262,6 +1324,7 @@
   "bellydrum": {
    "name": "Belly Drum",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -1283,6 +1346,7 @@
   "bestow": {
    "name": "Bestow",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -1304,6 +1368,7 @@
   "bide": {
    "name": "Bide",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -1325,6 +1390,7 @@
   "bind": {
    "name": "Bind",
    "secondaries": [],
+   "hits": null,
    "power": 15,
    "accuracy": 85,
    "type": "Normal",
@@ -1351,6 +1417,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Dark",
@@ -1372,6 +1439,7 @@
   "bitterblade": {
    "name": "Bitter Blade",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Fire",
@@ -1401,6 +1469,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Ghost",
@@ -1422,6 +1491,7 @@
   "blackholeeclipse": {
    "name": "Black Hole Eclipse",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Dark",
@@ -1443,6 +1513,7 @@
   "blastburn": {
    "name": "Blast Burn",
    "secondaries": [],
+   "hits": null,
    "power": 150,
    "accuracy": 90,
    "type": "Fire",
@@ -1470,6 +1541,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 85,
    "accuracy": 90,
    "type": "Fire",
@@ -1497,6 +1569,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Fire",
@@ -1526,6 +1599,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 100,
    "accuracy": 80,
    "type": "Flying",
@@ -1553,6 +1627,7 @@
      "status": "frozen"
     }
    ],
+   "hits": null,
    "power": 110,
    "accuracy": 70,
    "type": "Ice",
@@ -1574,6 +1649,7 @@
   "block": {
    "name": "Block",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -1595,6 +1671,7 @@
   "bloodmoon": {
    "name": "Blood Moon",
    "secondaries": [],
+   "hits": null,
    "power": 140,
    "accuracy": 100,
    "type": "Normal",
@@ -1616,6 +1693,7 @@
   "bloomdoom": {
    "name": "Bloom Doom",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Grass",
@@ -1643,6 +1721,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 130,
    "accuracy": 85,
    "type": "Fire",
@@ -1664,6 +1743,7 @@
   "bodypress": {
    "name": "Body Press",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Fighting",
@@ -1691,6 +1771,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 85,
    "accuracy": 100,
    "type": "Normal",
@@ -1712,6 +1793,7 @@
   "boltbeak": {
    "name": "Bolt Beak",
    "secondaries": [],
+   "hits": null,
    "power": 85,
    "accuracy": 100,
    "type": "Electric",
@@ -1739,6 +1821,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 130,
    "accuracy": 85,
    "type": "Electric",
@@ -1765,6 +1848,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 85,
    "type": "Ground",
@@ -1786,6 +1870,10 @@
   "bonemerang": {
    "name": "Bonemerang",
    "secondaries": [],
+   "hits": [
+    2,
+    2
+   ],
    "power": 50,
    "accuracy": 90,
    "type": "Ground",
@@ -1807,6 +1895,10 @@
   "bonerush": {
    "name": "Bone Rush",
    "secondaries": [],
+   "hits": [
+    2,
+    5
+   ],
    "power": 25,
    "accuracy": 90,
    "type": "Ground",
@@ -1828,6 +1920,7 @@
   "boomburst": {
    "name": "Boomburst",
    "secondaries": [],
+   "hits": null,
    "power": 140,
    "accuracy": 100,
    "type": "Normal",
@@ -1855,6 +1948,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 85,
    "accuracy": 85,
    "type": "Flying",
@@ -1876,6 +1970,7 @@
   "bouncybubble": {
    "name": "Bouncy Bubble",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Water",
@@ -1897,6 +1992,7 @@
   "branchpoke": {
    "name": "Branch Poke",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Grass",
@@ -1918,6 +2014,7 @@
   "bravebird": {
    "name": "Brave Bird",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Flying",
@@ -1947,6 +2044,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Dragon",
@@ -1968,6 +2066,7 @@
   "breakneckblitz": {
    "name": "Breakneck Blitz",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Normal",
@@ -1989,6 +2088,7 @@
   "brickbreak": {
    "name": "Brick Break",
    "secondaries": [],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Fighting",
@@ -2010,6 +2110,7 @@
   "brine": {
    "name": "Brine",
    "secondaries": [],
+   "hits": null,
    "power": 65,
    "accuracy": 100,
    "type": "Water",
@@ -2031,6 +2132,7 @@
   "brutalswing": {
    "name": "Brutal Swing",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Dark",
@@ -2060,6 +2162,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Water",
@@ -2089,6 +2192,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 100,
    "type": "Water",
@@ -2110,6 +2214,7 @@
   "bugbite": {
    "name": "Bug Bite",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Bug",
@@ -2139,6 +2244,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Bug",
@@ -2160,6 +2266,7 @@
   "bulkup": {
    "name": "Bulk Up",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fighting",
@@ -2189,6 +2296,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Ground",
@@ -2210,6 +2318,7 @@
   "bulletpunch": {
    "name": "Bullet Punch",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Steel",
@@ -2231,6 +2340,10 @@
   "bulletseed": {
    "name": "Bullet Seed",
    "secondaries": [],
+   "hits": [
+    2,
+    5
+   ],
    "power": 25,
    "accuracy": 100,
    "type": "Grass",
@@ -2252,6 +2365,7 @@
   "burningbulwark": {
    "name": "Burning Bulwark",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fire",
@@ -2273,6 +2387,7 @@
   "burningjealousy": {
    "name": "Burning Jealousy",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Fire",
@@ -2294,6 +2409,7 @@
   "burnup": {
    "name": "Burn Up",
    "secondaries": [],
+   "hits": null,
    "power": 130,
    "accuracy": 100,
    "type": "Fire",
@@ -2321,6 +2437,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Electric",
@@ -2342,6 +2459,7 @@
   "calmmind": {
    "name": "Calm Mind",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -2363,6 +2481,7 @@
   "camouflage": {
    "name": "Camouflage",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -2384,6 +2503,7 @@
   "captivate": {
    "name": "Captivate",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -2405,6 +2525,7 @@
   "catastropika": {
    "name": "Catastropika",
    "secondaries": [],
+   "hits": null,
    "power": 210,
    "accuracy": 0,
    "type": "Electric",
@@ -2426,6 +2547,7 @@
   "ceaselessedge": {
    "name": "Ceaseless Edge",
    "secondaries": [],
+   "hits": null,
    "power": 65,
    "accuracy": 90,
    "type": "Dark",
@@ -2447,6 +2569,7 @@
   "celebrate": {
    "name": "Celebrate",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -2468,6 +2591,7 @@
   "charge": {
    "name": "Charge",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Electric",
@@ -2497,6 +2621,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 50,
    "accuracy": 90,
    "type": "Electric",
@@ -2518,6 +2643,7 @@
   "charm": {
    "name": "Charm",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Fairy",
@@ -2544,6 +2670,7 @@
      "kind": "confuse"
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 100,
    "type": "Flying",
@@ -2573,6 +2700,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Water",
@@ -2594,6 +2722,7 @@
   "chillyreception": {
    "name": "Chilly Reception",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Ice",
@@ -2615,6 +2744,7 @@
   "chipaway": {
    "name": "Chip Away",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Normal",
@@ -2636,6 +2766,7 @@
   "chloroblast": {
    "name": "Chloroblast",
    "secondaries": [],
+   "hits": null,
    "power": 150,
    "accuracy": 95,
    "type": "Grass",
@@ -2657,6 +2788,7 @@
   "circlethrow": {
    "name": "Circle Throw",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 90,
    "type": "Fighting",
@@ -2678,6 +2810,7 @@
   "clamp": {
    "name": "Clamp",
    "secondaries": [],
+   "hits": null,
    "power": 35,
    "accuracy": 85,
    "type": "Water",
@@ -2699,6 +2832,7 @@
   "clangingscales": {
    "name": "Clanging Scales",
    "secondaries": [],
+   "hits": null,
    "power": 110,
    "accuracy": 100,
    "type": "Dragon",
@@ -2720,6 +2854,7 @@
   "clangoroussoul": {
    "name": "Clangorous Soul",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Dragon",
@@ -2741,6 +2876,7 @@
   "clangoroussoulblaze": {
    "name": "Clangorous Soulblaze",
    "secondaries": [],
+   "hits": null,
    "power": 185,
    "accuracy": 0,
    "type": "Dragon",
@@ -2762,6 +2898,7 @@
   "clearsmog": {
    "name": "Clear Smog",
    "secondaries": [],
+   "hits": null,
    "power": 50,
    "accuracy": 0,
    "type": "Poison",
@@ -2783,6 +2920,7 @@
   "closecombat": {
    "name": "Close Combat",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Fighting",
@@ -2804,6 +2942,7 @@
   "coaching": {
    "name": "Coaching",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fighting",
@@ -2825,6 +2964,7 @@
   "coil": {
    "name": "Coil",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Poison",
@@ -2846,6 +2986,7 @@
   "collisioncourse": {
    "name": "Collision Course",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Fighting",
@@ -2873,6 +3014,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Fighting",
@@ -2894,6 +3036,10 @@
   "cometpunch": {
    "name": "Comet Punch",
    "secondaries": [],
+   "hits": [
+    2,
+    5
+   ],
    "power": 18,
    "accuracy": 85,
    "type": "Normal",
@@ -2915,6 +3061,7 @@
   "comeuppance": {
    "name": "Comeuppance",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Dark",
@@ -2936,6 +3083,7 @@
   "confide": {
    "name": "Confide",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -2957,6 +3105,7 @@
   "confuseray": {
    "name": "Confuse Ray",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Ghost",
@@ -2983,6 +3132,7 @@
      "kind": "confuse"
     }
    ],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Psychic",
@@ -3012,6 +3162,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 10,
    "accuracy": 100,
    "type": "Normal",
@@ -3033,6 +3184,7 @@
   "continentalcrush": {
    "name": "Continental Crush",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Rock",
@@ -3054,6 +3206,7 @@
   "conversion": {
    "name": "Conversion",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -3075,6 +3228,7 @@
   "conversion2": {
    "name": "Conversion 2",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -3096,6 +3250,7 @@
   "copycat": {
    "name": "Copycat",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -3117,6 +3272,7 @@
   "coreenforcer": {
    "name": "Core Enforcer",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Dragon",
@@ -3138,6 +3294,7 @@
   "corkscrewcrash": {
    "name": "Corkscrew Crash",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Steel",
@@ -3159,6 +3316,7 @@
   "corrosivegas": {
    "name": "Corrosive Gas",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Poison",
@@ -3180,6 +3338,7 @@
   "cosmicpower": {
    "name": "Cosmic Power",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -3201,6 +3360,7 @@
   "cottonguard": {
    "name": "Cotton Guard",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Grass",
@@ -3222,6 +3382,7 @@
   "cottonspore": {
    "name": "Cotton Spore",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Grass",
@@ -3243,6 +3404,7 @@
   "counter": {
    "name": "Counter",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Fighting",
@@ -3264,6 +3426,7 @@
   "courtchange": {
    "name": "Court Change",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -3285,6 +3448,7 @@
   "covet": {
    "name": "Covet",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Normal",
@@ -3306,6 +3470,7 @@
   "crabhammer": {
    "name": "Crabhammer",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 90,
    "type": "Water",
@@ -3327,6 +3492,7 @@
   "craftyshield": {
    "name": "Crafty Shield",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fairy",
@@ -3348,6 +3514,7 @@
   "crosschop": {
    "name": "Cross Chop",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 80,
    "type": "Fighting",
@@ -3375,6 +3542,7 @@
      "status": "poisoned"
     }
    ],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Poison",
@@ -3404,6 +3572,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Dark",
@@ -3433,6 +3602,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 75,
    "accuracy": 95,
    "type": "Normal",
@@ -3454,6 +3624,7 @@
   "crushgrip": {
    "name": "Crush Grip",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -3475,6 +3646,7 @@
   "curse": {
    "name": "Curse",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Ghost",
@@ -3496,6 +3668,7 @@
   "cut": {
    "name": "Cut",
    "secondaries": [],
+   "hits": null,
    "power": 50,
    "accuracy": 95,
    "type": "Normal",
@@ -3517,6 +3690,7 @@
   "darkestlariat": {
    "name": "Darkest Lariat",
    "secondaries": [],
+   "hits": null,
    "power": 85,
    "accuracy": 100,
    "type": "Dark",
@@ -3543,6 +3717,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Dark",
@@ -3564,6 +3739,7 @@
   "darkvoid": {
    "name": "Dark Void",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 50,
    "type": "Dark",
@@ -3585,6 +3761,7 @@
   "dazzlinggleam": {
    "name": "Dazzling Gleam",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Fairy",
@@ -3606,6 +3783,7 @@
   "decorate": {
    "name": "Decorate",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fairy",
@@ -3627,6 +3805,7 @@
   "defendorder": {
    "name": "Defend Order",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Bug",
@@ -3648,6 +3827,7 @@
   "defensecurl": {
    "name": "Defense Curl",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -3669,6 +3849,7 @@
   "defog": {
    "name": "Defog",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Flying",
@@ -3690,6 +3871,7 @@
   "destinybond": {
    "name": "Destiny Bond",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Ghost",
@@ -3711,6 +3893,7 @@
   "detect": {
    "name": "Detect",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fighting",
@@ -3732,6 +3915,7 @@
   "devastatingdrake": {
    "name": "Devastating Drake",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Dragon",
@@ -3753,6 +3937,7 @@
   "diamondstorm": {
    "name": "Diamond Storm",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 95,
    "type": "Rock",
@@ -3774,6 +3959,7 @@
   "dig": {
    "name": "Dig",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Ground",
@@ -3795,6 +3981,7 @@
   "direclaw": {
    "name": "Dire Claw",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Poison",
@@ -3816,6 +4003,7 @@
   "disable": {
    "name": "Disable",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -3837,6 +4025,7 @@
   "disarmingvoice": {
    "name": "Disarming Voice",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 0,
    "type": "Fairy",
@@ -3864,6 +4053,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Electric",
@@ -3885,6 +4075,7 @@
   "dive": {
    "name": "Dive",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Water",
@@ -3911,6 +4102,7 @@
      "kind": "confuse"
     }
    ],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Normal",
@@ -3932,6 +4124,7 @@
   "doodle": {
    "name": "Doodle",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -3953,6 +4146,7 @@
   "doomdesire": {
    "name": "Doom Desire",
    "secondaries": [],
+   "hits": null,
    "power": 140,
    "accuracy": 100,
    "type": "Steel",
@@ -3974,6 +4168,7 @@
   "doubleedge": {
    "name": "Double-Edge",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Normal",
@@ -3995,6 +4190,10 @@
   "doublehit": {
    "name": "Double Hit",
    "secondaries": [],
+   "hits": [
+    2,
+    2
+   ],
    "power": 35,
    "accuracy": 90,
    "type": "Normal",
@@ -4021,6 +4220,10 @@
      "kind": "flinch"
     }
    ],
+   "hits": [
+    2,
+    2
+   ],
    "power": 60,
    "accuracy": 100,
    "type": "Steel",
@@ -4042,6 +4245,10 @@
   "doublekick": {
    "name": "Double Kick",
    "secondaries": [],
+   "hits": [
+    2,
+    2
+   ],
    "power": 30,
    "accuracy": 100,
    "type": "Fighting",
@@ -4063,6 +4270,7 @@
   "doubleshock": {
    "name": "Double Shock",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Electric",
@@ -4084,6 +4292,10 @@
   "doubleslap": {
    "name": "Double Slap",
    "secondaries": [],
+   "hits": [
+    2,
+    5
+   ],
    "power": 15,
    "accuracy": 85,
    "type": "Normal",
@@ -4105,6 +4317,7 @@
   "doubleteam": {
    "name": "Double Team",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -4126,6 +4339,7 @@
   "dracometeor": {
    "name": "Draco Meteor",
    "secondaries": [],
+   "hits": null,
    "power": 130,
    "accuracy": 90,
    "type": "Dragon",
@@ -4147,6 +4361,7 @@
   "dragonascent": {
    "name": "Dragon Ascent",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Flying",
@@ -4174,6 +4389,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Dragon",
@@ -4195,6 +4411,7 @@
   "dragoncheer": {
    "name": "Dragon Cheer",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Dragon",
@@ -4216,6 +4433,7 @@
   "dragonclaw": {
    "name": "Dragon Claw",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Dragon",
@@ -4237,6 +4455,7 @@
   "dragondance": {
    "name": "Dragon Dance",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Dragon",
@@ -4258,6 +4477,10 @@
   "dragondarts": {
    "name": "Dragon Darts",
    "secondaries": [],
+   "hits": [
+    2,
+    2
+   ],
    "power": 50,
    "accuracy": 100,
    "type": "Dragon",
@@ -4279,6 +4502,7 @@
   "dragonenergy": {
    "name": "Dragon Energy",
    "secondaries": [],
+   "hits": null,
    "power": 150,
    "accuracy": 100,
    "type": "Dragon",
@@ -4300,6 +4524,7 @@
   "dragonhammer": {
    "name": "Dragon Hammer",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Dragon",
@@ -4321,6 +4546,7 @@
   "dragonpulse": {
    "name": "Dragon Pulse",
    "secondaries": [],
+   "hits": null,
    "power": 85,
    "accuracy": 100,
    "type": "Dragon",
@@ -4342,6 +4568,7 @@
   "dragonrage": {
    "name": "Dragon Rage",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Dragon",
@@ -4368,6 +4595,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 100,
    "accuracy": 75,
    "type": "Dragon",
@@ -4389,6 +4617,7 @@
   "dragontail": {
    "name": "Dragon Tail",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 90,
    "type": "Dragon",
@@ -4410,6 +4639,7 @@
   "drainingkiss": {
    "name": "Draining Kiss",
    "secondaries": [],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Fairy",
@@ -4431,6 +4661,7 @@
   "drainpunch": {
    "name": "Drain Punch",
    "secondaries": [],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Fighting",
@@ -4452,6 +4683,7 @@
   "dreameater": {
    "name": "Dream Eater",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Psychic",
@@ -4473,6 +4705,7 @@
   "drillpeck": {
    "name": "Drill Peck",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Flying",
@@ -4494,6 +4727,7 @@
   "drillrun": {
    "name": "Drill Run",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 95,
    "type": "Ground",
@@ -4523,6 +4757,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Grass",
@@ -4544,6 +4779,10 @@
   "dualchop": {
    "name": "Dual Chop",
    "secondaries": [],
+   "hits": [
+    2,
+    2
+   ],
    "power": 40,
    "accuracy": 90,
    "type": "Dragon",
@@ -4565,6 +4804,10 @@
   "dualwingbeat": {
    "name": "Dual Wingbeat",
    "secondaries": [],
+   "hits": [
+    2,
+    2
+   ],
    "power": 40,
    "accuracy": 90,
    "type": "Flying",
@@ -4586,6 +4829,7 @@
   "dynamaxcannon": {
    "name": "Dynamax Cannon",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Dragon",
@@ -4612,6 +4856,7 @@
      "kind": "confuse"
     }
    ],
+   "hits": null,
    "power": 100,
    "accuracy": 50,
    "type": "Fighting",
@@ -4641,6 +4886,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Ground",
@@ -4662,6 +4908,7 @@
   "earthquake": {
    "name": "Earthquake",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Ground",
@@ -4683,6 +4930,7 @@
   "echoedvoice": {
    "name": "Echoed Voice",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Normal",
@@ -4704,6 +4952,7 @@
   "eerieimpulse": {
    "name": "Eerie Impulse",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Electric",
@@ -4725,6 +4974,7 @@
   "eeriespell": {
    "name": "Eerie Spell",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Psychic",
@@ -4746,6 +4996,7 @@
   "eggbomb": {
    "name": "Egg Bomb",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 75,
    "type": "Normal",
@@ -4767,6 +5018,7 @@
   "electricterrain": {
    "name": "Electric Terrain",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Electric",
@@ -4788,6 +5040,7 @@
   "electrify": {
    "name": "Electrify",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Electric",
@@ -4809,6 +5062,7 @@
   "electroball": {
    "name": "Electro Ball",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Electric",
@@ -4830,6 +5084,7 @@
   "electrodrift": {
    "name": "Electro Drift",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Electric",
@@ -4851,6 +5106,7 @@
   "electroshot": {
    "name": "Electro Shot",
    "secondaries": [],
+   "hits": null,
    "power": 130,
    "accuracy": 100,
    "type": "Electric",
@@ -4880,6 +5136,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 55,
    "accuracy": 95,
    "type": "Electric",
@@ -4901,6 +5158,7 @@
   "embargo": {
    "name": "Embargo",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Dark",
@@ -4928,6 +5186,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Fire",
@@ -4949,6 +5208,7 @@
   "encore": {
    "name": "Encore",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -4970,6 +5230,7 @@
   "endeavor": {
    "name": "Endeavor",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -4991,6 +5252,7 @@
   "endure": {
    "name": "Endure",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -5020,6 +5282,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Grass",
@@ -5041,6 +5304,7 @@
   "entrainment": {
    "name": "Entrainment",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -5062,6 +5326,7 @@
   "eruption": {
    "name": "Eruption",
    "secondaries": [],
+   "hits": null,
    "power": 150,
    "accuracy": 100,
    "type": "Fire",
@@ -5091,6 +5356,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Psychic",
@@ -5112,6 +5378,7 @@
   "eternabeam": {
    "name": "Eternabeam",
    "secondaries": [],
+   "hits": null,
    "power": 160,
    "accuracy": 90,
    "type": "Dragon",
@@ -5133,6 +5400,7 @@
   "expandingforce": {
    "name": "Expanding Force",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Psychic",
@@ -5154,6 +5422,7 @@
   "explosion": {
    "name": "Explosion",
    "secondaries": [],
+   "hits": null,
    "power": 250,
    "accuracy": 100,
    "type": "Normal",
@@ -5180,6 +5449,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Psychic",
@@ -5201,6 +5471,7 @@
   "extremeevoboost": {
    "name": "Extreme Evoboost",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -5222,6 +5493,7 @@
   "extremespeed": {
    "name": "Extreme Speed",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Normal",
@@ -5243,6 +5515,7 @@
   "facade": {
    "name": "Facade",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Normal",
@@ -5264,6 +5537,7 @@
   "fairylock": {
    "name": "Fairy Lock",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fairy",
@@ -5285,6 +5559,7 @@
   "fairywind": {
    "name": "Fairy Wind",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Fairy",
@@ -5311,6 +5586,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Normal",
@@ -5332,6 +5608,7 @@
   "faketears": {
    "name": "Fake Tears",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Dark",
@@ -5353,6 +5630,7 @@
   "falsesurrender": {
    "name": "False Surrender",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 0,
    "type": "Dark",
@@ -5374,6 +5652,7 @@
   "falseswipe": {
    "name": "False Swipe",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Normal",
@@ -5395,6 +5674,7 @@
   "featherdance": {
    "name": "Feather Dance",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Flying",
@@ -5416,6 +5696,7 @@
   "feint": {
    "name": "Feint",
    "secondaries": [],
+   "hits": null,
    "power": 30,
    "accuracy": 100,
    "type": "Normal",
@@ -5437,6 +5718,7 @@
   "feintattack": {
    "name": "Feint Attack",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 0,
    "type": "Dark",
@@ -5458,6 +5740,7 @@
   "fellstinger": {
    "name": "Fell Stinger",
    "secondaries": [],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Bug",
@@ -5479,6 +5762,7 @@
   "ficklebeam": {
    "name": "Fickle Beam",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Dragon",
@@ -5508,6 +5792,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Fire",
@@ -5534,6 +5819,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Dark",
@@ -5555,6 +5841,7 @@
   "filletaway": {
    "name": "Fillet Away",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -5576,6 +5863,7 @@
   "finalgambit": {
    "name": "Final Gambit",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Fighting",
@@ -5603,6 +5891,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 110,
    "accuracy": 85,
    "type": "Fire",
@@ -5634,6 +5923,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 95,
    "type": "Fire",
@@ -5663,6 +5953,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Fire",
@@ -5684,6 +5975,7 @@
   "firepledge": {
    "name": "Fire Pledge",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Fire",
@@ -5711,6 +6003,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Fire",
@@ -5732,6 +6025,7 @@
   "firespin": {
    "name": "Fire Spin",
    "secondaries": [],
+   "hits": null,
    "power": 35,
    "accuracy": 85,
    "type": "Fire",
@@ -5753,6 +6047,7 @@
   "firstimpression": {
    "name": "First Impression",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Bug",
@@ -5774,6 +6069,7 @@
   "fishiousrend": {
    "name": "Fishious Rend",
    "secondaries": [],
+   "hits": null,
    "power": 85,
    "accuracy": 100,
    "type": "Water",
@@ -5795,6 +6091,7 @@
   "fissure": {
    "name": "Fissure",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 30,
    "type": "Ground",
@@ -5816,6 +6113,7 @@
   "flail": {
    "name": "Flail",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -5837,6 +6135,7 @@
   "flameburst": {
    "name": "Flame Burst",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Fire",
@@ -5866,6 +6165,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Fire",
@@ -5893,6 +6193,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Fire",
@@ -5920,6 +6221,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Fire",
@@ -5947,6 +6249,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Fire",
@@ -5968,6 +6271,7 @@
   "flash": {
    "name": "Flash",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -5997,6 +6301,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Steel",
@@ -6018,6 +6323,7 @@
   "flatter": {
    "name": "Flatter",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Dark",
@@ -6039,6 +6345,7 @@
   "fleurcannon": {
    "name": "Fleur Cannon",
    "secondaries": [],
+   "hits": null,
    "power": 130,
    "accuracy": 90,
    "type": "Fairy",
@@ -6060,6 +6367,7 @@
   "fling": {
    "name": "Fling",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Dark",
@@ -6081,6 +6389,7 @@
   "flipturn": {
    "name": "Flip Turn",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Water",
@@ -6107,6 +6416,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 95,
    "type": "Flying",
@@ -6128,6 +6438,7 @@
   "floralhealing": {
    "name": "Floral Healing",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fairy",
@@ -6149,6 +6460,7 @@
   "flowershield": {
    "name": "Flower Shield",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fairy",
@@ -6170,6 +6482,7 @@
   "flowertrick": {
    "name": "Flower Trick",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 0,
    "type": "Grass",
@@ -6191,6 +6504,7 @@
   "fly": {
    "name": "Fly",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 95,
    "type": "Flying",
@@ -6212,6 +6526,7 @@
   "flyingpress": {
    "name": "Flying Press",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 95,
    "type": "Fighting",
@@ -6241,6 +6556,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 120,
    "accuracy": 70,
    "type": "Fighting",
@@ -6262,6 +6578,7 @@
   "focusenergy": {
    "name": "Focus Energy",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -6283,6 +6600,7 @@
   "focuspunch": {
    "name": "Focus Punch",
    "secondaries": [],
+   "hits": null,
    "power": 150,
    "accuracy": 100,
    "type": "Fighting",
@@ -6304,6 +6622,7 @@
   "followme": {
    "name": "Follow Me",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -6331,6 +6650,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Fighting",
@@ -6352,6 +6672,7 @@
   "foresight": {
    "name": "Foresight",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -6373,6 +6694,7 @@
   "forestscurse": {
    "name": "Forest's Curse",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Grass",
@@ -6394,6 +6716,7 @@
   "foulplay": {
    "name": "Foul Play",
    "secondaries": [],
+   "hits": null,
    "power": 95,
    "accuracy": 100,
    "type": "Dark",
@@ -6421,6 +6744,7 @@
      "status": "frozen"
     }
    ],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Ice",
@@ -6448,6 +6772,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 140,
    "accuracy": 90,
    "type": "Ice",
@@ -6475,6 +6800,7 @@
      "status": "frozen"
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Psychic",
@@ -6496,6 +6822,7 @@
   "freezyfrost": {
    "name": "Freezy Frost",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 90,
    "type": "Ice",
@@ -6517,6 +6844,7 @@
   "frenzyplant": {
    "name": "Frenzy Plant",
    "secondaries": [],
+   "hits": null,
    "power": 150,
    "accuracy": 90,
    "type": "Grass",
@@ -6538,6 +6866,7 @@
   "frostbreath": {
    "name": "Frost Breath",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 90,
    "type": "Ice",
@@ -6559,6 +6888,7 @@
   "frustration": {
    "name": "Frustration",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -6580,6 +6910,10 @@
   "furyattack": {
    "name": "Fury Attack",
    "secondaries": [],
+   "hits": [
+    2,
+    5
+   ],
    "power": 15,
    "accuracy": 85,
    "type": "Normal",
@@ -6601,6 +6935,7 @@
   "furycutter": {
    "name": "Fury Cutter",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 95,
    "type": "Bug",
@@ -6622,6 +6957,10 @@
   "furyswipes": {
    "name": "Fury Swipes",
    "secondaries": [],
+   "hits": [
+    2,
+    5
+   ],
    "power": 18,
    "accuracy": 80,
    "type": "Normal",
@@ -6643,6 +6982,7 @@
   "fusionbolt": {
    "name": "Fusion Bolt",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Electric",
@@ -6664,6 +7004,7 @@
   "fusionflare": {
    "name": "Fusion Flare",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Fire",
@@ -6685,6 +7026,7 @@
   "futuresight": {
    "name": "Future Sight",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Psychic",
@@ -6706,6 +7048,7 @@
   "gastroacid": {
    "name": "Gastro Acid",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Poison",
@@ -6727,6 +7070,10 @@
   "geargrind": {
    "name": "Gear Grind",
    "secondaries": [],
+   "hits": [
+    2,
+    2
+   ],
    "power": 50,
    "accuracy": 85,
    "type": "Steel",
@@ -6748,6 +7095,7 @@
   "gearup": {
    "name": "Gear Up",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Steel",
@@ -6769,6 +7117,7 @@
   "genesissupernova": {
    "name": "Genesis Supernova",
    "secondaries": [],
+   "hits": null,
    "power": 185,
    "accuracy": 0,
    "type": "Psychic",
@@ -6790,6 +7139,7 @@
   "geomancy": {
    "name": "Geomancy",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fairy",
@@ -6811,6 +7161,7 @@
   "gigadrain": {
    "name": "Giga Drain",
    "secondaries": [],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Grass",
@@ -6832,6 +7183,7 @@
   "gigaimpact": {
    "name": "Giga Impact",
    "secondaries": [],
+   "hits": null,
    "power": 150,
    "accuracy": 90,
    "type": "Normal",
@@ -6853,6 +7205,7 @@
   "gigatonhammer": {
    "name": "Gigaton Hammer",
    "secondaries": [],
+   "hits": null,
    "power": 160,
    "accuracy": 100,
    "type": "Steel",
@@ -6874,6 +7227,7 @@
   "gigavolthavoc": {
    "name": "Gigavolt Havoc",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Electric",
@@ -6895,6 +7249,7 @@
   "glaciallance": {
    "name": "Glacial Lance",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Ice",
@@ -6924,6 +7279,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 95,
    "type": "Ice",
@@ -6945,6 +7301,7 @@
   "glaiverush": {
    "name": "Glaive Rush",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Dragon",
@@ -6966,6 +7323,7 @@
   "glare": {
    "name": "Glare",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -6987,6 +7345,7 @@
   "glitzyglow": {
    "name": "Glitzy Glow",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 95,
    "type": "Psychic",
@@ -7008,6 +7367,7 @@
   "gmaxbefuddle": {
    "name": "G-Max Befuddle",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Bug",
@@ -7029,6 +7389,7 @@
   "gmaxcannonade": {
    "name": "G-Max Cannonade",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Water",
@@ -7050,6 +7411,7 @@
   "gmaxcentiferno": {
    "name": "G-Max Centiferno",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Fire",
@@ -7071,6 +7433,7 @@
   "gmaxchistrike": {
    "name": "G-Max Chi Strike",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Fighting",
@@ -7092,6 +7455,7 @@
   "gmaxcuddle": {
    "name": "G-Max Cuddle",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Normal",
@@ -7113,6 +7477,7 @@
   "gmaxdepletion": {
    "name": "G-Max Depletion",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Dragon",
@@ -7134,6 +7499,7 @@
   "gmaxdrumsolo": {
    "name": "G-Max Drum Solo",
    "secondaries": [],
+   "hits": null,
    "power": 160,
    "accuracy": 0,
    "type": "Grass",
@@ -7155,6 +7521,7 @@
   "gmaxfinale": {
    "name": "G-Max Finale",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Fairy",
@@ -7176,6 +7543,7 @@
   "gmaxfireball": {
    "name": "G-Max Fireball",
    "secondaries": [],
+   "hits": null,
    "power": 160,
    "accuracy": 0,
    "type": "Fire",
@@ -7197,6 +7565,7 @@
   "gmaxfoamburst": {
    "name": "G-Max Foam Burst",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Water",
@@ -7218,6 +7587,7 @@
   "gmaxgoldrush": {
    "name": "G-Max Gold Rush",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Normal",
@@ -7239,6 +7609,7 @@
   "gmaxgravitas": {
    "name": "G-Max Gravitas",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Psychic",
@@ -7260,6 +7631,7 @@
   "gmaxhydrosnipe": {
    "name": "G-Max Hydrosnipe",
    "secondaries": [],
+   "hits": null,
    "power": 160,
    "accuracy": 0,
    "type": "Water",
@@ -7281,6 +7653,7 @@
   "gmaxmalodor": {
    "name": "G-Max Malodor",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Poison",
@@ -7302,6 +7675,7 @@
   "gmaxmeltdown": {
    "name": "G-Max Meltdown",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Steel",
@@ -7323,6 +7697,7 @@
   "gmaxoneblow": {
    "name": "G-Max One Blow",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Dark",
@@ -7344,6 +7719,7 @@
   "gmaxrapidflow": {
    "name": "G-Max Rapid Flow",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Water",
@@ -7365,6 +7741,7 @@
   "gmaxreplenish": {
    "name": "G-Max Replenish",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Normal",
@@ -7386,6 +7763,7 @@
   "gmaxresonance": {
    "name": "G-Max Resonance",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Ice",
@@ -7407,6 +7785,7 @@
   "gmaxsandblast": {
    "name": "G-Max Sandblast",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Ground",
@@ -7428,6 +7807,7 @@
   "gmaxsmite": {
    "name": "G-Max Smite",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Fairy",
@@ -7449,6 +7829,7 @@
   "gmaxsnooze": {
    "name": "G-Max Snooze",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Dark",
@@ -7470,6 +7851,7 @@
   "gmaxsteelsurge": {
    "name": "G-Max Steelsurge",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Steel",
@@ -7491,6 +7873,7 @@
   "gmaxstonesurge": {
    "name": "G-Max Stonesurge",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Water",
@@ -7512,6 +7895,7 @@
   "gmaxstunshock": {
    "name": "G-Max Stun Shock",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Electric",
@@ -7533,6 +7917,7 @@
   "gmaxsweetness": {
    "name": "G-Max Sweetness",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Grass",
@@ -7554,6 +7939,7 @@
   "gmaxtartness": {
    "name": "G-Max Tartness",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Grass",
@@ -7575,6 +7961,7 @@
   "gmaxterror": {
    "name": "G-Max Terror",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Ghost",
@@ -7596,6 +7983,7 @@
   "gmaxvinelash": {
    "name": "G-Max Vine Lash",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Grass",
@@ -7617,6 +8005,7 @@
   "gmaxvolcalith": {
    "name": "G-Max Volcalith",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Rock",
@@ -7638,6 +8027,7 @@
   "gmaxvoltcrash": {
    "name": "G-Max Volt Crash",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Electric",
@@ -7659,6 +8049,7 @@
   "gmaxwildfire": {
    "name": "G-Max Wildfire",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Fire",
@@ -7680,6 +8071,7 @@
   "gmaxwindrage": {
    "name": "G-Max Wind Rage",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Flying",
@@ -7701,6 +8093,7 @@
   "grassknot": {
    "name": "Grass Knot",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Grass",
@@ -7722,6 +8115,7 @@
   "grasspledge": {
    "name": "Grass Pledge",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Grass",
@@ -7743,6 +8137,7 @@
   "grasswhistle": {
    "name": "Grass Whistle",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 55,
    "type": "Grass",
@@ -7764,6 +8159,7 @@
   "grassyglide": {
    "name": "Grassy Glide",
    "secondaries": [],
+   "hits": null,
    "power": 55,
    "accuracy": 100,
    "type": "Grass",
@@ -7785,6 +8181,7 @@
   "grassyterrain": {
    "name": "Grassy Terrain",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Grass",
@@ -7814,6 +8211,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Grass",
@@ -7835,6 +8233,7 @@
   "gravity": {
    "name": "Gravity",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -7856,6 +8255,7 @@
   "growl": {
    "name": "Growl",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -7877,6 +8277,7 @@
   "growth": {
    "name": "Growth",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -7898,6 +8299,7 @@
   "grudge": {
    "name": "Grudge",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Ghost",
@@ -7919,6 +8321,7 @@
   "guardianofalola": {
    "name": "Guardian of Alola",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fairy",
@@ -7940,6 +8343,7 @@
   "guardsplit": {
    "name": "Guard Split",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -7961,6 +8365,7 @@
   "guardswap": {
    "name": "Guard Swap",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -7982,6 +8387,7 @@
   "guillotine": {
    "name": "Guillotine",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 30,
    "type": "Normal",
@@ -8009,6 +8415,7 @@
      "status": "poisoned"
     }
    ],
+   "hits": null,
    "power": 120,
    "accuracy": 80,
    "type": "Poison",
@@ -8030,6 +8437,7 @@
   "gust": {
    "name": "Gust",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Flying",
@@ -8051,6 +8459,7 @@
   "gyroball": {
    "name": "Gyro Ball",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Steel",
@@ -8072,6 +8481,7 @@
   "hail": {
    "name": "Hail",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Ice",
@@ -8093,6 +8503,7 @@
   "hammerarm": {
    "name": "Hammer Arm",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 90,
    "type": "Fighting",
@@ -8114,6 +8525,7 @@
   "happyhour": {
    "name": "Happy Hour",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -8135,6 +8547,7 @@
   "harden": {
    "name": "Harden",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -8156,6 +8569,7 @@
   "hardpress": {
    "name": "Hard Press",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Steel",
@@ -8177,6 +8591,7 @@
   "haze": {
    "name": "Haze",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Ice",
@@ -8203,6 +8618,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Normal",
@@ -8224,6 +8640,7 @@
   "headcharge": {
    "name": "Head Charge",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Normal",
@@ -8245,6 +8662,7 @@
   "headlongrush": {
    "name": "Headlong Rush",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Ground",
@@ -8266,6 +8684,7 @@
   "headsmash": {
    "name": "Head Smash",
    "secondaries": [],
+   "hits": null,
    "power": 150,
    "accuracy": 80,
    "type": "Rock",
@@ -8287,6 +8706,7 @@
   "healbell": {
    "name": "Heal Bell",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -8308,6 +8728,7 @@
   "healblock": {
    "name": "Heal Block",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Psychic",
@@ -8329,6 +8750,7 @@
   "healingwish": {
    "name": "Healing Wish",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -8350,6 +8772,7 @@
   "healorder": {
    "name": "Heal Order",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Bug",
@@ -8371,6 +8794,7 @@
   "healpulse": {
    "name": "Heal Pulse",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -8397,6 +8821,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Psychic",
@@ -8418,6 +8843,7 @@
   "heartswap": {
    "name": "Heart Swap",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -8439,6 +8865,7 @@
   "heatcrash": {
    "name": "Heat Crash",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Fire",
@@ -8466,6 +8893,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 95,
    "accuracy": 90,
    "type": "Fire",
@@ -8487,6 +8915,7 @@
   "heavyslam": {
    "name": "Heavy Slam",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Steel",
@@ -8508,6 +8937,7 @@
   "helpinghand": {
    "name": "Helping Hand",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -8529,6 +8959,7 @@
   "hex": {
    "name": "Hex",
    "secondaries": [],
+   "hits": null,
    "power": 65,
    "accuracy": 100,
    "type": "Ghost",
@@ -8550,6 +8981,7 @@
   "hiddenpower": {
    "name": "Hidden Power",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Normal",
@@ -8571,6 +9003,7 @@
   "hiddenpowerbug": {
    "name": "Hidden Power Bug",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Bug",
@@ -8592,6 +9025,7 @@
   "hiddenpowerdark": {
    "name": "Hidden Power Dark",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Dark",
@@ -8613,6 +9047,7 @@
   "hiddenpowerdragon": {
    "name": "Hidden Power Dragon",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Dragon",
@@ -8634,6 +9069,7 @@
   "hiddenpowerelectric": {
    "name": "Hidden Power Electric",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Electric",
@@ -8655,6 +9091,7 @@
   "hiddenpowerfighting": {
    "name": "Hidden Power Fighting",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Fighting",
@@ -8676,6 +9113,7 @@
   "hiddenpowerfire": {
    "name": "Hidden Power Fire",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Fire",
@@ -8697,6 +9135,7 @@
   "hiddenpowerflying": {
    "name": "Hidden Power Flying",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Flying",
@@ -8718,6 +9157,7 @@
   "hiddenpowerghost": {
    "name": "Hidden Power Ghost",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Ghost",
@@ -8739,6 +9179,7 @@
   "hiddenpowergrass": {
    "name": "Hidden Power Grass",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Grass",
@@ -8760,6 +9201,7 @@
   "hiddenpowerground": {
    "name": "Hidden Power Ground",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Ground",
@@ -8781,6 +9223,7 @@
   "hiddenpowerice": {
    "name": "Hidden Power Ice",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Ice",
@@ -8802,6 +9245,7 @@
   "hiddenpowerpoison": {
    "name": "Hidden Power Poison",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Poison",
@@ -8823,6 +9267,7 @@
   "hiddenpowerpsychic": {
    "name": "Hidden Power Psychic",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Psychic",
@@ -8844,6 +9289,7 @@
   "hiddenpowerrock": {
    "name": "Hidden Power Rock",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Rock",
@@ -8865,6 +9311,7 @@
   "hiddenpowersteel": {
    "name": "Hidden Power Steel",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Steel",
@@ -8886,6 +9333,7 @@
   "hiddenpowerwater": {
    "name": "Hidden Power Water",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Water",
@@ -8907,6 +9355,7 @@
   "highhorsepower": {
    "name": "High Horsepower",
    "secondaries": [],
+   "hits": null,
    "power": 95,
    "accuracy": 95,
    "type": "Ground",
@@ -8928,6 +9377,7 @@
   "highjumpkick": {
    "name": "High Jump Kick",
    "secondaries": [],
+   "hits": null,
    "power": 130,
    "accuracy": 90,
    "type": "Fighting",
@@ -8949,6 +9399,7 @@
   "holdback": {
    "name": "Hold Back",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Normal",
@@ -8970,6 +9421,7 @@
   "holdhands": {
    "name": "Hold Hands",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -8991,6 +9443,7 @@
   "honeclaws": {
    "name": "Hone Claws",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Dark",
@@ -9012,6 +9465,7 @@
   "hornattack": {
    "name": "Horn Attack",
    "secondaries": [],
+   "hits": null,
    "power": 65,
    "accuracy": 100,
    "type": "Normal",
@@ -9033,6 +9487,7 @@
   "horndrill": {
    "name": "Horn Drill",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 30,
    "type": "Normal",
@@ -9054,6 +9509,7 @@
   "hornleech": {
    "name": "Horn Leech",
    "secondaries": [],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Grass",
@@ -9075,6 +9531,7 @@
   "howl": {
    "name": "Howl",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -9101,6 +9558,7 @@
      "kind": "confuse"
     }
    ],
+   "hits": null,
    "power": 110,
    "accuracy": 70,
    "type": "Flying",
@@ -9122,6 +9580,7 @@
   "hydrocannon": {
    "name": "Hydro Cannon",
    "secondaries": [],
+   "hits": null,
    "power": 150,
    "accuracy": 90,
    "type": "Water",
@@ -9143,6 +9602,7 @@
   "hydropump": {
    "name": "Hydro Pump",
    "secondaries": [],
+   "hits": null,
    "power": 110,
    "accuracy": 80,
    "type": "Water",
@@ -9164,6 +9624,7 @@
   "hydrosteam": {
    "name": "Hydro Steam",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Water",
@@ -9185,6 +9646,7 @@
   "hydrovortex": {
    "name": "Hydro Vortex",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Water",
@@ -9206,6 +9668,7 @@
   "hyperbeam": {
    "name": "Hyper Beam",
    "secondaries": [],
+   "hits": null,
    "power": 150,
    "accuracy": 90,
    "type": "Normal",
@@ -9227,6 +9690,7 @@
   "hyperdrill": {
    "name": "Hyper Drill",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Normal",
@@ -9253,6 +9717,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 90,
    "type": "Normal",
@@ -9274,6 +9739,7 @@
   "hyperspacefury": {
    "name": "Hyperspace Fury",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 0,
    "type": "Dark",
@@ -9295,6 +9761,7 @@
   "hyperspacehole": {
    "name": "Hyperspace Hole",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 0,
    "type": "Psychic",
@@ -9316,6 +9783,7 @@
   "hypervoice": {
    "name": "Hyper Voice",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Normal",
@@ -9337,6 +9805,7 @@
   "hypnosis": {
    "name": "Hypnosis",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 60,
    "type": "Psychic",
@@ -9358,6 +9827,7 @@
   "iceball": {
    "name": "Ice Ball",
    "secondaries": [],
+   "hits": null,
    "power": 30,
    "accuracy": 90,
    "type": "Ice",
@@ -9385,6 +9855,7 @@
      "status": "frozen"
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Ice",
@@ -9412,6 +9883,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 140,
    "accuracy": 90,
    "type": "Ice",
@@ -9443,6 +9915,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 95,
    "type": "Ice",
@@ -9464,6 +9937,7 @@
   "icehammer": {
    "name": "Ice Hammer",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 90,
    "type": "Ice",
@@ -9491,6 +9965,7 @@
      "status": "frozen"
     }
    ],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Ice",
@@ -9512,6 +9987,7 @@
   "iceshard": {
    "name": "Ice Shard",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Ice",
@@ -9533,6 +10009,7 @@
   "icespinner": {
    "name": "Ice Spinner",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Ice",
@@ -9559,6 +10036,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 85,
    "accuracy": 90,
    "type": "Ice",
@@ -9580,6 +10058,10 @@
   "iciclespear": {
    "name": "Icicle Spear",
    "secondaries": [],
+   "hits": [
+    2,
+    5
+   ],
    "power": 25,
    "accuracy": 100,
    "type": "Ice",
@@ -9609,6 +10091,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 55,
    "accuracy": 95,
    "type": "Ice",
@@ -9630,6 +10113,7 @@
   "imprison": {
    "name": "Imprison",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -9651,6 +10135,7 @@
   "incinerate": {
    "name": "Incinerate",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Fire",
@@ -9678,6 +10163,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Ghost",
@@ -9705,6 +10191,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 100,
    "accuracy": 50,
    "type": "Fire",
@@ -9726,6 +10213,7 @@
   "infernooverdrive": {
    "name": "Inferno Overdrive",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Fire",
@@ -9747,6 +10235,7 @@
   "infestation": {
    "name": "Infestation",
    "secondaries": [],
+   "hits": null,
    "power": 20,
    "accuracy": 100,
    "type": "Bug",
@@ -9768,6 +10257,7 @@
   "ingrain": {
    "name": "Ingrain",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Grass",
@@ -9789,6 +10279,7 @@
   "instruct": {
    "name": "Instruct",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -9810,6 +10301,7 @@
   "iondeluge": {
    "name": "Ion Deluge",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Electric",
@@ -9831,6 +10323,7 @@
   "irondefense": {
    "name": "Iron Defense",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Steel",
@@ -9857,6 +10350,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Steel",
@@ -9886,6 +10380,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 100,
    "accuracy": 75,
    "type": "Steel",
@@ -9907,6 +10402,7 @@
   "ivycudgel": {
    "name": "Ivy Cudgel",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Grass",
@@ -9928,6 +10424,7 @@
   "jawlock": {
    "name": "Jaw Lock",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Dark",
@@ -9949,6 +10446,7 @@
   "jetpunch": {
    "name": "Jet Punch",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Water",
@@ -9970,6 +10468,7 @@
   "judgment": {
    "name": "Judgment",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Normal",
@@ -9991,6 +10490,7 @@
   "jumpkick": {
    "name": "Jump Kick",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 95,
    "type": "Fighting",
@@ -10012,6 +10512,7 @@
   "junglehealing": {
    "name": "Jungle Healing",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Grass",
@@ -10033,6 +10534,7 @@
   "karatechop": {
    "name": "Karate Chop",
    "secondaries": [],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Fighting",
@@ -10054,6 +10556,7 @@
   "kinesis": {
    "name": "Kinesis",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 80,
    "type": "Psychic",
@@ -10075,6 +10578,7 @@
   "kingsshield": {
    "name": "King's Shield",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Steel",
@@ -10096,6 +10600,7 @@
   "knockoff": {
    "name": "Knock Off",
    "secondaries": [],
+   "hits": null,
    "power": 65,
    "accuracy": 100,
    "type": "Dark",
@@ -10117,6 +10622,7 @@
   "kowtowcleave": {
    "name": "Kowtow Cleave",
    "secondaries": [],
+   "hits": null,
    "power": 85,
    "accuracy": 0,
    "type": "Dark",
@@ -10138,6 +10644,7 @@
   "landswrath": {
    "name": "Land's Wrath",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Ground",
@@ -10159,6 +10666,7 @@
   "laserfocus": {
    "name": "Laser Focus",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -10180,6 +10688,7 @@
   "lashout": {
    "name": "Lash Out",
    "secondaries": [],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Dark",
@@ -10201,6 +10710,7 @@
   "lastresort": {
    "name": "Last Resort",
    "secondaries": [],
+   "hits": null,
    "power": 140,
    "accuracy": 100,
    "type": "Normal",
@@ -10222,6 +10732,7 @@
   "lastrespects": {
    "name": "Last Respects",
    "secondaries": [],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Ghost",
@@ -10249,6 +10760,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Fire",
@@ -10270,6 +10782,7 @@
   "leafage": {
    "name": "Leafage",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Grass",
@@ -10291,6 +10804,7 @@
   "leafblade": {
    "name": "Leaf Blade",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Grass",
@@ -10312,6 +10826,7 @@
   "leafstorm": {
    "name": "Leaf Storm",
    "secondaries": [],
+   "hits": null,
    "power": 130,
    "accuracy": 90,
    "type": "Grass",
@@ -10341,6 +10856,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 90,
    "type": "Grass",
@@ -10362,6 +10878,7 @@
   "leechlife": {
    "name": "Leech Life",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Bug",
@@ -10383,6 +10900,7 @@
   "leechseed": {
    "name": "Leech Seed",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 90,
    "type": "Grass",
@@ -10404,6 +10922,7 @@
   "leer": {
    "name": "Leer",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -10425,6 +10944,7 @@
   "letssnuggleforever": {
    "name": "Let's Snuggle Forever",
    "secondaries": [],
+   "hits": null,
    "power": 190,
    "accuracy": 0,
    "type": "Fairy",
@@ -10452,6 +10972,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 30,
    "accuracy": 100,
    "type": "Ghost",
@@ -10473,6 +10994,7 @@
   "lifedew": {
    "name": "Life Dew",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Water",
@@ -10494,6 +11016,7 @@
   "lightofruin": {
    "name": "Light of Ruin",
    "secondaries": [],
+   "hits": null,
    "power": 140,
    "accuracy": 90,
    "type": "Fairy",
@@ -10515,6 +11038,7 @@
   "lightscreen": {
    "name": "Light Screen",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -10536,6 +11060,7 @@
   "lightthatburnsthesky": {
    "name": "Light That Burns the Sky",
    "secondaries": [],
+   "hits": null,
    "power": 200,
    "accuracy": 0,
    "type": "Psychic",
@@ -10565,6 +11090,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 85,
    "accuracy": 100,
    "type": "Water",
@@ -10586,6 +11112,7 @@
   "lockon": {
    "name": "Lock-On",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -10607,6 +11134,7 @@
   "lovelykiss": {
    "name": "Lovely Kiss",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 75,
    "type": "Normal",
@@ -10628,6 +11156,7 @@
   "lowkick": {
    "name": "Low Kick",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Fighting",
@@ -10657,6 +11186,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 100,
    "type": "Fighting",
@@ -10678,6 +11208,7 @@
   "luckychant": {
    "name": "Lucky Chant",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -10707,6 +11238,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Psychic",
@@ -10728,6 +11260,7 @@
   "lunarblessing": {
    "name": "Lunar Blessing",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -10749,6 +11282,7 @@
   "lunardance": {
    "name": "Lunar Dance",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -10778,6 +11312,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Bug",
@@ -10807,6 +11342,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 95,
    "accuracy": 100,
    "type": "Psychic",
@@ -10828,6 +11364,7 @@
   "machpunch": {
    "name": "Mach Punch",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Fighting",
@@ -10849,6 +11386,7 @@
   "magicalleaf": {
    "name": "Magical Leaf",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 0,
    "type": "Grass",
@@ -10875,6 +11413,7 @@
      "kind": "confuse"
     }
    ],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Fairy",
@@ -10896,6 +11435,7 @@
   "magiccoat": {
    "name": "Magic Coat",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -10917,6 +11457,7 @@
   "magicpowder": {
    "name": "Magic Powder",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Psychic",
@@ -10938,6 +11479,7 @@
   "magicroom": {
    "name": "Magic Room",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -10959,6 +11501,7 @@
   "magmastorm": {
    "name": "Magma Storm",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 75,
    "type": "Fire",
@@ -10980,6 +11523,7 @@
   "magnetbomb": {
    "name": "Magnet Bomb",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 0,
    "type": "Steel",
@@ -11001,6 +11545,7 @@
   "magneticflux": {
    "name": "Magnetic Flux",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Electric",
@@ -11022,6 +11567,7 @@
   "magnetrise": {
    "name": "Magnet Rise",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Electric",
@@ -11043,6 +11589,7 @@
   "magnitude": {
    "name": "Magnitude",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Ground",
@@ -11064,6 +11611,7 @@
   "makeitrain": {
    "name": "Make It Rain",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Steel",
@@ -11085,6 +11633,7 @@
   "maliciousmoonsault": {
    "name": "Malicious Moonsault",
    "secondaries": [],
+   "hits": null,
    "power": 180,
    "accuracy": 0,
    "type": "Dark",
@@ -11112,6 +11661,7 @@
      "status": "badly poisoned"
     }
    ],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Poison",
@@ -11133,6 +11683,7 @@
   "matblock": {
    "name": "Mat Block",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fighting",
@@ -11160,6 +11711,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 90,
    "type": "Grass",
@@ -11181,6 +11733,7 @@
   "maxairstream": {
    "name": "Max Airstream",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Flying",
@@ -11202,6 +11755,7 @@
   "maxdarkness": {
    "name": "Max Darkness",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Dark",
@@ -11223,6 +11777,7 @@
   "maxflare": {
    "name": "Max Flare",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 0,
    "type": "Fire",
@@ -11244,6 +11799,7 @@
   "maxflutterby": {
    "name": "Max Flutterby",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Bug",
@@ -11265,6 +11821,7 @@
   "maxgeyser": {
    "name": "Max Geyser",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Water",
@@ -11286,6 +11843,7 @@
   "maxguard": {
    "name": "Max Guard",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -11307,6 +11865,7 @@
   "maxhailstorm": {
    "name": "Max Hailstorm",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Ice",
@@ -11328,6 +11887,7 @@
   "maxknuckle": {
    "name": "Max Knuckle",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Fighting",
@@ -11349,6 +11909,7 @@
   "maxlightning": {
    "name": "Max Lightning",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Electric",
@@ -11370,6 +11931,7 @@
   "maxmindstorm": {
    "name": "Max Mindstorm",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Psychic",
@@ -11391,6 +11953,7 @@
   "maxooze": {
    "name": "Max Ooze",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Poison",
@@ -11412,6 +11975,7 @@
   "maxovergrowth": {
    "name": "Max Overgrowth",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Grass",
@@ -11433,6 +11997,7 @@
   "maxphantasm": {
    "name": "Max Phantasm",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Ghost",
@@ -11454,6 +12019,7 @@
   "maxquake": {
    "name": "Max Quake",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Ground",
@@ -11475,6 +12041,7 @@
   "maxrockfall": {
    "name": "Max Rockfall",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Rock",
@@ -11496,6 +12063,7 @@
   "maxstarfall": {
    "name": "Max Starfall",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Fairy",
@@ -11517,6 +12085,7 @@
   "maxsteelspike": {
    "name": "Max Steelspike",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Steel",
@@ -11538,6 +12107,7 @@
   "maxstrike": {
    "name": "Max Strike",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Normal",
@@ -11559,6 +12129,7 @@
   "maxwyrmwind": {
    "name": "Max Wyrmwind",
    "secondaries": [],
+   "hits": null,
    "power": 10,
    "accuracy": 0,
    "type": "Dragon",
@@ -11580,6 +12151,7 @@
   "meanlook": {
    "name": "Mean Look",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -11601,6 +12173,7 @@
   "meditate": {
    "name": "Meditate",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -11622,6 +12195,7 @@
   "mefirst": {
    "name": "Me First",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -11643,6 +12217,7 @@
   "megadrain": {
    "name": "Mega Drain",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Grass",
@@ -11664,6 +12239,7 @@
   "megahorn": {
    "name": "Megahorn",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 85,
    "type": "Bug",
@@ -11685,6 +12261,7 @@
   "megakick": {
    "name": "Mega Kick",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 75,
    "type": "Normal",
@@ -11706,6 +12283,7 @@
   "megapunch": {
    "name": "Mega Punch",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 85,
    "type": "Normal",
@@ -11727,6 +12305,7 @@
   "memento": {
    "name": "Memento",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Dark",
@@ -11748,6 +12327,7 @@
   "menacingmoonrazemaelstrom": {
    "name": "Menacing Moonraze Maelstrom",
    "secondaries": [],
+   "hits": null,
    "power": 200,
    "accuracy": 0,
    "type": "Ghost",
@@ -11769,6 +12349,7 @@
   "metalburst": {
    "name": "Metal Burst",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Steel",
@@ -11798,6 +12379,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 50,
    "accuracy": 95,
    "type": "Steel",
@@ -11819,6 +12401,7 @@
   "metalsound": {
    "name": "Metal Sound",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 85,
    "type": "Steel",
@@ -11840,6 +12423,7 @@
   "meteorassault": {
    "name": "Meteor Assault",
    "secondaries": [],
+   "hits": null,
    "power": 150,
    "accuracy": 100,
    "type": "Fighting",
@@ -11861,6 +12445,7 @@
   "meteorbeam": {
    "name": "Meteor Beam",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 90,
    "type": "Rock",
@@ -11890,6 +12475,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 90,
    "type": "Steel",
@@ -11911,6 +12497,7 @@
   "metronome": {
    "name": "Metronome",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -11932,6 +12519,7 @@
   "mightycleave": {
    "name": "Mighty Cleave",
    "secondaries": [],
+   "hits": null,
    "power": 95,
    "accuracy": 100,
    "type": "Rock",
@@ -11953,6 +12541,7 @@
   "milkdrink": {
    "name": "Milk Drink",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -11974,6 +12563,7 @@
   "mimic": {
    "name": "Mimic",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -11995,6 +12585,7 @@
   "mindblown": {
    "name": "Mind Blown",
    "secondaries": [],
+   "hits": null,
    "power": 150,
    "accuracy": 100,
    "type": "Fire",
@@ -12016,6 +12607,7 @@
   "mindreader": {
    "name": "Mind Reader",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -12037,6 +12629,7 @@
   "minimize": {
    "name": "Minimize",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -12058,6 +12651,7 @@
   "miracleeye": {
    "name": "Miracle Eye",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -12079,6 +12673,7 @@
   "mirrorcoat": {
    "name": "Mirror Coat",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Psychic",
@@ -12100,6 +12695,7 @@
   "mirrormove": {
    "name": "Mirror Move",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Flying",
@@ -12129,6 +12725,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 85,
    "type": "Steel",
@@ -12150,6 +12747,7 @@
   "mist": {
    "name": "Mist",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Ice",
@@ -12179,6 +12777,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 95,
    "accuracy": 100,
    "type": "Psychic",
@@ -12200,6 +12799,7 @@
   "mistyexplosion": {
    "name": "Misty Explosion",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Fairy",
@@ -12221,6 +12821,7 @@
   "mistyterrain": {
    "name": "Misty Terrain",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fairy",
@@ -12250,6 +12851,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 95,
    "accuracy": 100,
    "type": "Fairy",
@@ -12271,6 +12873,7 @@
   "moongeistbeam": {
    "name": "Moongeist Beam",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Ghost",
@@ -12292,6 +12895,7 @@
   "moonlight": {
    "name": "Moonlight",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fairy",
@@ -12313,6 +12917,7 @@
   "morningsun": {
    "name": "Morning Sun",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -12340,6 +12945,7 @@
      "status": "poisoned"
     }
    ],
+   "hits": null,
    "power": 30,
    "accuracy": 100,
    "type": "Poison",
@@ -12366,6 +12972,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 100,
    "accuracy": 85,
    "type": "Ice",
@@ -12395,6 +13002,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 85,
    "type": "Ground",
@@ -12424,6 +13032,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 85,
    "type": "Water",
@@ -12453,6 +13062,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 55,
    "accuracy": 95,
    "type": "Ground",
@@ -12482,6 +13092,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 20,
    "accuracy": 100,
    "type": "Ground",
@@ -12503,6 +13114,7 @@
   "mudsport": {
    "name": "Mud Sport",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Ground",
@@ -12524,6 +13136,7 @@
   "multiattack": {
    "name": "Multi-Attack",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Normal",
@@ -12553,6 +13166,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Fire",
@@ -12582,6 +13196,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 70,
    "accuracy": 90,
    "type": "Psychic",
@@ -12603,6 +13218,7 @@
   "nastyplot": {
    "name": "Nasty Plot",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Dark",
@@ -12624,6 +13240,7 @@
   "naturalgift": {
    "name": "Natural Gift",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -12645,6 +13262,7 @@
   "naturepower": {
    "name": "Nature Power",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -12666,6 +13284,7 @@
   "naturesmadness": {
    "name": "Nature's Madness",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 90,
    "type": "Fairy",
@@ -12692,6 +13311,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Grass",
@@ -12713,6 +13333,7 @@
   "neverendingnightmare": {
    "name": "Never-Ending Nightmare",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Ghost",
@@ -12742,6 +13363,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 85,
    "accuracy": 95,
    "type": "Dark",
@@ -12763,6 +13385,7 @@
   "nightmare": {
    "name": "Nightmare",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Ghost",
@@ -12784,6 +13407,7 @@
   "nightshade": {
    "name": "Night Shade",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Ghost",
@@ -12805,6 +13429,7 @@
   "nightslash": {
    "name": "Night Slash",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Dark",
@@ -12826,6 +13451,7 @@
   "nihillight": {
    "name": "Nihil Light",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Dragon",
@@ -12847,6 +13473,7 @@
   "nobleroar": {
    "name": "Noble Roar",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -12868,6 +13495,7 @@
   "noretreat": {
    "name": "No Retreat",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fighting",
@@ -12895,6 +13523,7 @@
      "status": "poisoned"
     }
    ],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Poison",
@@ -12922,6 +13551,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 20,
    "accuracy": 100,
    "type": "Electric",
@@ -12943,6 +13573,7 @@
   "oblivionwing": {
    "name": "Oblivion Wing",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Flying",
@@ -12964,6 +13595,7 @@
   "obstruct": {
    "name": "Obstruct",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Dark",
@@ -12985,6 +13617,7 @@
   "oceanicoperetta": {
    "name": "Oceanic Operetta",
    "secondaries": [],
+   "hits": null,
    "power": 195,
    "accuracy": 0,
    "type": "Water",
@@ -13014,6 +13647,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 85,
    "type": "Water",
@@ -13035,6 +13669,7 @@
   "octolock": {
    "name": "Octolock",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Fighting",
@@ -13056,6 +13691,7 @@
   "odorsleuth": {
    "name": "Odor Sleuth",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -13089,6 +13725,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Ghost",
@@ -13110,6 +13747,7 @@
   "orderup": {
    "name": "Order Up",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Dragon",
@@ -13131,6 +13769,7 @@
   "originpulse": {
    "name": "Origin Pulse",
    "secondaries": [],
+   "hits": null,
    "power": 110,
    "accuracy": 85,
    "type": "Water",
@@ -13152,6 +13791,7 @@
   "outrage": {
    "name": "Outrage",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Dragon",
@@ -13173,6 +13813,7 @@
   "overdrive": {
    "name": "Overdrive",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Electric",
@@ -13194,6 +13835,7 @@
   "overheat": {
    "name": "Overheat",
    "secondaries": [],
+   "hits": null,
    "power": 130,
    "accuracy": 90,
    "type": "Fire",
@@ -13215,6 +13857,7 @@
   "painsplit": {
    "name": "Pain Split",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -13236,6 +13879,7 @@
   "paraboliccharge": {
    "name": "Parabolic Charge",
    "secondaries": [],
+   "hits": null,
    "power": 65,
    "accuracy": 100,
    "type": "Electric",
@@ -13257,6 +13901,7 @@
   "partingshot": {
    "name": "Parting Shot",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Dark",
@@ -13278,6 +13923,7 @@
   "payback": {
    "name": "Payback",
    "secondaries": [],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Dark",
@@ -13299,6 +13945,7 @@
   "payday": {
    "name": "Pay Day",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Normal",
@@ -13320,6 +13967,7 @@
   "peck": {
    "name": "Peck",
    "secondaries": [],
+   "hits": null,
    "power": 35,
    "accuracy": 100,
    "type": "Flying",
@@ -13341,6 +13989,7 @@
   "perishsong": {
    "name": "Perish Song",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -13362,6 +14011,7 @@
   "petalblizzard": {
    "name": "Petal Blizzard",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Grass",
@@ -13383,6 +14033,7 @@
   "petaldance": {
    "name": "Petal Dance",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Grass",
@@ -13404,6 +14055,7 @@
   "phantomforce": {
    "name": "Phantom Force",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Ghost",
@@ -13425,6 +14077,7 @@
   "photongeyser": {
    "name": "Photon Geyser",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Psychic",
@@ -13446,6 +14099,7 @@
   "pikapapow": {
    "name": "Pika Papow",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Electric",
@@ -13467,6 +14121,10 @@
   "pinmissile": {
    "name": "Pin Missile",
    "secondaries": [],
+   "hits": [
+    2,
+    5
+   ],
    "power": 25,
    "accuracy": 95,
    "type": "Bug",
@@ -13488,6 +14146,7 @@
   "plasmafists": {
    "name": "Plasma Fists",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Electric",
@@ -13509,6 +14168,7 @@
   "playnice": {
    "name": "Play Nice",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -13538,6 +14198,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 90,
    "type": "Fairy",
@@ -13559,6 +14220,7 @@
   "pluck": {
    "name": "Pluck",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Flying",
@@ -13586,6 +14248,7 @@
      "status": "badly poisoned"
     }
    ],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Poison",
@@ -13607,6 +14270,7 @@
   "poisongas": {
    "name": "Poison Gas",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 90,
    "type": "Poison",
@@ -13634,6 +14298,7 @@
      "status": "poisoned"
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Poison",
@@ -13655,6 +14320,7 @@
   "poisonpowder": {
    "name": "Poison Powder",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 75,
    "type": "Poison",
@@ -13682,6 +14348,7 @@
      "status": "poisoned"
     }
    ],
+   "hits": null,
    "power": 15,
    "accuracy": 100,
    "type": "Poison",
@@ -13709,6 +14376,7 @@
      "status": "poisoned"
     }
    ],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Poison",
@@ -13730,6 +14398,7 @@
   "pollenpuff": {
    "name": "Pollen Puff",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Bug",
@@ -13751,6 +14420,7 @@
   "poltergeist": {
    "name": "Poltergeist",
    "secondaries": [],
+   "hits": null,
    "power": 110,
    "accuracy": 90,
    "type": "Ghost",
@@ -13772,6 +14442,10 @@
   "populationbomb": {
    "name": "Population Bomb",
    "secondaries": [],
+   "hits": [
+    10,
+    10
+   ],
    "power": 20,
    "accuracy": 90,
    "type": "Normal",
@@ -13801,6 +14475,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Bug",
@@ -13822,6 +14497,7 @@
   "pound": {
    "name": "Pound",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Normal",
@@ -13843,6 +14519,7 @@
   "powder": {
    "name": "Powder",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Bug",
@@ -13870,6 +14547,7 @@
      "status": "frozen"
     }
    ],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Ice",
@@ -13891,6 +14569,7 @@
   "powergem": {
    "name": "Power Gem",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Rock",
@@ -13912,6 +14591,7 @@
   "powershift": {
    "name": "Power Shift",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -13933,6 +14613,7 @@
   "powersplit": {
    "name": "Power Split",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -13954,6 +14635,7 @@
   "powerswap": {
    "name": "Power Swap",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -13975,6 +14657,7 @@
   "powertrick": {
    "name": "Power Trick",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -13996,6 +14679,7 @@
   "powertrip": {
    "name": "Power Trip",
    "secondaries": [],
+   "hits": null,
    "power": 20,
    "accuracy": 100,
    "type": "Dark",
@@ -14025,6 +14709,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Fighting",
@@ -14046,6 +14731,7 @@
   "powerwhip": {
    "name": "Power Whip",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 85,
    "type": "Grass",
@@ -14067,6 +14753,7 @@
   "precipiceblades": {
    "name": "Precipice Blades",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 85,
    "type": "Ground",
@@ -14088,6 +14775,7 @@
   "present": {
    "name": "Present",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 90,
    "type": "Normal",
@@ -14109,6 +14797,7 @@
   "prismaticlaser": {
    "name": "Prismatic Laser",
    "secondaries": [],
+   "hits": null,
    "power": 160,
    "accuracy": 100,
    "type": "Psychic",
@@ -14130,6 +14819,7 @@
   "protect": {
    "name": "Protect",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -14156,6 +14846,7 @@
      "kind": "confuse"
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 100,
    "type": "Psychic",
@@ -14177,6 +14868,7 @@
   "psyblade": {
    "name": "Psyblade",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Psychic",
@@ -14206,6 +14898,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Psychic",
@@ -14227,6 +14920,7 @@
   "psychicfangs": {
    "name": "Psychic Fangs",
    "secondaries": [],
+   "hits": null,
    "power": 85,
    "accuracy": 100,
    "type": "Psychic",
@@ -14248,6 +14942,7 @@
   "psychicnoise": {
    "name": "Psychic Noise",
    "secondaries": [],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Psychic",
@@ -14269,6 +14964,7 @@
   "psychicterrain": {
    "name": "Psychic Terrain",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -14290,6 +14986,7 @@
   "psychoboost": {
    "name": "Psycho Boost",
    "secondaries": [],
+   "hits": null,
    "power": 140,
    "accuracy": 90,
    "type": "Psychic",
@@ -14311,6 +15008,7 @@
   "psychocut": {
    "name": "Psycho Cut",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Psychic",
@@ -14332,6 +15030,7 @@
   "psychoshift": {
    "name": "Psycho Shift",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Psychic",
@@ -14353,6 +15052,7 @@
   "psychup": {
    "name": "Psych Up",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -14382,6 +15082,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 70,
    "accuracy": 90,
    "type": "Psychic",
@@ -14403,6 +15104,7 @@
   "psyshock": {
    "name": "Psyshock",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Psychic",
@@ -14424,6 +15126,7 @@
   "psystrike": {
    "name": "Psystrike",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Psychic",
@@ -14445,6 +15148,7 @@
   "psywave": {
    "name": "Psywave",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Psychic",
@@ -14466,6 +15170,7 @@
   "pulverizingpancake": {
    "name": "Pulverizing Pancake",
    "secondaries": [],
+   "hits": null,
    "power": 210,
    "accuracy": 0,
    "type": "Normal",
@@ -14487,6 +15192,7 @@
   "punishment": {
    "name": "Punishment",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Dark",
@@ -14508,6 +15214,7 @@
   "purify": {
    "name": "Purify",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Poison",
@@ -14529,6 +15236,7 @@
   "pursuit": {
    "name": "Pursuit",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Dark",
@@ -14556,6 +15264,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 120,
    "accuracy": 90,
    "type": "Fire",
@@ -14577,6 +15286,7 @@
   "quash": {
    "name": "Quash",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Dark",
@@ -14598,6 +15308,7 @@
   "quickattack": {
    "name": "Quick Attack",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Normal",
@@ -14619,6 +15330,7 @@
   "quickguard": {
    "name": "Quick Guard",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fighting",
@@ -14640,6 +15352,7 @@
   "quiverdance": {
    "name": "Quiver Dance",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Bug",
@@ -14661,6 +15374,7 @@
   "rage": {
    "name": "Rage",
    "secondaries": [],
+   "hits": null,
    "power": 20,
    "accuracy": 100,
    "type": "Normal",
@@ -14682,6 +15396,7 @@
   "ragefist": {
    "name": "Rage Fist",
    "secondaries": [],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Ghost",
@@ -14703,6 +15418,7 @@
   "ragepowder": {
    "name": "Rage Powder",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Bug",
@@ -14724,6 +15440,7 @@
   "ragingbull": {
    "name": "Raging Bull",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Normal",
@@ -14745,6 +15462,7 @@
   "ragingfury": {
    "name": "Raging Fury",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Fire",
@@ -14766,6 +15484,7 @@
   "raindance": {
    "name": "Rain Dance",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Water",
@@ -14795,6 +15514,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Normal",
@@ -14816,6 +15536,7 @@
   "razorleaf": {
    "name": "Razor Leaf",
    "secondaries": [],
+   "hits": null,
    "power": 55,
    "accuracy": 95,
    "type": "Grass",
@@ -14845,6 +15566,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 75,
    "accuracy": 95,
    "type": "Water",
@@ -14866,6 +15588,7 @@
   "razorwind": {
    "name": "Razor Wind",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Normal",
@@ -14887,6 +15610,7 @@
   "recover": {
    "name": "Recover",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -14908,6 +15632,7 @@
   "recycle": {
    "name": "Recycle",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -14929,6 +15654,7 @@
   "reflect": {
    "name": "Reflect",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -14950,6 +15676,7 @@
   "reflecttype": {
    "name": "Reflect Type",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -14971,6 +15698,7 @@
   "refresh": {
    "name": "Refresh",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -14998,6 +15726,7 @@
      "status": "asleep"
     }
    ],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Normal",
@@ -15019,6 +15748,7 @@
   "rest": {
    "name": "Rest",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -15040,6 +15770,7 @@
   "retaliate": {
    "name": "Retaliate",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Normal",
@@ -15061,6 +15792,7 @@
   "return": {
    "name": "Return",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -15082,6 +15814,7 @@
   "revelationdance": {
    "name": "Revelation Dance",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Normal",
@@ -15103,6 +15836,7 @@
   "revenge": {
    "name": "Revenge",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Fighting",
@@ -15124,6 +15858,7 @@
   "reversal": {
    "name": "Reversal",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Fighting",
@@ -15145,6 +15880,7 @@
   "revivalblessing": {
    "name": "Revival Blessing",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -15166,6 +15902,7 @@
   "risingvoltage": {
    "name": "Rising Voltage",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Electric",
@@ -15187,6 +15924,7 @@
   "roar": {
    "name": "Roar",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -15208,6 +15946,7 @@
   "roaroftime": {
    "name": "Roar of Time",
    "secondaries": [],
+   "hits": null,
    "power": 150,
    "accuracy": 90,
    "type": "Dragon",
@@ -15229,6 +15968,10 @@
   "rockblast": {
    "name": "Rock Blast",
    "secondaries": [],
+   "hits": [
+    2,
+    5
+   ],
    "power": 25,
    "accuracy": 90,
    "type": "Rock",
@@ -15255,6 +15998,7 @@
      "kind": "confuse"
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 85,
    "type": "Normal",
@@ -15276,6 +16020,7 @@
   "rockpolish": {
    "name": "Rock Polish",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Rock",
@@ -15302,6 +16047,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 75,
    "accuracy": 90,
    "type": "Rock",
@@ -15331,6 +16077,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Fighting",
@@ -15352,6 +16099,7 @@
   "rockthrow": {
    "name": "Rock Throw",
    "secondaries": [],
+   "hits": null,
    "power": 50,
    "accuracy": 90,
    "type": "Rock",
@@ -15381,6 +16129,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 95,
    "type": "Rock",
@@ -15402,6 +16151,7 @@
   "rockwrecker": {
    "name": "Rock Wrecker",
    "secondaries": [],
+   "hits": null,
    "power": 150,
    "accuracy": 90,
    "type": "Rock",
@@ -15423,6 +16173,7 @@
   "roleplay": {
    "name": "Role Play",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -15449,6 +16200,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 85,
    "type": "Fighting",
@@ -15470,6 +16222,7 @@
   "rollout": {
    "name": "Rollout",
    "secondaries": [],
+   "hits": null,
    "power": 30,
    "accuracy": 90,
    "type": "Rock",
@@ -15491,6 +16244,7 @@
   "roost": {
    "name": "Roost",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Flying",
@@ -15512,6 +16266,7 @@
   "rototiller": {
    "name": "Rototiller",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Ground",
@@ -15533,6 +16288,7 @@
   "round": {
    "name": "Round",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Normal",
@@ -15554,6 +16310,7 @@
   "ruination": {
    "name": "Ruination",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 90,
    "type": "Dark",
@@ -15581,6 +16338,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 100,
    "accuracy": 95,
    "type": "Fire",
@@ -15602,6 +16360,7 @@
   "sacredsword": {
    "name": "Sacred Sword",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Fighting",
@@ -15623,6 +16382,7 @@
   "safeguard": {
    "name": "Safeguard",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -15644,6 +16404,7 @@
   "saltcure": {
    "name": "Salt Cure",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Rock",
@@ -15665,6 +16426,7 @@
   "sandattack": {
    "name": "Sand Attack",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Ground",
@@ -15692,6 +16454,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 100,
    "accuracy": 80,
    "type": "Ground",
@@ -15713,6 +16476,7 @@
   "sandstorm": {
    "name": "Sandstorm",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Rock",
@@ -15734,6 +16498,7 @@
   "sandtomb": {
    "name": "Sand Tomb",
    "secondaries": [],
+   "hits": null,
    "power": 35,
    "accuracy": 85,
    "type": "Ground",
@@ -15755,6 +16520,7 @@
   "sappyseed": {
    "name": "Sappy Seed",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 90,
    "type": "Grass",
@@ -15776,6 +16542,7 @@
   "savagespinout": {
    "name": "Savage Spin-Out",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Bug",
@@ -15803,6 +16570,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Water",
@@ -15824,6 +16592,10 @@
   "scaleshot": {
    "name": "Scale Shot",
    "secondaries": [],
+   "hits": [
+    2,
+    5
+   ],
    "power": 25,
    "accuracy": 90,
    "type": "Dragon",
@@ -15845,6 +16617,7 @@
   "scaryface": {
    "name": "Scary Face",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -15872,6 +16645,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Ground",
@@ -15893,6 +16667,7 @@
   "scratch": {
    "name": "Scratch",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Normal",
@@ -15914,6 +16689,7 @@
   "screech": {
    "name": "Screech",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 85,
    "type": "Normal",
@@ -15941,6 +16717,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Fire",
@@ -15962,6 +16739,7 @@
   "searingsunrazesmash": {
    "name": "Searing Sunraze Smash",
    "secondaries": [],
+   "hits": null,
    "power": 200,
    "accuracy": 0,
    "type": "Steel",
@@ -15989,6 +16767,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Normal",
@@ -16010,6 +16789,7 @@
   "secretsword": {
    "name": "Secret Sword",
    "secondaries": [],
+   "hits": null,
    "power": 85,
    "accuracy": 100,
    "type": "Fighting",
@@ -16031,6 +16811,7 @@
   "seedbomb": {
    "name": "Seed Bomb",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Grass",
@@ -16060,6 +16841,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 120,
    "accuracy": 85,
    "type": "Grass",
@@ -16081,6 +16863,7 @@
   "seismictoss": {
    "name": "Seismic Toss",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Fighting",
@@ -16102,6 +16885,7 @@
   "selfdestruct": {
    "name": "Self-Destruct",
    "secondaries": [],
+   "hits": null,
    "power": 200,
    "accuracy": 100,
    "type": "Normal",
@@ -16131,6 +16915,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Ghost",
@@ -16160,6 +16945,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 85,
    "accuracy": 100,
    "type": "Ghost",
@@ -16181,6 +16967,7 @@
   "shadowclaw": {
    "name": "Shadow Claw",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Ghost",
@@ -16202,6 +16989,7 @@
   "shadowforce": {
    "name": "Shadow Force",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Ghost",
@@ -16223,6 +17011,7 @@
   "shadowpunch": {
    "name": "Shadow Punch",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 0,
    "type": "Ghost",
@@ -16244,6 +17033,7 @@
   "shadowsneak": {
    "name": "Shadow Sneak",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Ghost",
@@ -16265,6 +17055,7 @@
   "sharpen": {
    "name": "Sharpen",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -16286,6 +17077,7 @@
   "shatteredpsyche": {
    "name": "Shattered Psyche",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Psychic",
@@ -16307,6 +17099,7 @@
   "shedtail": {
    "name": "Shed Tail",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -16328,6 +17121,7 @@
   "sheercold": {
    "name": "Sheer Cold",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 30,
    "type": "Ice",
@@ -16355,6 +17149,7 @@
      "status": "poisoned"
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Poison",
@@ -16376,6 +17171,7 @@
   "shellsmash": {
    "name": "Shell Smash",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -16397,6 +17193,7 @@
   "shelltrap": {
    "name": "Shell Trap",
    "secondaries": [],
+   "hits": null,
    "power": 150,
    "accuracy": 100,
    "type": "Fire",
@@ -16418,6 +17215,7 @@
   "shelter": {
    "name": "Shelter",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Steel",
@@ -16439,6 +17237,7 @@
   "shiftgear": {
    "name": "Shift Gear",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Steel",
@@ -16460,6 +17259,7 @@
   "shockwave": {
    "name": "Shock Wave",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 0,
    "type": "Electric",
@@ -16481,6 +17281,7 @@
   "shoreup": {
    "name": "Shore Up",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Ground",
@@ -16507,6 +17308,7 @@
      "kind": "confuse"
     }
    ],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Bug",
@@ -16528,6 +17330,7 @@
   "silktrap": {
    "name": "Silk Trap",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Bug",
@@ -16561,6 +17364,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Bug",
@@ -16582,6 +17386,7 @@
   "simplebeam": {
    "name": "Simple Beam",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -16603,6 +17408,7 @@
   "sing": {
    "name": "Sing",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 55,
    "type": "Normal",
@@ -16624,6 +17430,7 @@
   "sinisterarrowraid": {
    "name": "Sinister Arrow Raid",
    "secondaries": [],
+   "hits": null,
    "power": 180,
    "accuracy": 0,
    "type": "Ghost",
@@ -16651,6 +17458,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Fire",
@@ -16672,6 +17480,7 @@
   "sketch": {
    "name": "Sketch",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -16693,6 +17502,7 @@
   "skillswap": {
    "name": "Skill Swap",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -16722,6 +17532,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 70,
    "accuracy": 90,
    "type": "Bug",
@@ -16743,6 +17554,7 @@
   "skullbash": {
    "name": "Skull Bash",
    "secondaries": [],
+   "hits": null,
    "power": 130,
    "accuracy": 100,
    "type": "Normal",
@@ -16769,6 +17581,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 140,
    "accuracy": 90,
    "type": "Flying",
@@ -16790,6 +17603,7 @@
   "skydrop": {
    "name": "Sky Drop",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Flying",
@@ -16811,6 +17625,7 @@
   "skyuppercut": {
    "name": "Sky Uppercut",
    "secondaries": [],
+   "hits": null,
    "power": 85,
    "accuracy": 90,
    "type": "Fighting",
@@ -16832,6 +17647,7 @@
   "slackoff": {
    "name": "Slack Off",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -16853,6 +17669,7 @@
   "slam": {
    "name": "Slam",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 75,
    "type": "Normal",
@@ -16874,6 +17691,7 @@
   "slash": {
    "name": "Slash",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Normal",
@@ -16895,6 +17713,7 @@
   "sleeppowder": {
    "name": "Sleep Powder",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 75,
    "type": "Grass",
@@ -16916,6 +17735,7 @@
   "sleeptalk": {
    "name": "Sleep Talk",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -16943,6 +17763,7 @@
      "status": "poisoned"
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 100,
    "type": "Poison",
@@ -16970,6 +17791,7 @@
      "status": "poisoned"
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Poison",
@@ -16997,6 +17819,7 @@
      "status": "poisoned"
     }
    ],
+   "hits": null,
    "power": 95,
    "accuracy": 100,
    "type": "Poison",
@@ -17018,6 +17841,7 @@
   "smackdown": {
    "name": "Smack Down",
    "secondaries": [],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Rock",
@@ -17039,6 +17863,7 @@
   "smartstrike": {
    "name": "Smart Strike",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 0,
    "type": "Steel",
@@ -17060,6 +17885,7 @@
   "smellingsalts": {
    "name": "Smelling Salts",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Normal",
@@ -17087,6 +17913,7 @@
      "status": "poisoned"
     }
    ],
+   "hits": null,
    "power": 30,
    "accuracy": 70,
    "type": "Poison",
@@ -17108,6 +17935,7 @@
   "smokescreen": {
    "name": "Smokescreen",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -17129,6 +17957,7 @@
   "snaptrap": {
    "name": "Snap Trap",
    "secondaries": [],
+   "hits": null,
    "power": 35,
    "accuracy": 100,
    "type": "Grass",
@@ -17158,6 +17987,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 55,
    "accuracy": 95,
    "type": "Dark",
@@ -17179,6 +18009,7 @@
   "snatch": {
    "name": "Snatch",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Dark",
@@ -17200,6 +18031,7 @@
   "snipeshot": {
    "name": "Snipe Shot",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Water",
@@ -17226,6 +18058,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Normal",
@@ -17247,6 +18080,7 @@
   "snowscape": {
    "name": "Snowscape",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Ice",
@@ -17268,6 +18102,7 @@
   "soak": {
    "name": "Soak",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Water",
@@ -17289,6 +18124,7 @@
   "softboiled": {
    "name": "Soft-Boiled",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -17310,6 +18146,7 @@
   "solarbeam": {
    "name": "Solar Beam",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Grass",
@@ -17331,6 +18168,7 @@
   "solarblade": {
    "name": "Solar Blade",
    "secondaries": [],
+   "hits": null,
    "power": 125,
    "accuracy": 100,
    "type": "Grass",
@@ -17352,6 +18190,7 @@
   "sonicboom": {
    "name": "Sonic Boom",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 90,
    "type": "Normal",
@@ -17373,6 +18212,7 @@
   "soulstealing7starstrike": {
    "name": "Soul-Stealing 7-Star Strike",
    "secondaries": [],
+   "hits": null,
    "power": 195,
    "accuracy": 0,
    "type": "Ghost",
@@ -17394,6 +18234,7 @@
   "spacialrend": {
    "name": "Spacial Rend",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 95,
    "type": "Dragon",
@@ -17421,6 +18262,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 100,
    "type": "Electric",
@@ -17442,6 +18284,7 @@
   "sparklingaria": {
    "name": "Sparkling Aria",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Water",
@@ -17463,6 +18306,7 @@
   "sparklyswirl": {
    "name": "Sparkly Swirl",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 85,
    "type": "Fairy",
@@ -17484,6 +18328,7 @@
   "spectralthief": {
    "name": "Spectral Thief",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Ghost",
@@ -17505,6 +18350,7 @@
   "speedswap": {
    "name": "Speed Swap",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -17526,6 +18372,7 @@
   "spicyextract": {
    "name": "Spicy Extract",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Grass",
@@ -17547,6 +18394,7 @@
   "spiderweb": {
    "name": "Spider Web",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Bug",
@@ -17568,6 +18416,10 @@
   "spikecannon": {
    "name": "Spike Cannon",
    "secondaries": [],
+   "hits": [
+    2,
+    5
+   ],
    "power": 20,
    "accuracy": 100,
    "type": "Normal",
@@ -17589,6 +18441,7 @@
   "spikes": {
    "name": "Spikes",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Ground",
@@ -17610,6 +18463,7 @@
   "spikyshield": {
    "name": "Spiky Shield",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Grass",
@@ -17631,6 +18485,7 @@
   "spinout": {
    "name": "Spin Out",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Steel",
@@ -17660,6 +18515,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Fairy",
@@ -17681,6 +18537,7 @@
   "spiritshackle": {
    "name": "Spirit Shackle",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Ghost",
@@ -17702,6 +18559,7 @@
   "spite": {
    "name": "Spite",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Ghost",
@@ -17723,6 +18581,7 @@
   "spitup": {
    "name": "Spit Up",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -17744,6 +18603,7 @@
   "splash": {
    "name": "Splash",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -17765,6 +18625,7 @@
   "splinteredstormshards": {
    "name": "Splintered Stormshards",
    "secondaries": [],
+   "hits": null,
    "power": 190,
    "accuracy": 0,
    "type": "Rock",
@@ -17792,6 +18653,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Water",
@@ -17813,6 +18675,7 @@
   "spore": {
    "name": "Spore",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Grass",
@@ -17834,6 +18697,7 @@
   "spotlight": {
    "name": "Spotlight",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -17863,6 +18727,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 100,
    "accuracy": 80,
    "type": "Fairy",
@@ -17884,6 +18749,7 @@
   "stealthrock": {
    "name": "Stealth Rock",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Rock",
@@ -17911,6 +18777,7 @@
      "status": "burned"
     }
    ],
+   "hits": null,
    "power": 110,
    "accuracy": 95,
    "type": "Water",
@@ -17937,6 +18804,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 100,
    "type": "Bug",
@@ -17958,6 +18826,7 @@
   "steelbeam": {
    "name": "Steel Beam",
    "secondaries": [],
+   "hits": null,
    "power": 140,
    "accuracy": 95,
    "type": "Steel",
@@ -17979,6 +18848,7 @@
   "steelroller": {
    "name": "Steel Roller",
    "secondaries": [],
+   "hits": null,
    "power": 130,
    "accuracy": 100,
    "type": "Steel",
@@ -18008,6 +18878,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 70,
    "accuracy": 90,
    "type": "Steel",
@@ -18029,6 +18900,7 @@
   "stickyweb": {
    "name": "Sticky Web",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Bug",
@@ -18050,6 +18922,7 @@
   "stockpile": {
    "name": "Stockpile",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -18077,6 +18950,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 175,
    "accuracy": 0,
    "type": "Electric",
@@ -18103,6 +18977,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 100,
    "type": "Normal",
@@ -18124,6 +18999,7 @@
   "stompingtantrum": {
    "name": "Stomping Tantrum",
    "secondaries": [],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Ground",
@@ -18145,6 +19021,7 @@
   "stoneaxe": {
    "name": "Stone Axe",
    "secondaries": [],
+   "hits": null,
    "power": 65,
    "accuracy": 90,
    "type": "Rock",
@@ -18166,6 +19043,7 @@
   "stoneedge": {
    "name": "Stone Edge",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 80,
    "type": "Rock",
@@ -18187,6 +19065,7 @@
   "storedpower": {
    "name": "Stored Power",
    "secondaries": [],
+   "hits": null,
    "power": 20,
    "accuracy": 100,
    "type": "Psychic",
@@ -18208,6 +19087,7 @@
   "stormthrow": {
    "name": "Storm Throw",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Fighting",
@@ -18234,6 +19114,7 @@
      "kind": "confuse"
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 95,
    "type": "Fairy",
@@ -18255,6 +19136,7 @@
   "strength": {
    "name": "Strength",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Normal",
@@ -18276,6 +19158,7 @@
   "strengthsap": {
    "name": "Strength Sap",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Grass",
@@ -18297,6 +19180,7 @@
   "stringshot": {
    "name": "String Shot",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 95,
    "type": "Bug",
@@ -18318,6 +19202,7 @@
   "struggle": {
    "name": "Struggle",
    "secondaries": [],
+   "hits": null,
    "power": 50,
    "accuracy": 0,
    "type": "Normal",
@@ -18347,6 +19232,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Bug",
@@ -18368,6 +19254,7 @@
   "stuffcheeks": {
    "name": "Stuff Cheeks",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -18389,6 +19276,7 @@
   "stunspore": {
    "name": "Stun Spore",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 75,
    "type": "Grass",
@@ -18410,6 +19298,7 @@
   "submission": {
    "name": "Submission",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 80,
    "type": "Fighting",
@@ -18431,6 +19320,7 @@
   "substitute": {
    "name": "Substitute",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -18452,6 +19342,7 @@
   "subzeroslammer": {
    "name": "Subzero Slammer",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Ice",
@@ -18473,6 +19364,7 @@
   "suckerpunch": {
    "name": "Sucker Punch",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Dark",
@@ -18494,6 +19386,7 @@
   "sunnyday": {
    "name": "Sunny Day",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fire",
@@ -18515,6 +19408,7 @@
   "sunsteelstrike": {
    "name": "Sunsteel Strike",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 100,
    "type": "Steel",
@@ -18536,6 +19430,7 @@
   "supercellslam": {
    "name": "Supercell Slam",
    "secondaries": [],
+   "hits": null,
    "power": 100,
    "accuracy": 95,
    "type": "Electric",
@@ -18557,6 +19452,7 @@
   "superfang": {
    "name": "Super Fang",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 90,
    "type": "Normal",
@@ -18578,6 +19474,7 @@
   "superpower": {
    "name": "Superpower",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Fighting",
@@ -18599,6 +19496,7 @@
   "supersonic": {
    "name": "Supersonic",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 55,
    "type": "Normal",
@@ -18620,6 +19518,7 @@
   "supersonicskystrike": {
    "name": "Supersonic Skystrike",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Flying",
@@ -18641,6 +19540,7 @@
   "surf": {
    "name": "Surf",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Water",
@@ -18662,6 +19562,10 @@
   "surgingstrikes": {
    "name": "Surging Strikes",
    "secondaries": [],
+   "hits": [
+    3,
+    3
+   ],
    "power": 25,
    "accuracy": 100,
    "type": "Water",
@@ -18683,6 +19587,7 @@
   "swagger": {
    "name": "Swagger",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 85,
    "type": "Normal",
@@ -18704,6 +19609,7 @@
   "swallow": {
    "name": "Swallow",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -18725,6 +19631,7 @@
   "sweetkiss": {
    "name": "Sweet Kiss",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 75,
    "type": "Fairy",
@@ -18746,6 +19653,7 @@
   "sweetscent": {
    "name": "Sweet Scent",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -18767,6 +19675,7 @@
   "swift": {
    "name": "Swift",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 0,
    "type": "Normal",
@@ -18788,6 +19697,7 @@
   "switcheroo": {
    "name": "Switcheroo",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Dark",
@@ -18809,6 +19719,7 @@
   "swordsdance": {
    "name": "Swords Dance",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -18830,6 +19741,7 @@
   "synchronoise": {
    "name": "Synchronoise",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Psychic",
@@ -18851,6 +19763,7 @@
   "synthesis": {
    "name": "Synthesis",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Grass",
@@ -18872,6 +19785,7 @@
   "syrupbomb": {
    "name": "Syrup Bomb",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 85,
    "type": "Grass",
@@ -18893,6 +19807,10 @@
   "tachyoncutter": {
    "name": "Tachyon Cutter",
    "secondaries": [],
+   "hits": [
+    2,
+    2
+   ],
    "power": 50,
    "accuracy": 0,
    "type": "Steel",
@@ -18914,6 +19832,7 @@
   "tackle": {
    "name": "Tackle",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Normal",
@@ -18935,6 +19854,7 @@
   "tailglow": {
    "name": "Tail Glow",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Bug",
@@ -18956,6 +19876,10 @@
   "tailslap": {
    "name": "Tail Slap",
    "secondaries": [],
+   "hits": [
+    2,
+    5
+   ],
    "power": 25,
    "accuracy": 85,
    "type": "Normal",
@@ -18977,6 +19901,7 @@
   "tailwhip": {
    "name": "Tail Whip",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -18998,6 +19923,7 @@
   "tailwind": {
    "name": "Tailwind",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Flying",
@@ -19019,6 +19945,7 @@
   "takedown": {
    "name": "Take Down",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 85,
    "type": "Normal",
@@ -19040,6 +19967,7 @@
   "takeheart": {
    "name": "Take Heart",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -19061,6 +19989,7 @@
   "tarshot": {
    "name": "Tar Shot",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Rock",
@@ -19082,6 +20011,7 @@
   "taunt": {
    "name": "Taunt",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Dark",
@@ -19103,6 +20033,7 @@
   "tearfullook": {
    "name": "Tearful Look",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -19124,6 +20055,7 @@
   "teatime": {
    "name": "Teatime",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -19145,6 +20077,7 @@
   "technoblast": {
    "name": "Techno Blast",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Normal",
@@ -19166,6 +20099,7 @@
   "tectonicrage": {
    "name": "Tectonic Rage",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Ground",
@@ -19187,6 +20121,7 @@
   "teeterdance": {
    "name": "Teeter Dance",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -19208,6 +20143,7 @@
   "telekinesis": {
    "name": "Telekinesis",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -19229,6 +20165,7 @@
   "teleport": {
    "name": "Teleport",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -19250,6 +20187,7 @@
   "temperflare": {
    "name": "Temper Flare",
    "secondaries": [],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Fire",
@@ -19271,6 +20209,7 @@
   "terablast": {
    "name": "Tera Blast",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Normal",
@@ -19292,6 +20231,7 @@
   "terastarstorm": {
    "name": "Tera Starstorm",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Normal",
@@ -19313,6 +20253,7 @@
   "terrainpulse": {
    "name": "Terrain Pulse",
    "secondaries": [],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Normal",
@@ -19334,6 +20275,7 @@
   "thief": {
    "name": "Thief",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Dark",
@@ -19355,6 +20297,7 @@
   "thousandarrows": {
    "name": "Thousand Arrows",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Ground",
@@ -19376,6 +20319,7 @@
   "thousandwaves": {
    "name": "Thousand Waves",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Ground",
@@ -19397,6 +20341,7 @@
   "thrash": {
    "name": "Thrash",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Normal",
@@ -19418,6 +20363,7 @@
   "throatchop": {
    "name": "Throat Chop",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Dark",
@@ -19445,6 +20391,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 110,
    "accuracy": 70,
    "type": "Electric",
@@ -19472,6 +20419,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Electric",
@@ -19493,6 +20441,7 @@
   "thundercage": {
    "name": "Thunder Cage",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 90,
    "type": "Electric",
@@ -19514,6 +20463,7 @@
   "thunderclap": {
    "name": "Thunderclap",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Electric",
@@ -19545,6 +20495,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 95,
    "type": "Electric",
@@ -19574,6 +20525,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Fighting",
@@ -19601,6 +20553,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Electric",
@@ -19628,6 +20581,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Electric",
@@ -19649,6 +20603,7 @@
   "thunderwave": {
    "name": "Thunder Wave",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 90,
    "type": "Electric",
@@ -19670,6 +20625,7 @@
   "tickle": {
    "name": "Tickle",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -19691,6 +20647,7 @@
   "tidyup": {
    "name": "Tidy Up",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -19712,6 +20669,7 @@
   "topsyturvy": {
    "name": "Topsy-Turvy",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Dark",
@@ -19741,6 +20699,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Fire",
@@ -19762,6 +20721,7 @@
   "torment": {
    "name": "Torment",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Dark",
@@ -19783,6 +20743,7 @@
   "toxic": {
    "name": "Toxic",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 90,
    "type": "Poison",
@@ -19804,6 +20765,7 @@
   "toxicspikes": {
    "name": "Toxic Spikes",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Poison",
@@ -19825,6 +20787,7 @@
   "toxicthread": {
    "name": "Toxic Thread",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Poison",
@@ -19854,6 +20817,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Grass",
@@ -19875,6 +20839,7 @@
   "transform": {
    "name": "Transform",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -19896,6 +20861,7 @@
   "triattack": {
    "name": "Tri Attack",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Normal",
@@ -19917,6 +20883,7 @@
   "trick": {
    "name": "Trick",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Psychic",
@@ -19938,6 +20905,7 @@
   "trickortreat": {
    "name": "Trick-or-Treat",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Ghost",
@@ -19959,6 +20927,7 @@
   "trickroom": {
    "name": "Trick Room",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -19992,6 +20961,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Fighting",
@@ -20013,6 +20983,10 @@
   "tripleaxel": {
    "name": "Triple Axel",
    "secondaries": [],
+   "hits": [
+    3,
+    3
+   ],
    "power": 20,
    "accuracy": 90,
    "type": "Ice",
@@ -20034,6 +21008,10 @@
   "tripledive": {
    "name": "Triple Dive",
    "secondaries": [],
+   "hits": [
+    3,
+    3
+   ],
    "power": 30,
    "accuracy": 95,
    "type": "Water",
@@ -20055,6 +21033,10 @@
   "triplekick": {
    "name": "Triple Kick",
    "secondaries": [],
+   "hits": [
+    3,
+    3
+   ],
    "power": 10,
    "accuracy": 90,
    "type": "Fighting",
@@ -20084,6 +21066,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Grass",
@@ -20105,6 +21088,7 @@
   "trumpcard": {
    "name": "Trump Card",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -20126,6 +21110,10 @@
   "twinbeam": {
    "name": "Twin Beam",
    "secondaries": [],
+   "hits": [
+    2,
+    2
+   ],
    "power": 40,
    "accuracy": 100,
    "type": "Psychic",
@@ -20153,6 +21141,10 @@
      "status": "poisoned"
     }
    ],
+   "hits": [
+    2,
+    2
+   ],
    "power": 25,
    "accuracy": 100,
    "type": "Bug",
@@ -20174,6 +21166,7 @@
   "twinkletackle": {
    "name": "Twinkle Tackle",
    "secondaries": [],
+   "hits": null,
    "power": 1,
    "accuracy": 0,
    "type": "Fairy",
@@ -20200,6 +21193,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Dragon",
@@ -20226,6 +21220,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 65,
    "accuracy": 100,
    "type": "Fighting",
@@ -20247,6 +21242,7 @@
   "uproar": {
    "name": "Uproar",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Normal",
@@ -20268,6 +21264,7 @@
   "uturn": {
    "name": "U-turn",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Bug",
@@ -20289,6 +21286,7 @@
   "vacuumwave": {
    "name": "Vacuum Wave",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Fighting",
@@ -20310,6 +21308,7 @@
   "vcreate": {
    "name": "V-create",
    "secondaries": [],
+   "hits": null,
    "power": 180,
    "accuracy": 95,
    "type": "Fire",
@@ -20331,6 +21330,7 @@
   "veeveevolley": {
    "name": "Veevee Volley",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -20352,6 +21352,7 @@
   "venomdrench": {
    "name": "Venom Drench",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Poison",
@@ -20373,6 +21374,7 @@
   "venoshock": {
    "name": "Venoshock",
    "secondaries": [],
+   "hits": null,
    "power": 65,
    "accuracy": 100,
    "type": "Poison",
@@ -20394,6 +21396,7 @@
   "victorydance": {
    "name": "Victory Dance",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Fighting",
@@ -20415,6 +21418,7 @@
   "vinewhip": {
    "name": "Vine Whip",
    "secondaries": [],
+   "hits": null,
    "power": 45,
    "accuracy": 100,
    "type": "Grass",
@@ -20436,6 +21440,7 @@
   "visegrip": {
    "name": "Vise Grip",
    "secondaries": [],
+   "hits": null,
    "power": 55,
    "accuracy": 100,
    "type": "Normal",
@@ -20457,6 +21462,7 @@
   "vitalthrow": {
    "name": "Vital Throw",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 0,
    "type": "Fighting",
@@ -20478,6 +21484,7 @@
   "voltswitch": {
    "name": "Volt Switch",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Electric",
@@ -20505,6 +21512,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Electric",
@@ -20526,6 +21534,7 @@
   "wakeupslap": {
    "name": "Wake-Up Slap",
    "secondaries": [],
+   "hits": null,
    "power": 70,
    "accuracy": 100,
    "type": "Fighting",
@@ -20552,6 +21561,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Water",
@@ -20573,6 +21583,7 @@
   "watergun": {
    "name": "Water Gun",
    "secondaries": [],
+   "hits": null,
    "power": 40,
    "accuracy": 100,
    "type": "Water",
@@ -20594,6 +21605,7 @@
   "waterpledge": {
    "name": "Water Pledge",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Water",
@@ -20620,6 +21632,7 @@
      "kind": "confuse"
     }
    ],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Water",
@@ -20641,6 +21654,10 @@
   "watershuriken": {
    "name": "Water Shuriken",
    "secondaries": [],
+   "hits": [
+    2,
+    5
+   ],
    "power": 15,
    "accuracy": 100,
    "type": "Water",
@@ -20662,6 +21679,7 @@
   "watersport": {
    "name": "Water Sport",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Water",
@@ -20683,6 +21701,7 @@
   "waterspout": {
    "name": "Water Spout",
    "secondaries": [],
+   "hits": null,
    "power": 150,
    "accuracy": 100,
    "type": "Water",
@@ -20704,6 +21723,7 @@
   "wavecrash": {
    "name": "Wave Crash",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Water",
@@ -20725,6 +21745,7 @@
   "weatherball": {
    "name": "Weather Ball",
    "secondaries": [],
+   "hits": null,
    "power": 50,
    "accuracy": 100,
    "type": "Normal",
@@ -20746,6 +21767,7 @@
   "whirlpool": {
    "name": "Whirlpool",
    "secondaries": [],
+   "hits": null,
    "power": 35,
    "accuracy": 85,
    "type": "Water",
@@ -20767,6 +21789,7 @@
   "whirlwind": {
    "name": "Whirlwind",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -20788,6 +21811,7 @@
   "wickedblow": {
    "name": "Wicked Blow",
    "secondaries": [],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Dark",
@@ -20815,6 +21839,7 @@
      "status": "asleep"
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Dark",
@@ -20836,6 +21861,7 @@
   "wideguard": {
    "name": "Wide Guard",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Rock",
@@ -20863,6 +21889,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 100,
    "accuracy": 80,
    "type": "Electric",
@@ -20884,6 +21911,7 @@
   "wildcharge": {
    "name": "Wild Charge",
    "secondaries": [],
+   "hits": null,
    "power": 90,
    "accuracy": 100,
    "type": "Electric",
@@ -20905,6 +21933,7 @@
   "willowisp": {
    "name": "Will-O-Wisp",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 85,
    "type": "Fire",
@@ -20926,6 +21955,7 @@
   "wingattack": {
    "name": "Wing Attack",
    "secondaries": [],
+   "hits": null,
    "power": 60,
    "accuracy": 100,
    "type": "Flying",
@@ -20947,6 +21977,7 @@
   "wish": {
    "name": "Wish",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -20968,6 +21999,7 @@
   "withdraw": {
    "name": "Withdraw",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Water",
@@ -20989,6 +22021,7 @@
   "wonderroom": {
    "name": "Wonder Room",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Psychic",
@@ -21010,6 +22043,7 @@
   "woodhammer": {
    "name": "Wood Hammer",
    "secondaries": [],
+   "hits": null,
    "power": 120,
    "accuracy": 100,
    "type": "Grass",
@@ -21031,6 +22065,7 @@
   "workup": {
    "name": "Work Up",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -21052,6 +22087,7 @@
   "worryseed": {
    "name": "Worry Seed",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Grass",
@@ -21073,6 +22109,7 @@
   "wrap": {
    "name": "Wrap",
    "secondaries": [],
+   "hits": null,
    "power": 15,
    "accuracy": 90,
    "type": "Normal",
@@ -21094,6 +22131,7 @@
   "wringout": {
    "name": "Wring Out",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 100,
    "type": "Normal",
@@ -21115,6 +22153,7 @@
   "xscissor": {
    "name": "X-Scissor",
    "secondaries": [],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Bug",
@@ -21136,6 +22175,7 @@
   "yawn": {
    "name": "Yawn",
    "secondaries": [],
+   "hits": null,
    "power": 0,
    "accuracy": 0,
    "type": "Normal",
@@ -21163,6 +22203,7 @@
      "status": "paralysed"
     }
    ],
+   "hits": null,
    "power": 120,
    "accuracy": 50,
    "type": "Electric",
@@ -21189,6 +22230,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 90,
    "type": "Psychic",
@@ -21215,6 +22257,7 @@
      "kind": "flinch"
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Electric",
@@ -21244,6 +22287,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 100,
    "type": "Electric",
@@ -21273,6 +22317,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 85,
    "accuracy": 100,
    "type": "Rock",
@@ -21302,6 +22347,7 @@
      }
     }
    ],
+   "hits": null,
    "power": 80,
    "accuracy": 95,
    "type": "Ghost",
@@ -21329,6 +22375,7 @@
      "status": "frozen"
     }
    ],
+   "hits": null,
    "power": 75,
    "accuracy": 100,
    "type": "Fire",
