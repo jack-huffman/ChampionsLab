@@ -41,9 +41,24 @@ forwards its own lookups to it, so there is one implementation of each rather
 than two. Views read the store through the environment; anything expensive
 takes `store.rulebook` and leaves.
 
-The one shared cache inside the `Rulebook` — parsed move quality, because
-pricing a move is a parse and the forecast prices every move of every form —
-sits behind a lock, and does its work outside it.
+## Swift 6
+
+Every target builds in **Swift 6 language mode** with no warnings, which is
+the point of all of the above: the compiler checks that the engine touches no
+shared mutable state rather than the author promising it. Two rules keep it
+that way.
+
+Anything shared across threads goes through `Memo` — a small cache behind a
+lock, which does its work *outside* the lock, because everything cached here
+is a pure function of its key and two threads racing to compute the same
+entry wastes microseconds where holding the lock across the work would
+serialise the very paths that were moved off the main thread. Move
+drawbacks, compiled patterns and move quality all use it.
+
+The one deliberate escape hatch is `Builder.Weights.current`, marked
+`nonisolated(unsafe)` with the reason beside it: `Tools/calibrate` fits it
+against tournament results and writes it once before anything reads it, and
+every read is on a hot path.
 
 ## Invariants worth knowing
 

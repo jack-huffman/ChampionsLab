@@ -490,17 +490,18 @@ enum UsageFeed {
 
     // MARK: - Regex plumbing
 
-    private static var cache: [String: NSRegularExpression] = [:]
+    private static let cache = Memo<String, NSRegularExpression>()
 
     private static func regex(_ pattern: String,
                               dotMatchesNewlines: Bool = false) -> NSRegularExpression {
         let key = (dotMatchesNewlines ? "s:" : ":") + pattern
-        if let hit = cache[key] { return hit }
-        // Every pattern here is a literal, so a failure is a programming error.
-        let made = try! NSRegularExpression(
-            pattern: pattern, options: dotMatchesNewlines ? [.dotMatchesLineSeparators] : [])
-        cache[key] = made
-        return made
+        return cache.value(key) {
+            // Every pattern here is a literal, so a failure is a programming
+            // error rather than something to handle.
+            try! NSRegularExpression(
+                pattern: pattern,
+                options: dotMatchesNewlines ? [.dotMatchesLineSeparators] : [])
+        }
     }
 
     private static func split(_ text: String, on pattern: String) -> [String] {

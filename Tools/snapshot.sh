@@ -5,6 +5,6 @@ cd "$(dirname "$0")/.."
 SDK="$(xcrun --show-sdk-path --sdk macosx)"
 # Every app source except ChampionsLab.swift, which owns @main.
 SOURCES=$(find Sources/ChampionsLab -name '*.swift')
-swiftc -swift-version 5 -target arm64-apple-macosx13.0 -sdk "$SDK" \
+swiftc -swift-version 6 -target arm64-apple-macosx13.0 -sdk "$SDK" \
 	-o build/snapshot $SOURCES Tools/snapshot/main.swift
 ./build/snapshot

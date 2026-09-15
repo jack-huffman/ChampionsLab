@@ -50,7 +50,12 @@ struct TeamScore {
         var disruption = 14.0
 
         var sum: Double { matchup + roles + defence + coverage + synergy + disruption }
-        static var current = Weights()
+        /// The weights the scorer actually uses. `Tools/calibrate` fits them
+        /// against tournament results and writes them here once, before
+        /// anything reads them; the app never changes them at all. Marked
+        /// unsafe rather than locked because every read is on a hot path and
+        /// the only write happens before there is a second thread.
+        nonisolated(unsafe) static var current = Weights()
     }
 
     /// 0…100. Matchup is the largest single term but deliberately not a

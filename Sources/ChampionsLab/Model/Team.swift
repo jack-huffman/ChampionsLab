@@ -219,9 +219,9 @@ enum TeamStore {
 
     /// Anything that went wrong reading the file, for the UI to show. Losing
     /// saved teams silently is much worse than saying so.
-    private(set) static var loadWarning: String?
+    @MainActor private(set) static var loadWarning: String?
 
-    static func load() -> [Team] {
+    @MainActor static func load() -> [Team] {
         loadWarning = nil
         guard FileManager.default.fileExists(atPath: file.path) else { return [] }
         guard let raw = try? Data(contentsOf: file) else {

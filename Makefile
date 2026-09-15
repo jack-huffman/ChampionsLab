@@ -16,10 +16,17 @@
 SHELL := /bin/bash
 NICE  := nice -n 15
 
-.PHONY: test hitch accuracy snapshot app dmg data check clean
+.PHONY: test warnings hitch accuracy snapshot app dmg data check clean
 
 test:
 	$(NICE) swift test 2>&1 | tail -25
+
+# The build must stay warning-free in Swift 6 language mode: everything below
+# the interface runs off the main thread, and that is only safe because the
+# compiler can see it is.
+warnings:
+	@rm -rf .build
+	@$(NICE) swift build 2>&1 | grep -E "warning:|error:" || echo "no warnings"
 
 hitch:
 	$(NICE) ./Tools/hitch.sh
@@ -39,7 +46,7 @@ dmg:
 data:
 	./Scripts/mkdata.py && ./Scripts/mkassets.py
 
-check: test hitch snapshot app
+check: test warnings hitch snapshot app
 
 clean:
 	rm -rf .build build

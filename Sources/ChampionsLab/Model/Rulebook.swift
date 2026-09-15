@@ -117,23 +117,3 @@ struct Rulebook: Sendable {
             * stab * ateBoost * reach
     }
 }
-
-/// A cache more than one thread may reach for. The work happens outside the
-/// lock, so two threads asking for the same thing at once do it twice rather
-/// than one of them waiting — which for a pure function is the cheaper trade.
-private final class Memo<Key: Hashable & Sendable, Value: Sendable>: @unchecked Sendable {
-    private var entries: [Key: Value] = [:]
-    private let lock = NSLock()
-
-    func value(_ key: Key, _ make: () -> Value) -> Value {
-        lock.lock()
-        let hit = entries[key]
-        lock.unlock()
-        if let hit { return hit }
-        let made = make()
-        lock.lock()
-        entries[key] = made
-        lock.unlock()
-        return made
-    }
-}

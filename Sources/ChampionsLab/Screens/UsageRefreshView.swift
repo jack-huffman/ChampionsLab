@@ -45,10 +45,11 @@ final class UsageRefreshModel: ObservableObject {
         task = Task { [weak self] in
             do {
                 let snapshot = try await UsageFeed.refresh(format: target, index: index) {
-                    done, total, name in
-                    self?.done = done
-                    self?.total = total
-                    self?.current = name
+                    @MainActor @Sendable done, total, name in
+                    guard let self else { return }
+                    self.done = done
+                    self.total = total
+                    self.current = name
                 }
                 guard !Task.isCancelled else { return }
                 store.apply(snapshot)
