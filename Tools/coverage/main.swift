@@ -56,6 +56,20 @@ import SwiftUI
             .compactMap { usageOf[$0.id] }.max() ?? 0
     }
 
+    // -- abilities and items, by reading the model ----------------------------
+    let modelSource: String = {
+        var text = ""
+        for dir in ["Sources/ChampionsLab/Battle", "Sources/ChampionsLab/Damage",
+                    "Sources/ChampionsLab/Model"] {
+            guard let files = try? FileManager.default.contentsOfDirectory(atPath: dir) else { continue }
+            for file in files where file.hasSuffix(".swift") {
+                text += (try? String(contentsOfFile: "\(dir)/\(file)", encoding: .utf8)) ?? ""
+            }
+        }
+        return text
+    }()
+    func modelMentions(_ name: String) -> Bool { modelSource.contains("\"\(name)\"") }
+
     // -- moves, by using them -------------------------------------------------
     func team(_ rows: [(String, String, [String])]) -> Team {
         var out = Team(); out.format = "doubles"
@@ -86,7 +100,7 @@ import SwiftUI
 
     struct Finding { let name: String; let kind: String; let usage: Double; let note: String }
     var moveFindings: [Finding] = []
-    var damaging = 0, extras = 0, inert = 0
+    var damaging = 0, extras = 0, inert = 0, conditional = 0
 
     let legal = store.data.moves.values.filter { $0.learnable }.sorted { $0.name < $1.name }
     for move in legal {
@@ -125,6 +139,11 @@ import SwiftUI
             if promises { extras += 1 } else { damaging += 1 }
         } else if changed || !said.isEmpty {
             extras += 1
+        } else if modelMentions(move.name) || modelSource.contains("\"\(move.id)\"") {
+            // The model names it, so it is implemented and simply had nothing
+            // to do here: a Sucker Punch against a target that is not
+            // attacking is a move working correctly.
+            conditional += 1
         } else {
             inert += 1
             moveFindings.append(Finding(name: move.name,
@@ -134,19 +153,6 @@ import SwiftUI
         }
     }
 
-    // -- abilities and items, by reading the model ----------------------------
-    let modelSource: String = {
-        var text = ""
-        for dir in ["Sources/ChampionsLab/Battle", "Sources/ChampionsLab/Damage",
-                    "Sources/ChampionsLab/Model"] {
-            guard let files = try? FileManager.default.contentsOfDirectory(atPath: dir) else { continue }
-            for file in files where file.hasSuffix(".swift") {
-                text += (try? String(contentsOfFile: "\(dir)/\(file)", encoding: .utf8)) ?? ""
-            }
-        }
-        return text
-    }()
-    func modelMentions(_ name: String) -> Bool { modelSource.contains("\"\(name)\"") }
 
     var abilityFindings: [Finding] = []
     let abilities = store.data.abilities.keys.sorted()
@@ -179,6 +185,7 @@ import SwiftUI
     print("  moves      \(legal.count) legal in this format")
     print("             \(damaging) plain damage, which is all they claim  (\(percent(damaging, legal.count)))")
     print("             \(extras) carry an effect, and it happens  (\(percent(extras, legal.count)))")
+    print("             \(conditional) the model names, which did nothing in this position  (\(percent(conditional, legal.count)))")
     print("             \(inert) do nothing at all  (\(percent(inert, legal.count)))")
     print("  abilities  \(abilities.count) in the dex, \(abilitiesKnown) named by the model  (\(percent(abilitiesKnown, abilities.count)))")
     print("             \(abilityFindings.count) unimplemented and carried by something in this format")
