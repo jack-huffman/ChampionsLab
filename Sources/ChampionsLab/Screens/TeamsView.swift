@@ -120,7 +120,7 @@ struct TeamsView: View {
             }
             HStack(spacing: 2) {
                 ForEach(team.slots) { slot in
-                    if let form = slot.form(in: store) {
+                    if let form = slot.form(in: store.rulebook) {
                         SpriteImage(form: form, side: 26)
                     }
                 }
@@ -394,7 +394,7 @@ struct SlotEditor: View {
 
     @State private var expanded = true
 
-    private var form: Form? { slot.form(in: store) }
+    private var form: Form? { slot.form(in: store.rulebook) }
 
     var body: some View {
         Card(padding: 14) {
@@ -431,7 +431,7 @@ struct SlotEditor: View {
                     Text(form.formLabel).font(.system(size: 15, weight: .semibold))
                     // Champions registers the base Pokémon holding its stone, so
                     // say plainly what it becomes — the analysis uses those stats.
-                    if let mega = slot.megaEvolution(in: store) {
+                    if let mega = slot.megaEvolution(in: store.rulebook) {
                         Text("→ \(mega.formLabel)")
                             .font(.system(size: 11, weight: .medium))
                             .padding(.horizontal, 6).padding(.vertical, 2)
@@ -441,7 +441,7 @@ struct SlotEditor: View {
                     }
                 }
                 HStack(spacing: 4) {
-                    ForEach((slot.megaEvolution(in: store) ?? form).pokeTypes) {
+                    ForEach((slot.megaEvolution(in: store.rulebook) ?? form).pokeTypes) {
                         TypeChip(type: $0, size: .small)
                     }
                     if !slot.item.isEmpty {
@@ -458,7 +458,7 @@ struct SlotEditor: View {
             }
             Spacer()
             Button {
-                store.pendingCalculation = CalculatorPreload(slot: slot, store: store)
+                store.pendingCalculation = CalculatorPreload(slot: slot, rules: store.rulebook)
                 NotificationCenter.default.post(name: .openCalculator, object: nil)
             } label: {
                 Image(systemName: "function")
@@ -512,8 +512,8 @@ struct SlotEditor: View {
 
     /// Locked stat readout: the same rails, not draggable.
     private func statReadout(_ form: Form) -> some View {
-        let battle = slot.battleForm(in: store) ?? form
-        let mega = slot.megaEvolution(in: store)
+        let battle = slot.battleForm(in: store.rulebook) ?? form
+        let mega = slot.megaEvolution(in: store.rulebook)
         return VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(mega == nil ? "Stats" : "Stats as \(mega!.formLabel)")

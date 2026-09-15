@@ -25,17 +25,16 @@ struct CalculatorPreload: Equatable {
     /// rebuilds the view rather than reusing the old state.
     var token = UUID()
 
-    @MainActor
-    init(slot: TeamSlot, store: Store) {
-        let form = slot.battleForm(in: store)
+    init(slot: TeamSlot, rules: Rulebook) {
+        let form = slot.battleForm(in: rules)
         formID = form?.id ?? slot.formID
         // A Mega fights with its own ability, which is the point of evolving.
-        ability = slot.megaEvolution(in: store)?.abilities.first?.name
+        ability = slot.megaEvolution(in: rules)?.abilities.first?.name
             ?? (slot.ability.isEmpty ? (form?.abilities.first?.name ?? "") : slot.ability)
         item = slot.item
         sp = slot.sp
         alignmentName = slot.alignmentName
-        moveID = slot.moves.first { store.move($0)?.isDamaging == true } ?? ""
+        moveID = slot.moves.first { rules.move($0)?.isDamaging == true } ?? ""
     }
 }
 
@@ -75,27 +74,27 @@ struct TeamSlot: Codable, Identifiable, Hashable {
         nickname = try c.decodeIfPresent(String.self, forKey: .nickname) ?? ""
     }
 
-    @MainActor func form(in store: Store) -> Form? { store.formsByID[formID] }
+    func form(in rules: Rulebook) -> Form? { rules.form(formID) }
 
     /// The form this slot fights as: the Mega when it is holding the stone,
     /// otherwise the registered form.
-    @MainActor func battleForm(in store: Store) -> Form? {
-        guard let base = form(in: store) else { return nil }
-        return store.megaForm(for: base, holding: item) ?? base
+    func battleForm(in rules: Rulebook) -> Form? {
+        guard let base = form(in: rules) else { return nil }
+        return rules.megaForm(for: base, holding: item) ?? base
     }
 
     /// The Mega this slot will become, if any — for showing "→ Mega Charizard Y".
-    @MainActor func megaEvolution(in store: Store) -> Form? {
-        guard let base = form(in: store) else { return nil }
-        return store.megaForm(for: base, holding: item)
+    func megaEvolution(in rules: Rulebook) -> Form? {
+        guard let base = form(in: rules) else { return nil }
+        return rules.megaForm(for: base, holding: item)
     }
 
     /// Ready for the calculator.
-    @MainActor func combatant(in store: Store) -> Combatant? {
-        guard let base = form(in: store) else { return nil }
+    func combatant(in rules: Rulebook) -> Combatant? {
+        guard let base = form(in: rules) else { return nil }
         // Fight as the Mega when the stone is held; its ability replaces the
         // base one, which is the whole point of Mega Evolving.
-        let mega = store.megaForm(for: base, holding: item)
+        let mega = rules.megaForm(for: base, holding: item)
         let form = mega ?? base
         return Combatant(form: form,
                          ability: mega?.abilities.first?.name ?? ability,
@@ -151,7 +150,7 @@ struct Team: Codable, Identifiable, Hashable {
         // Mega Evolves, not two team members.
         var seenSpecies: [Int: [String]] = [:]
         for slot in slots {
-            guard let form = slot.form(in: store) else { continue }
+            guard let form = slot.form(in: store.rulebook) else { continue }
             seenSpecies[form.dex, default: []].append(form.formLabel)
         }
         for (dex, labels) in seenSpecies where labels.count > 1 {
@@ -170,7 +169,7 @@ struct Team: Codable, Identifiable, Hashable {
         // Champions registers the base Pokémon holding its stone, so reading the
         // registered form found zero Megas on a team carrying two of them and
         // this warning never fired for any normally built team.
-        let megas = slots.compactMap { $0.battleForm(in: store) }.filter(\.isMega)
+        let megas = slots.compactMap { $0.battleForm(in: store.rulebook) }.filter(\.isMega)
         if megas.count > 1 {
             out.append("Only one Pokémon can Mega Evolve per battle — you have \(megas.count) Megas. That is legal to register, but only one can be used.")
         }
@@ -182,12 +181,12 @@ struct Team: Codable, Identifiable, Hashable {
         // measured ladder, which is evidence rather than proof.
         for slot in slots {
             guard let item = store.item(named: slot.item), !item.seenInGame,
-                  let form = slot.form(in: store) else { continue }
+                  let form = slot.form(in: store.rulebook) else { continue }
             out.append("\(form.formLabel) is holding \(item.name), which has not been seen in Champions — it is in the main-series item list but on none of the registered teams or the measured ladder.")
         }
 
         for slot in slots {
-            guard let form = slot.form(in: store) else { continue }
+            guard let form = slot.form(in: store.rulebook) else { continue }
             if slot.spUsed > ChampionsStats.spTotal {
                 out.append("\(form.formLabel) spends \(slot.spUsed) SP; the cap is \(ChampionsStats.spTotal)")
             }
@@ -201,8 +200,8 @@ struct Team: Codable, Identifiable, Hashable {
         return out
     }
 
-    @MainActor func isComplete(in store: Store) -> Bool {
-        let need = store.data.rules.formats.first { $0.id == format }?.teamSize ?? 6
+    func isComplete(in rules: Rulebook) -> Bool {
+        let need = rules.formats.first { $0.id == format }?.teamSize ?? 6
         return slots.count >= need
     }
 }

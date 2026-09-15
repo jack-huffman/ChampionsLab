@@ -475,7 +475,6 @@ struct Board {
     }
 }
 
-@MainActor
 extension Board {
     /// A board at the start of a game: two teams, the named leads out in front.
     ///
@@ -487,16 +486,16 @@ extension Board {
     /// the other case — it starts as what was registered and evolves during a
     /// turn, which is the only way the order of it can matter, and the order is
     /// what decides a weather war.
-    init(mine myTeam: Team, theirs theirTeam: Team, store: Store,
+    init(mine myTeam: Team, theirs theirTeam: Team, rules: Rulebook,
          myLeads: [String] = [], theirLeads: [String] = [],
          field: Field = Field(isDoubles: true),
          alreadyEvolved: Bool = true) {
         func build(_ team: Team, leads: [String]) -> [Fighter] {
             let made: [(String, Fighter)] = team.slots.compactMap { slot in
-                guard let registered = slot.form(in: store),
-                      let evolved = slot.battleForm(in: store),
-                      let combatant = slot.combatant(in: store) else { return nil }
-                let mega = slot.megaEvolution(in: store)
+                guard let registered = slot.form(in: rules),
+                      let evolved = slot.battleForm(in: rules),
+                      let combatant = slot.combatant(in: rules) else { return nil }
+                let mega = slot.megaEvolution(in: rules)
                 let form = alreadyEvolved ? evolved : registered
                 // A slot with nothing chosen still has an ability; treating it
                 // as blank means an Intimidate that never fires.
@@ -518,12 +517,12 @@ extension Board {
                                          item: slot.item, sp: slot.sp,
                                          alignment: slot.alignment)
                 }
-                var moves = slot.moves.compactMap { store.move($0) }
+                var moves = slot.moves.compactMap { rules.move($0) }
                 if !moves.contains(where: \.isDamaging) {
-                    let pool = store.moves(for: form).filter { $0.isDamaging && $0.power > 0 }
+                    let pool = rules.moves(for: form).filter { $0.isDamaging && $0.power > 0 }
                     moves += pool.sorted {
-                        store.moveValue($0, for: form, ability: combatant.ability, item: slot.item)
-                            > store.moveValue($1, for: form, ability: combatant.ability, item: slot.item)
+                        rules.moveValue($0, for: form, ability: combatant.ability, item: slot.item)
+                            > rules.moveValue($1, for: form, ability: combatant.ability, item: slot.item)
                     }.prefix(3)
                 }
                 return (registered.id,
@@ -555,7 +554,7 @@ extension Board {
     /// `sendOut` false leaves the leads' abilities for the caller to fire, one
     /// at a time, which is how the battle screen shows them happening.
     static func opening(mine myTeam: Team, bringing: [String], theirs theirTeam: Team,
-                        store: Store, singles: Bool, sendOut: Bool = true) -> Board {
+                        rules: Rulebook, singles: Bool, sendOut: Bool = true) -> Board {
         let bring = singles ? 3 : 4
         let leadCount = singles ? 1 : 2
         let field = Field(isDoubles: !singles)
@@ -565,17 +564,17 @@ extension Board {
         if brought.slots.count < leadCount { brought = myTeam }
 
         // They choose their own four the same way, against your six.
-        let theirGrid = Matchup(mine: theirTeam, theirs: myTeam, store: store, field: field)
-        let picker = BringFour(matchup: theirGrid, store: store, bring: bring)
+        let theirGrid = Matchup(mine: theirTeam, theirs: myTeam, rules: rules, field: field)
+        let picker = BringFour(matchup: theirGrid, rules: rules, bring: bring)
         var theirBrought = theirTeam
         if let plan = picker.plans.first {
             theirBrought.slots = plan.bring.compactMap { form in
-                theirTeam.slots.first { $0.battleForm(in: store)?.id == form.id }
+                theirTeam.slots.first { $0.battleForm(in: rules)?.id == form.id }
             }
         }
         if theirBrought.slots.count < leadCount { theirBrought = theirTeam }
 
-        var board = Board(mine: brought, theirs: theirBrought, store: store,
+        var board = Board(mine: brought, theirs: theirBrought, rules: rules,
                           field: field, alreadyEvolved: false)
         board.activeCount = leadCount
         if sendOut { board.sendOutLeads() }
@@ -584,11 +583,11 @@ extension Board {
         board.theirBenchGuesses = benchGuesses(
             for: theirTeam, against: myTeam, opposite: brought,
             leadIDs: Set(board.theirs.prefix(leadCount).map(\.build.form.id)),
-            behind: bring - leadCount, store: store, field: field)
+            behind: bring - leadCount, rules: rules, field: field)
         board.myBenchGuesses = benchGuesses(
             for: myTeam, against: theirTeam, opposite: theirBrought,
             leadIDs: Set(board.mine.prefix(leadCount).map(\.build.form.id)),
-            behind: bring - leadCount, store: store, field: field)
+            behind: bring - leadCount, rules: rules, field: field)
         return board
     }
 
@@ -601,18 +600,18 @@ extension Board {
     /// the chooser's members are built into fighters.
     private static func benchGuesses(for chooser: Team, against other: Team,
                                      opposite: Team, leadIDs: Set<String>,
-                                     behind: Int, store: Store, field: Field) -> [BenchGuess] {
-        let grid = Matchup(mine: chooser, theirs: other, store: store, field: field)
+                                     behind: Int, rules: Rulebook, field: Field) -> [BenchGuess] {
+        let grid = Matchup(mine: chooser, theirs: other, rules: rules, field: field)
         // Every Pokémon on the chooser's six as a fighter, so a guess can be
         // played out rather than only scored.
-        let whole = Board(mine: opposite, theirs: chooser, store: store,
+        let whole = Board(mine: opposite, theirs: chooser, rules: rules,
                           field: field, alreadyEvolved: false)
         // A fighter stands as what was registered; the grid rates what it
         // fights as. For a stone-holder those are different Pokémon, and
         // matching them by id silently dropped every pair with a Mega in it.
         var fightsAs: [String: Form] = [:]
         for slot in chooser.slots {
-            if let registered = slot.form(in: store), let battle = slot.battleForm(in: store) {
+            if let registered = slot.form(in: rules), let battle = slot.battleForm(in: rules) {
                 fightsAs[registered.id] = battle
             }
         }

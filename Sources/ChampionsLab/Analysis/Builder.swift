@@ -951,14 +951,14 @@ struct TeamBuilder {
 
         let megaIndices = team.slots.indices.filter { index in
             let slot = team.slots[index]
-            return slot.megaEvolution(in: store) != nil
-                || (slot.form(in: store)?.isMega ?? false)
+            return slot.megaEvolution(in: store.rulebook) != nil
+                || (slot.form(in: store.rulebook)?.isMega ?? false)
         }
         guard megaIndices.count == 2 else { return nil }
 
         var candidates: [Line] = []
         for index in megaIndices {
-            guard let mega = team.slots[index].battleForm(in: store) else { continue }
+            guard let mega = team.slots[index].battleForm(in: store.rulebook) else { continue }
             // The other Mega stays home: bringing both wastes a slot on a
             // Pokémon that cannot use its item.
             let partners = team.slots.indices
@@ -1100,7 +1100,7 @@ struct TeamBuilder {
         let hasTrickRoom = !(held[.trickRoom]?.isEmpty ?? true)
         for opponent in slice {
             let theirs = opponent.team
-            let matchup = Matchup(mine: team, theirs: theirs, store: store,
+            let matchup = Matchup(mine: team, theirs: theirs, rules: store.rulebook,
                                   field: field(for: team, against: theirs),
                                   myTailwind: hasTailwind, theirTailwind: true,
                                   myTrickRoom: hasTrickRoom)
@@ -1116,7 +1116,7 @@ struct TeamBuilder {
         guard slots.count > 2 else { return slots }
         let advisor = TeamAdvisor(team: Team(), store: store)
         func supportRank(_ slot: TeamSlot) -> Int {
-            guard let form = slot.battleForm(in: store) else { return 9 }
+            guard let form = slot.battleForm(in: store.rulebook) else { return 9 }
             let roles = advisor.potentialRoles(of: form)
             if roles.contains(.fakeOut) || roles.contains(.redirection) { return 0 }
             if roles.contains(.intimidate) { return 1 }
@@ -1143,7 +1143,7 @@ struct TeamBuilder {
 
         var parts: [String] = []
         let lead = slots.count > 1
-            ? (slots[1].battleForm(in: store)?.formLabel ?? "its partner") : "its partner"
+            ? (slots[1].battleForm(in: store.rulebook)?.formLabel ?? "its partner") : "its partner"
         parts.append("Lead \(mega.formLabel) beside \(lead); Mega Evolve turn one.")
 
         if !running.isDisjoint(with: ["Follow Me", "Rage Powder"]) {
@@ -1343,7 +1343,7 @@ struct TeamBuilder {
             var weather = Weather.none
             var terrain = Terrain.none
             for slot in t.slots {
-                guard let combatant = slot.combatant(in: store) else { continue }
+                guard let combatant = slot.combatant(in: store.rulebook) else { continue }
                 switch combatant.ability {
                 case "Drizzle":       weather = .rain
                 case "Drought":       weather = .sun
@@ -1376,7 +1376,7 @@ struct TeamBuilder {
     func breaksSashes(_ team: Team) -> (can: Bool, how: [String]) {
         var how: [String] = []
         for slot in team.slots {
-            guard let form = slot.battleForm(in: store) else { continue }
+            guard let form = slot.battleForm(in: store.rulebook) else { continue }
             for id in slot.moves {
                 guard let move = store.move(id), move.isDamaging else { continue }
                 if move.effect.contains("attacks 2 to") || move.effect.contains("times in a row") {
@@ -1458,7 +1458,7 @@ struct TeamBuilder {
         for (index, opponent) in opponents.enumerated() {
             if index % 2 == 0 { await breathe("matchups") }
             let theirs = opponent.team
-            let matchup = Matchup(mine: team, theirs: theirs, store: store,
+            let matchup = Matchup(mine: team, theirs: theirs, rules: store.rulebook,
                                   field: field(for: team, against: theirs),
                                   myTailwind: hasTailwind, theirTailwind: true,
                                   myTrickRoom: hasTrickRoom)
@@ -1584,7 +1584,7 @@ struct TeamBuilder {
         for opponent in opponents {
             let theirs = opponent.team
             // Opponents in this format nearly all carry Tailwind of their own.
-            let matchup = Matchup(mine: team, theirs: theirs, store: store,
+            let matchup = Matchup(mine: team, theirs: theirs, rules: store.rulebook,
                                   field: field(for: team, against: theirs),
                                   myTailwind: hasTailwind, theirTailwind: true,
                                   myTrickRoom: hasTrickRoom)

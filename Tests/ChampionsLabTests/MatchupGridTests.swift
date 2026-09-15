@@ -16,7 +16,7 @@ final class MatchupGridTests: HarnessCase {
     let theirs = TeamPaste.team(from: bigSix, store: store)
     check("meta team built", theirs.slots.count == 6, "\(theirs.slots.count)")
 
-    let m = Matchup(mine: result.team, theirs: theirs, store: store,
+    let m = Matchup(mine: result.team, theirs: theirs, rules: store.rulebook,
                     field: Field(isDoubles: true))
     let v = m.verdict
     print("  cells \(v.totalCells)  wins \(v.winCount)  losses \(v.lossCount)  edge \(v.score)  faster \(v.speedEdge)%")
@@ -26,7 +26,7 @@ final class MatchupGridTests: HarnessCase {
     print("  unanswered:", v.unanswered.map(\.formLabel))
     print("  dead weight:", v.deadWeight.map(\.formLabel))
 
-    let mirror = Matchup(mine: theirs, theirs: theirs, store: store, field: Field(isDoubles: true))
+    let mirror = Matchup(mine: theirs, theirs: theirs, rules: store.rulebook, field: Field(isDoubles: true))
     print("  mirror edge: \(mirror.verdict.score)")
     check("mirror is even", abs(mirror.verdict.score) <= 5, "\(mirror.verdict.score)")
 
@@ -105,7 +105,7 @@ print("\n== megas fight as megas ==")
     var menceSlot = TeamSlot(formID: form("Salamence").id)
     menceSlot.item = "Salamencite"
     menceTeam.slots = [menceSlot]
-    let menceGrid = Matchup(mine: menceTeam, theirs: menceTeam, store: store,
+    let menceGrid = Matchup(mine: menceTeam, theirs: menceTeam, rules: store.rulebook,
                             field: Field(isDoubles: true))
     let fighting = menceGrid.myForms.first?.formLabel ?? "-"
     print("  Salamence @ Salamencite fights as: \(fighting)")
@@ -197,7 +197,7 @@ print("\n== meta team identity ==")
     // And the cache keyed on it hands back distinct teams.
     let firstFew = store.data.metaTeams.filter { $0.record != nil }.prefix(8)
     let builtIDs = firstFew.map { meta in
-        store.opponentTeam(meta).slots.compactMap { $0.form(in: store)?.formLabel }
+        store.opponentTeam(meta).slots.compactMap { $0.form(in: store.rulebook)?.formLabel }
             .sorted().joined(separator: ",")
     }
     check("and the built-team cache does not alias them",
@@ -210,9 +210,9 @@ print("\n== bring four ==")
     if sixes.count >= 2 {
         let mineTeam = store.opponentTeam(sixes[0])
         let theirTeam = store.opponentTeam(sixes[1])
-        let grid = Matchup(mine: mineTeam, theirs: theirTeam, store: store,
+        let grid = Matchup(mine: mineTeam, theirs: theirTeam, rules: store.rulebook,
                            field: Field(isDoubles: true))
-        let picker = BringFour(matchup: grid, store: store)
+        let picker = BringFour(matchup: grid, rules: store.rulebook)
 
         print("  mine:   \(sixes[0].name)")
         print("  theirs: \(sixes[1].name)")
@@ -279,7 +279,7 @@ print("\n== switching ==")
 
     // The paste's Incineroar runs Parting Shot, so its losing cells have a way
     // out that the grid can name.
-    let switchGrid = Matchup(mine: result.team, theirs: theirs, store: store,
+    let switchGrid = Matchup(mine: result.team, theirs: theirs, rules: store.rulebook,
                              field: Field(isDoubles: true))
     let ways = switchGrid.retreats()
     print("  losing cells: \(ways.count)")
@@ -299,7 +299,7 @@ print("\n== switching ==")
     var gengarSlot = TeamSlot(formID: form("Gengar").id)
     gengarSlot.item = "Gengarite"
     gengarTeam.slots = [gengarSlot]
-    let trapGrid = Matchup(mine: result.team, theirs: gengarTeam, store: store,
+    let trapGrid = Matchup(mine: result.team, theirs: gengarTeam, rules: store.rulebook,
                            field: Field(isDoubles: true))
     print("  versus Gengar + Gengarite: fights as \(trapGrid.theirForms.first?.formLabel ?? "-"), ability \(trapGrid.theirForms.first?.abilities.first?.name ?? "-")")
     check("Shadow Tag traps every cell it is in",
@@ -309,7 +309,7 @@ print("\n== switching ==")
 
     // The discount is applied to both sides, so a team against itself is still
     // level. Softening only your own losses would lift every score on screen.
-    let selfGrid = Matchup(mine: result.team, theirs: result.team, store: store,
+    let selfGrid = Matchup(mine: result.team, theirs: result.team, rules: store.rulebook,
                            field: Field(isDoubles: true))
     print("  mirror edge with switching modelled: \(selfGrid.verdict.score)")
     check("leaving is worth the same to both sides", abs(selfGrid.verdict.score) <= 5,

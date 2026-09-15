@@ -108,7 +108,7 @@ struct TeamAdvisor {
     private var members: [(slot: TeamSlot, form: Form)] {
         team.slots.compactMap { slot in
             // Read the Mega, since that is what actually fights.
-            guard let form = slot.battleForm(in: store) else { return nil }
+            guard let form = slot.battleForm(in: store.rulebook) else { return nil }
             return (slot, form)
         }
     }
@@ -276,8 +276,8 @@ struct TeamAdvisor {
         let present = members
 
         // Megas: registered vs usable, and whether the stone is actually held.
-        let megaSlots = team.slots.filter { $0.megaEvolution(in: store) != nil }
-        let megaForms = team.slots.compactMap { $0.form(in: store) }.filter(\.isMega)
+        let megaSlots = team.slots.filter { $0.megaEvolution(in: store.rulebook) != nil }
+        let megaForms = team.slots.compactMap { $0.form(in: store.rulebook) }.filter(\.isMega)
         if megaSlots.isEmpty && megaForms.isEmpty {
             out.append(Note(severity: .caution, title: "No Mega Evolution",
                             detail: "M-C added six Megas and the format is built around them. A team without one is giving up its once-per-battle gimmick — there is no Terastallization here to fall back on."))
@@ -287,9 +287,9 @@ struct TeamAdvisor {
                             detail: "Legal, and common on tournament lists as a matchup choice, but only one can Mega Evolve per battle. The others are paying an item slot for nothing on the turns they are out."))
         }
         for slot in team.slots {
-            guard let form = slot.form(in: store), !form.isMega else { continue }
+            guard let form = slot.form(in: store.rulebook), !form.isMega else { continue }
             let hasMega = store.data.forms.contains { $0.dex == form.dex && $0.isMega }
-            if hasMega && slot.megaEvolution(in: store) == nil && !slot.item.isEmpty {
+            if hasMega && slot.megaEvolution(in: store.rulebook) == nil && !slot.item.isEmpty {
                 out.append(Note(severity: .caution,
                                 title: "\(form.formLabel) is not holding its stone",
                                 detail: "It has a Mega form, but with \(slot.item) it will fight in its base form all game."))
@@ -358,10 +358,10 @@ struct TeamAdvisor {
         let analysis = TeamAnalysis(team: team, store: store)
         let soft = analysis.softSpots.prefix(4).map(\.type)
         let missing = missingEssentials
-        let onTeam = Set(team.slots.compactMap { $0.form(in: store)?.dex })
+        let onTeam = Set(team.slots.compactMap { $0.form(in: store.rulebook)?.dex })
         let plans = archetypes.filter { $0.archetype != .balance }
-        let hasMega = !team.slots.compactMap { $0.form(in: store) }.filter(\.isMega).isEmpty
-            || team.slots.contains { $0.megaEvolution(in: store) != nil }
+        let hasMega = !team.slots.compactMap { $0.form(in: store.rulebook) }.filter(\.isMega).isEmpty
+            || team.slots.contains { $0.megaEvolution(in: store.rulebook) != nil }
 
         // Anti-meta standing, from the Forecast engine, as a baseline of quality.
         let standing = Dictionary(picks.map { ($0.form.id, $0) },
@@ -457,7 +457,7 @@ struct TeamAdvisor {
     func prescriptions(picks: [Forecast.Pick]) -> [Prescription] {
         let analysis = TeamAnalysis(team: team, store: store)
         var out: [Prescription] = []
-        let onTeam = Set(team.slots.compactMap { $0.form(in: store)?.dex })
+        let onTeam = Set(team.slots.compactMap { $0.form(in: store.rulebook)?.dex })
 
         for role in missingEssentials {
             let options = store.data.forms

@@ -63,9 +63,9 @@ struct GamePlanner {
     private var ownField: Field {
         var out = Field(isDoubles: true)
         for slot in team.slots {
-            let ability = slot.megaEvolution(in: store)?.abilities.first?.name
+            let ability = slot.megaEvolution(in: store.rulebook)?.abilities.first?.name
                 ?? (slot.ability.isEmpty
-                    ? slot.battleForm(in: store)?.abilities.first?.name ?? "" : slot.ability)
+                    ? slot.battleForm(in: store.rulebook)?.abilities.first?.name ?? "" : slot.ability)
             switch ability {
             case "Drought":       out.weather = .sun
             case "Drizzle":       out.weather = .rain
@@ -83,8 +83,8 @@ struct GamePlanner {
 
     private var members: [Member] {
         team.slots.compactMap { slot in
-            guard let form = slot.battleForm(in: store),
-                  let combatant = slot.combatant(in: store) else { return nil }
+            guard let form = slot.battleForm(in: store.rulebook),
+                  let combatant = slot.combatant(in: store.rulebook) else { return nil }
             return Member(slot: slot, form: form,
                           moves: Set(slot.moves.compactMap { store.move($0)?.name }),
                           learnable: Set(form.moves.compactMap { store.move($0)?.name }),

@@ -133,11 +133,11 @@ struct TeamRefiner {
     /// Every ability on the six, resolved through Mega Evolution.
     private var teamAbilities: Set<String> {
         Set(team.slots.compactMap { slot -> String? in
-            if let mega = slot.megaEvolution(in: store) {
+            if let mega = slot.megaEvolution(in: store.rulebook) {
                 return mega.abilities.first?.name
             }
             return slot.ability.isEmpty
-                ? slot.battleForm(in: store)?.abilities.first?.name : slot.ability
+                ? slot.battleForm(in: store.rulebook)?.abilities.first?.name : slot.ability
         })
     }
 
@@ -181,7 +181,7 @@ struct TeamRefiner {
             // Species clause against whatever is on the team *now*, which is
             // not what it was when the edit was first scored.
             if out.slots.enumerated().contains(where: {
-                $0.offset != edit.slot && $0.element.form(in: store)?.dex == form.dex
+                $0.offset != edit.slot && $0.element.form(in: store.rulebook)?.dex == form.dex
             }) { return nil }
             var used = Set(out.slots.enumerated()
                 .filter { $0.offset != edit.slot }
@@ -213,7 +213,7 @@ struct TeamRefiner {
         candidates = Array(candidates.prefix(budget))
 
         for index in team.slots.indices {
-            guard let outgoing = team.slots[index].battleForm(in: store) else { continue }
+            guard let outgoing = team.slots[index].battleForm(in: store.rulebook) else { continue }
             // Never propose cutting the Pokémon the team exists to use. A team
             // called "Mega Bax" does not want to be told to drop Baxcalibur,
             // and no coach would say it.
@@ -227,7 +227,7 @@ struct TeamRefiner {
 
         let abilities = teamAbilities
         for index in team.slots.indices {
-            guard let form = team.slots[index].battleForm(in: store) else { continue }
+            guard let form = team.slots[index].battleForm(in: store.rulebook) else { continue }
             let learnable = store.moves(for: form)
             let current = Set(team.slots[index].moves)
             let ability = team.slots[index].ability
@@ -290,7 +290,7 @@ struct TeamRefiner {
         var pinned = self.pinned
         if pinned.isEmpty {
             for (index, slot) in team.slots.enumerated()
-            where slot.battleForm(in: store)?.isMega == true {
+            where slot.battleForm(in: store.rulebook)?.isMega == true {
                 pinned.insert(index)
             }
         }

@@ -17,7 +17,7 @@ print("\n== abilities in the turn ==")
     let barbed = fighters([("Garchomp", "Life Orb", ["Swords Dance", "Earthquake", "Protect"]),
                            ("Rillaboom", "Life Orb", ["Protect"]),
                            ("Kingambit", "Chople Berry", ["Protect"])])
-    var barbBoard = Board(mine: touchers, theirs: barbed, store: store,
+    var barbBoard = Board(mine: touchers, theirs: barbed, rules: store.rulebook,
                           field: Field(isDoubles: true), alreadyEvolved: false)
     barbBoard.theirs[0].build.ability = "Rough Skin"
     let scraped = TurnModel.resolve(
@@ -37,7 +37,7 @@ print("\n== abilities in the turn ==")
     let hitters = fighters([("Garchomp", "Life Orb", ["Earthquake", "Protect"]),
                             ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"]),
                             ("Incineroar", "Sitrus Berry", ["Protect"])])
-    var exitBoard = Board(mine: exiting, theirs: hitters, store: store,
+    var exitBoard = Board(mine: exiting, theirs: hitters, rules: store.rulebook,
                           field: Field(isDoubles: true), alreadyEvolved: false)
     exitBoard.mine[0].build.ability = "Emergency Exit"
     let fled = TurnModel.resolve(
@@ -63,7 +63,7 @@ print("\n== abilities in the turn ==")
     _ = fled
 
     // Regenerator heals on the way out.
-    var regen = Board(mine: touchers, theirs: barbed, store: store,
+    var regen = Board(mine: touchers, theirs: barbed, rules: store.rulebook,
                       field: Field(isDoubles: true), alreadyEvolved: false)
     regen.mine[0].build.ability = "Regenerator"
     regen.mine[0].hp = regen.mine[0].maxHP / 3
@@ -124,7 +124,7 @@ print("\n== arriving ==")
                              ("Kingambit", "Chople Berry", ["Iron Head", "Protect"]),
                              ("Garchomp", "Life Orb", ["Earthquake", "Protect"]),
                              ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"])])
-    var startBoard = Board(mine: weatherLeads, theirs: sunLeads, store: store,
+    var startBoard = Board(mine: weatherLeads, theirs: sunLeads, rules: store.rulebook,
                            field: Field(isDoubles: true), alreadyEvolved: false)
     startBoard.mine[0].build.ability = "Drizzle"
     startBoard.mine[1].build.ability = "Intimidate"
@@ -149,7 +149,7 @@ print("\n== arriving ==")
     var competitive = Board(mine: weatherLeads,
                             theirs: fighters([("Milotic", "Leftovers", ["Muddy Water", "Protect"]),
                                               ("Kingambit", "Chople Berry", ["Iron Head", "Protect"])]),
-                            store: store, field: Field(isDoubles: true), alreadyEvolved: false)
+                            rules: store.rulebook, field: Field(isDoubles: true), alreadyEvolved: false)
     competitive.mine[1].build.ability = "Intimidate"
     competitive.theirs[0].build.ability = "Competitive"
     competitive.activeCount = 2
@@ -159,7 +159,7 @@ print("\n== arriving ==")
           competitive.theirs[0].build.boosts[Stat.attack.rawValue] == -1
             && competitive.theirs[0].build.boosts[Stat.spAttack.rawValue] == 2,
           "\(competitive.theirs[0].build.boosts)")
-    print("  a Milotic with nothing registered fights with: \(Board(mine: weatherLeads, theirs: fighters([("Milotic", "Leftovers", ["Protect"])]), store: store, field: Field(isDoubles: true), alreadyEvolved: false).theirs[0].build.ability)")
+    print("  a Milotic with nothing registered fights with: \(Board(mine: weatherLeads, theirs: fighters([("Milotic", "Leftovers", ["Protect"])]), rules: store.rulebook, field: Field(isDoubles: true), alreadyEvolved: false).theirs[0].build.ability)")
 
     // Both sides lose a Pokémon; both send in at once, faster first.
     var fallen = startBoard
@@ -226,7 +226,7 @@ print("\n== answering a hit ==")
                              ("Whimsicott", "Focus Sash", ["Protect"])])
     let dragonPair = fighters([("Baxcalibur", "Loaded Dice", ["Glaive Rush", "Protect"]),
                             ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"])])
-    var thermal = Board(mine: sunPair, theirs: dragonPair, store: store,
+    var thermal = Board(mine: sunPair, theirs: dragonPair, rules: store.rulebook,
                         field: Field(isDoubles: true), alreadyEvolved: false)
     thermal.theirs[0].build.ability = "Thermal Exchange"
     let warmed = TurnModel.resolve(thermal,
@@ -270,7 +270,7 @@ print("\n== the bar and the fallen ==")
                                          ("Whimsicott", "Focus Sash", ["Protect"]),
                                          ("Garchomp", "Life Orb", ["Protect"]),
                                          ("Kingambit", "Chople Berry", ["Protect"])]),
-                         theirs: soaked, store: store, field: Field(isDoubles: true), alreadyEvolved: false)
+                         theirs: soaked, rules: store.rulebook, field: Field(isDoubles: true), alreadyEvolved: false)
     let unbowed = TurnModel.resolve(mourning,
         mine: Play(left: .attack(move: 0, target: 0), right: .attack(move: 0, target: 0)),
         theirs: Play(left: .attack(move: at(mourning.theirs[0], "Swords Dance"), target: 0),
@@ -297,7 +297,7 @@ print("\n== the herb and the burden ==")
                                        ("Whimsicott", "Focus Sash", ["Protect"])]),
                        theirs: fighters([("Whimsicott", "Focus Sash", ["Icy Wind", "Protect"]),
                                          ("Kingambit", "Chople Berry", ["Swords Dance", "Protect"])]),
-                       store: store, field: Field(isDoubles: true), alreadyEvolved: false)
+                       rules: store.rulebook, field: Field(isDoubles: true), alreadyEvolved: false)
     herbal.mine[0].build.ability = "Unburden"
     let quick0 = herbal.mine[0].build.speed(in: herbal.field)
     let chilled2 = TurnModel.resolve(herbal,

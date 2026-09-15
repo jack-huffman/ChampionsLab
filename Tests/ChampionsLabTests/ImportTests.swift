@@ -32,12 +32,12 @@ print("\n== import ==")
     check("warned about the illegal entry",
           result.warnings.contains { $0.contains("Amoonguss") })
 
-    let labels = result.team.slots.compactMap { $0.form(in: store)?.formLabel }
+    let labels = result.team.slots.compactMap { $0.form(in: store.rulebook)?.formLabel }
     print("  ->", labels.joined(separator: ", "))
     check("Charizard-Mega-Y resolved", labels.contains("Mega Charizard Y"))
     check("Indeedee-F resolved", labels.contains("Indeedee (Female)"))
 
-    if let zard = result.team.slots.first(where: { $0.form(in: store)?.formLabel == "Mega Charizard Y" }) {
+    if let zard = result.team.slots.first(where: { $0.form(in: store.rulebook)?.formLabel == "Mega Charizard Y" }) {
         check("Timid parsed", zard.alignmentName == "Timid", zard.alignmentName)
         check("252 SpA -> 32 SP", zard.sp[Stat.spAttack.rawValue] == 32, "\(zard.sp)")
         check("4 moves", zard.moves.count == 4, "\(zard.moves.count)")
@@ -45,14 +45,14 @@ print("\n== import ==")
     }
     // Every imported move must be one the form can actually learn.
     check("no unlearnable moves imported", result.team.slots.allSatisfy { slot in
-        guard let form = slot.form(in: store) else { return false }
+        guard let form = slot.form(in: store.rulebook) else { return false }
         return slot.moves.allSatisfy { form.moves.contains($0) }
     })
     // Charizard holding its stone must be analysed as Mega Charizard Y.
-    if let zard = result.team.slots.first(where: { $0.form(in: store)?.name == "Charizard" }) {
+    if let zard = result.team.slots.first(where: { $0.form(in: store.rulebook)?.name == "Charizard" }) {
         check("stone resolves to the Mega",
-              zard.battleForm(in: store)?.formLabel == "Mega Charizard Y",
-              zard.battleForm(in: store)?.formLabel ?? "nil")
+              zard.battleForm(in: store.rulebook)?.formLabel == "Mega Charizard Y",
+              zard.battleForm(in: store.rulebook)?.formLabel ?? "nil")
     }
 
 print("\n== export round-trip ==")

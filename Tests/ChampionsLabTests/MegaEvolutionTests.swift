@@ -30,7 +30,7 @@ print("\n== mega evolution ==")
                            ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"]),
                            ("Kingambit", "Chople Berry", ["Iron Head", "Protect"])])
 
-    let unevolved = Board(mine: sunSide, theirs: snowSide, store: store,
+    let unevolved = Board(mine: sunSide, theirs: snowSide, rules: store.rulebook,
                           field: Field(isDoubles: true), alreadyEvolved: false)
     check("a battle starts with what was registered, not what it becomes",
           unevolved.mine[0].build.form.formLabel == "Charizard",
@@ -39,7 +39,7 @@ print("\n== mega evolution ==")
           unevolved.mine[0].build.ability != "Drought", unevolved.mine[0].build.ability)
     check("but it knows what it turns into",
           unevolved.mine[0].pendingMega?.formLabel == "Mega Charizard Y")
-    let analysed = Board(mine: sunSide, theirs: snowSide, store: store,
+    let analysed = Board(mine: sunSide, theirs: snowSide, rules: store.rulebook,
                          field: Field(isDoubles: true))
     check("while every analysis screen still sees the Mega",
           analysed.mine[0].build.form.formLabel == "Mega Charizard Y",
@@ -70,7 +70,7 @@ print("\n== mega evolution ==")
     let twoStones = sideOf([("Charizard", "Charizardite Y", ["Heat Wave", "Protect"]),
                             ("Froslass", "Froslassite", ["Blizzard", "Protect"]),
                             ("Garchomp", "Life Orb", ["Earthquake", "Protect"])])
-    let dual = Board(mine: twoStones, theirs: snowSide, store: store,
+    let dual = Board(mine: twoStones, theirs: snowSide, rules: store.rulebook,
                      field: Field(isDoubles: true), alreadyEvolved: false)
     // Asking for the second slot as well changes nothing: a side gets one.
     let afterDual = TurnModel.resolve(

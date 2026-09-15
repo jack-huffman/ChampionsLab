@@ -23,16 +23,27 @@ data/                           champions.json, sprites, matches, tournaments
 
 ## Layering
 
-`Model` and `Damage` know nothing about the app. `Battle` — `TurnModel`,
-`TurnGame`, `BattleEngine` — is **isolated to nothing**: it takes a `Board`
-(a value) and a `Rulebook` (an immutable, `Sendable` snapshot of the usage
-table) and can run on any thread. The only main-actor code on the engine's
-path is building a `Board` from two `Team`s, which happens once, at the
-boundary. The search runs as a detached task and hops back to the main actor
-with its answer; a result for a board that has since moved on is dropped.
+`Rulebook` is the currency. The dex does not change while a battle is being
+played, so everything the engine needs out of it — the forms, the moves, the
+usage table, and the derived "what is this move worth" — is snapshotted once
+into an immutable `Sendable` value. Anything that takes a `Rulebook` instead
+of the `Store` is isolated to nothing and runs on any thread:
 
-`Store` is `@MainActor` and owns the dataset, saved teams, sprite caches and
-the analysis caches. Views read it through the environment.
+- `Model` and `Damage`, including `DuelEngine`
+- `Battle`: `TurnModel`, `TurnGame`, `BattleEngine`, and `Board` — including
+  `Board.opening`, which chooses their four and works out both sides' bench
+  guesses
+- `Analysis`: `Matchup` and `BringFour`, which is the whole versus grid
+
+`Store` is `@MainActor` and owns the dataset, the saved teams, the sprite and
+analysis caches, and the network refresh. It builds the `Rulebook` and
+forwards its own lookups to it, so there is one implementation of each rather
+than two. Views read the store through the environment; anything expensive
+takes `store.rulebook` and leaves.
+
+The one shared cache inside the `Rulebook` — parsed move quality, because
+pricing a move is a parse and the forecast prices every move of every form —
+sits behind a lock, and does its work outside it.
 
 ## Invariants worth knowing
 
@@ -88,12 +99,15 @@ main thread and hands a value back:
 |---|---|
 | `BattleEngine.think` | detached task, result applied on the main actor |
 | the played turn's solve | detached task, then `resolve(_:mine:solved:)` |
+| the versus lobby: two grids, two bring-four searches | detached task |
+| `Board.opening`: their four and both sides' bench guesses | detached task, behind the opening flash |
 | a turn's resolution, the reads, the previews | main actor; all cheap |
-| building a `Board` from two `Team`s | main actor, once, at the boundary |
+| loading the dataset, saving teams, the usage refresh | main actor, by definition |
 
-Both detached searches carry a ticket — the turn number, or a counter — and
+Every detached piece carries a ticket — the turn number, or a counter — and
 an answer to a position that has since moved on is dropped rather than
-applied to the wrong board.
+applied to the wrong board. The timing harness holds the line: no stretch of
+main-thread work longer than four frames.
 
 ## Checking a change
 

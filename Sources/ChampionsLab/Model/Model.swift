@@ -8,7 +8,7 @@ import Foundation
 /// One legal entry in the roster. Megas are separate forms, not a variant of
 /// their base: Mega Golisopod is Bug/Steel with 630 BST while Golisopod is
 /// Bug/Water with 530, so they cannot share a record.
-struct Form: Codable, Identifiable, Hashable {
+struct Form: Codable, Identifiable, Hashable, Sendable {
     let dex: Int
     let species: String
     let name: String
@@ -77,7 +77,7 @@ enum Ailment: String {
     var halvesSpeed: Bool { self == .paralysis }
 }
 
-struct Move: Codable, Identifiable, Hashable {
+struct Move: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let name: String
     let type: String
@@ -534,7 +534,7 @@ struct Regulation: Codable {
     }
 }
 
-struct FormatRule: Codable, Identifiable, Hashable {
+struct FormatRule: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let name: String
     let teamSize: Int

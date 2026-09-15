@@ -14,7 +14,7 @@ print("\n== each target rolls its own ==")
                           ("Whimsicott", "Focus Sash", ["Protect"])])
     let soaked = fighters([("Garchomp", "Life Orb", ["Swords Dance", "Protect"]),
                            ("Kingambit", "Chople Berry", ["Swords Dance", "Protect"])])
-    let muddyBoard = Board(mine: muddy, theirs: soaked, store: store,
+    let muddyBoard = Board(mine: muddy, theirs: soaked, rules: store.rulebook,
                            field: Field(isDoubles: true), alreadyEvolved: false)
     var oneOfTwo = 0, bothHit = 0
     for _ in 0..<400 {
@@ -34,7 +34,7 @@ print("\n== each target rolls its own ==")
     print("  Leech Life gives back: \(leech.drainShare ?? 0)")
     check("draining moves are read from the text", leech.drainShare == 0.5
           && store.data.moves.values.first { $0.name == "Draining Kiss" }?.drainShare == 0.75)
-    var drainBoard = Board(mine: soaked, theirs: muddy, store: store,
+    var drainBoard = Board(mine: soaked, theirs: muddy, rules: store.rulebook,
                            field: Field(isDoubles: true), alreadyEvolved: false)
     drainBoard.mine[0].moves = [leech] + drainBoard.mine[0].moves
     drainBoard.mine[0].hp = drainBoard.mine[0].maxHP / 2
@@ -55,7 +55,7 @@ print("\n== each target rolls its own ==")
 
     let tantrum = store.data.moves.values.first { $0.name == "Stomping Tantrum" }!
     check("Stomping Tantrum is read as doubling after a failed move", tantrum.doublesAfterFailure)
-    var tantrumBoard = Board(mine: soaked, theirs: muddy, store: store,
+    var tantrumBoard = Board(mine: soaked, theirs: muddy, rules: store.rulebook,
                              field: Field(isDoubles: true), alreadyEvolved: false)
     tantrumBoard.mine[0].moves = [tantrum] + tantrumBoard.mine[0].moves
     // Turn one: the move goes into a Protect and fails.
@@ -80,7 +80,7 @@ print("\n== each target rolls its own ==")
     /// weather and terrain on a five-turn clock
     @MainActor func testTheFieldRunsOut() throws {
 print("\n== the field runs out ==")
-    var clock = Board(mine: muddy, theirs: soaked, store: store,
+    var clock = Board(mine: muddy, theirs: soaked, rules: store.rulebook,
                       field: Field(isDoubles: true), alreadyEvolved: false)
     clock.mine[0].build.ability = "Drizzle"
     clock.sendOutLeads()

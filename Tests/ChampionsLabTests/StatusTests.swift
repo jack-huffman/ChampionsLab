@@ -14,7 +14,7 @@ print("\n== what a hit does besides damage ==")
                         ("Milotic", "Leftovers", ["Scald", "Protect"])])
     let chilled = fighters([("Garchomp", "Life Orb", ["Swords Dance", "Protect"]),
                             ("Kingambit", "Chople Berry", ["Swords Dance", "Protect"])])
-    let icyBoard = Board(mine: icy, theirs: chilled, store: store,
+    let icyBoard = Board(mine: icy, theirs: chilled, rules: store.rulebook,
                          field: Field(isDoubles: true), alreadyEvolved: false)
     let windy = TurnModel.resolve(icyBoard,
         mine: Play(left: .attack(move: at(icyBoard.mine[0], "Icy Wind"), target: 0),
@@ -71,7 +71,7 @@ print("\n== getting health back ==")
           recover.healing?.share == 0.5 && synthesis.healing?.sunlit == true && pulse.healing?.whom == .partner)
     var tired = Board(mine: fighters([("Milotic", "Leftovers", ["Recover", "Protect"]),
                                       ("Whimsicott", "Focus Sash", ["Protect"])]),
-                      theirs: chilled, store: store, field: Field(isDoubles: true), alreadyEvolved: false)
+                      theirs: chilled, rules: store.rulebook, field: Field(isDoubles: true), alreadyEvolved: false)
     tired.mine[0].hp = tired.mine[0].maxHP / 5
     let recovered = TurnModel.resolve(tired,
         mine: Play(left: .attack(move: at(tired.mine[0], "Recover"), target: 0),
@@ -98,7 +98,7 @@ print("\n== confusion ==")
             && store.data.moves.values.first { $0.name == "Water Pulse" }?.secondary?.chance == 20)
     var dazed = Board(mine: fighters([("Whimsicott", "Focus Sash", ["Confuse Ray", "Protect"]),
                                       ("Milotic", "Leftovers", ["Protect"])]),
-                      theirs: chilled, store: store, field: Field(isDoubles: true), alreadyEvolved: false)
+                      theirs: chilled, rules: store.rulebook, field: Field(isDoubles: true), alreadyEvolved: false)
     dazed.mine[0].moves = [confuseRay] + dazed.mine[0].moves
     let rayed = TurnModel.resolve(dazed,
         mine: Play(left: .attack(move: 0, target: 0),

@@ -90,8 +90,8 @@ struct SpeedTiersView: View {
 
         if let team {
             for slot in team.slots {
-                guard let form = slot.battleForm(in: store),
-                      let combatant = slot.combatant(in: store) else { continue }
+                guard let form = slot.battleForm(in: store.rulebook),
+                      let combatant = slot.combatant(in: store.rulebook) else { continue }
                 let base = combatant.speed(in: field)
                 out.append(Mark(form: form, speed: tailwind ? base * 2 : base,
                                 label: form.formLabel,

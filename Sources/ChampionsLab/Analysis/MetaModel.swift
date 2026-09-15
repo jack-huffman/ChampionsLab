@@ -501,8 +501,8 @@ struct MetaModel {
     /// Whether a team does a job, and who does it.
     func fills(_ group: RoleGroup, in team: Team) -> [Form] {
         team.slots.compactMap { slot -> Form? in
-            guard let form = slot.battleForm(in: store),
-                  let combatant = slot.combatant(in: store) else { return nil }
+            guard let form = slot.battleForm(in: store.rulebook),
+                  let combatant = slot.combatant(in: store.rulebook) else { return nil }
             let moves = slot.moves.compactMap { store.move($0) }
             if moves.contains(where: { group.moves.contains($0.name) }) { return form }
             if group.abilities.contains(combatant.ability) { return form }
@@ -577,8 +577,8 @@ struct MetaModel {
             let spreads: Bool
         }
         let members: [Member] = team.slots.compactMap { slot in
-            guard let form = slot.battleForm(in: store),
-                  let combatant = slot.combatant(in: store) else { return nil }
+            guard let form = slot.battleForm(in: store.rulebook),
+                  let combatant = slot.combatant(in: store.rulebook) else { return nil }
             let running = Set(slot.moves.compactMap { store.move($0)?.name })
             return Member(slot: slot, form: form, running: running,
                           learnable: Set(form.moves.compactMap { store.move($0)?.name }),
@@ -648,7 +648,7 @@ struct MetaModel {
     func selfDefeating(_ terrain: Terrain, for team: Team) -> [String] {
         var hurt: [String] = []
         for slot in team.slots {
-            guard let form = slot.battleForm(in: store) else { continue }
+            guard let form = slot.battleForm(in: store.rulebook) else { continue }
             for id in slot.moves {
                 guard let move = store.move(id), move.isDamaging else { continue }
                 switch terrain {
@@ -672,8 +672,8 @@ struct MetaModel {
         // form's. Reading slot.ability directly reported Mega Charizard Y's
         // Drought as something it "could run" rather than something it has.
         let members: [(Form, Set<String>, Set<String>, String)] = team.slots.compactMap { slot in
-            guard let form = slot.battleForm(in: store),
-                  let combatant = slot.combatant(in: store) else { return nil }
+            guard let form = slot.battleForm(in: store.rulebook),
+                  let combatant = slot.combatant(in: store.rulebook) else { return nil }
             return (form,
                     Set(slot.moves.compactMap { store.move($0)?.name }),
                     Set(form.moves.compactMap { store.move($0)?.name }),

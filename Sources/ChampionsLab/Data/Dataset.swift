@@ -120,11 +120,9 @@ final class Store: ObservableObject {
         Dictionary(data.forms.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
     }()
 
-    func move(_ id: String) -> Move? { data.moves[id] }
+    func move(_ id: String) -> Move? { rulebook.move(id) }
 
-    func moves(for form: Form) -> [Move] {
-        form.moves.compactMap { data.moves[$0] }.sorted { $0.name < $1.name }
-    }
+    func moves(for form: Form) -> [Move] { rulebook.moves(for: form) }
 
     func item(named name: String) -> Item? {
         data.items.first { $0.name == name }
@@ -151,15 +149,7 @@ final class Store: ObservableObject {
     /// the slot fights as Mega Charizard Y with 159 Sp. Atk and Drought, not as
     /// a base Charizard with 109 and Solar Power.
     func megaForm(for base: Form, holding item: String) -> Form? {
-        guard !item.isEmpty, !base.isMega else { return nil }
-        // Floette's Mega belongs to the Eternal Flower form alone: the plain
-        // Floette holds a Floettite the way anyone else would, uselessly.
-        if base.species == "floette", base.suffix.isEmpty { return nil }
-        let candidates = data.forms.filter { $0.dex == base.dex && $0.isMega }
-        if let exact = candidates.first(where: { $0.megaStone == item }) { return exact }
-        // Only one Mega for this species and the item is some stone: take it.
-        if candidates.count == 1, item == "Mega Stone" { return candidates.first }
-        return nil
+        rulebook.megaForm(for: base, holding: item)
     }
 
     var newMegas: [Form] {
@@ -267,33 +257,12 @@ final class Store: ObservableObject {
     /// What a move is worth *to this Pokémon*: its own worth, its same-type
     /// bonus, and any ability that changes its type.
     ///
-    /// Six places ranked moves and only three of them applied STAB, which is
-    /// how Mega Baxcalibur — a Dragon/Ice Pokémon — had its best move reported
-    /// as Double-Edge. Normal at 120 beats Dragon at 106 until you remember the
-    /// Dragon one is multiplied by one and a half. The damage calculator always
-    /// had this right; the rankings feeding it did not, so it lives in one place
-    /// now and every caller uses it.
+    /// What a move is worth in this form's hands. One implementation, in the
+    /// rulebook, because six places used to rank moves and only three of them
+    /// applied the same-type bonus.
     func moveValue(_ move: Move, for form: Form,
                    ability: String = "", item: String = "") -> Double {
-        let resolved = ability.isEmpty ? (form.abilities.first?.name ?? "") : ability
-        // An -ate ability changes a Normal move's type, which changes whether
-        // it gets the bonus — this is why Mega Salamence clicks Double-Edge.
-        let ate = AteAbility.resolve(type: move.type, ability: resolved)
-        let type = ate.type, ateBoost = ate.boost
-        var stab = form.types.contains(type) ? 1.5 : 1.0
-        if resolved == "Adaptability", stab > 1 { stab = 2.0 }
-
-        // Whether it can actually throw the move. Ranking on power and STAB
-        // alone handed Mega Golisopod a Bug Buzz: 90 BP of Bug on a Pokémon
-        // with 150 Attack and 70 Sp. Atk, where the physical 100 BP it already
-        // had was worth twice as much.
-        let physical = move.category == "Physical"
-        let using = Double(physical ? form.attack : form.spAttack)
-        let best = Double(max(form.attack, form.spAttack))
-        let reach = best > 0 ? using / best : 1
-
-        return quality(of: move, ability: resolved, item: item).expectedPower
-            * stab * ateBoost * reach
+        rulebook.moveValue(move, for: form, ability: ability, item: item)
     }
 
     /// The move this Pokémon is actually best at, by that measure.
@@ -304,15 +273,8 @@ final class Store: ObservableObject {
         }
     }
 
-    /// Move worth, cached: Forecast prices every move of every form.
-    private var qualityCache: [String: MoveQuality] = [:]
-
     func quality(of move: Move, ability: String = "", item: String = "") -> MoveQuality {
-        let key = "\(move.id)|\(ability)|\(item)"
-        if let hit = qualityCache[key] { return hit }
-        let made = move.quality(ability: ability, item: item)
-        qualityCache[key] = made
-        return made
+        rulebook.quality(of: move, ability: ability, item: item)
     }
 
     private var moveOptionCache: [String: [LookupOption]] = [:]

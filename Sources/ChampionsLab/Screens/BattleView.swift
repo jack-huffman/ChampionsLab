@@ -34,6 +34,8 @@ struct BattleView: View {
     @State private var playing = false
     /// Every turn of this game, marked. Read back in the Review panel.
     @State private var review: [TurnReview] = []
+    /// Which lobby is being worked out; an older one's answer is dropped.
+    @State private var lobbyTicket = 0
     /// The start of the game, being shown: the flash, the leads coming out,
     /// their abilities going off. Nil once orders can be given.
     @State private var opening = false
@@ -150,8 +152,8 @@ struct BattleView: View {
                let theirs = shared.data.metaTeams.first(where: { $0.id == openTeams.theirs })
                    .map({ shared.opponentTeam($0) })
                    ?? shared.teams.first(where: { $0.id.uuidString == openTeams.theirs }) {
-                _lobby = State(initialValue: Self.lobby(mine: mine, theirs: theirs,
-                                                        singles: false, store: shared))
+                _lobby = State(initialValue: BattleView.lobby(mine: mine, theirs: theirs,
+                                                              singles: false, rules: shared.rulebook))
             }
         }
         if !previewing.isEmpty { _bringing = State(initialValue: previewing) }
@@ -190,6 +192,7 @@ struct BattleView: View {
                     previewBoard
                 case .battle:
                     if let board { field(board) }
+                    else { openingCard.padding(14) }
                 }
             }
         }
@@ -255,9 +258,7 @@ struct BattleView: View {
         case .versus:
             if lobby.verdict == nil { enterVersus() } else { stage = .versus }
         case .preview:
-            if lobby.verdict == nil, let mine = myTeam, let theirs = theirTeam {
-                lobby = Self.lobby(mine: mine, theirs: theirs, singles: singles, store: store)
-            }
+            if lobby.verdict == nil { enterVersus() }
             stage = .preview
         case .battle:
             if board != nil { stage = .battle }
@@ -286,31 +287,47 @@ struct BattleView: View {
         var theirExpectation: [Form] = []
     }
 
-    static func lobby(mine: Team, theirs: Team, singles: Bool, store: Store) -> Lobby {
+    /// Two grids of thirty-six duels and two bring-four searches. Nothing here
+    /// touches the store or the interface, so it runs wherever it is put.
+    nonisolated static func lobby(mine: Team, theirs: Team, singles: Bool,
+                                  rules: Rulebook) -> Lobby {
         let field = Field(isDoubles: !singles)
         let bring = singles ? 3 : 4
-        let grid = Matchup(mine: mine, theirs: theirs, store: store, field: field)
+        let grid = Matchup(mine: mine, theirs: theirs, rules: rules, field: field)
         // The same arithmetic from the other side of the table: their four
         // is chosen against your six exactly as yours is against theirs.
-        let flipped = Matchup(mine: theirs, theirs: mine, store: store, field: field)
-        let theirPicker = BringFour(matchup: flipped, store: store, bring: bring)
+        let flipped = Matchup(mine: theirs, theirs: mine, rules: rules, field: field)
+        let theirPicker = BringFour(matchup: flipped, rules: rules, bring: bring)
         var out = Lobby()
         let verdict = grid.verdict
         out.verdict = verdict
         out.myFears = verdict.unanswered
-        out.myPlan = BringFour(matchup: grid, store: store, bring: bring).plans.first
+        out.myPlan = BringFour(matchup: grid, rules: rules, bring: bring).plans.first
         out.theirPlan = theirPicker.plans.first
         out.theirExpectation = theirPicker.theirLikelyFour
         out.theirFears = flipped.verdict.unanswered
         return out
     }
 
+    /// Show the versus page at once and work the two sixes out behind it: the
+    /// page is mostly sprites, and the part that needs the arithmetic can
+    /// arrive a moment later.
     private func enterVersus() {
         guard let mine = myTeam, let theirs = theirTeam else { return }
-        lobby = Self.lobby(mine: mine, theirs: theirs, singles: singles, store: store)
         bringing = []; focused = nil; board = nil; finished = nil
         log = []; mySide = []; theirSide = []
+        lobby = Lobby()
         stage = .versus
+        let rules = store.rulebook, singles = singles
+        let ticket = lobbyTicket + 1
+        lobbyTicket = ticket
+        Task { @MainActor in
+            let made = await Task.detached(priority: .userInitiated) {
+                Self.lobby(mine: mine, theirs: theirs, singles: singles, rules: rules)
+            }.value
+            guard ticket == lobbyTicket else { return }
+            withAnimation(.easeOut(duration: 0.25)) { lobby = made }
+        }
     }
 
     private func choose(mine id: String) {
@@ -352,7 +369,7 @@ struct BattleView: View {
             out.append(Candidate(id: saved.id.uuidString, name: saved.name,
                                  tag: "\(saved.slots.count) Pokémon · \(saved.format)",
                                  group: "My teams",
-                                 forms: saved.slots.map { $0.battleForm(in: store) }))
+                                 forms: saved.slots.map { $0.battleForm(in: store.rulebook) }))
         }
         guard !opponentSearch.isEmpty else { return out }
         let needle = opponentSearch.lowercased()
@@ -380,7 +397,7 @@ struct BattleView: View {
                                 Button { choose(mine: team.id.uuidString) } label: {
                                     SixCard(name: team.name,
                                             tag: "\(team.slots.count) Pokémon · \(team.format)",
-                                            forms: team.slots.map { $0.battleForm(in: store) },
+                                            forms: team.slots.map { $0.battleForm(in: store.rulebook) },
                                             selected: team.id.uuidString == myTeamID)
                                 }
                                 .buttonStyle(.plain)
@@ -534,12 +551,12 @@ struct BattleView: View {
     /// Plans and grids speak in battle forms; anything shown before the battle
     /// speaks in these, because that is what walks out.
     private func registered(_ battle: Form, in team: Team) -> Form {
-        team.slots.first { $0.battleForm(in: store)?.id == battle.id }?.form(in: store) ?? battle
+        team.slots.first { $0.battleForm(in: store.rulebook)?.id == battle.id }?.form(in: store.rulebook) ?? battle
     }
 
     private func stoneHolders(_ team: Team) -> Set<String> {
-        Set(team.slots.filter { $0.megaEvolution(in: store) != nil }
-                      .compactMap { $0.form(in: store)?.id })
+        Set(team.slots.filter { $0.megaEvolution(in: store.rulebook) != nil }
+                      .compactMap { $0.form(in: store.rulebook)?.id })
     }
 
     /// Theirs that *could* be holding a stone. Nobody's items are on show at
@@ -548,7 +565,7 @@ struct BattleView: View {
     /// their list would answer a question the game does not let you ask.
     private func possibleMegas(_ team: Team) -> Set<String> {
         Set(team.slots.compactMap { slot -> String? in
-            guard let form = slot.form(in: store) else { return nil }
+            guard let form = slot.form(in: store.rulebook) else { return nil }
             let couldMega = store.data.forms.contains { $0.isMega && $0.species == form.species }
             return couldMega ? form.id : nil
         })
@@ -564,7 +581,7 @@ struct BattleView: View {
 
     private func bannerSide(_ team: Team, plan: BringFour.Plan?, title: String, tag: String,
                             tint: Color) -> VersusBanner.Side {
-        let all = team.slots.compactMap { $0.battleForm(in: store) }
+        let all = team.slots.compactMap { $0.battleForm(in: store.rulebook) }
         // The predicted four first, leads leading; the two left home last.
         let ordered: [Form]
         if let plan {
@@ -849,8 +866,8 @@ struct BattleView: View {
 
     /// One of mine, in the order it is being brought.
     private func previewRow(_ slot: TeamSlot) -> some View {
-        let form = slot.form(in: store)
-        let holdsStone = slot.megaEvolution(in: store) != nil   // yours: you know
+        let form = slot.form(in: store.rulebook)
+        let holdsStone = slot.megaEvolution(in: store.rulebook) != nil   // yours: you know
         let id = slot.formID
         let order = bringing.firstIndex(of: id).map { $0 + 1 }
         let isFocus = focused == id || (focused == nil && bringing.last == id)
@@ -913,8 +930,8 @@ struct BattleView: View {
 
     /// One of theirs, marked with how the Pokémon in focus fares against it.
     private func opposingRow(_ slot: TeamSlot) -> some View {
-        let form = slot.form(in: store)
-        let battle = slot.battleForm(in: store)
+        let form = slot.form(in: store.rulebook)
+        let battle = slot.battleForm(in: store.rulebook)
         // Theirs: not what it holds, which you cannot see, but whether the
         // species has a Mega at all.
         let couldMega = form.map { theirTeam.map(possibleMegas)?.contains($0.id) ?? false } ?? false
@@ -983,9 +1000,9 @@ struct BattleView: View {
         guard let mine = myTeam, let theirTeam,
               let focusID = focused ?? bringing.last,
               let mineSlot = mine.slots.first(where: { $0.formID == focusID }),
-              let mineForm = mineSlot.battleForm(in: store),
-              let theirForm = theirs.battleForm(in: store) else { return nil }
-        let grid = Matchup(mine: mine, theirs: theirTeam, store: store,
+              let mineForm = mineSlot.battleForm(in: store.rulebook),
+              let theirForm = theirs.battleForm(in: store.rulebook) else { return nil }
+        let grid = Matchup(mine: mine, theirs: theirTeam, rules: store.rulebook,
                            field: Field(isDoubles: !singles))
         guard let cell = grid.cell(mine: mineForm, theirs: theirForm) else { return nil }
         let against = "\(mineForm.formLabel) against \(theirForm.formLabel)"
@@ -1009,7 +1026,7 @@ struct BattleView: View {
 
     private func label(_ formID: String) -> String {
         if let slot = myTeam?.slots.first(where: { $0.formID == formID }),
-           let form = slot.battleForm(in: store) {
+           let form = slot.battleForm(in: store.rulebook) {
             return form.formLabel
         }
         return store.formsByID[formID]?.formLabel ?? formID
@@ -1018,27 +1035,20 @@ struct BattleView: View {
     /// What the bring-four search would take, as a starting point.
     private func autoPick() {
         guard let mine = myTeam, let theirs = theirTeam else { return }
-        let grid = Matchup(mine: mine, theirs: theirs, store: store,
+        let grid = Matchup(mine: mine, theirs: theirs, rules: store.rulebook,
                            field: Field(isDoubles: !singles))
-        let picker = BringFour(matchup: grid, store: store, bring: bringCount)
+        let picker = BringFour(matchup: grid, rules: store.rulebook, bring: bringCount)
         guard let plan = picker.plans.first else { return }
         // The plan names battle forms; the preview is keyed on what is
         // registered, which for a Mega is the base.
         bringing = plan.bring.compactMap { form in
-            mine.slots.first { $0.battleForm(in: store)?.id == form.id }?.formID
+            mine.slots.first { $0.battleForm(in: store.rulebook)?.id == form.id }?.formID
         }
     }
 
     private func begin() {
         guard let mine = myTeam, let theirs = theirTeam else { return }
         guard bringing.count >= leadCount else { return }
-        // Their four is chosen against your six the way you chose yours, and
-        // each side's back two go on the board as guesses: the game knows the
-        // truth so it can be played, and neither side's advice reads past what
-        // has been seen. Two bring-four searches and two grids, so the screen
-        // is changed first and the board built a moment later.
-        var start = Board.opening(mine: mine, bringing: bringing, theirs: theirs,
-                                  store: store, singles: singles, sendOut: false)
         stage = .battle
         turn = 1
         finished = nil
@@ -1046,10 +1056,29 @@ struct BattleView: View {
         leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
         chosenSends = []; review = []; playing = false
         log = [BattleView.opener]
+        board = nil
+        opening = true
+        shown = []
+        callout = nil
+        // Their four is chosen against your six the way you chose yours, and
+        // each side's back two go on the board as guesses: the game knows the
+        // truth so it can be played, and neither side's advice reads past what
+        // has been seen. Two bring-four searches and two grids to work that
+        // out, so it happens off the main thread while the flash is up.
+        let rules = store.rulebook, singles = singles, bringing = bringing
+        func built() async -> Board {
+            await Task.detached(priority: .userInitiated) {
+                Board.opening(mine: mine, bringing: bringing, theirs: theirs,
+                              rules: rules, singles: singles, sendOut: false)
+            }.value
+        }
         if snapshotMode {
+            var start = Board.opening(mine: mine, bringing: bringing, theirs: theirs,
+                                      rules: rules, singles: singles, sendOut: false)
             start.sendOutLeads()
             board = start
             log += start.story
+            opening = false
             think()
             return
         }
@@ -1057,13 +1086,11 @@ struct BattleView: View {
         // coming out one by one, then their abilities in Speed order — the
         // slower weather landing second and staying, an Intimidate cutting
         // what is already out. Orders wait until it is done.
-        board = start
-        opening = true
-        shown = []
-        callout = nil
         startFlash = true
-        let order = start.leadOrder
         Task { @MainActor in
+            let start = await built()
+            board = start
+            let order = start.leadOrder
             try? await Task.sleep(nanoseconds: 1_100_000_000)
             withAnimation(.easeOut(duration: 0.35)) { startFlash = false }
             try? await Task.sleep(nanoseconds: 300_000_000)

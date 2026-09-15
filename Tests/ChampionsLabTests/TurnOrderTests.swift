@@ -34,7 +34,7 @@ print("\n== the rest of a turn ==")
         ("Garchomp", "Focus Sash", ["Earthquake", "Swords Dance", "Rock Slide", "Protect"]),
         ("Rillaboom", "Life Orb", ["Wood Hammer", "Fake Out", "Protect"]),
         ("Kingambit", "Chople Berry", ["Iron Head", "Protect"])])
-    let opening = Board(mine: supporters, theirs: aggressors, store: store,
+    let opening = Board(mine: supporters, theirs: aggressors, rules: store.rulebook,
                         field: Field(isDoubles: true), alreadyEvolved: false)
     func at(_ fighter: Fighter, _ name: String) -> Int {
         fighter.moves.firstIndex { $0.name == name } ?? 0
@@ -80,7 +80,7 @@ print("\n== the rest of a turn ==")
     let screened = fighters([("Whimsicott", "Focus Sash", ["Light Screen", "Protect"]),
                              ("Incineroar", "Sitrus Berry", ["Wide Guard", "Protect"]),
                              ("Garchomp", "Life Orb", ["Earthquake", "Protect"])])
-    let wide = Board(mine: screened, theirs: aggressors, store: store,
+    let wide = Board(mine: screened, theirs: aggressors, rules: store.rulebook,
                      field: Field(isDoubles: true), alreadyEvolved: false)
     let blocked = TurnModel.resolve(
         wide,
@@ -148,7 +148,7 @@ print("\n== turn order ==")
     let quick = fighters([("Garchomp", "Choice Scarf", ["Earthquake", "Protect"]),
                           ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"]),
                           ("Kingambit", "Chople Berry", ["Iron Head", "Protect"])])
-    var windBoard = Board(mine: windUp, theirs: quick, store: store,
+    var windBoard = Board(mine: windUp, theirs: quick, rules: store.rulebook,
                           field: Field(isDoubles: true), alreadyEvolved: false)
     windBoard.mine[0].build.ability = "Prankster"
     let mySlow = windBoard.mine[1].build.speed(in: windBoard.field)
@@ -186,7 +186,7 @@ print("\n== turn order ==")
                             ("Whimsicott", "Focus Sash", ["Protect"])])
     let heated = fighters([("Garchomp", "Life Orb", ["Swords Dance", "Earthquake"]),
                            ("Rillaboom", "Life Orb", ["Wood Hammer"])])
-    let heatBoard = Board(mine: heaters, theirs: heated, store: store,
+    let heatBoard = Board(mine: heaters, theirs: heated, rules: store.rulebook,
                           field: Field(isDoubles: true), alreadyEvolved: false)
     let heatTurn = TurnModel.resolve(
         heatBoard,
@@ -215,7 +215,7 @@ print("\n== what a move costs its user ==")
         let gambit = fighters([("Whimsicott", "Focus Sash", ["Final Gambit", "Protect"]),
                                ("Incineroar", "Sitrus Berry", ["Flare Blitz", "Protect"]),
                                ("Garchomp", "Life Orb", ["Earthquake", "Protect"])])
-        let board2 = Board(mine: gambit, theirs: quick, store: store,
+        let board2 = Board(mine: gambit, theirs: quick, rules: store.rulebook,
                            field: Field(isDoubles: true), alreadyEvolved: false)
         if board2.mine[0].moves.contains(where: { $0.name == "Final Gambit" }) {
             let after = TurnModel.resolve(
@@ -234,7 +234,7 @@ print("\n== what a move costs its user ==")
     let orbed = fighters([("Garchomp", "Life Orb", ["Double-Edge", "Protect"]),
                           ("Incineroar", "Sitrus Berry", ["Protect"]),
                           ("Whimsicott", "Focus Sash", ["Protect"])])
-    let orbBoard = Board(mine: orbed, theirs: quick, store: store,
+    let orbBoard = Board(mine: orbed, theirs: quick, rules: store.rulebook,
                          field: Field(isDoubles: true), alreadyEvolved: false)
     if orbBoard.mine[0].moves.contains(where: { $0.name == "Double-Edge" }) {
         let after = TurnModel.resolve(
@@ -270,7 +270,7 @@ print("\n== priority refused ==")
     let fakers = fighters([("Rillaboom", "Life Orb", ["Fake Out", "Wood Hammer", "Protect"]),
                            ("Incineroar", "Sitrus Berry", ["Fake Out", "Flare Blitz", "Protect"]),
                            ("Kingambit", "Chople Berry", ["Iron Head", "Protect"])])
-    var tailed = Board(mine: guarded2, theirs: fakers, store: store,
+    var tailed = Board(mine: guarded2, theirs: fakers, rules: store.rulebook,
                        field: Field(isDoubles: true), alreadyEvolved: false)
     tailed.mine[0].build.ability = "Armor Tail"
     print("  your lead is \(tailed.mine[0].build.form.formLabel) with "
@@ -322,7 +322,7 @@ print("\n== priority refused ==")
     /// who comes in when something falls
     @MainActor func testSendingOneIn() throws {
 print("\n== sending one in ==")
-    var wounded = Board(mine: supporters, theirs: aggressors, store: store,
+    var wounded = Board(mine: supporters, theirs: aggressors, rules: store.rulebook,
                         field: Field(isDoubles: true), alreadyEvolved: false)
     wounded.mine[0].hp = 0
     wounded.theirs[0].hp = 0

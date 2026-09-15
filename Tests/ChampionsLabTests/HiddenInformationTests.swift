@@ -23,7 +23,7 @@ print("\n== the hidden back two ==")
                              ("Charizard", "Charizardite Y", ["Heat Wave", "Solar Beam", "Protect"]),
                              ("Farigiraf", "Leftovers", ["Trick Room", "Psychic", "Protect"])])
     let game = Board.opening(mine: mySix, bringing: mySix.slots.prefix(4).map(\.formID),
-                             theirs: theirSix, store: store, singles: false)
+                             theirs: theirSix, rules: store.rulebook, singles: false)
     print("  they brought \(game.theirs.map { $0.build.form.formLabel }), leading the first two")
     check("their four is chosen, but only the leads are on show",
           game.theirs.count == 4 && game.theirs[0].seen && game.theirs[1].seen
@@ -80,7 +80,7 @@ print("\n== the hidden back two ==")
                                  ("Farigiraf", "Leftovers", ["Trick Room", "Psychic", "Protect"])])
 print("\n== both of theirs act ==")
     let bothGame = Board.opening(mine: mySix, bringing: mySix.slots.prefix(4).map(\.formID),
-                                 theirs: theirSix, store: store, singles: false)
+                                 theirs: theirSix, rules: store.rulebook, singles: false)
     let bothSolve = TurnGame(board: bothGame).solve(iterations: 300)
     let theirsActing = bothSolve.theirPlays.filter { !$0.left.isPass && !$0.right.isPass }.count
     check("every line of theirs gives both Pokémon something to do",
@@ -138,7 +138,7 @@ print("\n== both of theirs act ==")
                                  ("Charizard", "Charizardite Y", ["Heat Wave", "Solar Beam", "Protect"]),
                                  ("Farigiraf", "Leftovers", ["Trick Room", "Psychic", "Protect"])])
         let game = Board.opening(mine: mySix, bringing: mySix.slots.prefix(4).map(\.formID),
-                                 theirs: theirSix, store: store, singles: false)
+                                 theirs: theirSix, rules: store.rulebook, singles: false)
         check("they have a guess about your back two as well",
               game.myBenchGuesses.count > 1 && abs(game.myBenchGuesses.reduce(0) { $0 + $1.chance } - 1) < 0.01,
               "\(game.myBenchGuesses.count)")
@@ -158,7 +158,7 @@ print("\n== both of theirs act ==")
         var swapped = game
         for slot in game.myUnseenBench {
             let unexpected = fighters([("Milotic", "Leftovers", ["Recover", "Muddy Water", "Protect"])])
-            let other = Board(mine: unexpected, theirs: theirSix, store: store,
+            let other = Board(mine: unexpected, theirs: theirSix, rules: store.rulebook,
                               field: Field(isDoubles: true), alreadyEvolved: false)
             swapped.mine[slot] = other.mine[0]
         }

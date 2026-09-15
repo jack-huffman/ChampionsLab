@@ -101,7 +101,7 @@ print("\n== the clock ==")
         let theirSix = store.opponentTeam(opponent)
         var windows = 0
         for saved in store.teams {
-            let grid = Matchup(mine: saved, theirs: theirSix, store: store,
+            let grid = Matchup(mine: saved, theirs: theirSix, rules: store.rulebook,
                                field: Field(isDoubles: true))
             guard let w = grid.window() else { continue }
             windows += 1

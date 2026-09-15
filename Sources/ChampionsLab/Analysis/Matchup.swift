@@ -187,11 +187,10 @@ struct OpposingReport: Identifiable {
     var threatScore: Double { duels.reduce(0) { $0 - $1.outcome.score } }
 }
 
-@MainActor
 struct Matchup {
     let mine: Team
     let theirs: Team
-    let store: Store
+    let rules: Rulebook
     var field: Field = Field()
     /// Speed control in effect for each side. Tailwind doubles Speed for four
     /// turns, which decides a large share of the one-on-ones — scoring without
@@ -210,12 +209,12 @@ struct Matchup {
     /// several hundred times and a linear scan of thirty-six is not free.
     private var byCell: [String: Duel] = [:]
 
-    init(mine: Team, theirs: Team, store: Store, field: Field = Field(),
+    init(mine: Team, theirs: Team, rules: Rulebook, field: Field = Field(),
          myTailwind: Bool = false, theirTailwind: Bool = false,
          myTrickRoom: Bool = false) {
         self.mine = mine
         self.theirs = theirs
-        self.store = store
+        self.rules = rules
         self.field = field
         self.myTailwind = myTailwind
         self.theirTailwind = theirTailwind
@@ -242,7 +241,7 @@ struct Matchup {
         // A Mega fights with its own ability, which is most of the reason to
         // evolve: Salamence's Intimidate becomes Aerilate, and that changes
         // what its moves are as well as how hard they hit.
-        let ability = slot.megaEvolution(in: store)?.abilities.first?.name
+        let ability = slot.megaEvolution(in: rules)?.abilities.first?.name
             ?? (slot.ability.isEmpty ? (form.abilities.first?.name ?? "") : slot.ability)
         var c = Combatant(form: form, ability: ability, item: slot.item,
                           sp: slot.sp, alignment: slot.alignment)
@@ -265,9 +264,9 @@ struct Matchup {
     /// slot's ability here handed Mega Salamence a Dragon move, because
     /// Aerilate was not in the room when Double-Edge was priced.
     private func moves(_ slot: TeamSlot, form: Form, ability: String) -> [Move] {
-        let chosen = slot.moves.compactMap { store.move($0) }
+        let chosen = slot.moves.compactMap { rules.move($0) }
         if chosen.contains(where: \.isDamaging) { return chosen }
-        let learnable = store.moves(for: form).filter { $0.isDamaging && $0.power > 0 }
+        let learnable = rules.moves(for: form).filter { $0.isDamaging && $0.power > 0 }
         // Under the effective type, not the printed one: filtering on the
         // printed type drops every -ate move out of its own user's STAB pool.
         let stab = learnable.filter {
@@ -277,8 +276,8 @@ struct Matchup {
         // Ranked on what the move is worth, not its base power: otherwise the
         // fallback set is Giga Impact and Steel Beam every time.
         return Array(pool.sorted {
-            store.moveValue($0, for: form, ability: ability, item: slot.item)
-                > store.moveValue($1, for: form, ability: ability, item: slot.item)
+            rules.moveValue($0, for: form, ability: ability, item: slot.item)
+                > rules.moveValue($1, for: form, ability: ability, item: slot.item)
         }.prefix(3))
     }
 
@@ -291,13 +290,13 @@ struct Matchup {
     /// 600 base stats with Intimidate rather than 700 with Aerilate.
     var myPairs: [(TeamSlot, Form)] {
         mine.slots.compactMap { slot in
-            slot.battleForm(in: store).map { (slot, $0) }
+            slot.battleForm(in: rules).map { (slot, $0) }
         }
     }
 
     var theirPairs: [(TeamSlot, Form)] {
         theirs.slots.compactMap { slot in
-            slot.battleForm(in: store).map { (slot, $0) }
+            slot.battleForm(in: rules).map { (slot, $0) }
         }
     }
 
@@ -326,7 +325,7 @@ struct Matchup {
                 out.append(DuelEngine.duel(
                     mine: DuelEngine.Side(combatant: me, moves: myMoves, speed: speeds.0),
                     theirs: DuelEngine.Side(combatant: them, moves: theirMoves, speed: speeds.1),
-                    field: field, store: store))
+                    field: field, rules: rules))
             }
         }
         return out
@@ -389,7 +388,7 @@ struct Matchup {
     /// Members of a side running Helping Hand or Coaching.
     private func boosterIDs(_ pairs: [(TeamSlot, Form)]) -> Set<String> {
         Set(pairs.filter { slot, _ in
-            slot.moves.contains { ["Helping Hand", "Coaching"].contains(store.move($0)?.name) }
+            slot.moves.contains { ["Helping Hand", "Coaching"].contains(rules.move($0)?.name) }
         }.map(\.1.id))
     }
 
@@ -583,7 +582,7 @@ struct Matchup {
         // The speed control this six is actually running, not what it could.
         var best: (name: String, turns: Int)?
         for (slot, form) in myPairs where mineIDs.contains(form.id) {
-            for move in slot.moves.compactMap({ store.move($0) })
+            for move in slot.moves.compactMap({ rules.move($0) })
             where ["Tailwind", "Trick Room"].contains(move.name) {
                 guard let turns = Matchup.duration(of: move) else { continue }
                 if best == nil || turns < best!.turns { best = (move.name, turns) }
@@ -608,7 +607,7 @@ struct Matchup {
         }
         cost.sort { $0.2 > $1.2 }
 
-        let bring = store.data.rules.formats.first { $0.id == mineTeamFormat }?.bring ?? 4
+        let bring = rules.bringCount(mineTeamFormat)
         let mustRemove = min(bring, cost.count)
         let needed = cost.prefix(mustRemove).reduce(0) { $0 + $1.2 }
         let actions = control.turns * (field.isDoubles ? 2 : 1)

@@ -37,16 +37,15 @@
 
 import Foundation
 
-@MainActor
 struct BringFour {
     let matchup: Matchup
-    let store: Store
+    let rules: Rulebook
     /// How many are brought. Four in doubles, three in singles.
     var bring = 4
 
-    init(matchup: Matchup, store: Store, bring: Int = 4) {
+    init(matchup: Matchup, rules: Rulebook, bring: Int = 4) {
         self.matchup = matchup
-        self.store = store
+        self.rules = rules
         self.bring = bring
     }
 
@@ -404,7 +403,7 @@ struct BringFour {
                 forms.filter { form in
                     guard let slot = matchup.myPairs.first(where: { $0.1.id == form.id })?.0
                     else { return false }
-                    return slot.moves.contains { names.contains(store.move($0)?.name ?? "") }
+                    return slot.moves.contains { names.contains(rules.move($0)?.name ?? "") }
                 }
             }
             let onSix = has(matchup.myForms)

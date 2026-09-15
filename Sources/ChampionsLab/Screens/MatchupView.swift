@@ -43,7 +43,7 @@ struct MatchupView: View {
 
     private var matchup: Matchup? {
         guard let opponent, !opponent.slots.isEmpty, !team.slots.isEmpty else { return nil }
-        return Matchup(mine: team, theirs: opponent, store: store,
+        return Matchup(mine: team, theirs: opponent, rules: store.rulebook,
                        field: Field(weather: weather, terrain: terrain,
                                     isDoubles: team.isDoubles))
     }
@@ -104,7 +104,7 @@ struct MatchupView: View {
         for saved in store.teams where saved.id != team.id {
             out.append(Candidate(id: saved.id.uuidString, name: saved.name,
                                  tag: "\(saved.slots.count) Pokémon", group: "My teams",
-                                 forms: saved.slots.map { $0.battleForm(in: store) }))
+                                 forms: saved.slots.map { $0.battleForm(in: store.rulebook) }))
         }
         guard !opponentSearch.isEmpty else { return out }
         let needle = opponentSearch.lowercased()
@@ -325,7 +325,7 @@ struct MatchupView: View {
                            trailing: Bool) -> some View {
         let key = "\(side)-\(index)"
         let open = inspecting == key
-        let form = slot.battleForm(in: store)
+        let form = slot.battleForm(in: store.rulebook)
         VStack(alignment: trailing ? .trailing : .leading, spacing: 5) {
             Button {
                 inspecting = open ? nil : key
@@ -370,7 +370,7 @@ struct MatchupView: View {
     /// What the slot is actually carrying, which is the reason to click it.
     @ViewBuilder
     private func buildDetail(_ slot: TeamSlot, form: Form?, trailing: Bool) -> some View {
-        let combatant = slot.combatant(in: store)
+        let combatant = slot.combatant(in: store.rulebook)
         VStack(alignment: trailing ? .trailing : .leading, spacing: 4) {
             if let form {
                 HStack(spacing: 4) {
@@ -379,7 +379,7 @@ struct MatchupView: View {
                     if !trailing { Spacer(minLength: 0) }
                 }
             }
-            let ability = slot.megaEvolution(in: store)?.abilities.first?.name
+            let ability = slot.megaEvolution(in: store.rulebook)?.abilities.first?.name
                 ?? (slot.ability.isEmpty ? form?.abilities.first?.name ?? "" : slot.ability)
             if !ability.isEmpty {
                 Text(ability).font(.system(size: 11, weight: .medium))
@@ -538,10 +538,10 @@ struct MatchupView: View {
             // The leads the bring-four search settled on, so the two screens
             // agree about which turn is being solved.
             let size = store.data.rules.formats.first { $0.id == team.format }?.bring ?? 4
-            let picker = BringFour(matchup: matchup, store: store, bring: size)
+            let picker = BringFour(matchup: matchup, rules: store.rulebook, bring: size)
             let plan = picker.plans.first
             await breathe("turn leads")
-            let board = Board(mine: team, theirs: opponent, store: store,
+            let board = Board(mine: team, theirs: opponent, rules: store.rulebook,
                               myLeads: plan?.leads.map(\.id) ?? [],
                               theirLeads: Array(picker.theirLikelyFour.prefix(2).map(\.id)),
                               field: Field(weather: weather, terrain: terrain,
@@ -570,7 +570,7 @@ struct MatchupView: View {
     @ViewBuilder
     private func bringFourCard(_ matchup: Matchup) -> some View {
         let size = store.data.rules.formats.first { $0.id == team.format }?.bring ?? 4
-        let picker = BringFour(matchup: matchup, store: store, bring: size)
+        let picker = BringFour(matchup: matchup, rules: store.rulebook, bring: size)
         let plans = picker.plans
         let chosen = plans.first { $0.id == selectedPlan } ?? plans.first
 
@@ -1003,7 +1003,7 @@ struct ImportSheet: View {
                                 SectionHeader(title: "Preview",
                                               subtitle: "\(preview.team.slots.count) Pokémon")
                                 ForEach(preview.team.slots) { slot in
-                                    if let form = slot.form(in: store) {
+                                    if let form = slot.form(in: store.rulebook) {
                                         HStack(spacing: 8) {
                                             SpriteImage(form: form, side: 30)
                                             VStack(alignment: .leading, spacing: 1) {

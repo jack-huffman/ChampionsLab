@@ -290,7 +290,7 @@ struct BuilderView: View {
 
             HStack(spacing: 3) {
                 ForEach(blueprint.team.slots) { slot in
-                    if let form = slot.form(in: store) {
+                    if let form = slot.form(in: store.rulebook) {
                         SpriteImage(form: form, side: 30)
                     }
                 }
@@ -337,7 +337,7 @@ struct BuilderView: View {
     private func members(_ blueprint: Blueprint) -> some View {
         VStack(spacing: 4) {
             ForEach(blueprint.team.slots) { slot in
-                if let form = slot.form(in: store) {
+                if let form = slot.form(in: store.rulebook) {
                     HStack(spacing: 8) {
                         SpriteImage(form: form, side: 30)
                         VStack(alignment: .leading, spacing: 1) {
@@ -407,7 +407,7 @@ struct BuilderView: View {
             // The four to bring, in lead order — the front two first.
             HStack(spacing: 4) {
                 ForEach(Array(line.bring.enumerated()), id: \.element.id) { position, slot in
-                    if let form = slot.battleForm(in: store) {
+                    if let form = slot.battleForm(in: store.rulebook) {
                         VStack(spacing: 2) {
                             SpriteImage(form: form, side: 28)
                             Text(position < 2 ? "lead" : "back")

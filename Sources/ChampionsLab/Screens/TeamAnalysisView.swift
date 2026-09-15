@@ -20,9 +20,9 @@ struct TeamAnalysisView: View {
     private var ownField: Field {
         var out = Field(isDoubles: team.isDoubles)
         for slot in team.slots {
-            let ability = slot.megaEvolution(in: store)?.abilities.first?.name
+            let ability = slot.megaEvolution(in: store.rulebook)?.abilities.first?.name
                 ?? (slot.ability.isEmpty
-                    ? slot.battleForm(in: store)?.abilities.first?.name ?? "" : slot.ability)
+                    ? slot.battleForm(in: store.rulebook)?.abilities.first?.name ?? "" : slot.ability)
             switch ability {
             case "Drought":        out.weather = .sun
             case "Drizzle":        out.weather = .rain
@@ -63,7 +63,7 @@ struct TeamAnalysisView: View {
                 } else {
                     ForEach(team.slots.indices, id: \.self) { index in
                         if let plan = spreads[index],
-                           let form = team.slots[index].battleForm(in: store) {
+                           let form = team.slots[index].battleForm(in: store.rulebook) {
                             spreadRow(index: index, form: form, plan: plan)
                             if index != team.slots.indices.last { Divider() }
                         }
@@ -127,7 +127,7 @@ struct TeamAnalysisView: View {
             var made: [Int: SpreadPlanner.Plan] = [:]
             let advisor = TeamAdvisor(team: team, store: store)
             for index in team.slots.indices {
-                guard let form = team.slots[index].battleForm(in: store) else { continue }
+                guard let form = team.slots[index].battleForm(in: store.rulebook) else { continue }
                 await breathe("spread")
                 let roles = advisor.potentialRoles(of: form)
                 // A redirection or speed-control slot is not spending points on
@@ -236,7 +236,7 @@ struct TeamAnalysisView: View {
 
     private var defensiveCard: some View {
         let exposures = analysis.exposures
-        let members = team.slots.compactMap { $0.form(in: store) }
+        let members = team.slots.compactMap { $0.form(in: store.rulebook) }
         return Card {
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(title: "Defensive matrix",

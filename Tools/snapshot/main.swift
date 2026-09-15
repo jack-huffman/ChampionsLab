@@ -129,9 +129,9 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
            size: CGSize(width: 1180, height: 2400), dark: true)
     // The calculator as it opens from a team slot's ƒ button.
     if let saved = store.teams.first(where: { $0.name == "Sun / Dual Mega" }),
-       let zard = saved.slots.first(where: { $0.form(in: store)?.name == "Charizard" }),
+       let zard = saved.slots.first(where: { $0.form(in: store.rulebook)?.name == "Charizard" }),
        let target = store.form(named: "Garchomp") {
-        render(CalculatorView(preload: CalculatorPreload(slot: zard, store: store),
+        render(CalculatorView(preload: CalculatorPreload(slot: zard, rules: store.rulebook),
                               initialDefender: target.id),
                named: "calc-preloaded-dark",
                size: CGSize(width: 1180, height: 1200), dark: true)
@@ -150,11 +150,11 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
        let against = store.data.metaTeams.first(where: { $0.name == "Big Six" }) {
         let theirs = store.opponentTeam(against)
         // Team Preview, with a four already chosen so the ordering shows.
-        let grid = Matchup(mine: playing, theirs: theirs, store: store,
+        let grid = Matchup(mine: playing, theirs: theirs, rules: store.rulebook,
                            field: Field(isDoubles: true))
-        let chosen = BringFour(matchup: grid, store: store).plans.first?.bring
+        let chosen = BringFour(matchup: grid, rules: store.rulebook).plans.first?.bring
             .compactMap { form in
-                playing.slots.first { $0.battleForm(in: store)?.id == form.id }?.formID
+                playing.slots.first { $0.battleForm(in: store.rulebook)?.id == form.id }?.formID
             } ?? []
         render(BattleView(openTeams: (mine: playing.id.uuidString, theirs: against.id),
                           previewing: chosen),
@@ -173,14 +173,14 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         // And the field itself, a turn in. Lead with something holding a
         // stone, so the Mega Evolve toggle shows.
         var order = chosen
-        let stone = playing.slots.first { $0.megaEvolution(in: store) != nil }?.formID
+        let stone = playing.slots.first { $0.megaEvolution(in: store.rulebook) != nil }?.formID
         if let stone {
             order.removeAll { $0 == stone }
             order.insert(stone, at: 0)
             order = Array(order.prefix(4))
         }
         var board = Board.opening(mine: playing, bringing: order, theirs: theirs,
-                                  store: store, singles: false)
+                                  rules: store.rulebook, singles: false)
         // Weather and terrain with their clocks running, so the field shows them.
         if board.field.weather == .none { board.field.weather = .rain; board.weatherTurns = 4 }
         if board.field.terrain == .none { board.field.terrain = .grassy; board.terrainTurns = 3 }

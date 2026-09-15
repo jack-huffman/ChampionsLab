@@ -279,7 +279,7 @@ enum TeamPaste {
     static func export(_ team: Team, store: Store) -> String {
         var out: [String] = []
         for slot in team.slots {
-            guard let form = slot.form(in: store) else { continue }
+            guard let form = slot.form(in: store.rulebook) else { continue }
             var block: [String] = []
 
             var head = showdownName(form)

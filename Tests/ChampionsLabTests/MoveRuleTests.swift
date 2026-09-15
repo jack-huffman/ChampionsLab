@@ -31,7 +31,7 @@ print("\n== two-turn moves ==")
                              ("Whimsicott", "Focus Sash", ["Protect"])])
     let standing = fighters([("Garchomp", "Life Orb", ["Swords Dance", "Earthquake", "Protect"]),
                              ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"])])
-    let chargeBoard = Board(mine: chargers, theirs: standing, store: store,
+    let chargeBoard = Board(mine: chargers, theirs: standing, rules: store.rulebook,
                             field: Field(isDoubles: true), alreadyEvolved: false)
     let eShot = at(chargeBoard.mine[0], "Electro Shot")
     let beam = at(chargeBoard.mine[0], "Solar Beam")
@@ -105,7 +105,7 @@ print("\n== two-turn moves ==")
                              ("Whimsicott", "Focus Sash", ["Protect"])])
     let standing = fighters([("Garchomp", "Life Orb", ["Swords Dance", "Earthquake", "Protect"]),
                              ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"])])
-    let chargeBoard = Board(mine: chargers, theirs: standing, store: store,
+    let chargeBoard = Board(mine: chargers, theirs: standing, rules: store.rulebook,
                             field: Field(isDoubles: true), alreadyEvolved: false)
 
 print("\n== Protect wearing thin ==")
@@ -184,7 +184,7 @@ print("\n== Feint ==")
                              ("Garchomp", "Life Orb", ["Earthquake", "Dragon Claw", "Protect"])])
     let guardedSide = fighters([("Kingambit", "Chople Berry", ["Protect", "Iron Head"]),
                             ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"])])
-    let feintBoard = Board(mine: feinters, theirs: guardedSide, store: store,
+    let feintBoard = Board(mine: feinters, theirs: guardedSide, rules: store.rulebook,
                            field: Field(isDoubles: true), alreadyEvolved: false)
     let feint = at(feintBoard.mine[0], "Feint")
     check("Feint is +2 and not protectable",
@@ -220,7 +220,7 @@ print("\n== the target that was gone ==")
                             ("Garchomp", "Life Orb", ["Dragon Claw", "Protect"])])
     let falling = fighters([("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"]),
                             ("Kingambit", "Chople Berry", ["Iron Head", "Protect"])])
-    var turnBoard = Board(mine: turners, theirs: falling, store: store,
+    var turnBoard = Board(mine: turners, theirs: falling, rules: store.rulebook,
                           field: Field(isDoubles: true), alreadyEvolved: false)
     turnBoard.theirs[0].hp = 1
     let turned = TurnModel.resolve(turnBoard,
@@ -248,7 +248,7 @@ print("\n== the party as a target ==")
                              ("Kingambit", "Chople Berry", ["Iron Head", "Protect"])])
     let bystanders = fighters([("Rillaboom", "Life Orb", ["Protect"]),
                                ("Incineroar", "Sitrus Berry", ["Protect"])])
-    var reviveBoard = Board(mine: revivers, theirs: bystanders, store: store,
+    var reviveBoard = Board(mine: revivers, theirs: bystanders, rules: store.rulebook,
                             field: Field(isDoubles: true), alreadyEvolved: false)
     reviveBoard.mine[3].hp = 0        // Kingambit is down
     let blessing = at(reviveBoard.mine[0], "Revival Blessing")
@@ -276,7 +276,7 @@ print("\n== the party as a target ==")
     /// hitting your own partner on purpose
     @MainActor func testTheTech() throws {
 print("\n== the tech ==")
-    var techBoard = Board(mine: sunPair, theirs: dragonPair, store: store,
+    var techBoard = Board(mine: sunPair, theirs: dragonPair, rules: store.rulebook,
                           field: Field(isDoubles: true), alreadyEvolved: false)
     techBoard.mine[1].build.item = "Weakness Policy"
     let selfHit = TurnModel.resolve(techBoard,
@@ -318,7 +318,7 @@ print("\n== the tech ==")
                                   ("Kingambit", "Chople Berry", ["Sucker Punch", "Iron Head", "Protect"])])
         let grounded = fighters([("Indeedee (Female)", "Psychic Seed", ["Trick Room", "Dazzling Gleam", "Protect"]),
                                  ("Garchomp", "Life Orb", ["Earthquake", "Protect"])])
-        var board = Board(mine: quickOnes, theirs: grounded, store: store,
+        var board = Board(mine: quickOnes, theirs: grounded, rules: store.rulebook,
                           field: Field(isDoubles: true), alreadyEvolved: false)
         board.field.terrain = .psychic
         board.terrainTurns = 5
@@ -357,7 +357,7 @@ print("\n== the tech ==")
                              ("Whimsicott", "Focus Sash", ["Protect"])])
         let targets = fighters([("Garchomp", "Life Orb", ["Earthquake", "Swords Dance", "Protect"]),
                                 ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"])])
-        let board = Board(mine: dark, theirs: targets, store: store,
+        let board = Board(mine: dark, theirs: targets, rules: store.rulebook,
                           field: Field(isDoubles: true), alreadyEvolved: false)
         let punch = at(board.mine[0], "Sucker Punch")
         func into(_ theirLeft: Choice) -> Board {
@@ -387,7 +387,7 @@ print("\n== the tech ==")
         print("== Ally Switch ==")
         let pair = fighters([("Indeedee (Female)", "Psychic Seed", ["Ally Switch", "Protect"]),
                              ("Charizard", "Charizardite Y", ["Heat Wave", "Protect"])])
-        let board = Board(mine: pair, theirs: soaked, store: store,
+        let board = Board(mine: pair, theirs: soaked, rules: store.rulebook,
                           field: Field(isDoubles: true), alreadyEvolved: false)
         let swapped = TurnModel.resolve(board,
             mine: Play(left: .attack(move: at(board.mine[0], "Ally Switch"), target: 0),

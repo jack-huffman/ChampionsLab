@@ -99,7 +99,7 @@ let fieldMoveNeeds: [String: Set<String>] = [
     print("\n== solving a turn ==")
     if let meta = store.data.metaTeams.first(where: { $0.name == "Big Six" }),
        let mine = store.teams.first(where: { $0.slots.count >= 4 }) {
-        let board = Board(mine: mine, theirs: store.opponentTeam(meta), store: store)
+        let board = Board(mine: mine, theirs: store.opponentTeam(meta), rules: store.rulebook)
         let game = TurnGame(board: board)
         _ = game.solve()
         let started = Date()
@@ -137,7 +137,7 @@ let fieldMoveNeeds: [String: Set<String>] = [
     print("\n== the search ==")
     if let meta = store.data.metaTeams.first(where: { $0.name == "Big Six" }),
        let mine = store.teams.first(where: { $0.slots.count >= 4 }) {
-        let board = Board(mine: mine, theirs: store.opponentTeam(meta), store: store)
+        let board = Board(mine: mine, theirs: store.opponentTeam(meta), rules: store.rulebook)
         var reached: [Int] = []
         for budget in [0.15, 0.5] {
             var engine = BattleEngine(rules: store.rulebook, budget: budget)
@@ -212,9 +212,9 @@ let fieldMoveNeeds: [String: Set<String>] = [
 
         // Everything the six is running, and what it would be giving up.
         let abilities = Set(team.slots.compactMap { slot -> String? in
-            if let mega = slot.megaEvolution(in: store) { return mega.abilities.first?.name }
+            if let mega = slot.megaEvolution(in: store.rulebook) { return mega.abilities.first?.name }
             return slot.ability.isEmpty
-                ? slot.battleForm(in: store)?.abilities.first?.name : slot.ability
+                ? slot.battleForm(in: store.rulebook)?.abilities.first?.name : slot.ability
         })
         let protectedNames: Set<String> = ["Tailwind", "Trick Room", "Follow Me",
                                            "Rage Powder", "Revival Blessing"]

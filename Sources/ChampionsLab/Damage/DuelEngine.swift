@@ -33,7 +33,6 @@
 
 import Foundation
 
-@MainActor
 enum DuelEngine {
 
     struct Side {
@@ -87,15 +86,15 @@ enum DuelEngine {
         moves.first { protectMoves.contains($0.name) }
     }
 
-    static func duel(mine: Side, theirs: Side, field: Field, store: Store) -> Duel {
-        let myAttack = bestAttack(mine, into: theirs, field: field, store: store)
-        let theirAttack = bestAttack(theirs, into: mine, field: field, store: store)
+    static func duel(mine: Side, theirs: Side, field: Field, rules: Rulebook) -> Duel {
+        let myAttack = bestAttack(mine, into: theirs, field: field, rules: rules)
+        let theirAttack = bestAttack(theirs, into: mine, field: field, rules: rules)
 
         // Each side then asks whether a setup or status turn beats attacking.
         let myPlan = bestPlan(mine, into: theirs, attacking: myAttack,
-                              incoming: theirAttack, field: field, store: store)
+                              incoming: theirAttack, field: field, rules: rules)
         let theirPlan = bestPlan(theirs, into: mine, attacking: theirAttack,
-                                 incoming: myAttack, field: field, store: store)
+                                 incoming: myAttack, field: field, rules: rules)
 
         // Status each side lands on the other applies to the other's line.
         let myDamage = myPlan.damage
@@ -136,14 +135,14 @@ enum DuelEngine {
     /// to click, and measured against the target's effective health rather than
     /// its raw maximum.
     static func bestAttack(_ side: Side, into target: Side,
-                           field: Field, store: Store) -> Plan {
+                           field: Field, rules: Rulebook) -> Plan {
         var plan = Plan()
         let effective = Double(target.combatant.effectiveHP)
         for move in side.moves where move.isDamaging {
             let result = DamageCalc.calculate(attacker: side.combatant,
                                               defender: target.combatant,
                                               move: move, field: field)
-            let quality = store.quality(of: move, ability: side.combatant.ability,
+            let quality = rules.quality(of: move, ability: side.combatant.ability,
                                         item: side.combatant.item)
             let share = Double(result.maxDamage) / max(1, effective)
             if share * quality.reliability > plan.damage * plan.reliability {
@@ -172,7 +171,7 @@ enum DuelEngine {
 
     /// Whether spending a turn first beats attacking straight away.
     static func bestPlan(_ side: Side, into target: Side, attacking: Plan,
-                         incoming: Plan, field: Field, store: Store) -> Plan {
+                         incoming: Plan, field: Field, rules: Rulebook) -> Plan {
         var best = attacking
         guard canSpendATurn(side.combatant) else { return best }
         // Turns it needs if it just attacks, and whether it lives to do more.
@@ -190,7 +189,7 @@ enum DuelEngine {
                 guard relevant > 0 else { continue }
                 var boosted = side
                 boosted.combatant.boosts[(physical ? Stat.attack : .spAttack).rawValue] += relevant
-                let after = bestAttack(boosted, into: target, field: field, store: store)
+                let after = bestAttack(boosted, into: target, field: field, rules: rules)
                 var candidate = after
                 candidate.setupTurns = attacking.setupTurns + 1
                 candidate.note = move.name

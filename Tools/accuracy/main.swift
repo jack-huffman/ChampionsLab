@@ -84,7 +84,7 @@ import AppKit
         let mine = team(game.a, name: game.a.player)
         let theirs = team(game.b, name: game.b.player)
         guard mine.slots.count >= 4, theirs.slots.count >= 4 else { continue }
-        let grid = Matchup(mine: mine, theirs: theirs, store: store,
+        let grid = Matchup(mine: mine, theirs: theirs, rules: store.rulebook,
                            field: Field(isDoubles: true))
         let edge = grid.verdict.score
         scored += 1

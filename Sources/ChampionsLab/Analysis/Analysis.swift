@@ -81,7 +81,7 @@ struct TeamAnalysis {
 
     private var slots: [(slot: TeamSlot, form: Form)] {
         team.slots.compactMap { slot in
-            guard let form = slot.form(in: store) else { return nil }
+            guard let form = slot.form(in: store.rulebook) else { return nil }
             return (slot, form)
         }
     }
@@ -209,7 +209,7 @@ struct TeamAnalysis {
             var duelCount = 0.0
 
             for member in members {
-                guard var attacker = member.slot.combatant(in: store) else { continue }
+                guard var attacker = member.slot.combatant(in: store.rulebook) else { continue }
                 attacker.ability = member.slot.ability.isEmpty
                     ? (member.form.abilities.first?.name ?? "") : member.slot.ability
 
@@ -220,7 +220,7 @@ struct TeamAnalysis {
                     mine: DuelEngine.Side(combatant: attacker, moves: ourMoves, speed: nil),
                     theirs: DuelEngine.Side(combatant: threatCombatant,
                                             moves: threatMoves, speed: threatSpeed),
-                    field: field, store: store)
+                    field: field, rules: store.rulebook)
                 let memberBest = duel.outgoing
                 let memberWorst = duel.incoming
                 bestOutgoing = max(bestOutgoing, memberBest)

@@ -33,7 +33,7 @@ print("\n== the solver ==")
 print("\n== a turn played out ==")
     if let opponent = store.data.metaTeams.first(where: { $0.name == "Big Six" }),
        let mineTeam = store.teams.first(where: { $0.slots.count >= 4 }) {
-        let start = Board(mine: mineTeam, theirs: store.opponentTeam(opponent), store: store)
+        let start = Board(mine: mineTeam, theirs: store.opponentTeam(opponent), rules: store.rulebook)
         check("both sides have two out and the rest behind",
               start.mine.count >= 2 && start.theirs.count >= 2)
         check("everyone starts at full health",
@@ -186,7 +186,7 @@ print("\n== switching in ==")
             var bench = TeamSlot(formID: pelipper.id)
             bench.ability = "Drizzle"
             rainTeam.slots = [lead, second, bench]
-            let dry = Board(mine: rainTeam, theirs: store.opponentTeam(opponent), store: store)
+            let dry = Board(mine: rainTeam, theirs: store.opponentTeam(opponent), rules: store.rulebook)
             check("the field starts clear", dry.field.weather == .none)
             let wet = TurnModel.resolve(dry,
                 mine: Play(left: .swap(to: 2), right: .attack(move: 0, target: 0)),

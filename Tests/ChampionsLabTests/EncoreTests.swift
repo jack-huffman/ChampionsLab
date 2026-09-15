@@ -14,7 +14,7 @@ print("\n== boosted rolls, and Encore ==")
                                         ("Whimsicott", "Focus Sash", ["Encore", "Tailwind", "Protect"])]),
                         theirs: fighters([("Garchomp", "Life Orb", ["Dragon Claw", "Swords Dance", "Protect"]),
                                           ("Kingambit", "Chople Berry", ["Iron Head", "Swords Dance", "Protect"])]),
-                        store: store, field: Field(isDoubles: true), alreadyEvolved: false)
+                        rules: store.rulebook, field: Field(isDoubles: true), alreadyEvolved: false)
     boosted.mine[0].build.boosts[Stat.spAttack.rawValue] = 2
     let moonblast = boosted.mine[0].moves[at(boosted.mine[0], "Moonblast")]
     let plainRange = DamageCalc.calculate(attacker: Combatant(form: boosted.mine[0].build.form, ability: boosted.mine[0].build.ability, item: "", sp: boosted.mine[0].build.sp, alignment: boosted.mine[0].build.alignment),
