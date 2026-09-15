@@ -1,0 +1,513 @@
+{
+ "games": 994,
+ "generated": "2026-09-15",
+ "note": "How often a Pokemon is actually brought when it is on the team, and how often it leads when it is brought, measured from real ladder games. Four of six is 67%; anything away from that is a real preference.",
+ "rates": {
+  "Absol": {
+   "brought": 0.619,
+   "led": 0.635,
+   "seen": 84
+  },
+  "Aegislash": {
+   "brought": 0.611,
+   "led": 0.364,
+   "seen": 18
+  },
+  "Aerodactyl": {
+   "brought": 0.588,
+   "led": 0.511,
+   "seen": 80
+  },
+  "Alakazam": {
+   "brought": 0.667,
+   "led": 0.636,
+   "seen": 33
+  },
+  "Altaria": {
+   "brought": 0.556,
+   "led": 0.4,
+   "seen": 18
+  },
+  "Annihilape": {
+   "brought": 0.703,
+   "led": 0.577,
+   "seen": 37
+  },
+  "Araquanid": {
+   "brought": 0.424,
+   "led": 0.5,
+   "seen": 33
+  },
+  "Arcanine-Hisui": {
+   "brought": 0.721,
+   "led": 0.416,
+   "seen": 190
+  },
+  "Archaludon": {
+   "brought": 0.708,
+   "led": 0.441,
+   "seen": 192
+  },
+  "Armarouge": {
+   "brought": 0.627,
+   "led": 0.536,
+   "seen": 134
+  },
+  "Basculegion": {
+   "brought": 0.575,
+   "led": 0.415,
+   "seen": 499
+  },
+  "Baxcalibur": {
+   "brought": 0.615,
+   "led": 0.494,
+   "seen": 135
+  },
+  "Bellibolt": {
+   "brought": 0.875,
+   "led": 0.5,
+   "seen": 16
+  },
+  "Blastoise": {
+   "brought": 0.493,
+   "led": 0.727,
+   "seen": 67
+  },
+  "Blaziken": {
+   "brought": 0.613,
+   "led": 0.526,
+   "seen": 31
+  },
+  "Camerupt": {
+   "brought": 0.628,
+   "led": 0.148,
+   "seen": 43
+  },
+  "Ceruledge": {
+   "brought": 0.676,
+   "led": 0.435,
+   "seen": 34
+  },
+  "Chandelure": {
+   "brought": 0.438,
+   "led": 0.714,
+   "seen": 16
+  },
+  "Charizard": {
+   "brought": 0.711,
+   "led": 0.751,
+   "seen": 249
+  },
+  "Clefable": {
+   "brought": 0.41,
+   "led": 0.688,
+   "seen": 39
+  },
+  "Corviknight": {
+   "brought": 0.647,
+   "led": 0.667,
+   "seen": 51
+  },
+  "Delphox": {
+   "brought": 0.577,
+   "led": 0.463,
+   "seen": 71
+  },
+  "Dragapult": {
+   "brought": 0.475,
+   "led": 0.684,
+   "seen": 40
+  },
+  "Dragonite": {
+   "brought": 0.562,
+   "led": 0.639,
+   "seen": 64
+  },
+  "Drampa": {
+   "brought": 0.2,
+   "led": 0.5,
+   "seen": 20
+  },
+  "Empoleon": {
+   "brought": 0.6,
+   "led": 0.889,
+   "seen": 15
+  },
+  "Espathra": {
+   "brought": 0.529,
+   "led": 0.889,
+   "seen": 17
+  },
+  "Excadrill": {
+   "brought": 0.658,
+   "led": 0.6,
+   "seen": 76
+  },
+  "Farigiraf": {
+   "brought": 0.684,
+   "led": 0.643,
+   "seen": 307
+  },
+  "Floette-Eternal": {
+   "brought": 0.415,
+   "led": 0.588,
+   "seen": 193
+  },
+  "Froslass": {
+   "brought": 0.495,
+   "led": 0.771,
+   "seen": 97
+  },
+  "Gallade": {
+   "brought": 0.567,
+   "led": 0.529,
+   "seen": 30
+  },
+  "Garchomp": {
+   "brought": 0.637,
+   "led": 0.439,
+   "seen": 350
+  },
+  "Gardevoir": {
+   "brought": 0.556,
+   "led": 0.571,
+   "seen": 189
+  },
+  "Gengar": {
+   "brought": 0.712,
+   "led": 0.827,
+   "seen": 73
+  },
+  "Gholdengo": {
+   "brought": 0.572,
+   "led": 0.574,
+   "seen": 283
+  },
+  "Glimmora": {
+   "brought": 0.678,
+   "led": 0.725,
+   "seen": 59
+  },
+  "Golisopod": {
+   "brought": 0.613,
+   "led": 0.461,
+   "seen": 421
+  },
+  "Golurk": {
+   "brought": 0.217,
+   "led": 0.8,
+   "seen": 23
+  },
+  "Grimmsnarl": {
+   "brought": 0.727,
+   "led": 0.854,
+   "seen": 66
+  },
+  "Gyarados": {
+   "brought": 0.682,
+   "led": 0.4,
+   "seen": 22
+  },
+  "Hatterene": {
+   "brought": 0.693,
+   "led": 0.615,
+   "seen": 75
+  },
+  "Hydreigon": {
+   "brought": 0.762,
+   "led": 0.5,
+   "seen": 21
+  },
+  "Incineroar": {
+   "brought": 0.702,
+   "led": 0.613,
+   "seen": 618
+  },
+  "Indeedee": {
+   "brought": 0.815,
+   "led": 0.697,
+   "seen": 81
+  },
+  "Indeedee-F": {
+   "brought": 0.827,
+   "led": 0.671,
+   "seen": 485
+  },
+  "Inteleon": {
+   "brought": 0.688,
+   "led": 0.545,
+   "seen": 16
+  },
+  "Kingambit": {
+   "brought": 0.492,
+   "led": 0.498,
+   "seen": 478
+  },
+  "Kleavor": {
+   "brought": 0.842,
+   "led": 0.938,
+   "seen": 19
+  },
+  "Kommo-o": {
+   "brought": 0.611,
+   "led": 0.5,
+   "seen": 36
+  },
+  "Lucario": {
+   "brought": 0.515,
+   "led": 0.647,
+   "seen": 99
+  },
+  "Lycanroc-Dusk": {
+   "brought": 0.45,
+   "led": 0.667,
+   "seen": 20
+  },
+  "Malamar": {
+   "brought": 0.579,
+   "led": 1.0,
+   "seen": 19
+  },
+  "Mamoswine": {
+   "brought": 0.435,
+   "led": 0.4,
+   "seen": 23
+  },
+  "Maushold": {
+   "brought": 0.438,
+   "led": 0.429,
+   "seen": 16
+  },
+  "Maushold-Four": {
+   "brought": 0.656,
+   "led": 0.476,
+   "seen": 32
+  },
+  "Mawile": {
+   "brought": 0.594,
+   "led": 0.368,
+   "seen": 32
+  },
+  "Meganium": {
+   "brought": 0.4,
+   "led": 0.75,
+   "seen": 20
+  },
+  "Meowscarada": {
+   "brought": 0.538,
+   "led": 0.714,
+   "seen": 13
+  },
+  "Metagross": {
+   "brought": 0.654,
+   "led": 0.725,
+   "seen": 78
+  },
+  "Milotic": {
+   "brought": 0.663,
+   "led": 0.508,
+   "seen": 196
+  },
+  "Ninetales-Alola": {
+   "brought": 0.679,
+   "led": 0.456,
+   "seen": 84
+  },
+  "Oranguru": {
+   "brought": 0.842,
+   "led": 0.812,
+   "seen": 19
+  },
+  "Palafin": {
+   "brought": 0.308,
+   "led": 1.0,
+   "seen": 13
+  },
+  "Pawmot": {
+   "brought": 0.636,
+   "led": 0.544,
+   "seen": 107
+  },
+  "Pelipper": {
+   "brought": 0.715,
+   "led": 0.362,
+   "seen": 298
+  },
+  "Pincurchin": {
+   "brought": 0.8,
+   "led": 0.4,
+   "seen": 25
+  },
+  "Politoed": {
+   "brought": 0.608,
+   "led": 0.311,
+   "seen": 74
+  },
+  "Primarina": {
+   "brought": 0.719,
+   "led": 0.464,
+   "seen": 96
+  },
+  "Raichu": {
+   "brought": 0.588,
+   "led": 0.787,
+   "seen": 160
+  },
+  "Raichu-Alola": {
+   "brought": 0.769,
+   "led": 1.0,
+   "seen": 13
+  },
+  "Rillaboom": {
+   "brought": 0.661,
+   "led": 0.354,
+   "seen": 719
+  },
+  "Rotom-Heat": {
+   "brought": 0.545,
+   "led": 0.583,
+   "seen": 22
+  },
+  "Rotom-Wash": {
+   "brought": 0.519,
+   "led": 0.571,
+   "seen": 27
+  },
+  "Sableye": {
+   "brought": 0.609,
+   "led": 0.786,
+   "seen": 46
+  },
+  "Salamence": {
+   "brought": 0.528,
+   "led": 0.61,
+   "seen": 481
+  },
+  "Samurott-Hisui": {
+   "brought": 0.8,
+   "led": 0.5,
+   "seen": 15
+  },
+  "Scizor": {
+   "brought": 0.632,
+   "led": 0.333,
+   "seen": 19
+  },
+  "Scovillain": {
+   "brought": 0.688,
+   "led": 0.818,
+   "seen": 16
+  },
+  "Scrafty": {
+   "brought": 0.429,
+   "led": 0.5,
+   "seen": 28
+  },
+  "Sinistcha": {
+   "brought": 0.504,
+   "led": 0.186,
+   "seen": 139
+  },
+  "Sinistcha-Masterpiece": {
+   "brought": 0.417,
+   "led": 0.4,
+   "seen": 48
+  },
+  "Sirfetch\u2019d": {
+   "brought": 0.6,
+   "led": 0.143,
+   "seen": 35
+  },
+  "Sneasler": {
+   "brought": 0.657,
+   "led": 0.611,
+   "seen": 727
+  },
+  "Snorlax": {
+   "brought": 0.611,
+   "led": 0.636,
+   "seen": 18
+  },
+  "Staraptor": {
+   "brought": 0.556,
+   "led": 0.695,
+   "seen": 171
+  },
+  "Starmie": {
+   "brought": 0.421,
+   "led": 0.625,
+   "seen": 19
+  },
+  "Swampert": {
+   "brought": 0.375,
+   "led": 0.417,
+   "seen": 64
+  },
+  "Sylveon": {
+   "brought": 0.569,
+   "led": 0.234,
+   "seen": 255
+  },
+  "Talonflame": {
+   "brought": 0.714,
+   "led": 0.686,
+   "seen": 49
+  },
+  "Torkoal": {
+   "brought": 0.53,
+   "led": 0.18,
+   "seen": 115
+  },
+  "Toxapex": {
+   "brought": 0.5,
+   "led": 0.333,
+   "seen": 18
+  },
+  "Tsareena": {
+   "brought": 0.37,
+   "led": 0.5,
+   "seen": 27
+  },
+  "Typhlosion-Hisui": {
+   "brought": 0.679,
+   "led": 0.789,
+   "seen": 28
+  },
+  "Tyranitar": {
+   "brought": 0.614,
+   "led": 0.429,
+   "seen": 114
+  },
+  "Venusaur": {
+   "brought": 0.382,
+   "led": 0.577,
+   "seen": 68
+  },
+  "Vivillon": {
+   "brought": 0.526,
+   "led": 0.5,
+   "seen": 19
+  },
+  "Volcarona": {
+   "brought": 0.648,
+   "led": 0.588,
+   "seen": 105
+  },
+  "Weavile": {
+   "brought": 0.786,
+   "led": 0.727,
+   "seen": 14
+  },
+  "Whimsicott": {
+   "brought": 0.655,
+   "led": 0.5,
+   "seen": 275
+  },
+  "Zoroark-Hisui": {
+   "brought": 0.118,
+   "led": 0.0,
+   "seen": 17
+  }
+ },
+ "source": "https://replay.pokemonshowdown.com"
+}

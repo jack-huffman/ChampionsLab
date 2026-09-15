@@ -150,3 +150,66 @@ print("\n== confusion ==")
         print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     }
 }
+
+extension StatusTests {
+    /// What a condition actually costs, as opposed to what it was costing.
+    @MainActor func testWhatEachConditionCosts() throws {
+        print("\n== what a condition costs ==")
+        let rules = store.rulebook
+        let move = rules.moves.values.first { $0.name == "Iron Head" }!
+        let attacker = fighters([("Kingambit", "Leftovers", ["Iron Head"])]).slots[0]
+        guard let form = rules.form(attacker.formID) else { return check("a Kingambit", false) }
+        var healthy = Combatant(form: form)
+        healthy.ability = "Supreme Overlord"
+        var burned = healthy; burned.status = .burn
+        let target = Combatant(form: rules.forms.first { $0.formLabel == "Garchomp" }!)
+        let field = Field(isDoubles: true)
+        let clean = DamageCalc.calculate(attacker: healthy, defender: target, move: move, field: field)
+        let scorched = DamageCalc.calculate(attacker: burned, defender: target, move: move, field: field)
+        let ratio = Double(scorched.maxDamage) / Double(max(1, clean.maxDamage))
+        print(String(format: "  physical damage burned vs clean: %d vs %d (%.2f)",
+                     scorched.maxDamage, clean.maxDamage, ratio))
+        check("a burn halves a physical attack, not a third off",
+              ratio > 0.47 && ratio < 0.53)
+
+        // Guts is paid for the condition and ignores the burn.
+        var gutsy = burned; gutsy.ability = "Guts"
+        let raging = DamageCalc.calculate(attacker: gutsy, defender: target, move: move, field: field)
+        print("  with Guts instead: \(raging.maxDamage)")
+        check("Guts turns the burn into a boost", raging.maxDamage > clean.maxDamage)
+
+        var idle = healthy; idle.ability = "Guts"
+        let unbothered = DamageCalc.calculate(attacker: idle, defender: target, move: move, field: field)
+        check("and pays nothing while it is healthy", unbothered.maxDamage == clean.maxDamage)
+    }
+
+    /// Toxic is a clock: a sixteenth more every turn it lasts.
+    @MainActor func testBadPoisonGetsWorse() throws {
+        print("\n== toxic gets worse ==")
+        // No Leftovers on the poisoned one: a sixteenth back every turn exactly
+        // cancels the first tick of Toxic and makes the sequence read 0, 11, 22
+        // when what is being tested is 11, 22, 33.
+        var board = Board(mine: fighters([("Milotic", "", ["Protect"]),
+                                          ("Whimsicott", "Leftovers", ["Protect"])]),
+                          theirs: fighters([("Garchomp", "Leftovers", ["Protect"]),
+                                            ("Kingambit", "Leftovers", ["Protect"])]),
+                          rules: store.rulebook, field: Field(isDoubles: true),
+                          alreadyEvolved: false)
+        board.narrating = false
+        board.sendOutLeads()
+        board.mine[0].status = .badPoison
+        var losses: [Int] = []
+        let idle = Play(left: .pass, right: .pass)
+        for _ in 0..<3 {
+            let before = board.mine[0].hp
+            board = TurnModel.resolve(board, mine: idle, theirs: idle, rolling: false)
+            losses.append(before - board.mine[0].hp)
+        }
+        print("  health lost on each of three turns: \(losses)")
+        check("it starts costing something at once", losses.first ?? 0 > 0)
+        check("each turn costs more than the last",
+              losses.count == 3 && losses[1] > losses[0] && losses[2] > losses[1])
+        check("and the second turn costs about twice the first",
+              losses.count == 3 && Double(losses[1]) / Double(max(1, losses[0])) > 1.7)
+    }
+}

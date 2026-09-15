@@ -55,7 +55,10 @@ func argument(_ flag: String) -> String? {
     if let error = store.loadError { print("dataset error: \(error)"); exit(1) }
     let rules = store.rulebook
 
-    let path = FileManager.default.currentDirectoryPath + "/data/replays.json"
+    // `--from` reads a different corpus, which is how a measurement built from
+    // one set of games gets checked on a set it has never seen.
+    let path = FileManager.default.currentDirectoryPath + "/"
+        + (argument("--from") ?? "data/replays.json")
     guard let blob = FileManager.default.contents(atPath: path),
           let corpus = try? JSONDecoder().decode(Corpus.self, from: blob) else {
         print("no data/replays.json — run `make replays` first")

@@ -526,7 +526,17 @@ enum DamageCalc {
             attack *= 2
             notes.append("\(attacker.ability): Attack doubled")
         }
-        if attacker.ability == "Guts", physical { attack *= 1.5 }
+        // A burn halves what a physical attacker does. It was applied as a
+        // stage off Attack, which is a third rather than a half — and being a
+        // stage it compounded with whatever stages were already there, so a
+        // burned Pokémon at +6 lost an eighth of its damage instead of half.
+        //
+        // Guts ignores the burn and is paid for the condition instead, which is
+        // why the two are decided together.
+        if attacker.status != .none, physical {
+            if attacker.ability == "Guts" { attack *= 1.5 }
+            else if attacker.status == .burn { attack *= 0.5 }
+        }
         if attacker.ability == "Solar Power", !physical, field.weather == .sun { attack *= 1.5 }
         switch attacker.item {
         case "Choice Band" where physical: attack *= 1.5

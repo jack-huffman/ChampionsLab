@@ -107,6 +107,11 @@ struct Fighter {
     var goesNext = false
     /// Electromorphosis: the next Electric move it throws is twice as strong.
     var charged = false
+    /// Turns spent badly poisoned. Toxic takes a sixteenth on the first turn, a
+    /// second sixteenth on the next, and so on — which is the whole difference
+    /// between it and ordinary poison, and it was being taken as a flat eighth
+    /// for ever.
+    var toxicTurns = 0
     /// Its partner used Helping Hand on it this turn: half again on the move
     /// it is about to use, and gone at the end of the turn.
     var helped = false
@@ -858,8 +863,24 @@ extension Board {
         // A soft preference: the best pair is likeliest, not certain. Twelve
         // points of edge is one factor of e.
         let top = weights.max() ?? 0
-        let raw = weights.map { exp(($0 - top) / 12) }
+        var raw = weights.map { exp(($0 - top) / 12) }
+
+        // And then what people actually do. The score above is a theory of how
+        // somebody chooses — that they bring whatever our own grid rates best —
+        // and measured against a thousand real games it named the right pair no
+        // better than chance. A Pokémon's measured bring rate is the evidence
+        // it was missing: four of six is 67%, and something brought 83% of the
+        // time it is on a team, or 37%, is telling you something no grid works
+        // out. Multiplied in as odds, so a pair of two reluctant picks is
+        // doubly unlikely and the grid still decides between equals.
+        if ProcessInfo.processInfo.environment["CHAMPIONSLAB_NO_BRING_PRIOR"] == nil {
+            for (index, guess) in guesses.enumerated() {
+                let odds = guess.fighters.reduce(1.0) { $0 * $1.build.form.bringOdds }
+                raw[index] *= odds
+            }
+        }
         let total = raw.reduce(0, +)
+        guard total > 0 else { return [] }
         return zip(guesses, raw).map {
             BenchGuess(fighters: $0.fighters, chance: $1 / total)
         }.sorted { $0.chance > $1.chance }
@@ -1400,12 +1421,20 @@ enum TurnModel {
                     hp -= Swift.max(1, maxHP / 16)
                     if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
                     board.note("\(name) is hurt by its burn.")
-                case .poison, .badPoison:
-                    if !shielded {
-                        hp -= Swift.max(1, maxHP / 8)
-                        if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
-                        board.note("\(name) is hurt by poison.")
-                    }
+                case .poison where !shielded:
+                    hp -= Swift.max(1, maxHP / 8)
+                    if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
+                    board.note("\(name) is hurt by poison.")
+                case .badPoison where !shielded:
+                    // A sixteenth more each turn it lasts, which is what makes
+                    // Toxic a clock rather than chip damage.
+                    let stage = Swift.min(15, who.toxicTurns + 1)
+                    if mine { board.mine[index].toxicTurns = stage }
+                    else { board.theirs[index].toxicTurns = stage }
+                    hp -= Swift.max(1, maxHP * stage / 16)
+                    if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
+                    board.note("\(name) is hurt badly by poison"
+                               + (stage > 1 ? ", worse each turn." : "."))
                 default: break
                 }
                 // Speed Boost: a stage every turn it stays in, which is the
@@ -2003,6 +2032,26 @@ enum TurnModel {
             markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return
         }
+        // Frozen solid. One turn in five it thaws on its own, and a Fire move
+        // or a move that defrosts its user thaws it outright. Blizzard has
+        // frozen things since the reference table landed and nothing happened
+        // when it did: the condition was inflictable and inert.
+        if actor.status == .freeze {
+            let thawsItself = actor.moves.indices.contains(pickedMove(choice))
+                && (actor.moves[pickedMove(choice)].type == "Fire"
+                    || actor.moves[pickedMove(choice)].flags["defrosts"] == true)
+            let thaws = thawsItself
+                || (rolling && Double.random(in: 0..<1, using: &TurnModel.dice) < 0.2)
+            if thaws {
+                if byMine { board.mine[slot].status = .none } else { board.theirs[slot].status = .none }
+                board.note("\(name) thawed out.")
+            } else {
+                board.note("\(name) is frozen solid.")
+                dropCharge(byMine: byMine, slot: slot, board: &board)
+                markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                return
+            }
+        }
         if actor.status == .paralysis, rolling, Double.random(in: 0...1, using: &TurnModel.dice) < 0.25 {
             board.note("\(name) is paralysed and cannot move.")
             dropCharge(byMine: byMine, slot: slot, board: &board)
@@ -2385,6 +2434,13 @@ enum TurnModel {
                     field.critical = true
                 }
                 board.lastWasCritical = field.critical
+                // A Fire move thaws whatever it hits.
+                if defending[index].status == .freeze,
+                   DamageCalc.fieldForm(of: move, in: field).type == .fire {
+                    if hitMine { board.mine[index].status = .none }
+                    else { board.theirs[index].status = .none }
+                    board.detail("\(hitName) was thawed out.")
+                }
                 var attacker = actor.build
                 attacker.ignoresAbility = ["Mold Breaker", "Turboblaze", "Teravolt"]
                     .contains(actor.build.ability)
@@ -2413,9 +2469,6 @@ enum TurnModel {
                 // Supreme Overlord and Last Respects count the fallen. Never
                 // filled in before, so neither ever went off in a battle.
                 attacker.fallenAllies = (byMine ? board.mine : board.theirs).filter(\.fainted).count
-                if actor.status.halvesPhysical, move.category == "Physical" {
-                    attacker.boosts[Stat.attack.rawValue] -= 1
-                }
                 let result = DamageCalc.calculate(attacker: attacker, defender: defender,
                                                   move: move, field: field)
 
@@ -3370,6 +3423,13 @@ enum TurnModel {
             if board.field.terrain == .electric, side[slot].build.grounded { return "Electric Terrain" }
         }
         return nil
+    }
+
+    /// The move index a choice picks, or -1 for anything that is not an attack.
+    private static func pickedMove(_ choice: Choice) -> Int {
+        if case .attack(let index, _) = choice { return index }
+        if case .protectSelf(let index) = choice { return index }
+        return -1
     }
 
     /// Whether a Pokémon's last move came off, for Stomping Tantrum.

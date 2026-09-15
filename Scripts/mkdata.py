@@ -876,6 +876,7 @@ def main():
     mark_attested(items, overlay["meta_teams"], overlay["usage"], roster)
     apply_showdown(moves)
     split_regional_forms(roster)
+    apply_brings(roster)
 
     out = {
         "regulation": overlay["regulation"],
@@ -923,6 +924,7 @@ def main():
 
 
 SHOWDOWN = os.path.join(HERE, "data", "showdown.json")
+BRINGS = os.path.join(HERE, "data", "brings.json")
 
 # Where each part of the dataset came from, written into it so the app can say
 # so. Filled in as the merge runs; empty when the reference table is absent.
@@ -1040,6 +1042,42 @@ def champions_odds(move, secondaries):
         entry["chance"] = odds
         out.append(entry)
     return out
+
+
+def apply_brings(roster):
+    """Attach how often each form is actually brought, and how often it leads.
+
+    Measured from real ladder games by Scripts/mkreplays.py. The engine used to
+    guess an opponent's back two purely by scoring every possible four the way
+    its own matchup grid scores it — a theory of how somebody chooses, never
+    checked against somebody choosing. Held against a thousand real games it
+    named the right *pair* no better than chance.
+
+    This is the evidence it was missing. Four of six is 67%; a Pokemon brought
+    83% of the time it is on a team, or 37%, is telling you something the grid
+    cannot work out.
+    """
+    if not os.path.exists(BRINGS):
+        return
+    with open(BRINGS, encoding="utf-8") as fh:
+        rates = json.load(fh).get("rates", {})
+    if not rates:
+        return
+
+    def key(text):
+        return re.sub(r"[^a-z0-9]", "", text.lower())
+
+    by_key = {key(name): row for name, row in rates.items()}
+    matched = 0
+    for form in roster:
+        # Showdown writes "Indeedee-F" where the dex writes "Indeedee (Female)".
+        row = by_key.get(key(form["form_label"])) or by_key.get(key(form["name"]))
+        if row is None:
+            continue
+        form["brought"] = row["brought"]
+        form["led"] = row["led"]
+        matched += 1
+    print("==> brings: %d forms carry a measured bring rate" % matched)
 
 
 def apply_showdown(moves):

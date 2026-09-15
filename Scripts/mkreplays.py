@@ -92,10 +92,15 @@ def get(url):
         return None
 
 
-def listing(fmt, pages):
-    """Replay ids, newest first."""
+def listing(fmt, pages, first=1):
+    """Replay ids, newest first.
+
+    `first` lets a caller take a slice of the archive nobody has trained on,
+    which is the only way a measurement built from these games can be checked
+    on games it has never seen.
+    """
     found = []
-    for page in range(1, pages + 1):
+    for page in range(first, first + pages):
         rows = get("%s/search.json?format=%s&page=%d" % (BASE, fmt, page))
         if not rows:
             break
@@ -266,8 +271,10 @@ def parse(body):
 def main():
     fmt = argument("--format", FORMAT)
     pages = int(argument("--pages", PAGES))
+    first = int(argument("--from-page", 1))
+    out_path = argument("--out", OUT)
     print("==> listing %s, %d pages" % (fmt, pages))
-    ids = listing(fmt, pages)
+    ids = listing(fmt, pages, first)
     print("    %d replays" % len(ids))
 
     games, skipped = [], 0
@@ -286,8 +293,8 @@ def main():
 
     played = [g for g in games if len(g["turns"]) >= 4]
     rated = [g for g in games if (g["rating"] or 0) >= 1300]
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    with open(OUT, "w", encoding="utf-8") as fh:
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as fh:
         json.dump({
             "source": "https://replay.pokemonshowdown.com",
             "note": ("Ladder games in the same format this app is built for. Teams and "
@@ -297,7 +304,7 @@ def main():
             "generated": time.strftime("%Y-%m-%d"),
             "games": games,
         }, fh, separators=(",", ":"))
-    print("==> wrote %s (%.1f MB)" % (OUT, os.path.getsize(OUT) / 1e6))
+    print("==> wrote %s (%.1f MB)" % (out_path, os.path.getsize(out_path) / 1e6))
     print("    %d games, %d of four turns or more, %d rated 1300+, %d skipped"
           % (len(games), len(played), len(rated), skipped))
     if games:

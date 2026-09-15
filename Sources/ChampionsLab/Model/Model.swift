@@ -25,6 +25,12 @@ struct Form: Codable, Identifiable, Hashable, Sendable {
     /// Kilograms. Optional because a dex built before weights were scraped
     /// does not carry one, and a missing weight must not stop the app opening.
     let weight: Double?
+    /// How often this is actually brought when it is on a team, and how often
+    /// it leads when it is brought, measured from real ladder games. Nil for
+    /// anything too rarely seen to say. Four of six is 0.67, so a figure away
+    /// from that is a preference a matchup grid cannot work out on its own.
+    let brought: Double?
+    let led: Double?
 
     /// `types` as the enum, worked out once when the dex is read.
     ///
@@ -39,6 +45,7 @@ struct Form: Codable, Identifiable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case dex, species, name, icon, suffix, types, stats, abilities, moves, stone, weight
+        case brought, led
         case formLabel = "form_label"
     }
 
@@ -56,6 +63,8 @@ struct Form: Codable, Identifiable, Hashable, Sendable {
         moves = try box.decode([String].self, forKey: .moves)
         stone = try box.decodeIfPresent(String.self, forKey: .stone)
         weight = try box.decodeIfPresent(Double.self, forKey: .weight)
+        brought = try box.decodeIfPresent(Double.self, forKey: .brought)
+        led = try box.decodeIfPresent(Double.self, forKey: .led)
         pokeTypes = types.compactMap { PokeType(loose: $0) }
     }
 
@@ -64,6 +73,15 @@ struct Form: Codable, Identifiable, Hashable, Sendable {
     /// 50kg so a dex without weights still produces sane numbers instead of
     /// making every heavy-hitting move minimum power.
     var weightKg: Double { weight ?? 50 }
+
+    /// How often this is brought, as the odds against the four-of-six baseline.
+    /// One when nothing is known, so an unmeasured Pokémon neither helps nor
+    /// hurts a pair's standing.
+    var bringOdds: Double {
+        guard let brought, brought > 0.01, brought < 0.99 else { return 1 }
+        let base = 4.0 / 6.0
+        return (brought / (1 - brought)) / (base / (1 - base))
+    }
 
     var hp: Int { stats[0] }
     var attack: Int { stats[1] }
