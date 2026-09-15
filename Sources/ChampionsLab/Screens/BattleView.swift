@@ -2082,19 +2082,21 @@ struct BattleView: View {
         }
         .frame(width: 118)
         .padding(.vertical, 8).padding(.horizontal, 4)
-        // Nearly opaque, with an edge. At 55% the tile was reading whatever was
-        // behind it, which used to be a plain background and is now weather and
-        // terrain — so the cards went muddy the moment the field had anything
-        // on it. A Pokémon's card is the thing you read the game off; it has to
-        // sit on top of the room rather than in it.
-        .background(fighter.fainted ? Color.clear : Palette.surfaceRaised.opacity(0.94))
+        // Opaque and *lighter* than the field. Two goes at this were wrong in
+        // opposite directions: at 55% of a dark grey the card borrowed whatever
+        // was behind it and went muddy once there was weather; at 94% of the
+        // same dark grey it was darker than the ground and read as a hole. A
+        // card on a battlefield is a panel lying on top of it, so it is lighter
+        // than the field and carries a light edge and a shadow to say so.
+        .background(fighter.fainted ? Color.clear : Palette.cardOnField)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
             if !fighter.fainted {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(Palette.hairline.opacity(0.7), lineWidth: 1)
+                    .strokeBorder(.white.opacity(0.14), lineWidth: 1)
             }
         }
+        .shadow(color: .black.opacity(fighter.fainted ? 0 : 0.35), radius: 8, y: 3)
         // In the tile's own corner rather than the sprite's, and on a backdrop:
         // a sprite is not a reliable background — Charizard's wing reaches into
         // exactly this space — and a stat change is something you check at a

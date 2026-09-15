@@ -25,6 +25,17 @@ enum Palette {
                           : NSColor(calibratedRed: 0.985, green: 0.985, blue: 0.99, alpha: 1)
     })
 
+    /// A Pokémon's card on the battlefield.
+    ///
+    /// Not `surfaceRaised`, which is a *dark* grey — that reads as raised
+    /// against the app's near-black canvas, and as a hole against the
+    /// battlefield, which is a lighter blue with weather over it. On the field
+    /// a card has to be lighter than the ground it stands on.
+    static let cardOnField = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.isDark ? NSColor(calibratedRed: 0.235, green: 0.255, blue: 0.325, alpha: 0.97)
+                          : NSColor(calibratedRed: 1, green: 1, blue: 1, alpha: 0.95)
+    })
+
     static let hairline = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.isDark ? NSColor(white: 1, alpha: 0.09)
                           : NSColor(white: 0, alpha: 0.08)
