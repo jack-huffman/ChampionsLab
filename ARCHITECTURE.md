@@ -232,10 +232,28 @@ Every roll a played turn makes goes through `TurnModel.dice` for this reason. A
 search never touches it, because a search does not roll — it branches and
 weighs instead, which is what `branchedRolls` caps.
 
-Run it with both sides set the same first. That measures the noise floor, and
-the result should sit near even; anything else is a bug in the harness rather
-than a finding. The report prints two standard errors alongside the win rate
-and says plainly when a difference is inside them.
+Run it with both sides set the same first. Two identical engines split every
+pair exactly — not approximately, exactly — because the teams, the dice and the
+seat are all held fixed and only the engines change chairs. Anything else is a
+bug in the harness rather than a finding.
+
+That is also why the statistic it reports is the *pairs*, not the games. A pair
+that splits is the two engines agreeing; a pair where one took both halves of
+the same game, against the same team, with the same dice, is the whole of the
+evidence. The report reads the odds off those and prints two standard errors
+beside them.
+
+**It has been checked against something that ought to be true.** An engine
+given seven times the thinking time should win more, and it does:
+
+    0.35s against 0.05s, real teams, two runs pooled
+    48 pairs carried information; the slower thinker took 32 of them
+    67%, give or take 14 — above even
+
+That took 170 pairs to establish, which is the honest cost of the question.
+A change to the turn model with a smaller effect than "seven times the search"
+will need more games than that, or will not be measurable at all — which is
+itself worth knowing before spending a week on one.
 
 ## The data this is built on
 
