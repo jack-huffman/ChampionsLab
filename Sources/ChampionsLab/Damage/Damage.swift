@@ -35,6 +35,19 @@ struct Field {
     /// Wonder Room is up: every Pokémon's Defense and Special Defense have
     /// traded places, so a physical wall is suddenly the special one.
     var wonderRoom = false
+    /// The attacker is moving after the target has already gone, which is what
+    /// Analytic is paid for.
+    var movingLast = false
+    /// The attacker's partner is covering it with Friend Guard.
+    var friendGuarded = false
+    /// The target walked in this turn, which is what Stakeout is watching for.
+    /// Carried on the field rather than on the Pokémon, because it is a fact
+    /// about this turn and `Combatant` is what the parity audit fingerprints.
+    var targetJustArrived = false
+    /// Cloud Nine or Air Lock is on the field, so the weather is decoration.
+    /// Kept separate from clearing the weather outright, because the weather
+    /// is still *there* — it comes back the moment the ability leaves.
+    var weatherSuppressed = false
 }
 
 // MARK: - Combatants
@@ -379,6 +392,18 @@ enum DamageCalc {
             power *= 1.5
             notes.append("Sharpness: +50%")
         }
+        // Analytic pays for going second, which is the one thing a slow
+        // attacker has going for it.
+        if attacker.ability == "Analytic", field.movingLast {
+            power *= 1.3
+            notes.append("Analytic: +30% for moving last")
+        }
+        // Stakeout doubles on anything that has just walked in, which is what
+        // makes switching against one so expensive.
+        if attacker.ability == "Stakeout", field.targetJustArrived {
+            power *= 2
+            notes.append("Stakeout: doubled against something that just came in")
+        }
         if attacker.ability == "Iron Fist", move.isPunch { power *= 1.2 }
         if attacker.ability == "Strong Jaw", move.flags["bite"] == true { power *= 1.5 }
         if attacker.ability == "Punk Rock", move.isSound { power *= 1.3 }
@@ -460,6 +485,8 @@ enum DamageCalc {
             defense = Double(ChampionsStats.staged(defender.stat(defStat),
                                                   stage: min(0, defender.boosts[defStat.rawValue])))
         }
+        // Fur Coat is a second Defense, and the reason a Furfrou wall exists.
+        if defender.ability == "Fur Coat", physical { defense *= 2 }
         if defender.item == "Assault Vest", !physical { defense *= 1.5 }
         if defender.item == "Eviolite" { defense *= 1.5 }
         if field.weather == .snow, defender.effectiveTypes.contains(.ice), physical {
@@ -554,6 +581,9 @@ enum DamageCalc {
             notes.append("Glaive Rush: target is Wide Open, damage doubled")
         }
 
+        // Friend Guard: a quarter off everything aimed at its partner, which
+        // is the whole of a support slot that does nothing else.
+        if field.friendGuarded { modifier *= 0.75 }
         if field.screen, !field.critical {
             modifier *= field.isDoubles ? 0.667 : 0.5
             notes.append("Screen: ×\(field.isDoubles ? "0.667" : "0.5")")

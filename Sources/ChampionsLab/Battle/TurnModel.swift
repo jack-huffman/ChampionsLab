@@ -290,6 +290,14 @@ struct Board {
         var out = field
         out.magicRoom = magicRoom > 0
         out.wonderRoom = wonderRoom > 0
+        // Cloud Nine and Air Lock make the weather decoration while they stand
+        // there. Done here rather than at the thirteen places the calculator
+        // reads the weather, and *not* by clearing the board's weather, which
+        // is still there and comes back the moment the ability leaves.
+        let becalmed = (mine + theirs).prefix(activeCount * 2).contains {
+            !$0.fainted && ["Cloud Nine", "Air Lock"].contains($0.build.ability)
+        }
+        if becalmed { out.weather = .none; out.weatherSuppressed = true }
         return out
     }
     /// How many stand on each side. Two in doubles, one in singles.
@@ -1336,6 +1344,15 @@ enum TurnModel {
                     else { board.theirs[index].status = .none; board.theirs[index].asleepFor = 0 }
                     board.note("\(name) shed its skin and shook it off.")
                 }
+                // Harvest: in the sun, the berry it ate comes back.
+                if who.build.ability == "Harvest", who.build.itemSpent, hp > 0,
+                   who.build.item.hasSuffix("Berry"),
+                   board.field.weather == .sun
+                       || (rolling && Double.random(in: 0..<1, using: &TurnModel.dice) < 0.5) {
+                    if mine { board.mine[index].build.itemSpent = false }
+                    else { board.theirs[index].build.itemSpent = false }
+                    board.note("\(name) harvested another \(who.build.item).")
+                }
                 // Healer: three in ten that it clears up whatever its partner
                 // is carrying.
                 if who.build.ability == "Healer", hp > 0, rolling,
@@ -1589,8 +1606,13 @@ enum TurnModel {
             }
             board.mine[index].justArrived = false
             if board.mine[index].asleepFor > 0 {
-                board.mine[index].asleepFor -= 1
-                if board.mine[index].asleepFor == 0 { board.mine[index].status = .none }
+                // Early Bird sleeps through half of it.
+                let quick = board.mine[index].build.ability == "Early Bird"
+                board.mine[index].asleepFor -= quick ? 2 : 1
+                if board.mine[index].asleepFor <= 0 {
+                    board.mine[index].asleepFor = 0
+                    board.mine[index].status = .none
+                }
             }
         }
         for index in board.theirs.indices {
@@ -1609,8 +1631,13 @@ enum TurnModel {
             }
             board.theirs[index].justArrived = false
             if board.theirs[index].asleepFor > 0 {
-                board.theirs[index].asleepFor -= 1
-                if board.theirs[index].asleepFor == 0 { board.theirs[index].status = .none }
+                // Early Bird sleeps through half of it.
+                let quick = board.theirs[index].build.ability == "Early Bird"
+                board.theirs[index].asleepFor -= quick ? 2 : 1
+                if board.theirs[index].asleepFor <= 0 {
+                    board.theirs[index].asleepFor = 0
+                    board.theirs[index].status = .none
+                }
             }
         }
     }
@@ -2154,6 +2181,15 @@ enum TurnModel {
                 var defender = defending[index].build
                 defender.atFullHP = defending[index].hp == defending[index].maxHP
                 var field = board.calcField
+                field.targetJustArrived = defending[index].justArrived
+                // Analytic is paid for going after the target has already had
+                // its turn, which is exactly what `acted` records.
+                field.movingLast = board.acted.contains((hitMine ? "m" : "t") + "\(index)")
+                // Friend Guard covers whoever is standing next to the holder.
+                let ally = index == 0 ? 1 : 0
+                let sameSide = hitMine ? board.mine : board.theirs
+                field.friendGuarded = sameSide.indices.contains(ally) && ally < board.activeCount
+                    && !sameSide[ally].fainted && sameSide[ally].build.ability == "Friend Guard"
                 // An Infiltrator is not stopped by what is hanging in the air
                 // on the other side.
                 field.screen = actor.build.ability == "Infiltrator" ? false : farScreens.blunt(move)
@@ -2517,6 +2553,24 @@ enum TurnModel {
             }
         }
 
+        // Gooey and Tangling Hair take a stage of Speed off whatever touches
+        // them, which is how a slow Pokémon stops being outrun.
+        if ["Gooey", "Tangling Hair"].contains(defender.build.ability), !defender.fainted {
+            change([.speed: -1], onMine: byMine, slot: slot, board: &board,
+                   because: defender.build.ability)
+        }
+        // Magician takes the item off whatever it hits, if its own hands are
+        // empty. Pickpocket is the same trade in the other direction.
+        if attacker.build.ability == "Magician", attacker.build.item.isEmpty,
+           !defender.build.item.isEmpty, !defender.fainted,
+           defender.build.ability != "Sticky Hold" {
+            let taken = defender.build.item
+            if byMine { board.mine[slot].build.item = taken; board.mine[slot].build.itemSpent = false }
+            else { board.theirs[slot].build.item = taken; board.theirs[slot].build.itemSpent = false }
+            if hitMine { board.mine[hit].build.item = "" } else { board.theirs[hit].build.item = "" }
+            board.note("\(attackerName)'s Magician took \(defenderName)'s \(taken).")
+        }
+
         switch defender.build.ability {
         case "Rough Skin", "Iron Barbs":
             let lost = Swift.max(1, attacker.maxHP / 8)
@@ -2727,17 +2781,23 @@ enum TurnModel {
         let attackerTeam = byMine ? board.mine : board.theirs
         guard defenderTeam.indices.contains(hit), attackerTeam.indices.contains(slot) else { return }
         let defender = defenderTeam[hit]
+        let attacker = attackerTeam[slot]
         switch effect.kind {
         case .status(let ailment):
             guard defender.status == .none else { return }
-            let types = defender.build.form.pokeTypes
+            // The types the battle gave it, not the ones the dex printed: a
+            // Soaked Garchomp really can be burned like a Water type.
+            let types = defender.types
             let immune: Bool
             switch ailment {
             case .burn: immune = types.contains(.fire) || defender.build.ability == "Thermal Exchange"
                 || defender.build.ability == "Water Veil" || defender.build.ability == "Water Bubble"
             case .paralysis: immune = types.contains(.electric) || defender.build.ability == "Limber"
-            case .poison, .badPoison: immune = types.contains(where: { [.poison, .steel].contains($0) })
-                || defender.build.ability == "Immunity"
+            case .poison, .badPoison:
+                // Corrosion poisons the two types that cannot normally be.
+                immune = (attacker.build.ability != "Corrosion"
+                          && types.contains(where: { [.poison, .steel].contains($0) }))
+                    || defender.build.ability == "Immunity"
             case .freeze: immune = types.contains(.ice)
             case .sleep, .none: immune = true
             }
@@ -3773,7 +3833,8 @@ enum TurnModel {
             case .paralysis: immune = victim.types.contains(.electric)
                 || ["Limber"].contains(victim.build.ability)
             case .poison, .badPoison:
-                immune = victim.types.contains(where: { [.poison, .steel].contains($0) })
+                let corrodes = team[slot].build.ability == "Corrosion"
+                immune = (!corrodes && victim.types.contains(where: { [.poison, .steel].contains($0) }))
                     || ["Immunity"].contains(victim.build.ability)
             case .sleep: immune = ["Insomnia", "Vital Spirit"].contains(victim.build.ability)
                 || board.field.terrain == .electric
@@ -3816,6 +3877,14 @@ enum TurnModel {
         guard move.effect.contains("The user faints") else { return }
         let team = byMine ? board.mine : board.theirs
         guard team.indices.contains(slot), !team[slot].fainted else { return }
+        // Damp refuses an explosion from anywhere on the field, including one
+        // its own side set off.
+        if let damp = (board.mine + board.theirs).prefix(board.activeCount * 2).first(where: {
+            !$0.fainted && ["Damp"].contains($0.build.ability)
+        }) {
+            board.note("\(damp.build.form.formLabel)'s Damp stopped it going off.")
+            return
+        }
         if byMine { board.mine[slot].hp = 0 } else { board.theirs[slot].hp = 0 }
         board.note("\(team[slot].build.form.formLabel) fainted using \(move.name).")
     }
