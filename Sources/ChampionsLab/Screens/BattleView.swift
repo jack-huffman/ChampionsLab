@@ -1673,51 +1673,64 @@ struct BattleView: View {
         }
     }
 
-    /// What a Pokémon is carrying in stages and condition, on its card: the
-    /// Swords Dance, the Intimidate, the burn. Nothing shows when nothing is.
-    @ViewBuilder
-    private func stages(_ fighter: Fighter) -> some View {
-        let changed = Stat.allCases.filter { fighter.build.boosts.indices.contains($0.rawValue)
-            && fighter.build.boosts[$0.rawValue] != 0 }
-        if !changed.isEmpty || fighter.status != .none || fighter.isConfused {
-            // Three to a row and no wrapping inside a chip: five drops read as
-            // two tidy rows, not a capsule broken across two lines.
-            let rows = stride(from: 0, to: changed.count, by: 3).map { Array(changed[$0..<min($0 + 3, changed.count)]) }
-            VStack(spacing: 2) {
-                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                    HStack(spacing: 3) {
-                        ForEach(row, id: \.rawValue) { stat in
-                            let stage = fighter.build.boosts[stat.rawValue]
-                            Text("\(stat.short) \(stage > 0 ? "+" : "−")\(abs(stage))")
-                                .font(.system(size: 8, weight: .heavy, design: .rounded)).monospacedDigit()
-                                .lineLimit(1).fixedSize()
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 4).padding(.vertical, 1)
-                                .background(Capsule().fill(stage > 0 ? Palette.good : Palette.bad))
-                                .help("\(stat.short) \(stage > 0 ? "raised" : "lowered") by \(abs(stage)) stage\(abs(stage) == 1 ? "" : "s") — ×\(String(format: "%.2f", stageMultiplier(stage)))")
-                        }
+    /// A colour for each condition, so the word on the name is recognisable
+    /// before it is read.
+    private func statusTint(_ status: Ailment) -> Color {
+        switch status {
+        case .burn:      return Color(red: 0.93, green: 0.45, blue: 0.28)
+        case .paralysis: return Color(red: 0.95, green: 0.78, blue: 0.20)
+        case .poison, .badPoison: return Color(red: 0.72, green: 0.42, blue: 0.85)
+        case .sleep:     return Color(red: 0.55, green: 0.60, blue: 0.75)
+        case .freeze:    return Color(red: 0.45, green: 0.75, blue: 0.95)
+        case .none:      return Palette.dim
+        }
+    }
+
+    /// The stat changes, as arrows, up the right-hand edge of the card.
+    ///
+    /// One row per stat in the order they are thought about — Attack, Special
+    /// Attack, Defense, Special Defense, Speed — and one arrow per stage, so
+    /// two arrows is two stages and there is nothing to read. It used to be
+    /// coloured capsules stacked under the name, three to a row, which took as
+    /// much room as the Pokémon and had to be parsed rather than seen.
+    ///
+    /// Confusion stays a word, because it is not a stat and has nowhere to
+    /// point. The condition has moved to the end of the name.
+    private func stages(_ fighter: Fighter) -> AnyView {
+        // Speed last: it is the one that decides the turn, so it reads at the
+        // bottom where the eye finishes.
+        let order: [Stat] = [.attack, .spAttack, .defense, .spDefense, .speed]
+        let changed = order.filter {
+            fighter.build.boosts.indices.contains($0.rawValue)
+                && fighter.build.boosts[$0.rawValue] != 0
+        }
+        guard !changed.isEmpty || fighter.isConfused else { return AnyView(EmptyView()) }
+        return AnyView(VStack(alignment: .trailing, spacing: 1) {
+            ForEach(changed, id: \.rawValue) { stat in
+                let stage = fighter.build.boosts[stat.rawValue]
+                let up = stage > 0
+                HStack(spacing: 1) {
+                    Text(stat.short)
+                        .font(.system(size: 8, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    ForEach(0..<min(abs(stage), 6), id: \.self) { _ in
+                        Image(systemName: up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                            .font(.system(size: 7))
+                            .foregroundStyle(up ? Palette.good : Palette.bad)
                     }
                 }
+                .help("\(stat.short) \(up ? "raised" : "lowered") by \(abs(stage)) stage"
+                      + "\(abs(stage) == 1 ? "" : "s") — ×\(String(format: "%.2f", stageMultiplier(stage)))")
             }
-            HStack(spacing: 3) {
-                if fighter.status != .none {
-                    Text(fighter.status.rawValue.uppercased())
-                        .font(.system(size: 8, weight: .heavy)).kerning(0.3)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 4).padding(.vertical, 1)
-                        .background(Capsule().fill(Palette.warn))
-                }
-                if fighter.isConfused {
-                    Text("CONFUSED")
-                        .font(.system(size: 8, weight: .heavy)).kerning(0.3)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 4).padding(.vertical, 1)
-                        .background(Capsule().fill(Color(red: 0.75, green: 0.45, blue: 0.85)))
-                        .help("Confused for up to \(fighter.confusedFor) more turn\(fighter.confusedFor == 1 ? "" : "s"): one action in three goes into its own face. Switching out clears it.")
-                }
+            if fighter.isConfused {
+                Text("confused")
+                    .font(.system(size: 8, weight: .heavy))
+                    .foregroundStyle(Color(red: 0.75, green: 0.45, blue: 0.85))
+                    .help("Confused for up to \(fighter.confusedFor) more turn"
+                          + "\(fighter.confusedFor == 1 ? "" : "s"): one action in three goes "
+                          + "into its own face. Switching out clears it.")
             }
-            .padding(.top, 2)
-        }
+        })
     }
 
     private func stageMultiplier(_ stage: Int) -> Double {
@@ -1883,19 +1896,6 @@ struct BattleView: View {
                     .shadow(color: hit ? Palette.bad.opacity(0.55) : .clear, radius: 9)
                     .animation(.spring(response: 0.32, dampingFraction: 0.5), value: hit)
                     .animation(.easeOut(duration: 0.35), value: fighter.fainted)
-                if fighter.pendingMega != nil {
-                    Text("M").font(.system(size: 9, weight: .heavy))
-                        .frame(width: 17, height: 17)
-                        .background(Palette.warn).foregroundStyle(.white)
-                        .clipShape(Circle())
-                        .help("Holding its stone. It Mega Evolves only if you toggle it on "
-                              + "with a move, before anything else happens, in Speed order.")
-                } else if fighter.build.form.isMega {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Palette.warn)
-                        .help("Mega Evolved")
-                }
                 if fighter.isProtected && !fighter.fainted {
                     Image(systemName: "shield.fill")
                         .font(.system(size: 11))
@@ -1914,9 +1914,20 @@ struct BattleView: View {
                         .help("A substitute is taking the hits, worth \(fighter.substitute).")
                 }
             }
-            Text(fighter.build.form.formLabel)
-                .font(.system(size: 11, weight: .semibold))
-                .lineLimit(1).minimumScaleFactor(0.65)
+            // The condition rides on the name rather than taking a badge of
+            // its own: it is a fact about the Pokémon, and a line that reads
+            // "Kingambit · burned" needs no decoding.
+            HStack(spacing: 3) {
+                Text(fighter.build.form.formLabel)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1).minimumScaleFactor(0.65)
+                if fighter.status != .none {
+                    Text("· \(fighter.status.rawValue)")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(statusTint(fighter.status))
+                        .lineLimit(1).fixedSize()
+                }
+            }
             ZStack(alignment: .leading) {
                 Capsule().fill(Palette.hairline).frame(height: 7)
                 GeometryReader { geo in
@@ -1965,12 +1976,45 @@ struct BattleView: View {
                 .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(Palette.accent.opacity(0.85))
                 .lineLimit(1).minimumScaleFactor(0.7)
-            stages(fighter)
         }
         .frame(width: 118)
         .padding(.vertical, 8).padding(.horizontal, 4)
         .background(fighter.fainted ? Color.clear : Palette.surfaceRaised.opacity(0.55))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        // In the tile's own corner rather than the sprite's, and on a backdrop:
+        // a sprite is not a reliable background — Charizard's wing reaches into
+        // exactly this space — and a stat change is something you check at a
+        // glance rather than squint at.
+        .overlay(alignment: .topTrailing) {
+            stages(fighter)
+                .padding(.horizontal, 4).padding(.vertical, 2)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Palette.surface.opacity(0.88))
+                )
+                .padding(2)
+                .opacity(fighter.fainted ? 0 : 1)
+        }
+        // The stone marker takes the other corner. It used to share the right
+        // one with the stat column, which is fine at one stat changed and
+        // overlapping at four.
+        .overlay(alignment: .topLeading) {
+            if fighter.pendingMega != nil {
+                Text("M").font(.system(size: 9, weight: .heavy))
+                    .frame(width: 17, height: 17)
+                    .background(Palette.warn).foregroundStyle(.white)
+                    .clipShape(Circle())
+                    .padding(2)
+                    .help("Holding its stone. It Mega Evolves only if you toggle it on "
+                          + "with a move, before anything else happens, in Speed order.")
+            } else if fighter.build.form.isMega {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Palette.warn)
+                    .padding(4)
+                    .help("Mega Evolved")
+            }
+        }
     }
 
     /// What a move would actually do, on the button that would do it.
@@ -2150,8 +2194,9 @@ struct BattleView: View {
             if mine, build.item == "Choice Scarf" { causes.append("Scarf ×1.5") }
             if mine, build.item == "Iron Ball" || build.item == "Macho Brace" { causes.append("\(build.item) ×½") }
         }
-        let stage = build.boosts[Stat.speed.rawValue]
-        if stage != 0 { causes.append("Spe \(stage > 0 ? "+" : "")\(stage)") }
+        // The stage itself is not named here any more — the arrow column in the
+        // card's corner already says "Spe ▲". What stays are the things no
+        // arrow shows: the doublings, the halvings, the item.
         if tailwind { value *= 2; causes.append("Tailwind ×2") }
         if fighter.status.halvesSpeed { value /= 2; causes.append("paralysed ×½") }
         if trickRoom { causes.append("Trick Room: slower first") }

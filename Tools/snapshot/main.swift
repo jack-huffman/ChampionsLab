@@ -221,7 +221,11 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         if board.field.terrain == .none { board.field.terrain = .grassy; board.terrainTurns = 3 }
         // And stages on both sides, so the cards show what they carry.
         board.mine[0].build.boosts[Stat.spAttack.rawValue] = 2
+        board.mine[1].build.boosts[Stat.defense.rawValue] = -2
+        board.mine[1].build.boosts[Stat.speed.rawValue] = 1
         board.theirs[0].build.boosts[Stat.attack.rawValue] = -1
+        board.theirs[0].build.boosts[Stat.spDefense.rawValue] = -3
+        board.theirs[0].status = .paralysis
         board.theirs[1].status = .burn
         // A real turn played out, so the log shows its reasons nested under
         // the thing they explain rather than as a column of equal boxes.
