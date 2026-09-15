@@ -208,6 +208,9 @@ struct BringFour {
         /// The four, lead pair first.
         let bring: [Form]
         let benched: [Form]
+        /// What the lead pair does to theirs before anybody attacks — the Fake
+        /// Out, the Intimidate, the Tailwind, and the things that answer them.
+        var opening = Opening()
         /// Grid edge for this four against their six, weighted by what they
         /// will probably bring. −100…100, the same scale as the versus verdict.
         let edge: Int
@@ -230,6 +233,15 @@ struct BringFour {
         Int((turn.value * 15).rounded().clamped(to: -25...25))
     }
 
+    /// What winning the opening exchange is worth to the ranking.
+    ///
+    /// On the same scale as the tempo bonus and capped a little lower: taking
+    /// a turn off somebody is worth a great deal, but it is one turn, and a
+    /// four that is simply better across the board should still come first.
+    private func openingBonus(_ opening: Opening) -> Int {
+        Int((opening.value * 15).rounded().clamped(to: -18...18))
+    }
+
     /// Every four, ranked. Best first.
     var plans: [Plan] {
         let mine = matchup.myForms
@@ -248,24 +260,40 @@ struct BringFour {
                                      weights: weights)
             // Their lead is the one that answers yours best, so every pair of
             // yours is scored on its worst case rather than its best.
-            var best: (leads: [Form], turn: TurnOne)?
+            //
+            // Scored on the damage race *and* on the exchange that happens
+            // before any damage: whose Fake Out lands, whose Intimidate bites,
+            // who gets speed control up. Leading a Farigiraf into a Fake Out
+            // lead is a good opening and does not show up in a damage race at
+            // all — the whole point of it is that nothing happens.
+            var best: (leads: [Form], turn: TurnOne, opening: Opening, worth: Double)?
             for pair in combinations(four, 2) {
-                var floor: TurnOne?
+                let mineSide = Opening.side(pair, pairs: matchup.myPairs, rules: rules)
+                var floor: (turn: TurnOne, opening: Opening, worth: Double)?
                 for theirPair in combinations(likely, 2) {
                     let turn = turnOne(leads: pair, against: theirPair)
-                    if floor == nil || turn.value < floor!.value { floor = turn }
+                    let read = Opening.read(
+                        mine: mineSide,
+                        theirs: Opening.side(theirPair, pairs: matchup.theirPairs, rules: rules))
+                    let worth = turn.value + read.value
+                    if floor == nil || worth < floor!.worth { floor = (turn, read, worth) }
                 }
                 guard let floor else { continue }
-                if best == nil || floor.value > best!.turn.value { best = (pair, floor) }
+                if best == nil || floor.worth > best!.worth {
+                    best = (pair, floor.turn, floor.opening, floor.worth)
+                }
             }
             let leads = best?.leads ?? Array(four.prefix(2))
             let turn = best?.turn ?? .none
+            let opening = best?.opening ?? Opening()
             let ordered = leads + four.filter { form in !leads.contains { $0.id == form.id } }
             let benched = mine.filter { form in !four.contains { $0.id == form.id } }
 
-            out.append(Plan(bring: ordered, benched: benched, edge: rated.score,
+            out.append(Plan(bring: ordered, benched: benched, opening: opening,
+                            edge: rated.score,
                             turnOne: turn,
-                            score: (rated.score + tempoBonus(turn)).clamped(to: -100...100),
+                            score: (rated.score + tempoBonus(turn) + openingBonus(opening))
+                                .clamped(to: -100...100),
                             reasons: reasons(four: ordered, benched: benched, turn: turn,
                                              likely: likely, focusKOs: rated.focusKOs),
                             warnings: warnings(four: ordered, benched: benched,
