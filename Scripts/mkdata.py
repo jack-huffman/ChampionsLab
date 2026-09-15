@@ -225,6 +225,20 @@ def split_form_sections(page):
     return [page[bounds[i]:bounds[i + 1]] for i in range(len(marks))]
 
 
+def parse_weight(section):
+    """The form's weight in kilograms.
+
+    Low Kick and Grass Knot work their power out from the target's weight, and
+    Heavy Slam and Heat Crash from the ratio of the two, so this is a damage
+    input and not a piece of flavour. Serebii prints pounds and kilograms in
+    one cell: "220.5lbs<br /> 100kg". Each form carries its own -- Mega
+    Venusaur is 155.5kg to Venusaur's 100kg -- which is why it is read per
+    section rather than per page.
+    """
+    m = re.search(r"([\d.]+)\s*kg", section)
+    return float(m.group(1)) if m else 0.0
+
+
 def parse_form_label(section):
     """The form's display name, first cell after the header row."""
     m = re.search(r'<td class="fooinfo">\s*([A-Za-z][^<]{1,40}?)\s*</td>', section)
@@ -336,6 +350,7 @@ def parse_species(slug):
             "label": parse_form_label(section),
             "abilities": parse_abilities(section),
             "damage_taken": parse_damage_taken(section),
+            "weight": parse_weight(section),
         })
     return forms, parse_learnset(page)
 
@@ -590,6 +605,7 @@ def main():
                     card = cards[0] if cards else None
                 row["abilities"] = card["abilities"] if card else []
                 row["damage_taken"] = card["damage_taken"] if card else {}
+                row["weight"] = (card or {}).get("weight", 0.0)
                 row["form_label"] = (card["label"] if card else row["name"]) or row["name"]
                 # Remember that this row is a Mega, so the display name can be
                 # built from the species instead of trusting the card title —

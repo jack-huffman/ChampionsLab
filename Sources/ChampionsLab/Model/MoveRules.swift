@@ -69,3 +69,23 @@ extension Move {
     var doublesAfterFailure: Bool { rules.doublesAfterFailure }
     var breaksProtect: Bool { rules.breaksProtect }
 }
+
+extension Move {
+    /// Whether the model reads this move's text into something it acts on.
+    ///
+    /// The parity audit needs this to tell two very different failures apart.
+    /// A move whose only effect is a 10% paralysis never fires for the audit,
+    /// because the audit does not roll dice — but the model does carry it, and
+    /// calling that a gap sends someone looking for a bug that is not there.
+    /// A move whose text parses into nothing is the real gap: the model has no
+    /// idea what it does and will play it as a blank.
+    var parsesIntoARule: Bool {
+        let r = rules
+        if r.secondary != nil || r.healing != nil || r.drainShare != nil { return true }
+        if !r.targetDrops.isEmpty || !r.targetBoosts.isEmpty { return true }
+        if !r.selfBoosts.isEmpty || !r.selfDrops.isEmpty { return true }
+        if r.confuses || r.doublesAfterFailure || r.breaksProtect { return true }
+        if r.charge != nil { return true }
+        return false
+    }
+}

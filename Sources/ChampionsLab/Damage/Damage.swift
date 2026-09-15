@@ -58,6 +58,23 @@ struct Combatant {
     /// Its last move missed, failed or never happened, which is what
     /// Stomping Tantrum is waiting for.
     var lastMoveFailed = false
+    /// The attacker ignores the defender's ability, which is the whole of
+    /// Mold Breaker, Turboblaze and Teravolt.
+    var ignoresAbility = false
+
+    /// Weight in kilograms as the battle sees it, not as the dex prints it:
+    /// Heavy Metal doubles it, Light Metal and a Float Stone halve it. Four
+    /// moves read this instead of their own power.
+    var weightKg: Double {
+        var kg = form.weightKg
+        switch ability {
+        case "Heavy Metal": kg *= 2
+        case "Light Metal": kg *= 0.5
+        default: break
+        }
+        if item == "Float Stone" { kg *= 0.5 }
+        return max(0.1, kg)
+    }
 
     func stat(_ stat: Stat) -> Int {
         ChampionsStats.value(base: form.stats[stat.rawValue],
@@ -100,6 +117,16 @@ struct Combatant {
     }
 
     var effectiveTypes: [PokeType] { form.pokeTypes }
+
+    /// Items that add a fifth to one type of move.
+    static let typeBoostItems: [String: PokeType] = [
+        "Black Glasses": .dark, "Charcoal": .fire, "Fairy Feather": .fairy,
+        "Metal Coat": .steel, "Miracle Seed": .grass, "Mystic Water": .water,
+        "Never-Melt Ice": .ice, "Sharp Beak": .flying, "Spell Tag": .ghost,
+        "Twisted Spoon": .psychic, "Magnet": .electric, "Poison Barb": .poison,
+        "Silk Scarf": .normal, "Hard Stone": .rock, "Soft Sand": .ground,
+        "Dragon Fang": .dragon, "Black Belt": .fighting, "Silver Powder": .bug,
+    ]
 
     /// Standing on the ground, which is what every terrain asks about: it does
     /// nothing for a Flying type or a Levitate, and neither does a Spikes.
@@ -249,6 +276,23 @@ enum DamageCalc {
         // down to a third. Only a battle ever gets there, so only a battle sees
         // it, but a Charizard that has taken a hit hits back harder.
         // Last Respects: 50, and 50 more for every teammate that has gone down.
+        // Four moves ignore their listed power and read weight instead. Serebii
+        // prints these as 1 base power, so without this they hit for nothing:
+        // the audit caught it when Grass Knot dealt 2 damage.
+        if move.id == "lowkick" || move.id == "grassknot" {
+            let kg = defender.weightKg
+            power = kg >= 200 ? 120 : kg >= 100 ? 100 : kg >= 50 ? 80
+                  : kg >= 25 ? 60 : kg >= 10 ? 40 : 20
+            notes.append(String(format: "%@: %d power against %.1fkg",
+                                move.name, Int(power), kg))
+        }
+        if move.id == "heavyslam" || move.id == "heatcrash" {
+            let ratio = attacker.weightKg / defender.weightKg
+            power = ratio >= 5 ? 120 : ratio >= 4 ? 100 : ratio >= 3 ? 80
+                  : ratio >= 2 ? 60 : 40
+            notes.append(String(format: "%@: %d power at %.1fkg against %.1fkg",
+                                move.name, Int(power), attacker.weightKg, defender.weightKg))
+        }
         if move.id == "lastrespects" {
             power = Double(50 * (1 + attacker.fallenAllies))
             if attacker.fallenAllies > 0 {
@@ -393,7 +437,7 @@ enum DamageCalc {
             effectiveness *= TypeChart.multiplier(moveType, into: type)
         }
         effectiveness = applyDefensiveAbility(effectiveness, moveType: moveType,
-                                              defender: defender, notes: &notes)
+                                              defender: defender, ignored: attacker.ignoresAbility, notes: &notes)
         modifier *= effectiveness
 
         if effectiveness == 0 {
@@ -403,17 +447,18 @@ enum DamageCalc {
 
         // Aura Guard is what makes Mega Lucario Z awkward to break: it halves
         // every contact move, and most physical attackers only have those.
-        if defender.ability == "Aura Guard", move.makesContact {
+        if !attacker.ignoresAbility, defender.ability == "Aura Guard", move.makesContact {
             modifier *= 0.5
             notes.append("Aura Guard: contact halved")
         }
         // Only while the bar is full: the first hit is halved, the rest are not.
-        if defender.ability == "Multiscale" || defender.ability == "Shadow Shield", defender.atFullHP {
+        if !attacker.ignoresAbility, defender.ability == "Multiscale" || defender.ability == "Shadow Shield", defender.atFullHP {
             modifier *= 0.5
             notes.append("\(defender.ability) at full HP: ×0.5")
         }
-        if defender.ability == "Ice Scales", !physical { modifier *= 0.5 }
+        if !attacker.ignoresAbility, defender.ability == "Ice Scales", !physical { modifier *= 0.5 }
         if effectiveness > 1,
+           !attacker.ignoresAbility,
            ["Filter", "Solid Rock", "Prism Armor"].contains(defender.ability) {
             modifier *= 0.75
         }
@@ -446,6 +491,14 @@ enum DamageCalc {
             notes.append("Screen: ×\(field.isDoubles ? "0.667" : "0.5")")
         }
 
+        // The type-boost items: a fifth more of one type, which is what a
+        // Charcoal on a Fire attacker is for. Read from a table rather than the
+        // text because the text says "increased by 20%" in one place and
+        // "increases damage inflicted by 20%" in another.
+        if let boosted = Combatant.typeBoostItems[attacker.item], boosted == moveType {
+            modifier *= 1.2
+            notes.append("\(attacker.item): +20% \(moveType.rawValue)")
+        }
         if attacker.item == "Life Orb" {
             modifier *= 1.3
             notes.append("Life Orb: +30% (10% recoil)")
@@ -497,10 +550,10 @@ enum DamageCalc {
         // once breaks it on the first and knocks out with the second, which is
         // most of the reason those moves are worth running.
         let survivesAnything = ((defender.item == "Focus Sash" && !defender.itemSpent)
-            || defender.ability == "Sturdy") && !multiHit
+            || (defender.ability == "Sturdy" && !attacker.ignoresAbility)) && !multiHit
         if multiHit, defender.atFullHP,
            (defender.item == "Focus Sash" && !defender.itemSpent)
-            || defender.ability == "Sturdy" {
+            || (defender.ability == "Sturdy" && !attacker.ignoresAbility) {
             notes.append("Hits more than once, so it goes through a Focus Sash or Sturdy")
         }
         if survivesAnything, defender.atFullHP {
@@ -520,10 +573,13 @@ enum DamageCalc {
                             notes: notes)
     }
 
+    /// `ignored` is a Mold Breaker on the other side: every type immunity an
+    /// ability grants — Levitate, Flash Fire, Water Absorb — is something it
+    /// walks straight through.
     private static func applyDefensiveAbility(_ effectiveness: Double, moveType: PokeType,
-                                              defender: Combatant,
+                                              defender: Combatant, ignored: Bool = false,
                                               notes: inout [String]) -> Double {
-        switch (defender.ability, moveType) {
+        switch (ignored ? "" : defender.ability, moveType) {
         case ("Levitate", .ground):
             notes.append("Levitate: immune to Ground")
             return 0

@@ -10,4 +10,4 @@ SOURCES=$(find Sources/ChampionsLab -name '*.swift')
 mkdir -p build
 swiftc -swift-version 6 -target arm64-apple-macosx13.0 -sdk "$SDK" \
 	-o build/coverage $SOURCES Tools/coverage/main.swift
-./build/coverage
+./build/coverage "$@"

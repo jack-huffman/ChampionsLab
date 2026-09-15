@@ -22,13 +22,22 @@ struct Form: Codable, Identifiable, Hashable, Sendable {
     /// For a Mega form, the held item that triggers it. Empty when Serebii has
     /// not published a name for that stone yet.
     let stone: String?
+    /// Kilograms. Optional because a dex built before weights were scraped
+    /// does not carry one, and a missing weight must not stop the app opening.
+    let weight: Double?
 
     var id: String { icon.isEmpty ? "\(species)-\(suffix)" : icon }
 
     enum CodingKeys: String, CodingKey {
-        case dex, species, name, icon, suffix, types, stats, abilities, moves, stone
+        case dex, species, name, icon, suffix, types, stats, abilities, moves, stone, weight
         case formLabel = "form_label"
     }
+
+    /// Weight in kilograms, which Low Kick, Grass Knot, Heavy Slam and Heat
+    /// Crash all work their power out from. Falls back to an average-sized
+    /// 50kg so a dex without weights still produces sane numbers instead of
+    /// making every heavy-hitting move minimum power.
+    var weightKg: Double { weight ?? 50 }
 
     var hp: Int { stats[0] }
     var attack: Int { stats[1] }
