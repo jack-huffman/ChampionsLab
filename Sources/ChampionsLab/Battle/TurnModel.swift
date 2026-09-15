@@ -373,6 +373,11 @@ struct Board {
     /// play both are on.
     var myCountsStages = true
     var theirCountsStages = true
+    /// Whether each side scores a turn by how much it moves its chance of
+    /// winning, rather than by how much material it gains. Per side so that one
+    /// can be measured against the other; in play both are on.
+    var myPlaysForWin = true
+    var theirPlaysForWin = true
 
     /// Derive both sides' weights from the duel table.
     ///
@@ -558,6 +563,7 @@ struct Board {
         swap(&out.myBeats, &out.theirBeats)
         swap(&out.myRoster, &out.theirRoster)
         swap(&out.myCountsStages, &out.theirCountsStages)
+        swap(&out.myPlaysForWin, &out.theirPlaysForWin)
         // The per-slot keys name a side, so they have to be relabelled too.
         func relabel(_ table: [String: Bool]) -> [String: Bool] {
             Dictionary(uniqueKeysWithValues: table.map { key, value in
@@ -1214,6 +1220,32 @@ enum TurnModel {
         // see from here, so it is priced low and honestly.
         out += worth(.speed, 0.07)
         return Swift.max(-0.9, Swift.min(0.9, out))
+    }
+
+    /// A position's material margin, turned into a chance of winning from it.
+    ///
+    /// Material is linear and winning is not, and the difference is the whole
+    /// of how a good player handles risk. Strong players say it plainly:
+    ///
+    ///     "When you're ahead, only predict if being right wins the game
+    ///      outright and being wrong doesn't throw your lead. When you're
+    ///      behind, predict when no safe play covers all their options and
+    ///      losing without a read is otherwise inevitable."
+    ///
+    /// An engine maximising material cannot do either, because material is
+    /// risk-neutral: it plays a position it is winning by three exactly as it
+    /// plays one it is losing by three, and a coin flip worth ±1 looks the same
+    /// from both. Scoring a turn by how far it moves this curve instead makes
+    /// the engine cautious when it is ahead and willing when it is behind —
+    /// not as a rule bolted on, but because that is what the curve does. It is
+    /// flat out at the ends, so at +3 another point of material buys almost no
+    /// extra chance of winning while a slip costs a great deal, and at −3 the
+    /// reverse.
+    ///
+    /// The slope is set so a one-Pokémon lead reads as roughly two chances in
+    /// three, which is about where a real game with a Pokémon in hand sits.
+    static func winChance(_ value: Double) -> Double {
+        1 / (1 + exp(-value * 0.72))
     }
 
     /// What a Tailwind is worth, given what the room is doing.

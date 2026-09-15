@@ -343,8 +343,8 @@ struct TurnGame {
         for (i, mine) in myPlays.enumerated() {
             await breathe("turn matrix")
             for (j, theirs) in theirPlays.enumerated() {
-                payoff[i][j] = settle(mine, theirs).expected
-                    - forgone(mine, myOffence) + forgone(theirs, theirOffence)
+                payoff[i][j] = asWinChance(settle(mine, theirs).expected
+                    - forgone(mine, myOffence) + forgone(theirs, theirOffence))
             }
         }
         await breathe("turn solve")
@@ -379,8 +379,8 @@ struct TurnGame {
                                 count: myPlays.count)
         for (i, mine) in myPlays.enumerated() {
             for (j, theirs) in theirPlays.enumerated() {
-                payoff[i][j] = settle(mine, theirs).expected
-                    - forgone(mine, myOffence) + forgone(theirs, theirOffence)
+                payoff[i][j] = asWinChance(settle(mine, theirs).expected
+                    - forgone(mine, myOffence) + forgone(theirs, theirOffence))
             }
         }
         let (myMix, ownTheirMix, ownValue) = TurnGame.equilibrium(payoff, iterations: iterations)
@@ -435,6 +435,17 @@ struct TurnGame {
         let before = TurnModel.value(board)
         let expected = outcomes.reduce(0) { $0 + $1.chance * (TurnModel.value($1.board) - before) }
         return (expected, outcomes[0].board)
+    }
+
+    /// The same cell, scored by how far it moves the chance of winning.
+    ///
+    /// Taken on the whole adjusted figure rather than on the raw one, so the
+    /// tempo a Protect gives up is converted along with everything else and
+    /// keeps meaning what it meant.
+    func asWinChance(_ gain: Double) -> Double {
+        guard board.myPlaysForWin else { return gain }
+        let before = TurnModel.value(board)
+        return TurnModel.winChance(before + gain) - TurnModel.winChance(before)
     }
 
     // MARK: - Looking one turn further

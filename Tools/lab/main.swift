@@ -185,7 +185,7 @@ struct Report: Codable {
 @MainActor
 func runShard(index: Int, of shards: Int, games: Int, budget: Double,
               focus: String?, versus: [String], spread: Int, abTest: Bool,
-              stageTest: Bool, seed: UInt64) -> Report {
+              stageTest: Bool, winTest: Bool, seed: UInt64) -> Report {
     let store = Store.shared
     if let error = store.loadError { FileHandle.standardError.write(Data("dataset: \(error)\n".utf8)); exit(1) }
     let rules = store.rulebook
@@ -236,7 +236,8 @@ func runShard(index: Int, of shards: Int, games: Int, budget: Double,
             forMine: seat, forTheirs: seat, limit: 40, dice: dice,
             bringSpread: spread,
             weightedMine: true, weightedTheirs: !abTest,
-            stagesMine: true, stagesTheirs: !stageTest)
+            stagesMine: true, stagesTheirs: !stageTest,
+            forWinMine: true, forWinTheirs: !winTest)
 
         record(ledger, mine: teams[a].name, theirs: teams[b].name, into: &report)
         played += 1
@@ -636,6 +637,8 @@ func main() {
     let abTest = has("--ab")
     // The same experiment for the stat-stage term in the evaluation.
     let stageTest = has("--ab-stages")
+    // And for scoring a turn by the chance of winning rather than by material.
+    let winTest = has("--ab-win")
     let started = Date()
 
     // A child doing its slice: run it, print the JSON, done.
@@ -644,7 +647,8 @@ func main() {
         guard parts.count == 2 else { exit(2) }
         let report = runShard(index: parts[0], of: parts[1], games: games, budget: budget,
                               focus: focus, versus: versus, spread: spread,
-                              abTest: abTest, stageTest: stageTest, seed: seed)
+                              abTest: abTest, stageTest: stageTest,
+                              winTest: winTest, seed: seed)
         let blob = try! JSONEncoder().encode(report)
         FileHandle.standardOutput.write(blob)
         return
@@ -659,7 +663,7 @@ func main() {
     if workers == 1 {
         report = runShard(index: 0, of: 1, games: games, budget: budget, focus: focus,
                           versus: versus, spread: spread, abTest: abTest,
-                          stageTest: stageTest, seed: seed)
+                          stageTest: stageTest, winTest: winTest, seed: seed)
     } else {
         // Each child plays its own slice and hands back a ledger. Sharding by
         // process rather than by thread because the turn model's dice are
@@ -678,6 +682,7 @@ func main() {
             if has("--calibrate") { argv.append("--calibrate") }
             if abTest { argv.append("--ab") }
             if stageTest { argv.append("--ab-stages") }
+            if winTest { argv.append("--ab-win") }
             task.arguments = argv
             let pipe = Pipe()
             task.standardOutput = pipe
@@ -697,10 +702,11 @@ func main() {
 
     let seconds = Date().timeIntervalSince(started)
     report.seconds = seconds
-    if abTest || stageTest {
+    if abTest || stageTest || winTest {
         describeAB(report, seconds: seconds,
-                   what: stageTest ? "counting the stat stages on the board"
-                                   : "knowing what your Pokémon are worth")
+                   what: winTest ? "playing for the win rather than for material"
+                        : stageTest ? "counting the stat stages on the board"
+                                    : "knowing what your Pokémon are worth")
     }
     else if has("--calibrate") { describeCalibration(report, seconds: seconds) }
     else if versus.count == 2 { describeVersus(report, versus: versus, seconds: seconds) }

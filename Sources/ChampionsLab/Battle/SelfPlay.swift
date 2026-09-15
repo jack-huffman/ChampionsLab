@@ -158,7 +158,8 @@ enum SelfPlay {
         limit: Int = 40, dice: RandomNumberGenerator,
         logging: Bool = true, bringSpread: Int = 1,
         weightedMine: Bool = true, weightedTheirs: Bool = true,
-        stagesMine: Bool = true, stagesTheirs: Bool = true) -> Ledger {
+        stagesMine: Bool = true, stagesTheirs: Bool = true,
+        forWinMine: Bool = true, forWinTheirs: Bool = true) -> Ledger {
 
         // The battle's own dice, not just the engine's play sampling. Handing
         // both halves of a mirrored pair the same stream is what lets the
@@ -231,6 +232,8 @@ enum SelfPlay {
         }
         board.myCountsStages = stagesMine
         board.theirCountsStages = stagesTheirs
+        board.myPlaysForWin = forWinMine
+        board.theirPlaysForWin = forWinTheirs
         board.refreshWorth()
         // Narration is what records the steps, and the steps are what make the
         // ledger exact. It is on for the played board only: the engine's own
