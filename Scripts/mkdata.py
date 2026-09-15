@@ -15,8 +15,18 @@ resumes where it stopped. The generated JSON is committed, so a clean checkout
 builds without network access — the app never scrapes at runtime.
 
     ./mkdata.py                # incremental, uses cache
-    ./mkdata.py --refresh      # re-fetch everything
+    ./mkdata.py --delta        # pick up a new release: re-read the indexes,
+                               # then fetch only what is new or changed
+    ./mkdata.py --full         # re-fetch everything (same as --refresh)
     ./mkdata.py --only-roster  # roster + abilities, skip the slow move pass
+
+Champions will keep adding Pokemon, Megas, moves and items. A plain run reuses
+every cached page, so it cannot see a release at all; a full run re-fetches
+about fourteen hundred pages to find the dozen that changed. `--delta` is the
+one to reach for: it re-reads the three index pages, works out what is new
+against the dataset already on disk, and fetches detail pages only for those.
+Either way the run writes data/changes.json saying what moved, so a release's
+additions are a list rather than a diff of a 1.3 MB file.
 """
 
 import html
@@ -83,8 +93,15 @@ FORM_NAMES = {
 
 overlay_usage_cache = []
 
-REFRESH = "--refresh" in sys.argv
+REFRESH = "--refresh" in sys.argv or "--full" in sys.argv
 ONLY_ROSTER = "--only-roster" in sys.argv
+DELTA = "--delta" in sys.argv
+CHANGES = os.path.join(HERE, "data", "changes.json")
+
+# Pages to re-fetch even though they are cached. A delta run puts the three
+# index pages in here first, then adds the detail pages for whatever the
+# indexes say is new.
+FORCE = set()
 
 
 def curl(url):
@@ -107,7 +124,7 @@ def fetch(path, delay=0.25):
     """GET a Serebii page, caching the body under .cache/."""
     key = re.sub(r"[^a-z0-9]+", "_", path.lower()).strip("_") + ".html"
     dest = os.path.join(CACHE, key)
-    if os.path.exists(dest) and not REFRESH:
+    if os.path.exists(dest) and not REFRESH and path not in FORCE:
         with open(dest, encoding="utf-8", errors="ignore") as fh:
             return fh.read()
     os.makedirs(CACHE, exist_ok=True)
@@ -558,7 +575,119 @@ def parse_move_index():
 
 # ------------------------------------------------------------------ main ----
 
+def previous():
+    """The dataset already on disk, or None on a first run."""
+    if not os.path.exists(OUT):
+        return None
+    try:
+        with open(OUT, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
+def plan_delta(before):
+    """Work out what a new release added, and queue only those pages.
+
+    The three index pages are re-read every time -- they are the only way to
+    learn that something exists at all -- and then detail pages are fetched for
+    whatever they name that the dataset on disk has never heard of. A release
+    that adds twelve Pokemon costs twelve species pages instead of fourteen
+    hundred.
+
+    A species already in the dataset is re-read too when the roster now lists a
+    form of it that was not there before, which is how a new Mega arrives: the
+    species page is cached, and the Mega lives on it.
+    """
+    if before is None:
+        print("==> delta: nothing on disk to compare against, doing a full pass")
+        FORCE.clear()
+        return
+    # The indexes first, because nothing else can be known without them.
+    for type_name in (t.lower() for t in TYPE_ORDER):
+        FORCE.add("/pokedex-champions/%s.shtml" % type_name)
+    FORCE.add("/attackdex-champions/")
+    FORCE.add("/itemdex/list/holditem.shtml")
+    FORCE.add("/itemdex/list/megastone.shtml")
+
+    roster = with_eternal_floette(parse_roster())
+    known_forms = {f["icon"] for f in before.get("forms", [])}
+    known_species = {f["species"] for f in before.get("forms", [])}
+    new_forms = [f for f in roster if f["icon"] not in known_forms]
+    # Any species carrying a new form needs its page re-read, new or not.
+    for form in new_forms:
+        FORCE.add("/pokedex-champions/%s/" % form["species"])
+    fresh_species = sorted({f["species"] for f in new_forms} - known_species)
+
+    known_moves = set(before.get("moves", {}))
+    new_moves = sorted(set(parse_move_index()) - known_moves) if not ONLY_ROSTER else []
+    for slug in new_moves:
+        FORCE.add("/attackdex-champions/%s.shtml" % slug)
+
+    known_items = {i["slug"] for i in before.get("items", [])}
+    new_items = sorted(set(parse_item_index()) - known_items) if not ONLY_ROSTER else []
+    for slug in new_items:
+        FORCE.add("/itemdex/%s.shtml" % slug)
+
+    print("==> delta against the dataset on disk")
+    print("    %d new forms (%d new species), %d new moves, %d new items"
+          % (len(new_forms), len(fresh_species), len(new_moves), len(new_items)))
+    # Names, not labels: parse_roster has not built the display label yet, and
+    # "%s" % a or b binds the format tighter than the or, so this printed None.
+    for form in new_forms[:20]:
+        print("      form  %s (%s)" % (form["name"], form["icon"]))
+    for slug in new_moves[:20]:
+        print("      move  %s" % slug)
+    for slug in new_items[:20]:
+        print("      item  %s" % slug)
+    if not new_forms and not new_moves and not new_items:
+        print("      nothing new; the indexes match what is already here")
+
+
+def write_changes(before, roster, moves, items):
+    """Say what moved, as a list rather than a diff of a 1.3 MB file.
+
+    Written on every run, not just a delta one, so the answer to "what did this
+    release add" does not depend on having remembered to pass a flag.
+    """
+    def named(rows, key):
+        return {r[key] for r in rows}
+    was_forms = named(before.get("forms", []), "icon") if before else set()
+    was_labels = {f.get("form_label") or f["name"] for f in (before or {}).get("forms", [])}
+    was_moves = set(before.get("moves", {})) if before else set()
+    was_items = named(before.get("items", []), "slug") if before else set()
+
+    added_forms = [f.get("form_label") or f["name"] for f in roster if f["icon"] not in was_forms]
+    changes = {
+        "generated": time.strftime("%Y-%m-%d"),
+        "against": (before or {}).get("generated", "nothing"),
+        "forms_added": sorted(added_forms),
+        "megas_added": sorted(n for n in added_forms if n.startswith("Mega ")),
+        "moves_added": sorted(moves[s]["name"] for s in set(moves) - was_moves),
+        "items_added": sorted(i["name"] for i in items if i["slug"] not in was_items),
+        "forms_removed": sorted(was_labels - {f.get("form_label") or f["name"] for f in roster}),
+    }
+    with open(CHANGES, "w", encoding="utf-8") as fh:
+        json.dump(changes, fh, indent=1, ensure_ascii=False, sort_keys=True)
+        fh.write("\n")
+    total = sum(len(changes[k]) for k in
+                ("forms_added", "moves_added", "items_added", "forms_removed"))
+    if total:
+        print("==> changes against %s: %d forms, %d moves, %d items added, %d forms gone"
+              % (changes["against"], len(changes["forms_added"]),
+                 len(changes["moves_added"]), len(changes["items_added"]),
+                 len(changes["forms_removed"])))
+        for name in changes["forms_added"][:20]:
+            print("      + %s" % name)
+    else:
+        print("==> no change against %s" % changes["against"])
+    return changes
+
+
 def main():
+    before = previous()
+    if DELTA:
+        plan_delta(before)
     print("==> roster")
     roster = parse_roster()
     roster = with_eternal_floette(roster)
@@ -785,6 +914,7 @@ def main():
               % len(absent))
         print("      " + ", ".join(absent))
 
+    write_changes(before, roster, moves, items)
     audit_overlay(overlay, roster, moves, items)
 
 

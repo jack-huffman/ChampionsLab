@@ -18,7 +18,7 @@
 SHELL := /bin/bash
 NICE  := nice -n 15
 
-.PHONY: test warnings hitch coverage profile accuracy snapshot app dmg data check clean
+.PHONY: test warnings hitch coverage profile accuracy snapshot app dmg data check clean delta full-sync
 
 test:
 	$(NICE) swift test 2>&1 | tail -25
@@ -55,8 +55,22 @@ app:
 dmg:
 	$(NICE) ./Scripts/make-dmg.sh
 
+# Rebuild from the page cache. Cannot see a new release: every page it needs
+# is already on disk.
 data:
 	./Scripts/mkdata.py && ./Scripts/mkassets.py
+
+# Pick up a new Champions release. Re-reads the three index pages, then fetches
+# detail pages only for what they name that is not already in the dataset.
+# This is the one to reach for when a release lands.
+delta:
+	./Scripts/mkdata.py --delta && ./Scripts/mkassets.py
+
+# Re-fetch all fourteen hundred pages. Slow, and only needed when Serebii has
+# changed a page the indexes do not flag -- a correction rather than an
+# addition.
+full-sync:
+	./Scripts/mkdata.py --full && ./Scripts/mkassets.py
 
 check: test warnings hitch snapshot app
 

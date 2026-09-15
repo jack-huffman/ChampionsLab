@@ -147,21 +147,79 @@ turn.
 
 ## What is implemented, and what is not
 
-`make coverage` answers this, and it does not trust a list anybody has to
-remember to update:
+`make coverage`, or the **Parity Check** screen in the app, answers this. Both
+go through `ParityAudit`, so there is one answer to "is this implemented"
+rather than two that can disagree.
 
-- **moves** are audited by *using* them. Every legal move is put on a Pokémon
-  and used, and the board is compared before and after. A status move that
-  changes nothing is a move the model does not implement, whatever anyone
-  believed.
-- **abilities and items** are audited by reading the model's own source. If
-  the name appears nowhere, nothing can be happening.
+Nothing here is a list anybody has to remember to update. The audit plays the
+game:
 
-Both are ranked by measured usage, so a gap on a Pokémon in a quarter of games
-comes before one nobody brings. The audit found the `Lowers the target's …`
-regex silently failing where `Lowers targets' …` worked, which had disabled
-Screech, Scary Face, Noble Roar and every other single-target drop in the
-game.
+- **moves** are used, and the identical turn is played again without them. Any
+  difference between the two boards is what the move did, and nothing the other
+  side did can be mistaken for it.
+- **abilities and items** are compared against *nothing*: the same turns with
+  the trait and with the slot empty, across every weather and terrain, an
+  attack of each type in both directions, a provocation from the far side, and
+  a set of positions a rule might be waiting for — on one health point, with a
+  graveyard, holding a spent item, taunted, under screens.
+
+Four verdicts, and only the first is proof:
+
+| | meaning |
+|---|---|
+| **Proven** | the battery played it and the game came out differently |
+| **Parsed** | the model reads its text into a rule it applies, but the audit does not roll dice, so a 10% paralysis never fired for it. Not a gap |
+| **Not proven** | nothing happened and nothing parsed. Where to look |
+| **Out of scope** | a decision already made, with a reason. See `ParityAudit.notModelled` |
+
+The headline number is coverage of what people actually bring, because that is
+what decides whether the simulator can be trusted. The whole-dex figure sits
+behind it and mostly counts Pokémon nobody plays.
+
+**The control runs first and alone.** A made-up ability and a made-up item must
+both come back as having no effect. If either changes the game, the battery is
+finding differences that are not there, every number behind it is worthless,
+and the run stops and says so. This is not decoration: the control caught the
+audit reporting 99% ability coverage against a real figure of 78%, because its
+baseline was comparing one ability against another instead of against nothing.
+
+**The fingerprint is the audit's eyes.** Two boards are compared by writing one
+out as a string, and anything that string leaves out is invisible — a move that
+only changes that field reads as doing nothing. Twenty-odd working moves once
+read as missing for exactly this reason. `ParityAuditTests` counts the
+properties on `Fighter`, `Screens` and `Combatant` and fails when one is added
+without the fingerprint learning to see it.
+
+## Keeping up with a new release
+
+Champions will keep adding Pokémon, Megas, moves and items. Three ways to
+rebuild `data/champions.json`, and the middle one is almost always the right
+one:
+
+```
+make data        # rebuild from the page cache — cannot see a release at all
+make delta       # re-read the indexes, fetch only what is new
+make full-sync   # re-fetch all ~1,400 pages
+```
+
+`make data` reuses every cached page, so a release is invisible to it.
+`make full-sync` finds everything and costs a few thousand requests to Serebii,
+which is somebody's hobby server. `make delta` re-reads the three index pages —
+the eighteen type listings, the Attackdex index, the two item lists — works out
+what they name that the dataset on disk has never heard of, and fetches detail
+pages only for those. A release that adds twelve Pokémon costs twelve species
+pages. A species already in the dataset is re-read when the roster now lists a
+form of it that was not there before, which is how a new Mega arrives: the
+species page is cached and the Mega lives on it.
+
+Every run writes `data/changes.json` — forms, Megas, moves and items added
+since the previous build, and anything that disappeared — so a release's
+additions are a list rather than a diff of a 1.3 MB file.
+
+Corrections rather than additions are the one case `--delta` cannot catch: if
+Serebii fixes a base stat on a page the indexes do not flag, only a full sync
+sees it. `MOVE_CORRECTIONS` in the generator is for the opposite case, where
+Serebii is wrong and every sibling move agrees it is wrong.
 
 ## Checking a change
 
@@ -170,7 +228,12 @@ make test        # the suite — must pass
 make hitch       # no main-thread stretch past four frames; search reaches depth ≥ 2
 make snapshot    # look at build/shots/ — the renders catch layout regressions
 make accuracy    # 55.2% on 1,454 games is the floor; a drop is a regression
+make coverage    # the parity audit; the control must pass or the rest is noise
 ```
+
+`make hitch` is only meaningful on a quiet machine. The same commit reads 23 ms
+alone, 36 ms with a build running alongside it and 124 ms under real
+contention, so a jump is worth re-measuring before it is worth investigating.
 
 ## The suite
 
