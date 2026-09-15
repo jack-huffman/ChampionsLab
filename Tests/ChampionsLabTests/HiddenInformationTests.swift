@@ -160,7 +160,16 @@ print("\n== both of theirs act ==")
             let unexpected = fighters([("Milotic", "Leftovers", ["Recover", "Muddy Water", "Protect"])])
             let other = Board(mine: unexpected, theirs: theirSix, rules: store.rulebook,
                               field: Field(isDoubles: true), alreadyEvolved: false)
-            swapped.mine[slot] = other.mine[0]
+            // A board marks its own first two as seen, because they are the
+            // ones standing on the field. This one is being put on the *bench*
+            // of another board, where it has never been sent out — so it
+            // arrives carrying a flag no benched Pokémon would have, and the
+            // swap has to undo it. Without this the test is not comparing two
+            // hidden benches, it is comparing a hidden one against a revealed
+            // one, and anything that treats those differently looks like a leak.
+            var hiddenOne = other.mine[0]
+            hiddenOne.seen = false
+            swapped.mine[slot] = hiddenOne
         }
         check("the swap is real", swapped.mine[2].build.form.formLabel != game.mine[2].build.form.formLabel)
 

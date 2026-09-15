@@ -113,8 +113,57 @@ struct TeamRecord: Codable {
     }
 }
 
+/// What the picker said against what happened.
+///
+/// Keyed by the rank the picker gave the four that was played, so it pools
+/// across every pairing: if the ranking carries information, rank one should
+/// win more often than rank eight over a few thousand games. Keyed by score
+/// band as well, because a rank is only an order while a score claims a size.
+struct Calibration: Codable {
+    /// rank -> [wins, games]
+    var byRank: [String: [Int]] = [:]
+    /// score band, in tens -> [wins, games]
+    var byScore: [String: [Int]] = [:]
+    /// Every (pairing, rank) seen, so the best-four regret can be worked out.
+    /// "team|foe|rank" -> [wins, games]
+    var byPairing: [String: [Int]] = [:]
+
+    mutating func add(_ other: Calibration) {
+        func merge(_ into: inout [String: [Int]], _ from: [String: [Int]]) {
+            for (key, pair) in from {
+                var mine = into[key] ?? [0, 0]
+                mine[0] += pair[0]; mine[1] += pair[1]
+                into[key] = mine
+            }
+        }
+        merge(&byRank, other.byRank)
+        merge(&byScore, other.byScore)
+        merge(&byPairing, other.byPairing)
+    }
+
+    mutating func note(rank: Int, score: Int, team: String, foe: String, won: Bool) {
+        guard rank > 0 else { return }
+        func bump(_ into: inout [String: [Int]], _ key: String) {
+            var pair = into[key] ?? [0, 0]
+            pair[0] += won ? 1 : 0
+            pair[1] += 1
+            into[key] = pair
+        }
+        bump(&byRank, "\(rank)")
+        // Bands of ten, so a score of 37 and one of 34 are the same claim.
+        bump(&byScore, "\(Int((Double(score) / 10).rounded(.down)) * 10)")
+        bump(&byPairing, "\(team)|\(foe)|\(rank)")
+    }
+}
+
 struct Report: Codable {
     var teams: [String: TeamRecord] = [:]
+    var calibration = Calibration()
+    /// Games won by whoever sat in the "mine" chair, and how many were decided.
+    /// In an ordinary run this is 50% by construction — every pairing is played
+    /// both ways round. In an A/B it is the record of the side being tested.
+    var chairWins = 0
+    var chairDecided = 0
     var games = 0
     var seconds = 0.0
     /// How many teams were available to draw from, which is not the same as
@@ -123,6 +172,9 @@ struct Report: Codable {
 
     mutating func add(_ other: Report) {
         for (name, record) in other.teams { teams[name, default: TeamRecord()].add(record) }
+        calibration.add(other.calibration)
+        chairWins += other.chairWins
+        chairDecided += other.chairDecided
         games += other.games
         field = Swift.max(field, other.field)
     }
@@ -132,7 +184,8 @@ struct Report: Codable {
 
 @MainActor
 func runShard(index: Int, of shards: Int, games: Int, budget: Double,
-              focus: String?, versus: [String], spread: Int, seed: UInt64) -> Report {
+              focus: String?, versus: [String], spread: Int, abTest: Bool,
+              seed: UInt64) -> Report {
     let store = Store.shared
     if let error = store.loadError { FileHandle.standardError.write(Data("dataset: \(error)\n".utf8)); exit(1) }
     let rules = store.rulebook
@@ -175,10 +228,14 @@ func runShard(index: Int, of shards: Int, games: Int, budget: Double,
         if (order - 1) % shards != index { continue }
 
         let dice = SplitMix64(seed: seed &+ UInt64(order) &* 0x9E37_79B9_7F4A_7C15)
+        // In an A/B, only the side in the "mine" chair knows what its Pokémon
+        // are worth. The pairings run both ways round, so each team spends
+        // equal time in each chair and team strength cancels.
         let ledger = SelfPlay.playLogged(
             mine: teams[a], theirs: teams[b], rules: rules,
             forMine: seat, forTheirs: seat, limit: 40, dice: dice,
-            bringSpread: spread)
+            bringSpread: spread,
+            weightedMine: true, weightedTheirs: !abTest)
 
         record(ledger, mine: teams[a].name, theirs: teams[b].name, into: &report)
         played += 1
@@ -232,6 +289,17 @@ func record(_ ledger: SelfPlay.Ledger, mine: String, theirs: String, into report
          won: ledger.winner == .mine, drew: drew)
     side(theirs, mine, ledger.theirs, picked: ledger.pickedTheirs,
          won: ledger.winner == .theirs, drew: drew)
+    if !drew {
+        report.chairDecided += 1
+        if ledger.winner == .mine { report.chairWins += 1 }
+    }
+    // A draw is not evidence either way about the four that was chosen.
+    if !drew {
+        report.calibration.note(rank: ledger.rankMine, score: ledger.scoreMine,
+                                team: mine, foe: theirs, won: ledger.winner == .mine)
+        report.calibration.note(rank: ledger.rankTheirs, score: ledger.scoreTheirs,
+                                team: theirs, foe: mine, won: ledger.winner == .theirs)
+    }
 }
 
 /// A small, fast, seedable generator. The system one cannot be seeded, and a
@@ -322,6 +390,135 @@ func describe(_ report: Report, focus: String?, seconds: Double) {
         for (move, count) in quiet {
             print("  \(pad(move, 28)) \(pad("\(count)", 5)) uses")
         }
+    }
+}
+
+/// Weighted evaluation against flat, everything else held equal.
+///
+/// Every game has exactly one engine that knows what its Pokémon are worth
+/// against this opponent; the other prices them all alike, which is what the
+/// engine did before. The pairings run both ways round, so each team spends
+/// equal time in each chair and team strength cancels out — what is left is
+/// the change.
+@MainActor
+func describeAB(_ report: Report, seconds: Double) {
+    print("\n== knowing what your Pokémon are worth, against not knowing ==\n")
+    print("  \(report.games) games in \(String(format: "%.1f", seconds))s, "
+          + "\(report.chairDecided) decided\n")
+    guard report.chairDecided >= 20 else {
+        print("  too few games — try --games 800 --workers 5")
+        return
+    }
+    let rate = Double(report.chairWins) / Double(report.chairDecided)
+    let error = (rate * (1 - rate) / Double(report.chairDecided)).squareRoot() * 1.96
+    print(String(format: "  the weighted engine won %.1f%% of them, give or take %.1f",
+                 rate * 100, error * 100))
+    if abs(rate - 0.5) < error {
+        print("\n  Inside the noise. On this evidence the weights are not earning")
+        print("  their keep — which is worth knowing before they go in the app.")
+    } else if rate > 0.5 {
+        print(String(format: "\n  Worth %.1f points. The engine plays better when it knows",
+                     (rate - 0.5) * 100))
+        print("  which of its Pokémon it cannot afford to trade away.")
+    } else {
+        print("\n  It plays *worse* weighted, which means the weights are wrong")
+        print("  rather than merely useless. Do not ship them.")
+    }
+}
+
+/// Does the picker's ranking predict anything?
+///
+/// The bring-four picker ranks every four by a hand-written score and the app
+/// shows the top of that list as advice. Nothing had ever checked it against a
+/// game. This plays fours from all the way down the ranking and asks whether
+/// the order holds up.
+///
+/// Read the rank table first. If the picker knows what it is doing, rank one
+/// wins more than rank five and rank five more than rank ten. A flat table
+/// means the ranking is noise, however confident the score looks.
+@MainActor
+func describeCalibration(_ report: Report, seconds: Double) {
+    let cal = report.calibration
+    print("\n== does the bring-four picker know what it is talking about? ==\n")
+    print("  \(report.games) games in \(String(format: "%.1f", seconds))s\n")
+
+    let ranks = cal.byRank.compactMap { key, pair -> (Int, Int, Int)? in
+        guard let rank = Int(key), pair[1] >= 10 else { return nil }
+        return (rank, pair[0], pair[1])
+    }.sorted { $0.0 < $1.0 }
+    guard !ranks.isEmpty else {
+        print("  not enough games — try --games 2000 --spread 0")
+        return
+    }
+
+    print("  how each rank the picker gave actually did")
+    print("  " + String(repeating: "-", count: 62))
+    for (rank, wins, games) in ranks {
+        let rate = Double(wins) / Double(games)
+        let bar = String(repeating: "#", count: Int((rate * 40).rounded()))
+        print("    rank \(pad("\(rank)", 3)) \(percent(wins, games)) of \(pad("\(games)", 5)) \(bar)")
+    }
+
+    // The headline: what the picker's own favourite is worth against what a
+    // four drawn from the bottom half is worth.
+    let half = (ranks.map(\.0).max() ?? 1) / 2
+    let top = ranks.filter { $0.0 == 1 }
+    let low = ranks.filter { $0.0 > Swift.max(1, half) }
+    let topWins = top.reduce(0) { $0 + $1.1 }, topGames = top.reduce(0) { $0 + $1.2 }
+    let lowWins = low.reduce(0) { $0 + $1.1 }, lowGames = low.reduce(0) { $0 + $1.2 }
+    if topGames >= 10 && lowGames >= 10 {
+        let a = Double(topWins) / Double(topGames), b = Double(lowWins) / Double(lowGames)
+        let error = ((a * (1 - a) / Double(topGames)) + (b * (1 - b) / Double(lowGames)))
+            .squareRoot() * 1.96
+        print(String(format: "\n  its favourite wins %.0f%%, a four from the bottom half %.0f%% — "
+                     + "a gap of %.0f, give or take %.0f",
+                     a * 100, b * 100, (a - b) * 100, error * 100))
+        if abs(a - b) < error {
+            print("  That gap is inside the noise: on this evidence the ranking is not")
+            print("  telling you anything. More games, or the score needs work.")
+        } else if a > b {
+            print("  The ranking holds up: the top of the list really is better.")
+        } else {
+            print("  The ranking is upside down, which is worse than useless.")
+        }
+    }
+
+    // What trusting the favourite costs, pairing by pairing.
+    var regrets: [Double] = []
+    var grouped: [String: [(rank: Int, rate: Double, games: Int)]] = [:]
+    for (key, pair) in cal.byPairing where pair[1] >= 4 {
+        let parts = key.split(separator: "|").map(String.init)
+        guard parts.count == 3, let rank = Int(parts[2]) else { continue }
+        grouped["\(parts[0])|\(parts[1])", default: []]
+            .append((rank, Double(pair[0]) / Double(pair[1]), pair[1]))
+    }
+    for (_, rows) in grouped {
+        guard rows.count >= 3, let mine = rows.first(where: { $0.rank == 1 }),
+              let best = rows.max(by: { $0.rate < $1.rate }) else { continue }
+        regrets.append(best.rate - mine.rate)
+    }
+    if !regrets.isEmpty {
+        let mean = regrets.reduce(0, +) / Double(regrets.count)
+        print(String(format: "\n  across %d matchups with enough games, the best four available won "
+                     + "%.0f points more\n  than the one the picker recommended.",
+                     regrets.count, mean * 100))
+        print("  That is the ceiling on what a better picker could buy.")
+    }
+
+    let bands = cal.byScore.compactMap { key, pair -> (Int, Int, Int)? in
+        guard let band = Int(key), pair[1] >= 10 else { return nil }
+        return (band, pair[0], pair[1])
+    }.sorted { $0.0 < $1.0 }
+    if bands.count > 1 {
+        print("\n  and by the score it gave, in bands of ten")
+        print("  " + String(repeating: "-", count: 62))
+        for (band, wins, games) in bands {
+            let rate = Double(wins) / Double(games)
+            let bar = String(repeating: "#", count: Int((rate * 40).rounded()))
+            print("    \(pad("\(band)", 5)) \(percent(wins, games)) of \(pad("\(games)", 5)) \(bar)")
+        }
+        print("\n  A score that means something climbs down this table. One that does")
+        print("  not is a number the app is showing with more confidence than it has.")
     }
 }
 
@@ -432,7 +629,12 @@ func main() {
     // How many of the ranked fours are in play. A head-to-head defaults to
     // spreading, because replaying one four a thousand times answers nothing
     // about which four to bring.
-    let spread = Int(flag("--spread") ?? "") ?? (versus.count == 2 ? 6 : 1)
+    // Calibration needs the whole ranking in play, bottom included: there is
+    // nothing to compare the top against otherwise.
+    let spread = Int(flag("--spread") ?? "")
+        ?? (has("--calibrate") ? 0 : (versus.count == 2 ? 6 : 1))
+    // Weighted evaluation against flat evaluation, everything else held equal.
+    let abTest = has("--ab")
     let started = Date()
 
     // A child doing its slice: run it, print the JSON, done.
@@ -440,7 +642,8 @@ func main() {
         let parts = shard.split(separator: "/").compactMap { Int($0) }
         guard parts.count == 2 else { exit(2) }
         let report = runShard(index: parts[0], of: parts[1], games: games, budget: budget,
-                              focus: focus, versus: versus, spread: spread, seed: seed)
+                              focus: focus, versus: versus, spread: spread,
+                              abTest: abTest, seed: seed)
         let blob = try! JSONEncoder().encode(report)
         FileHandle.standardOutput.write(blob)
         return
@@ -454,7 +657,7 @@ func main() {
     var report = Report()
     if workers == 1 {
         report = runShard(index: 0, of: 1, games: games, budget: budget, focus: focus,
-                          versus: versus, spread: spread, seed: seed)
+                          versus: versus, spread: spread, abTest: abTest, seed: seed)
     } else {
         // Each child plays its own slice and hands back a ledger. Sharding by
         // process rather than by thread because the turn model's dice are
@@ -470,6 +673,8 @@ func main() {
                         "--seed", "\(seed &+ UInt64(index) &* 1_000_003)"]
             if let focus { argv += ["--team", focus] }
             if versus.count == 2 { argv += ["--vs", versus[0], versus[1]] }
+            if has("--calibrate") { argv.append("--calibrate") }
+            if abTest { argv.append("--ab") }
             task.arguments = argv
             let pipe = Pipe()
             task.standardOutput = pipe
@@ -489,7 +694,9 @@ func main() {
 
     let seconds = Date().timeIntervalSince(started)
     report.seconds = seconds
-    if versus.count == 2 { describeVersus(report, versus: versus, seconds: seconds) }
+    if abTest { describeAB(report, seconds: seconds) }
+    else if has("--calibrate") { describeCalibration(report, seconds: seconds) }
+    else if versus.count == 2 { describeVersus(report, versus: versus, seconds: seconds) }
     else { describe(report, focus: focus, seconds: seconds) }
 
     if let path = flag("--json") {

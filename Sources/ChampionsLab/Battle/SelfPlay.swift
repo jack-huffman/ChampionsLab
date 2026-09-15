@@ -55,6 +55,17 @@ enum SelfPlay {
         /// field — a game can end before the back two are ever sent out.
         var pickedMine: [String] = []
         var pickedTheirs: [String] = []
+        /// Where the picker ranked the four that was actually played, counting
+        /// from one, and what it scored it. This is what makes the picker
+        /// measurable: if its ranking means anything, rank one should win more
+        /// often than rank eight across a few thousand games.
+        var rankMine = 0
+        var rankTheirs = 0
+        var scoreMine = 0
+        var scoreTheirs = 0
+        /// How many fours it was choosing between.
+        var choicesMine = 0
+        var choicesTheirs = 0
         var broughtMine: [String] = []
         var broughtTheirs: [String] = []
         var mine: [String: Tally] = [:]
@@ -145,7 +156,8 @@ enum SelfPlay {
         mine: Team, theirs: Team, rules: Rulebook,
         forMine: Seat, forTheirs: Seat,
         limit: Int = 40, dice: RandomNumberGenerator,
-        logging: Bool = true, bringSpread: Int = 1) -> Ledger {
+        logging: Bool = true, bringSpread: Int = 1,
+        weightedMine: Bool = true, weightedTheirs: Bool = true) -> Ledger {
 
         // The battle's own dice, not just the engine's play sampling. Handing
         // both halves of a mirrored pair the same stream is what lets the
@@ -168,31 +180,52 @@ enum SelfPlay {
         // 1 the choice is drawn uniformly from the top N — uniformly rather
         // than by score, because the point is to give each candidate enough
         // games to be compared, not to play the favourite most often.
-        func fourOf(_ team: Team, against foe: Team) -> (team: Team, picked: [String]) {
-            guard team.slots.count > 4 else {
-                return (team, team.slots.compactMap { $0.battleForm(in: rules)?.formLabel })
-            }
+        struct Chosen {
+            var team: Team
+            var picked: [String] = []
+            var rank = 0
+            var score = 0
+            var choices = 0
+        }
+        func fourOf(_ team: Team, against foe: Team) -> Chosen {
+            let whole = Chosen(team: team,
+                               picked: team.slots.compactMap { $0.battleForm(in: rules)?.formLabel })
+            guard team.slots.count > 4 else { return whole }
             let grid = Matchup(mine: team, theirs: foe, rules: rules, field: field)
             let plans = BringFour(matchup: grid, rules: rules, bring: 4).plans
-            guard !plans.isEmpty else {
-                return (team, team.slots.compactMap { $0.battleForm(in: rules)?.formLabel })
-            }
-            let reach = Swift.max(1, Swift.min(bringSpread, plans.count))
-            let plan = plans[reach == 1 ? 0 : Int.random(in: 0..<reach, using: &TurnModel.dice)]
+            guard !plans.isEmpty else { return whole }
+            // A spread of zero or less means every four is in play, which is
+            // what measuring the ranking needs: the bottom of the list has to
+            // be played too, or there is nothing to compare the top against.
+            let reach = bringSpread <= 0 ? plans.count
+                                         : Swift.max(1, Swift.min(bringSpread, plans.count))
+            let at = reach == 1 ? 0 : Int.random(in: 0..<reach, using: &TurnModel.dice)
+            let plan = plans[at]
             var out = team
             out.slots = plan.bring.compactMap { form in
                 team.slots.first { $0.battleForm(in: rules)?.id == form.id }
             }
-            guard out.slots.count >= 2 else {
-                return (team, team.slots.compactMap { $0.battleForm(in: rules)?.formLabel })
-            }
-            return (out, plan.bring.map(\.formLabel))
+            guard out.slots.count >= 2 else { return whole }
+            return Chosen(team: out, picked: plan.bring.map(\.formLabel),
+                          rank: at + 1, score: plan.score, choices: plans.count)
         }
         let myFour = fourOf(mine, against: theirs)
         let theirFour = fourOf(theirs, against: mine)
         var board = Board(mine: myFour.team, theirs: theirFour.team, rules: rules,
                           field: field, alreadyEvolved: false)
         board.activeCount = 2
+        // Off the sixes, not the fours: what a Pokémon is worth is decided by
+        // the team it is facing, and the other side's back two are part of that
+        // whether they have been seen yet or not.
+        // Settable per side, which is the whole experiment: one engine that
+        // knows what its Pokémon are worth against this opponent, one that
+        // prices them all the same, playing the same game with the same dice.
+        if weightedMine {
+            board.myWorth = Worth.of(mine, against: theirs, rules: rules, field: field)
+        }
+        if weightedTheirs {
+            board.theirWorth = Worth.of(theirs, against: mine, rules: rules, field: field)
+        }
         // Narration is what records the steps, and the steps are what make the
         // ledger exact. It is on for the played board only: the engine's own
         // search boards are separate and stay silent, which is where the cost
@@ -203,6 +236,9 @@ enum SelfPlay {
         var ledger = Ledger()
         ledger.pickedMine = myFour.picked
         ledger.pickedTheirs = theirFour.picked
+        ledger.rankMine = myFour.rank; ledger.rankTheirs = theirFour.rank
+        ledger.scoreMine = myFour.score; ledger.scoreTheirs = theirFour.score
+        ledger.choicesMine = myFour.choices; ledger.choicesTheirs = theirFour.choices
         /// Who is standing where, so a form can be credited after it has been
         /// switched out. Read off the step rather than the live board.
         // A Mega and the Pokémon it evolved from are one entry. They were two,

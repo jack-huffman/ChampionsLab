@@ -322,15 +322,39 @@ struct Board {
     /// solved on, so their orders are an answer to what they believe rather
     /// than to what is actually sitting on your bench.
     var asTheySeeIt: Board {
+        var out = self
+        // Your side is worth one a Pokémon to them, whoever is on it.
+        //
+        // The weights are per form, so the table itself is a description of
+        // your six and of how each one fares against theirs. Handing it to the
+        // board they reason on would let the identity of a Pokémon they have
+        // never seen move their orders — the substitution above exists
+        // precisely to stop that, and this is the same rule applied to the
+        // thing the substitution does not reach.
+        out.myWorth = [:]
         let hidden = myUnseenBench
-        guard !hidden.isEmpty, let guess = liveGuesses(mine: true).first else { return self }
+        guard !hidden.isEmpty, let guess = liveGuesses(mine: true).first else { return out }
         let shown = Set(mine.filter(\.seen).map(\.build.form.id))
         let arriving = guess.fighters.filter { !shown.contains($0.build.form.id) }
-        guard !arriving.isEmpty else { return self }
-        var out = self
+        guard !arriving.isEmpty else { return out }
         for (slot, fighter) in zip(hidden, arriving) { out.mine[slot] = fighter }
         return out
     }
+    /// What each Pokémon is worth *against this particular opponent*, keyed by
+    /// form id, around an average of one.
+    ///
+    /// The engine used to price every Pokémon identically — 0.35 for being
+    /// alive and 0.65 scaled by health — so it would trade a Mega Charizard
+    /// that beats four of their six for an Incineroar that beats none and call
+    /// it even. One Pokémon for one Pokémon. That is not how anybody plays:
+    /// a team has a win condition, and the whole game is keeping it alive long
+    /// enough to use it.
+    ///
+    /// Empty means every Pokémon is worth one, which is exactly the old
+    /// behaviour — so a board built without this behaves as it always did.
+    var myWorth: [String: Double] = [:]
+    var theirWorth: [String: Double] = [:]
+
     var field: Field
     /// Turns left on each side's speed control.
     var myTailwind = 0
@@ -478,6 +502,7 @@ struct Board {
         swap(&out.myScreens, &out.theirScreens)
         swap(&out.myTailwind, &out.theirTailwind)
         swap(&out.theirBenchGuesses, &out.myBenchGuesses)
+        swap(&out.myWorth, &out.theirWorth)
         // The per-slot keys name a side, so they have to be relabelled too.
         func relabel(_ table: [String: Bool]) -> [String: Bool] {
             Dictionary(uniqueKeysWithValues: table.map { key, value in
@@ -903,6 +928,11 @@ extension Board {
         var board = Board(mine: brought, theirs: theirBrought, rules: rules,
                           field: field, alreadyEvolved: false)
         board.activeCount = leadCount
+        // What each side's Pokémon are worth against the other side. Worked
+        // out once here, off the six each side registered rather than the four
+        // they brought, and read on every evaluation after.
+        board.myWorth = Worth.of(myTeam, against: theirTeam, rules: rules, field: field)
+        board.theirWorth = Worth.of(theirTeam, against: myTeam, rules: rules, field: field)
         if sendOut { board.sendOutLeads() }
 
         // What each side's back two probably are, from both chairs.
@@ -1060,12 +1090,28 @@ enum TurnModel {
     /// still has to be answered, and a model that values only health throws
     /// bodies away for chip damage.
     static func value(_ board: Board) -> Double {
-        func side(_ team: [Fighter]) -> Double {
+        func side(_ team: [Fighter], _ worth: [String: Double]) -> Double {
             team.reduce(0) { total, fighter in
-                total + (fighter.fainted ? 0 : 0.35 + 0.65 * fighter.share)
+                guard !fighter.fainted else { return total }
+                // Only a Pokémon that has stood on the field carries a weight.
+                // One still on the bench is worth exactly one, whoever it is.
+                //
+                // This is the hidden-information rule. Weights are looked up by
+                // form, so weighting a Pokémon the other side has never seen
+                // would let its *identity* move the value of the board — and
+                // there are solve paths that fall back to the true board, so it
+                // is not enough to strip the weights from their view alone.
+                //
+                // Worth is around one, so a side with no weights scores exactly
+                // as it did before there were any.
+                let weight = fighter.seen ? (worth[fighter.build.form.id] ?? 1) : 1
+                return total + weight * (0.35 + 0.65 * fighter.share)
             }
         }
-        var out = side(board.mine) - side(board.theirs)
+        // Both sides weighed, which is what lets the engine prefer to knock out
+        // the Pokémon that actually threatens it. Only what has been seen
+        // carries a weight, which is where the hidden-information rule is kept.
+        var out = side(board.mine, board.myWorth) - side(board.theirs, board.theirWorth)
         out += speedControl(board.myTailwind, under: board.trickRoom)
             - speedControl(board.theirTailwind, under: board.trickRoom)
         return out
