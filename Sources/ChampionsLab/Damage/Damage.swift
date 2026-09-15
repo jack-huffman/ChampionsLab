@@ -30,6 +30,11 @@ struct Field {
     /// The attacker's partner used Helping Hand on it this turn: +50% power,
     /// and the single biggest reason a doubles support slot earns its place.
     var helpingHand = false
+    /// Magic Room is up: no held item does anything for anybody.
+    var magicRoom = false
+    /// Wonder Room is up: every Pokémon's Defense and Special Defense have
+    /// traded places, so a physical wall is suddenly the special one.
+    var wonderRoom = false
 }
 
 // MARK: - Combatants
@@ -76,9 +81,15 @@ struct Combatant {
         return max(0.1, kg)
     }
 
+    /// A stat the battle overwrote, by index, replacing what the build works
+    /// out. Guard Split and Power Split average two Pokémon's raw stats, which
+    /// is not a stage change and cannot be expressed as one.
+    var statOverride: [Int: Int] = [:]
+
     func stat(_ stat: Stat) -> Int {
-        ChampionsStats.value(base: form.stats[stat.rawValue],
-                             sp: sp[stat.rawValue], stat: stat, alignment: alignment)
+        if let forced = statOverride[stat.rawValue] { return forced }
+        return ChampionsStats.value(base: form.stats[stat.rawValue],
+                                    sp: sp[stat.rawValue], stat: stat, alignment: alignment)
     }
 
     func stagedStat(_ stat: Stat) -> Int {
@@ -116,7 +127,16 @@ struct Combatant {
         return Int(speed)
     }
 
-    var effectiveTypes: [PokeType] { form.pokeTypes }
+    /// A type the battle gave it, replacing what the dex says. Soak makes its
+    /// target a pure Water type; Terastallisation and the -ate abilities would
+    /// live here too. Empty unless something changed it.
+    var typeOverride: [PokeType] = []
+
+    /// The types it actually has right now. Every rule that asks about type
+    /// reads this, so a Soaked Garchomp really does take a Thunderbolt.
+    var effectiveTypes: [PokeType] {
+        typeOverride.isEmpty ? form.pokeTypes : typeOverride
+    }
 
     /// Items that add a fifth to one type of move.
     static let typeBoostItems: [String: PokeType] = [
@@ -131,7 +151,7 @@ struct Combatant {
     /// Standing on the ground, which is what every terrain asks about: it does
     /// nothing for a Flying type or a Levitate, and neither does a Spikes.
     var grounded: Bool {
-        !form.pokeTypes.contains(.flying) && ability != "Levitate" && item != "Air Balloon"
+        !effectiveTypes.contains(.flying) && ability != "Levitate" && item != "Air Balloon"
     }
 
     var maxHP: Int { stat(.hp) }
@@ -239,6 +259,20 @@ enum DamageCalc {
 
     static func calculate(attacker: Combatant, defender: Combatant,
                           move: Move, field: Field) -> DamageResult {
+        // Magic Room switches every held item off. Taking them away here means
+        // every item rule below is covered by one check, including the ones
+        // added after this was written.
+        if field.magicRoom, !attacker.item.isEmpty || !defender.item.isEmpty {
+            var bare = attacker, bareDefender = defender
+            bare.item = ""; bareDefender.item = ""
+            var without = field
+            without.magicRoom = false
+            let result = calculate(attacker: bare, defender: bareDefender,
+                                   move: move, field: without)
+            return DamageResult(minDamage: result.minDamage, maxDamage: result.maxDamage,
+                                targetHP: result.targetHP, effectiveness: result.effectiveness,
+                                notes: result.notes + ["Magic Room: held items do nothing"])
+        }
         var notes: [String] = []
         guard move.isDamaging, move.power > 0 else {
             return DamageResult(minDamage: 0, maxDamage: 0, targetHP: defender.maxHP,
@@ -292,6 +326,22 @@ enum DamageCalc {
                   : ratio >= 2 ? 60 : 40
             notes.append(String(format: "%@: %d power at %.1fkg against %.1fkg",
                                 move.name, Int(power), attacker.weightKg, defender.weightKg))
+        }
+        // Electro Ball and Gyro Ball read the two Speeds against each other:
+        // one rewards outrunning the target, the other rewards being slower,
+        // which is why a Gyro Ball user invests nothing in Speed at all.
+        if move.id == "electroball" || move.id == "gyroball" {
+            let mine = Double(Swift.max(1, attacker.stagedStat(.speed)))
+            let theirs = Double(Swift.max(1, defender.stagedStat(.speed)))
+            if move.id == "electroball" {
+                let ratio = mine / theirs
+                power = ratio >= 4 ? 150 : ratio >= 3 ? 120 : ratio >= 2 ? 80
+                      : ratio > 1 ? 60 : 40
+            } else {
+                power = Swift.min(150, Double(Int(25 * theirs / mine)))
+                power = Swift.max(1, power)
+            }
+            notes.append("\(move.name): \(Int(power)) power at \(Int(mine)) Speed against \(Int(theirs))")
         }
         if move.id == "lastrespects" {
             power = Double(50 * (1 + attacker.fallenAllies))
@@ -370,7 +420,11 @@ enum DamageCalc {
         // -- attack and defence ---------------------------------------------
         let physical = move.category == "Physical"
         let atkStat: Stat = physical ? .attack : .spAttack
-        let defStat: Stat = physical ? .defense : .spDefense
+        // Wonder Room trades the two defences, so a physical attack is worked
+        // out against Special Defense and the other way round. It swaps the
+        // stat, not the stage, which is why it reads as a stat choice here.
+        var defStat: Stat = physical ? .defense : .spDefense
+        if field.wonderRoom { defStat = physical ? .spDefense : .defense }
 
         var attack = Double(attacker.stagedStat(atkStat))
         // Ignore the defender's positive boosts on a crit, and the attacker's
@@ -398,11 +452,11 @@ enum DamageCalc {
         }
         if defender.item == "Assault Vest", !physical { defense *= 1.5 }
         if defender.item == "Eviolite" { defense *= 1.5 }
-        if field.weather == .snow, defender.form.pokeTypes.contains(.ice), physical {
+        if field.weather == .snow, defender.effectiveTypes.contains(.ice), physical {
             defense *= 1.5
             notes.append("Snow: Ice Defense ×1.5")
         }
-        if field.weather == .sand, defender.form.pokeTypes.contains(.rock), !physical {
+        if field.weather == .sand, defender.effectiveTypes.contains(.rock), !physical {
             defense *= 1.5
         }
 
@@ -427,7 +481,7 @@ enum DamageCalc {
         if field.critical { modifier *= 1.5 }
 
         // STAB, doubled rather than 1.5x under Adaptability.
-        var stab = attacker.form.pokeTypes.contains(moveType) ? 1.5 : 1.0
+        var stab = attacker.effectiveTypes.contains(moveType) ? 1.5 : 1.0
         if attacker.ability == "Adaptability", stab > 1 { stab = 2.0 }
         modifier *= stab
 

@@ -105,6 +105,19 @@ struct ParityAudit: Sendable {
         return lines.joined(separator: "\n")
     }
 
+    /// Which of these moves the battle model does nothing at all with.
+    ///
+    /// One bench for the lot, and the move battery only: `explain` builds a
+    /// fresh bench and runs all three batteries per name, which is fine for a
+    /// person at a command line and far too slow for a test.
+    public static func movesThatDoNothing(_ names: [String], rules: Rulebook) -> [String] {
+        let bench = Bench(rules: rules)
+        return names.filter { name in
+            guard let move = rules.moves.values.first(where: { $0.name == name }) else { return true }
+            return !bench.reactsTo(move: move)
+        }
+    }
+
     public static func controlFailure(rules: Rulebook) -> String? {
         let bench = Bench(rules: rules)
         if let why = bench.evidence(ability: "Nonexistent Ability") {
@@ -392,13 +405,21 @@ private struct Bench {
                 out += "/\(f.flinched)/\(f.charging ?? -1)/\(f.encoredFor)/\(f.tauntedFor)/\(f.hidden)"
                 out += "/\(f.drawingFire)/\(f.build.itemSpent)"
                 if traits { out += "/\(f.build.item)/\(f.build.ability)" }
-                out += "/\(f.seededFrom ?? -1)/\(f.critStage)/\(f.build.form.id)|"
+                out += "/\(f.seededFrom ?? -1)/\(f.critStage)/\(f.build.form.id)"
+                out += "/\(f.substitute)/\(f.infatuatedWith ?? -1)/\(f.tormented)/\(f.cannotEscape)"
+                out += "/\(f.aquaRing)/\(f.stockpile)/\(f.goesNext)/\(f.build.typeOverride)"
+                out += "/\(f.build.statOverride.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" })"
+                out += "/\(f.asleepFor)/\(f.protectStreak)/\(f.lastMoveFailed)/\(f.seen)|"
             }
         }
         out += "\(b.field.weather)\(b.field.terrain)\(b.myTailwind)\(b.theirTailwind)\(b.trickRoom)"
-        out += "\(b.myScreens.reflect)\(b.myScreens.lightScreen)\(b.myScreens.auroraVeil)"
-        out += "\(b.myScreens.wideGuard)\(b.myScreens.quickGuard)"
-        out += "\(b.theirScreens.reflect)\(b.theirScreens.wideGuard)\(b.theirScreens.quickGuard)"
+        out += "\(b.magicRoom)\(b.wonderRoom)\(b.weatherTurns)\(b.terrainTurns)"
+        for side in [b.myScreens, b.theirScreens] {
+            out += "/\(side.reflect)/\(side.lightScreen)/\(side.auroraVeil)"
+            out += "/\(side.wideGuard)/\(side.quickGuard)/\(side.safeguard)"
+            out += "/\(side.spikes)/\(side.toxicSpikes)/\(side.stealthRock)"
+            out += "/\(side.wishAmount)/\(side.wishTurns)"
+        }
         return out
     }
 
@@ -420,13 +441,23 @@ private struct Bench {
         var sleeping = b
         sleeping.mine[0].status = .sleep
         sleeping.mine[0].asleepFor = 3
+        // On one health point, so the next hit is lethal. Endure and Focus
+        // Sash exist only for this moment and are invisible without it.
+        var doomed = b
+        doomed.mine[0].hp = 1
+        doomed.mine[1].hp = 1
 
         let using = Play(left: .attack(move: 0, target: 0), right: .pass)
         let passing = Play(left: .pass, right: .pass)
+        // Their answers: nothing, a single-target attack, a Protect, and a
+        // spread move — without that last one Wide Guard has nothing to turn
+        // away and reads as missing.
+        let spread = theirMoves.firstIndex(where: \.isSpread)
         let answers = [Play(left: .pass, right: .pass),
                        Play(left: .attack(move: 0, target: 0), right: .pass),
-                       Play(left: .protectSelf(move: 1), right: .pass)]
-        for position in [b, fallen, sleeping] {
+                       Play(left: .protectSelf(move: provocations.count - 1), right: .pass)]
+            + (spread.map { [Play(left: .attack(move: $0, target: 0), right: .pass)] } ?? [])
+        for position in [b, fallen, sleeping, doomed] {
             for answer in answers {
                 // The same turn twice: once using it, once not. Anything the
                 // move did is the difference between them, and nothing the

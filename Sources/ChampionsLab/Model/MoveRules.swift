@@ -89,3 +89,10 @@ extension Move {
         return false
     }
 }
+
+extension Move {
+    /// Guillotine, Fissure, Horn Drill, Sheer Cold. Their listed power is 1,
+    /// so working them out from power makes them the weakest attacks in the
+    /// game rather than the most dangerous.
+    var isOHKO: Bool { effect.hasPrefix("Knocks out the target") }
+}

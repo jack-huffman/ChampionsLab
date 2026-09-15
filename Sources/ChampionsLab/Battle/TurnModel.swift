@@ -102,6 +102,28 @@ struct Fighter {
     var enduring = false
     /// Stages of critical-hit ratio, from Focus Energy or a Dragon Cheer.
     var critStage = 0
+    /// After You put it to the front of the queue: it acts next regardless of
+    /// Speed. Cleared once it has.
+    var goesNext = false
+    /// A Substitute standing in front of it, in health points. While it is up
+    /// it takes the damage and the status, and the Pokémon behind it takes
+    /// neither.
+    var substitute = 0
+    /// Infatuated with the slot it is looking at: one action in two is lost.
+    var infatuatedWith: Int?
+    /// Tormented: it cannot use the same move twice in a row.
+    var tormented = false
+    /// Held in place by Mean Look or Block, or by a Shadow Tag or Arena Trap
+    /// across the field. It cannot switch out.
+    var cannotEscape = false
+    /// Aqua Ring: a sixteenth of its health back every turn, for as long as it
+    /// stands there.
+    var aquaRing = false
+    /// Stockpiles held, which is what Swallow and Spit Up spend.
+    var stockpile = 0
+    /// The types it actually has right now, which is not always what the dex
+    /// says: Soak makes its target a pure Water type.
+    var types: [PokeType] { build.effectiveTypes }
     /// What it is held to, if anything.
     var encored: Choice? {
         guard encoredFor > 0, let last = lastMove, moves.indices.contains(last) else { return nil }
@@ -134,12 +156,27 @@ struct Screens {
     /// them: one turns away what hits everybody, the other what moves first.
     var wideGuard = false
     var quickGuard = false
+    /// Safeguard: five turns during which nothing on this side can be given a
+    /// status condition.
+    var safeguard = 0
+    /// Layers of Spikes (up to three) and Toxic Spikes (up to two), and whether
+    /// Stealth Rock is down. These bite whatever walks in, which is the whole
+    /// reason a pivot costs something.
+    var spikes = 0
+    var toxicSpikes = 0
+    var stealthRock = false
+    /// A Wish in the air: how much it will heal and how many turns until it
+    /// lands. It heals whoever is standing in the spot when it arrives.
+    var wishAmount = 0
+    var wishTurns = 0
 
     var any: Bool { reflect > 0 || lightScreen > 0 || auroraVeil > 0 }
+    /// Hazards survive a tick: they sit there until something clears them.
     mutating func tick() {
         reflect = max(0, reflect - 1)
         lightScreen = max(0, lightScreen - 1)
         auroraVeil = max(0, auroraVeil - 1)
+        safeguard = max(0, safeguard - 1)
         wideGuard = false
         quickGuard = false
     }
@@ -242,6 +279,19 @@ struct Board {
     var myTailwind = 0
     var theirTailwind = 0
     var trickRoom = 0
+    /// Magic Room: no held item does anything for five turns.
+    var magicRoom = 0
+    /// Wonder Room: every Pokémon's Defense and Special Defense trade places.
+    var wonderRoom = 0
+    /// The field as the damage calculator needs to see it, with the two rooms
+    /// folded in. Every call site reads this rather than `field`, so a room
+    /// cannot be forgotten at one of them.
+    var calcField: Field {
+        var out = field
+        out.magicRoom = magicRoom > 0
+        out.wonderRoom = wonderRoom > 0
+        return out
+    }
     /// How many stand on each side. Two in doubles, one in singles.
     var activeCount = 2
     var myScreens = Screens()
@@ -374,10 +424,54 @@ struct Board {
         }
     }
 
+    /// What is lying on the floor when something walks in.
+    ///
+    /// Hazards are the reason a pivot costs something, and without them a
+    /// switch was free: the search would pivot every turn because nothing ever
+    /// charged it for the privilege.
+    mutating func takeHazards(mine side: Bool, slot: Int) {
+        let field = side ? myScreens : theirScreens
+        guard field.spikes > 0 || field.toxicSpikes > 0 || field.stealthRock else { return }
+        var who = side ? mine[slot] : theirs[slot]
+        guard !who.fainted else { return }
+        let name = who.build.form.formLabel
+        let grounded = !who.types.contains(.flying) && who.build.ability != "Levitate"
+            && who.build.item != "Air Balloon"
+
+        if field.stealthRock {
+            // Stealth Rock is a Rock-type hit, so it reads off the type chart:
+            // four times on a Charizard, a quarter on a Tyranitar.
+            let effect = who.types.reduce(1.0) { $0 * TypeChart.multiplier(.rock, into: $1) }
+            let hit = Swift.max(1, Int(Double(who.maxHP) / 8 * effect))
+            who.hp -= hit
+            note("Pointed stones dug into \(name).")
+        }
+        if grounded, field.spikes > 0 {
+            let share = [0, 8, 6, 4][Swift.min(3, field.spikes)]
+            who.hp -= Swift.max(1, who.maxHP / share)
+            note("\(name) is hurt by the spikes.")
+        }
+        if grounded, field.toxicSpikes > 0 {
+            if who.types.contains(.poison) {
+                // A grounded Poison type takes them away rather than being hurt.
+                if side { myScreens.toxicSpikes = 0 } else { theirScreens.toxicSpikes = 0 }
+                note("\(name) absorbed the toxic spikes.")
+            } else if who.status == .none, !who.types.contains(.steel),
+                      who.build.ability != "Immunity" {
+                who.status = field.toxicSpikes >= 2 ? .badPoison : .poison
+                note("\(name) was poisoned by the toxic spikes.")
+            }
+        }
+        if who.hp <= 0 { who.hp = 0; note("\(name) fainted.") }
+        if side { mine[slot] = who } else { theirs[slot] = who }
+    }
+
     /// A Pokémon has just reached the field: it is seen, it can Fake Out, and
     /// whatever it does on arrival happens now.
     mutating func landed(mine side: Bool, slot: Int) {
         let before = field
+        takeHazards(mine: side, slot: slot)
+        if (side ? mine[slot] : theirs[slot]).fainted { return }
         if side {
             mine[slot].justArrived = true
             mine[slot].seen = true
@@ -819,6 +913,24 @@ enum TurnModel {
         let myChoices = [mine.left, mine.right]
         let theirChoices = [theirs.left, theirs.right]
 
+        // Mean Look holds something in place, and so does a Shadow Tag or an
+        // Arena Trap across the field. A Ghost walks out of any of it, and so
+        // does anything holding a Shed Shell.
+        func heldInPlace(_ who: Fighter, by others: [Fighter], board: Board) -> Bool {
+            if who.types.contains(.ghost) || who.build.item == "Shed Shell" { return false }
+            if who.cannotEscape { return true }
+            let grounded = !who.types.contains(.flying) && who.build.ability != "Levitate"
+            for other in others.prefix(board.activeCount) where !other.fainted {
+                switch other.build.ability {
+                case "Shadow Tag": if who.build.ability != "Shadow Tag" { return true }
+                case "Arena Trap": if grounded { return true }
+                case "Magnet Pull": if who.types.contains(.steel) { return true }
+                default: break
+                }
+            }
+            return false
+        }
+
         // -- switches, which resolve before anything else --------------------
         // In turn order — the faster Pokémon leaves first, Trick Room turning
         // that round — and each one its own step, with whatever the arrival
@@ -831,7 +943,8 @@ enum TurnModel {
             guard case .swap(let bench) = choice,
                   out.mine.indices.contains(slot), out.mine.indices.contains(bench),
                   !out.mine[bench].fainted, !out.mine[slot].fainted,
-                  out.mine[slot].charging == nil else { continue }
+                  out.mine[slot].charging == nil,
+                  !heldInPlace(out.mine[slot], by: out.theirs, board: out) else { continue }
             leaving.append((true, slot, bench,
                             speed(of: out.mine[slot], tailwind: out.myTailwind > 0, board: out)))
         }
@@ -839,7 +952,8 @@ enum TurnModel {
             guard case .swap(let bench) = choice,
                   out.theirs.indices.contains(slot), out.theirs.indices.contains(bench),
                   !out.theirs[bench].fainted, !out.theirs[slot].fainted,
-                  out.theirs[slot].charging == nil else { continue }
+                  out.theirs[slot].charging == nil,
+                  !heldInPlace(out.theirs[slot], by: out.mine, board: out) else { continue }
             leaving.append((false, slot, bench,
                             speed(of: out.theirs[slot], tailwind: out.theirTailwind > 0, board: out)))
         }
@@ -852,13 +966,11 @@ enum TurnModel {
             out.beginStep()
             if entry.mine {
                 out.note("You switched \(out.mine[entry.slot].build.form.formLabel) out for \(out.mine[entry.bench].build.form.formLabel).")
-                let said = swapIn(&out.mine, active: entry.slot, bench: entry.bench,
-                                  opposing: &out.theirs, field: &out.field)
+                let said = swapIn(mine: true, active: entry.slot, bench: entry.bench, board: &out)
                 if let said { out.note(said) }
             } else {
                 out.note("They switched \(out.theirs[entry.slot].build.form.formLabel) out for \(out.theirs[entry.bench].build.form.formLabel).")
-                let said = swapIn(&out.theirs, active: entry.slot, bench: entry.bench,
-                                  opposing: &out.mine, field: &out.field)
+                let said = swapIn(mine: false, active: entry.slot, bench: entry.bench, board: &out)
                 if let said { out.note(said) }
             }
             out.closeStep()
@@ -957,8 +1069,15 @@ enum TurnModel {
         while !pending.isEmpty {
             let inverted = out.trickRoom > 0
             var choice = 0
+            func jumpsQueue(_ e: (mine: Bool, slot: Int, choice: Choice, priority: Int, speed: Int)) -> Bool {
+                let team = e.mine ? out.mine : out.theirs
+                return team.indices.contains(e.slot) && team[e.slot].goesNext
+            }
             for index in pending.indices.dropFirst() {
                 let a = pending[index], b = pending[choice]
+                // After You beats priority and Speed both: the whole move is
+                // that the target acts next, whatever it was going to do.
+                if jumpsQueue(a) != jumpsQueue(b) { if jumpsQueue(a) { choice = index }; continue }
                 if a.priority != b.priority { if a.priority > b.priority { choice = index }; continue }
                 let aSpeed = current(a, board: out), bSpeed = current(b, board: out)
                 if aSpeed != bSpeed {
@@ -974,6 +1093,8 @@ enum TurnModel {
             // is held to is checked now, not when the turn was queued: an
             // Encore that landed a moment ago already applies.
             let actor = (entry.mine ? out.mine : out.theirs)[entry.slot]
+            if entry.mine { out.mine[entry.slot].goesNext = false }
+            else { out.theirs[entry.slot].goesNext = false }
             out.acted.insert((entry.mine ? "m" : "t") + "\(entry.slot)")
             out.beginStep()
             apply(forced(actor, entry.choice), byMine: entry.mine, slot: entry.slot, to: &out, rolling: rolling)
@@ -1050,7 +1171,7 @@ enum TurnModel {
                 let who = mine ? board.mine[index] : board.theirs[index]
                 let name = who.build.form.formLabel
                 let maxHP = who.maxHP
-                let types = who.build.form.pokeTypes
+                let types = who.types
                 var hp = who.hp
 
                 if board.field.weather == .sand,
@@ -1075,6 +1196,11 @@ enum TurnModel {
                     if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
                     board.note("\(name) is hurt by poison.")
                 default: break
+                }
+                if who.aquaRing, hp < maxHP, hp > 0 {
+                    hp = Swift.min(maxHP, hp + Swift.max(1, maxHP / 16))
+                    if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
+                    board.note("\(name)'s Aqua Ring restores a little.")
                 }
                 if who.build.item == "Leftovers", hp < maxHP, hp > 0 {
                     hp = Swift.min(maxHP, hp + Swift.max(1, maxHP / 16))
@@ -1137,9 +1263,40 @@ enum TurnModel {
         settle(mine: true)
         settle(mine: false)
 
+        // A Wish comes down on whoever is standing in the spot now, which is
+        // the point of it: the one that made it can be long gone.
+        func landWish(mine: Bool) {
+            var side = mine ? board.myScreens : board.theirScreens
+            guard side.wishTurns > 0 else { return }
+            side.wishTurns -= 1
+            if side.wishTurns == 0 {
+                let amount = side.wishAmount
+                side.wishAmount = 0
+                let count = Swift.min(board.activeCount, (mine ? board.mine : board.theirs).count)
+                for index in 0..<count {
+                    let who = mine ? board.mine[index] : board.theirs[index]
+                    guard !who.fainted, who.hp < who.maxHP else { continue }
+                    let gained = Swift.min(who.maxHP - who.hp, amount)
+                    if mine { board.mine[index].hp += gained } else { board.theirs[index].hp += gained }
+                    board.note("The wish came true and restored \(gained) to \(who.build.form.formLabel).")
+                }
+            }
+            if mine { board.myScreens = side } else { board.theirScreens = side }
+        }
+        landWish(mine: true)
+        landWish(mine: false)
+
         board.myTailwind = Swift.max(0, board.myTailwind - 1)
         board.theirTailwind = Swift.max(0, board.theirTailwind - 1)
         board.trickRoom = Swift.max(0, board.trickRoom - 1)
+        if board.magicRoom > 0 {
+            board.magicRoom -= 1
+            if board.magicRoom == 0 { board.note("Magic Room wore off.") }
+        }
+        if board.wonderRoom > 0 {
+            board.wonderRoom -= 1
+            if board.wonderRoom == 0 { board.note("Wonder Room wore off.") }
+        }
         // Weather and terrain run out. A clock at zero with something up is
         // an analysis board's field, left alone.
         if board.weatherTurns > 0 {
@@ -1412,9 +1569,20 @@ enum TurnModel {
     /// is itself an action: Intimidate takes an Attack stage off both of them,
     /// and a weather or terrain setter takes the field back, which is why
     /// pivoting a Pelipper back in is a play rather than a retreat.
+    /// Written against the board rather than against a borrowed array, because
+    /// what walks in has to be charged for the hazards lying on its side of the
+    /// field, and those live on the board.
     @discardableResult
-    private static func swapIn(_ team: inout [Fighter], active: Int, bench: Int,
-                               opposing: inout [Fighter], field: inout Field) -> String? {
+    private static func swapIn(mine side: Bool, active: Int, bench: Int,
+                               board: inout Board) -> String? {
+        var team = side ? board.mine : board.theirs
+        var opposing = side ? board.theirs : board.mine
+        var field = board.field
+        defer {
+            if side { board.mine = team; board.theirs = opposing }
+            else { board.theirs = team; board.mine = opposing }
+            board.field = field
+        }
         guard team.indices.contains(active), team.indices.contains(bench),
               !team[bench].fainted else { return nil }
         // Regenerator heals a third on the way out, which is what makes a
@@ -1423,6 +1591,9 @@ enum TurnModel {
             team[active].hp = Swift.min(team[active].maxHP,
                                         team[active].hp + team[active].maxHP / 3)
         }
+        // Everything the field did to it is left on the field. Stat stages
+        // especially: they were surviving a switch, so a Pokémon could set up,
+        // pivot out and come back later still at +2.
         team[active].charging = nil
         team[active].hidden = false
         team[active].protectStreak = 0
@@ -1432,13 +1603,30 @@ enum TurnModel {
         team[active].seededFrom = nil
         team[active].critStage = 0
         team[active].lastMove = nil
+        team[active].build.boosts = Array(repeating: 0, count: 6)
+        team[active].substitute = 0
+        team[active].infatuatedWith = nil
+        team[active].tormented = false
+        team[active].cannotEscape = false
+        team[active].aquaRing = false
+        team[active].stockpile = 0
+        team[active].build.typeOverride = []
+        team[active].build.statOverride = [:]
         team.swapAt(active, bench)
         team[active].justArrived = true
         team[active].seen = true
         team[active].isProtected = false
 
-        return entryAbility(of: team[active].build.ability, team: &team, slot: active,
-                            opposing: &opposing, field: &field)
+        let said = entryAbility(of: team[active].build.ability, team: &team, slot: active,
+                                opposing: &opposing, field: &field)
+        // Hazards bite before the ability speaks, so write the board back now.
+        if side { board.mine = team; board.theirs = opposing } else { board.theirs = team; board.mine = opposing }
+        board.field = field
+        board.takeHazards(mine: side, slot: active)
+        team = side ? board.mine : board.theirs
+        opposing = side ? board.theirs : board.mine
+        field = board.field
+        return said
     }
 
     private static func apply(_ choice: Choice, byMine: Bool, slot: Int,
@@ -1467,6 +1655,30 @@ enum TurnModel {
             markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return
         }
+        // Infatuation: half of its actions are lost while whatever it fell for
+        // is still standing there. Like confusion, the search averages and
+        // lets it act; a played turn rolls.
+        if let loves = actor.infatuatedWith {
+            let far = byMine ? board.theirs : board.mine
+            if !far.indices.contains(loves) || far[loves].fainted {
+                if byMine { board.mine[slot].infatuatedWith = nil }
+                else { board.theirs[slot].infatuatedWith = nil }
+            } else if rolling, Double.random(in: 0..<1) < 0.5 {
+                board.note("\(name) is immobilised by love.")
+                dropCharge(byMine: byMine, slot: slot, board: &board)
+                markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                return
+            }
+        }
+        // Torment: it cannot use the same move twice running, which is what
+        // stops something clicking one button all game.
+        if actor.tormented, case .attack(let index, _) = choice, actor.lastMove == index {
+            board.note("\(name) cannot use the same move twice in a row.")
+            dropCharge(byMine: byMine, slot: slot, board: &board)
+            markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+            return
+        }
+
         // Confusion: counted down each time it comes to act, and one action in
         // three goes into its own face — a typeless forty-power hit with its
         // own Attack against its own Defence. The search, which averages,
@@ -1700,7 +1912,7 @@ enum TurnModel {
                 reached += 1
                 var defender = defending[index].build
                 defender.atFullHP = defending[index].hp == defending[index].maxHP
-                var field = board.field
+                var field = board.calcField
                 // An Infiltrator is not stopped by what is hanging in the air
                 // on the other side.
                 field.screen = actor.build.ability == "Infiltrator" ? false : farScreens.blunt(move)
@@ -1758,6 +1970,41 @@ enum TurnModel {
                     ? Int.random(in: Swift.min(result.minDamage, result.maxDamage)
                                  ... Swift.max(result.minDamage, result.maxDamage))
                     : Int((Double(result.minDamage + result.maxDamage) / 2 * accuracy).rounded())
+
+                // A one-hit knockout does exactly that, three times in ten,
+                // and nothing at all the rest of the time. It is worked out
+                // here rather than from power, because its listed power is 1.
+                if move.isOHKO {
+                    let lands = rolling ? Double.random(in: 0..<1) < 0.3 : false
+                    if defending[index].types.contains(.ice), move.id == "sheercold" {
+                        board.note("It does not affect \(hitName).")
+                        continue
+                    }
+                    if lands {
+                        if hitMine { board.mine[index].hp = 0 } else { board.theirs[index].hp = 0 }
+                        totalDealt += defending[index].hp
+                        board.note("It is a one-hit knockout. \(hitName) fainted.")
+                    } else {
+                        board.note(rolling ? "But it missed."
+                                           : "\(hitName) is looking at a one-hit knockout, three times in ten.")
+                    }
+                    continue
+                }
+
+                // A Substitute takes the hit instead, and the Pokémon behind
+                // it takes nothing at all — not the damage, not the stat drop,
+                // not the status. Sound moves and an Infiltrator go through it.
+                if defending[index].substitute > 0, !move.isSound,
+                   actor.build.ability != "Infiltrator" {
+                    let shell = defending[index].substitute
+                    let absorbed = Swift.min(shell, dealt)
+                    if hitMine { board.mine[index].substitute = shell - absorbed }
+                    else { board.theirs[index].substitute = shell - absorbed }
+                    board.note(absorbed >= shell
+                               ? "\(hitName)'s substitute broke."
+                               : "\(hitName)'s substitute took \(absorbed).")
+                    continue
+                }
 
                 var landed = dealt
                 var sashed = false
@@ -2135,6 +2382,10 @@ enum TurnModel {
             case .sleep, .none: immune = true
             }
             if immune { return }
+            if (hitMine ? board.myScreens : board.theirScreens).safeguard > 0 {
+                board.note("The veil kept \(name) from being \(ailment.rawValue).")
+                return
+            }
             if board.field.terrain == .misty, !types.contains(.flying), defender.build.ability != "Levitate" {
                 board.note("The mist kept \(name) from being \(ailment.rawValue).")
                 return
@@ -2472,6 +2723,367 @@ enum TurnModel {
             return
         }
 
+        // -- the ones that reach across and rearrange something -------------
+        //
+        // Each of these was a move slot on a real team list that did nothing
+        // at all. They are grouped here because they share a shape: find the
+        // Pokémon on the other side, check it can be reached, then move a
+        // number, a name or an object from one side to the other.
+
+        /// The opposing slot this move is aimed at, if it can be reached.
+        func reachableTarget() -> Int? {
+            let far = byMine ? board.theirs : board.mine
+            let index = far.indices.contains(target) && target < board.activeCount ? target : 0
+            guard far.indices.contains(index), !far[index].fainted else { return nil }
+            if far[index].isProtected {
+                board.note("\(far[index].build.form.formLabel) protected itself.")
+                return nil
+            }
+            if far[index].substitute > 0 {
+                board.note("\(far[index].build.form.formLabel)'s substitute took it.")
+                return nil
+            }
+            return index
+        }
+        func farName(_ index: Int) -> String {
+            (byMine ? board.theirs : board.mine)[index].build.form.formLabel
+        }
+        /// Write a changed fighter back to whichever side it came from.
+        func setFar(_ index: Int, _ change: (inout Fighter) -> Void) {
+            if byMine { change(&board.theirs[index]) } else { change(&board.mine[index]) }
+        }
+        func setNear(_ change: (inout Fighter) -> Void) {
+            if byMine { change(&board.mine[slot]) } else { change(&board.theirs[slot]) }
+        }
+
+        // Trick and Switcheroo: the two held items change hands. The point is
+        // to hand something a Choice Scarf and take its berry.
+        if move.name == "Trick" || move.name == "Switcheroo" {
+            guard let index = reachableTarget() else { board.note("But it failed."); return }
+            let far = byMine ? board.theirs : board.mine
+            let theirs = far[index].build.item
+            let ours = team[slot].build.item
+            guard !(theirs.isEmpty && ours.isEmpty) else { board.note("But it failed."); return }
+            if far[index].build.ability == "Sticky Hold" {
+                board.note("\(farName(index))'s Sticky Hold kept hold of it.")
+                return
+            }
+            setFar(index) { $0.build.item = ours; $0.build.itemSpent = false }
+            setNear { $0.build.item = theirs; $0.build.itemSpent = false }
+            board.note("\(name) swapped items with \(farName(index)):"
+                       + " \(ours.isEmpty ? "nothing" : ours) for \(theirs.isEmpty ? "nothing" : theirs).")
+            return
+        }
+
+        // Skill Swap trades abilities; Worry Seed replaces the target's with
+        // Insomnia, which is how a sleep team gets turned off.
+        if move.name == "Skill Swap" || move.name == "Worry Seed" {
+            guard let index = reachableTarget() else { board.note("But it failed."); return }
+            let far = byMine ? board.theirs : board.mine
+            let had = far[index].build.ability
+            if move.name == "Worry Seed" {
+                guard had != "Insomnia" else { board.note("But it failed."); return }
+                setFar(index) { $0.build.ability = "Insomnia" }
+                board.note("\(farName(index))'s ability became Insomnia.")
+                if far[index].status == .sleep {
+                    setFar(index) { $0.status = .none; $0.asleepFor = 0 }
+                    board.note("\(farName(index)) woke up.")
+                }
+            } else {
+                let ours = team[slot].build.ability
+                setFar(index) { $0.build.ability = ours }
+                setNear { $0.build.ability = had }
+                board.note("\(name) and \(farName(index)) swapped abilities:"
+                           + " \(ours) for \(had).")
+            }
+            return
+        }
+
+        // Soak makes the target a pure Water type, which is how a Ground type
+        // stops being immune to Thunderbolt.
+        if move.name == "Soak" {
+            guard let index = reachableTarget() else { board.note("But it failed."); return }
+            setFar(index) { $0.build.typeOverride = [.water] }
+            board.note("\(farName(index)) became a Water type.")
+            return
+        }
+
+        // Psych Up copies the target's stat changes; Guard Swap and Power Swap
+        // trade one pair of them; Heart Swap trades all six.
+        if ["Psych Up", "Guard Swap", "Power Swap", "Heart Swap"].contains(move.name) {
+            guard let index = reachableTarget() else { board.note("But it failed."); return }
+            let far = byMine ? board.theirs : board.mine
+            var ourBoosts = team[slot].build.boosts
+            var theirBoosts = far[index].build.boosts
+            switch move.name {
+            case "Psych Up":
+                ourBoosts = theirBoosts
+                board.note("\(name) copied \(farName(index))'s stat changes.")
+            case "Heart Swap":
+                swap(&ourBoosts, &theirBoosts)
+                board.note("\(name) and \(farName(index)) traded every stat change.")
+            default:
+                let pair: [Stat] = move.name == "Guard Swap" ? [.defense, .spDefense]
+                                                             : [.attack, .spAttack]
+                for stat in pair {
+                    let keep = ourBoosts[stat.rawValue]
+                    ourBoosts[stat.rawValue] = theirBoosts[stat.rawValue]
+                    theirBoosts[stat.rawValue] = keep
+                }
+                board.note("\(name) and \(farName(index)) traded their"
+                           + " \(move.name == "Guard Swap" ? "defensive" : "offensive") stat changes.")
+            }
+            setNear { $0.build.boosts = ourBoosts }
+            setFar(index) { $0.build.boosts = theirBoosts }
+            return
+        }
+
+        // Pain Split averages the two health bars, which is what lets
+        // something on its last legs drag a healthy attacker down with it.
+        if move.name == "Pain Split" {
+            guard let index = reachableTarget() else { board.note("But it failed."); return }
+            let far = byMine ? board.theirs : board.mine
+            let shared = (team[slot].hp + far[index].hp) / 2
+            setNear { $0.hp = Swift.min($0.maxHP, shared) }
+            setFar(index) { $0.hp = Swift.min($0.maxHP, shared) }
+            board.note("\(name) and \(farName(index)) split their health, \(shared) each.")
+            return
+        }
+
+        // Guard Split and Power Split average the raw stats rather than the
+        // stages, so a wall hands half its bulk to whatever it touches.
+        if move.name == "Guard Split" || move.name == "Power Split" {
+            guard let index = reachableTarget() else { board.note("But it failed."); return }
+            let pair: [Stat] = move.name == "Guard Split" ? [.defense, .spDefense]
+                                                          : [.attack, .spAttack]
+            let far = byMine ? board.theirs : board.mine
+            for stat in pair {
+                let averaged = (team[slot].build.stat(stat) + far[index].build.stat(stat)) / 2
+                setNear { $0.build.statOverride[stat.rawValue] = averaged }
+                setFar(index) { $0.build.statOverride[stat.rawValue] = averaged }
+            }
+            board.note("\(name) and \(farName(index)) split their"
+                       + " \(move.name == "Guard Split" ? "defences" : "attacking power").")
+            return
+        }
+
+        // -- the ones that stick a label on something ------------------------
+
+        if move.name == "Attract" {
+            guard let index = reachableTarget() else { board.note("But it failed."); return }
+            let far = byMine ? board.theirs : board.mine
+            guard far[index].infatuatedWith == nil,
+                  !["Oblivious", "Aroma Veil"].contains(far[index].build.ability) else {
+                board.note("But it failed."); return
+            }
+            setFar(index) { $0.infatuatedWith = slot }
+            board.note("\(farName(index)) fell in love with \(name).")
+            return
+        }
+
+        if move.name == "Torment" {
+            guard let index = reachableTarget() else { board.note("But it failed."); return }
+            let far = byMine ? board.theirs : board.mine
+            guard !far[index].tormented, far[index].build.ability != "Aroma Veil" else {
+                board.note("But it failed."); return
+            }
+            setFar(index) { $0.tormented = true }
+            board.note("\(farName(index)) cannot use the same move twice in a row.")
+            return
+        }
+
+        if move.name == "Mean Look" || move.name == "Block" || move.name == "Spider Web" {
+            guard let index = reachableTarget() else { board.note("But it failed."); return }
+            let far = byMine ? board.theirs : board.mine
+            guard !far[index].cannotEscape, !far[index].types.contains(.ghost) else {
+                board.note("But it failed."); return
+            }
+            setFar(index) { $0.cannotEscape = true }
+            board.note("\(farName(index)) can no longer escape.")
+            return
+        }
+
+        // -- the ones that put something on a side of the field --------------
+
+        if ["Spikes", "Toxic Spikes", "Stealth Rock"].contains(move.name) {
+            // Hazards go on the *other* side, and stay until something clears
+            // them. They are the price of every pivot after this turn.
+            var far = byMine ? board.theirScreens : board.myScreens
+            let placed: Bool
+            switch move.name {
+            case "Spikes":       placed = far.spikes < 3; far.spikes = Swift.min(3, far.spikes + 1)
+            case "Toxic Spikes": placed = far.toxicSpikes < 2; far.toxicSpikes = Swift.min(2, far.toxicSpikes + 1)
+            default:             placed = !far.stealthRock; far.stealthRock = true
+            }
+            guard placed else { board.note("But it failed."); return }
+            if byMine { board.theirScreens = far } else { board.myScreens = far }
+            board.note("\(move.name) settled around the other side of the field.")
+            return
+        }
+
+        if move.name == "Safeguard" {
+            var own = byMine ? board.myScreens : board.theirScreens
+            guard own.safeguard == 0 else { board.note("But it failed."); return }
+            own.safeguard = 5
+            if byMine { board.myScreens = own } else { board.theirScreens = own }
+            board.note("A veil settled over \(byMine ? "your" : "their") side for five turns.")
+            return
+        }
+
+        if move.name == "Wish" {
+            var own = byMine ? board.myScreens : board.theirScreens
+            guard own.wishTurns == 0 else { board.note("But it failed."); return }
+            own.wishAmount = Swift.max(1, team[slot].maxHP / 2)
+            own.wishTurns = 2
+            if byMine { board.myScreens = own } else { board.theirScreens = own }
+            board.note("\(name) made a wish. Help arrives next turn.")
+            return
+        }
+
+        if move.name == "Aqua Ring" {
+            guard !team[slot].aquaRing else { board.note("But it failed."); return }
+            setNear { $0.aquaRing = true }
+            board.note("\(name) surrounded itself with a veil of water.")
+            return
+        }
+
+        if move.name == "Magic Room" || move.name == "Wonder Room" {
+            let running = move.name == "Magic Room" ? board.magicRoom : board.wonderRoom
+            let turns = running > 0 ? 0 : 5
+            if move.name == "Magic Room" { board.magicRoom = turns } else { board.wonderRoom = turns }
+            board.note(turns > 0
+                       ? "\(move.name) twisted the field for five turns."
+                       : "\(move.name) ended.")
+            return
+        }
+
+        // Substitute: a quarter of the bar becomes a shell that eats damage
+        // and status until it breaks.
+        if move.name == "Substitute" {
+            let cost = team[slot].maxHP / 4
+            guard team[slot].hp > cost, team[slot].substitute == 0 else {
+                board.note("But it failed."); return
+            }
+            setNear { $0.hp -= cost; $0.substitute = cost }
+            board.note("\(name) put up a substitute worth \(cost).")
+            return
+        }
+
+        // Belly Drum spends half the bar to go straight to the top.
+        if move.name == "Belly Drum" {
+            let cost = team[slot].maxHP / 2
+            guard team[slot].hp > cost, team[slot].build.boosts[Stat.attack.rawValue] < 6 else {
+                board.note("But it failed."); return
+            }
+            setNear { $0.hp -= cost; $0.build.boosts[Stat.attack.rawValue] = 6 }
+            board.note("\(name) cut its health to maximise its Attack.")
+            return
+        }
+
+        // Stockpile holds a charge; Swallow spends the lot for health.
+        if move.name == "Stockpile" {
+            guard team[slot].stockpile < 3 else { board.note("But it failed."); return }
+            setNear { $0.stockpile += 1
+                      $0.build.boosts[Stat.defense.rawValue] = Swift.min(6, $0.build.boosts[Stat.defense.rawValue] + 1)
+                      $0.build.boosts[Stat.spDefense.rawValue] = Swift.min(6, $0.build.boosts[Stat.spDefense.rawValue] + 1) }
+            board.note("\(name) stockpiled \(team[slot].stockpile + 1).")
+            return
+        }
+        if move.name == "Swallow" {
+            let held = team[slot].stockpile
+            guard held > 0 else { board.note("But it failed."); return }
+            let share = held == 1 ? 0.25 : held == 2 ? 0.5 : 1.0
+            let gained = Swift.min(team[slot].maxHP - team[slot].hp,
+                                   Swift.max(1, Int(Double(team[slot].maxHP) * share)))
+            setNear { $0.hp += gained; $0.stockpile = 0
+                      $0.build.boosts[Stat.defense.rawValue] -= held
+                      $0.build.boosts[Stat.spDefense.rawValue] -= held }
+            board.note("\(name) swallowed \(held) and recovered \(gained) health.")
+            return
+        }
+
+        // Roar and Whirlwind drag the target out and something else in, which
+        // is how a setup sweeper gets undone: every stage it earned goes with
+        // it. They move last on purpose — their priority is -6 — so what they
+        // undo is whatever just happened.
+        if move.name == "Roar" || move.name == "Whirlwind" {
+            guard let index = reachableTarget() else { board.note("But it failed."); return }
+            let far = byMine ? board.theirs : board.mine
+            guard !far[index].build.ability.isEmpty || true else { return }
+            if far[index].build.ability == "Suction Cups" {
+                board.note("\(farName(index))'s Suction Cups held it in place.")
+                return
+            }
+            // The search cannot roll, so it drags in the first one standing.
+            // A played turn picks at random, which is what the move does.
+            let bench = (board.activeCount..<far.count).filter { !far[$0].fainted }
+            guard let coming = rolling ? bench.randomElement() : bench.first else {
+                board.note("But there was no one to drag in.")
+                return
+            }
+            let arriving = far[coming].build.form.formLabel
+            board.note("\(farName(index)) was dragged out, and \(arriving) took its place.")
+            if let said = swapIn(mine: !byMine, active: index, bench: coming, board: &board) {
+                board.note(said)
+            }
+            return
+        }
+
+        // Baton Pass leaves, but hands everything it built up to whoever comes
+        // in. That is the whole move: the stages survive the switch that
+        // normally wipes them.
+        if move.name == "Baton Pass" {
+            let own = byMine ? board.mine : board.theirs
+            let bench = (board.activeCount..<own.count).filter { !own[$0].fainted }
+            guard let coming = bench.first else { board.note("But it failed."); return }
+            let passed = own[slot].build.boosts
+            let sub = own[slot].substitute
+            let ring = own[slot].aquaRing
+            let arriving = own[coming].build.form.formLabel
+            board.note("\(name) passed the baton to \(arriving).")
+            if let said = swapIn(mine: byMine, active: slot, bench: coming, board: &board) {
+                board.note(said)
+            }
+            if byMine {
+                board.mine[slot].build.boosts = passed
+                board.mine[slot].substitute = sub
+                board.mine[slot].aquaRing = ring
+            } else {
+                board.theirs[slot].build.boosts = passed
+                board.theirs[slot].substitute = sub
+                board.theirs[slot].aquaRing = ring
+            }
+            if passed.contains(where: { $0 != 0 }) {
+                board.note("\(arriving) took over every stat change.")
+            }
+            return
+        }
+
+        // After You hands the target the next action. The turn order was fixed
+        // before anything moved, so this marks the target and the order is
+        // rebuilt around the mark.
+        if move.name == "After You" {
+            guard let index = reachableTarget() else { board.note("But it failed."); return }
+            setFar(index) { $0.goesNext = true }
+            board.note("\(farName(index)) will move next.")
+            return
+        }
+
+        // Howl boosts the whole side, not just the user. Matched on the
+        // sentence rather than the name, and deliberately narrow: Coaching and
+        // Gear Up read as "the user's allies" without the user, and are
+        // already handled as ally-targeted moves further down.
+        if move.effect.contains("of the user and its allies"), !move.selfBoosts.isEmpty {
+            let boosts = move.selfBoosts
+            let partner = slot == 0 ? 1 : 0
+            applySelf(boosts, toMine: byMine, slot: slot, board: &board)
+            let own = byMine ? board.mine : board.theirs
+            if board.activeCount > 1, own.indices.contains(partner), !own[partner].fainted {
+                applySelf(boosts, toMine: byMine, slot: partner, board: &board)
+            }
+            return
+        }
+
         // Ally Switch: the two of yours trade places, which is how a Pokémon
         // steps out of the way of something aimed at where it was standing.
         // Like Protect, doing it again is a third as likely to work.
@@ -2737,12 +3349,12 @@ enum TurnModel {
             let victim = defending[target]
             let immune: Bool
             switch ailment {
-            case .burn: immune = victim.build.form.pokeTypes.contains(.fire)
+            case .burn: immune = victim.types.contains(.fire)
                 || ["Water Veil", "Water Bubble", "Thermal Exchange"].contains(victim.build.ability)
-            case .paralysis: immune = victim.build.form.pokeTypes.contains(.electric)
+            case .paralysis: immune = victim.types.contains(.electric)
                 || ["Limber"].contains(victim.build.ability)
             case .poison, .badPoison:
-                immune = victim.build.form.pokeTypes.contains(where: { [.poison, .steel].contains($0) })
+                immune = victim.types.contains(where: { [.poison, .steel].contains($0) })
                     || ["Immunity"].contains(victim.build.ability)
             case .sleep: immune = ["Insomnia", "Vital Spirit"].contains(victim.build.ability)
                 || board.field.terrain == .electric
@@ -2750,6 +3362,10 @@ enum TurnModel {
             }
             if immune {
                 board.note("\(victim.build.form.formLabel) is not affected.")
+                return
+            }
+            if (byMine ? board.theirScreens : board.myScreens).safeguard > 0 {
+                board.note("The veil kept \(victim.build.form.formLabel) safe.")
                 return
             }
             if byMine {

@@ -449,9 +449,19 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     internal var computedSelfDrops: [Stat: Int] { ownChanges(verb: "Lowers") }
 
     internal func ownChanges(verb: String) -> [Stat: Int] {
-        guard let match = effect.range(of: "\(verb) the user's .+? stats? by \\d+ stage",
-                                       options: .regularExpression) else { return [:] }
+        // Two word orders for the same sentence. Almost every move says
+        // "Boosts the user's Attack stat by 1 stage"; Howl says "Boosts the
+        // Attack stats of the user and its allies by 1 stage", and matching
+        // only the first left it doing nothing at all.
+        let direct = effect.range(of: "\(verb) the user's .+? stats? by \\d+ stage",
+                                  options: .regularExpression)
+        let shared = effect.range(of: "\(verb) the .+? stats? of the user and its allies by \\d+ stage",
+                                  options: .regularExpression)
+        guard let match = direct ?? shared else { return [:] }
         let phrase = String(effect[match])
+            .replacingOccurrences(of: " of the user and its allies", with: "")
+            .replacingOccurrences(of: "\(verb) the ", with: "\(verb) the user's ")
+            .replacingOccurrences(of: "\(verb) the user's user's ", with: "\(verb) the user's ")
         guard let amount = phrase.range(of: #"\d+"#, options: [.regularExpression, .backwards])
             .flatMap({ Int(phrase[$0]) }) else { return [:] }
         let statsPart = phrase
