@@ -68,6 +68,14 @@ dmg:
 duel:
 	$(NICE) ./Tools/duel.sh --games 60
 
+# Games at scale, with everything they did written down: which teams win,
+# which Pokemon carry them, which moves never get chosen, what a team cannot
+# beat. `make lab` is a quick pass; ARGS passes anything through --
+#   make lab ARGS="--games 800 --workers 6 --json build/lab.json"
+#   make lab ARGS="--team 'Sun / Dual Mega'"
+lab:
+	$(NICE) ./Tools/lab.sh --games 120 $(ARGS)
+
 # Real games in this exact format, from Showdown's replay archive. Everything
 # else here measures the engine against a team list and a result; this is the
 # only data with a turn in it.

@@ -149,8 +149,27 @@ enum SelfPlay {
         TurnModel.dice = dice
         defer { TurnModel.dice = wasDice }
 
-        var board = Board(mine: mine, theirs: theirs, rules: rules,
-                          field: Field(isDoubles: true), alreadyEvolved: false)
+        // Four of six, which is the format. Playing all six was giving every
+        // team its whole roster every game — a different and much easier game
+        // than the one being modelled, and useless for asking which four a
+        // team should bring. Each side chooses against the other's six, the
+        // same way the team-preview picker does.
+        let field = Field(isDoubles: true)
+        func fourOf(_ team: Team, against foe: Team) -> Team {
+            guard team.slots.count > 4 else { return team }
+            let grid = Matchup(mine: team, theirs: foe, rules: rules, field: field)
+            guard let plan = BringFour(matchup: grid, rules: rules, bring: 4).plans.first
+            else { return team }
+            var out = team
+            out.slots = plan.bring.compactMap { form in
+                team.slots.first { $0.battleForm(in: rules)?.id == form.id }
+            }
+            return out.slots.count >= 2 ? out : team
+        }
+        var board = Board(mine: fourOf(mine, against: theirs),
+                          theirs: fourOf(theirs, against: mine), rules: rules,
+                          field: field, alreadyEvolved: false)
+        board.activeCount = 2
         // Narration is what records the steps, and the steps are what make the
         // ledger exact. It is on for the played board only: the engine's own
         // search boards are separate and stay silent, which is where the cost
@@ -161,8 +180,20 @@ enum SelfPlay {
         var ledger = Ledger()
         /// Who is standing where, so a form can be credited after it has been
         /// switched out. Read off the step rather than the live board.
+        // A Mega and the Pokémon it evolved from are one entry. They were two,
+        // which put Garchomp on the table with nothing beside it and Mega
+        // Garchomp Z with all of its work.
+        //
+        // By name rather than by species: species would fold Alolan Ninetales
+        // into Ninetales, and in this format those are two different Pokémon
+        // with different types and different abilities.
         func label(_ id: String) -> String {
-            rules.forms.first { $0.id == id }?.formLabel ?? id
+            guard let form = rules.forms.first(where: { $0.id == id }) else { return id }
+            guard form.isMega else { return form.formLabel }
+            var base = form.formLabel
+            if base.hasPrefix("Mega ") { base.removeFirst(5) }
+            for tag in [" X", " Y", " Z"] where base.hasSuffix(tag) { base.removeLast(2) }
+            return base.isEmpty ? form.formLabel : base
         }
         func note(_ mineSide: Bool, _ form: String, _ change: (inout Tally) -> Void) {
             if mineSide { change(&ledger.mine[form, default: Tally()]) }
@@ -172,14 +203,14 @@ enum SelfPlay {
         /// Everything each side actually brought, in the order it appeared.
         func sawTheField() {
             for index in 0..<Swift.min(board.activeCount, board.mine.count) {
-                let who = board.mine[index].build.form.formLabel
+                let who = label(board.mine[index].build.form.id)
                 if !ledger.broughtMine.contains(who) {
                     ledger.broughtMine.append(who)
                     note(true, who) { $0.brought = 1 }
                 }
             }
             for index in 0..<Swift.min(board.activeCount, board.theirs.count) {
-                let who = board.theirs[index].build.form.formLabel
+                let who = label(board.theirs[index].build.form.id)
                 if !ledger.broughtTheirs.contains(who) {
                     ledger.broughtTheirs.append(who)
                     note(false, who) { $0.brought = 1 }
@@ -247,11 +278,13 @@ enum SelfPlay {
 
         /// Whoever is still standing when it is over.
         func countSurvivors() {
-            for fighter in board.mine where !fighter.fainted {
-                note(true, fighter.build.form.formLabel) { $0.survived = 1 }
+            // Only what was actually brought: the rest of the roster did not
+            // survive the game, it was never in it.
+            for fighter in board.mine.prefix(4) where !fighter.fainted {
+                note(true, label(fighter.build.form.id)) { $0.survived = 1 }
             }
-            for fighter in board.theirs where !fighter.fainted {
-                note(false, fighter.build.form.formLabel) { $0.survived = 1 }
+            for fighter in board.theirs.prefix(4) where !fighter.fainted {
+                note(false, label(fighter.build.form.id)) { $0.survived = 1 }
             }
         }
 
