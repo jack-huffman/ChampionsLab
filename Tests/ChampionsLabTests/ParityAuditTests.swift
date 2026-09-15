@@ -55,7 +55,13 @@ final class ParityAuditTests: HarnessCase {
                      "Substitute", "Belly Drum", "Stockpile", "Swallow", "Howl",
                      "Endure", "Wide Guard", "Aqua Ring", "Magic Room", "Wonder Room",
                      "Electro Ball", "Gyro Ball", "Grass Knot", "Low Kick",
-                     "Heavy Slam", "Baton Pass", "Roar", "After You", "Guillotine"]
+                     "Heavy Slam", "Baton Pass", "Roar", "After You", "Guillotine",
+                     // The field sweepers and stat movers, which only became
+                     // possible once hazards and side conditions existed.
+                     "Haze", "Defog", "Court Change", "Topsy-Turvy", "Entrainment",
+                     "Role Play", "Simple Beam", "Gastro Acid", "Corrosive Gas",
+                     "Reflect Type", "Magic Powder", "Speed Swap", "Power Trick",
+                     "Decorate", "Aromatic Mist", "Clangorous Soul", "Heal Bell"]
         let silent = ParityAudit.movesThatDoNothing(names, rules: store.rulebook)
         print("  \(names.count - silent.count) of \(names.count) change the game")
         if !silent.isEmpty { print("  nothing happens for: \(silent.joined(separator: ", "))") }

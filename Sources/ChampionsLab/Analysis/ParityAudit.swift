@@ -500,6 +500,18 @@ private struct Bench {
         var doomed = b
         doomed.mine[0].hp = 1
         doomed.mine[1].hp = 1
+        // A cluttered field. Defog, Court Change and Haze all clear something
+        // away, and on an empty board they clear nothing and read as doing
+        // nothing at all.
+        var cluttered = b
+        cluttered.myScreens.reflect = 4; cluttered.myScreens.lightScreen = 4
+        cluttered.myScreens.spikes = 2; cluttered.myScreens.stealthRock = true
+        cluttered.theirScreens.auroraVeil = 4; cluttered.theirScreens.toxicSpikes = 1
+        cluttered.theirScreens.safeguard = 3
+        cluttered.field.terrain = .grassy
+        cluttered.terrainTurns = 4
+        cluttered.mine[0].build.boosts[Stat.attack.rawValue] = 2
+        cluttered.theirs[0].build.boosts[Stat.defense.rawValue] = 2
 
         let using = Play(left: .attack(move: 0, target: 0), right: .pass)
         let passing = Play(left: .pass, right: .pass)
@@ -511,7 +523,7 @@ private struct Bench {
                        Play(left: .attack(move: 0, target: 0), right: .pass),
                        Play(left: .protectSelf(move: provocations.count - 1), right: .pass)]
             + (spread.map { [Play(left: .attack(move: $0, target: 0), right: .pass)] } ?? [])
-        for position in [b, fallen, sleeping, doomed] {
+        for position in [b, fallen, sleeping, doomed, cluttered] {
             for answer in answers {
                 // The same turn twice: once using it, once not. Anything the
                 // move did is the difference between them, and nothing the

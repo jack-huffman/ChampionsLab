@@ -3765,6 +3765,182 @@ enum TurnModel {
             return
         }
 
+        // -- the ones that sweep the field ----------------------------------
+
+        // Haze wipes every stat change on both sides, which is the answer to
+        // anything that has spent the game setting up.
+        if move.name == "Haze" {
+            for index in board.mine.indices { board.mine[index].build.boosts = Array(repeating: 0, count: 6) }
+            for index in board.theirs.indices { board.theirs[index].build.boosts = Array(repeating: 0, count: 6) }
+            board.note("A haze settled and every stat change went with it.")
+            return
+        }
+
+        // Defog clears what is hanging in the air and lying on the floor, on
+        // both sides. Its evasion drop is the part not modelled.
+        if move.name == "Defog" {
+            // The target's side, not both. Champions' own text is explicit
+            // about that — "on the target Pokémon's side of battle" — and the
+            // main series is more generous. Champions decides its own game.
+            var far = byMine ? board.theirScreens : board.myScreens
+            far.reflect = 0; far.lightScreen = 0; far.auroraVeil = 0
+            far.safeguard = 0; far.spikes = 0; far.toxicSpikes = 0
+            far.stealthRock = false
+            if byMine { board.theirScreens = far } else { board.myScreens = far }
+            // The terrain goes whoever put it there.
+            let hadTerrain = board.field.terrain != .none
+            board.field.terrain = .none
+            board.terrainTurns = 0
+            board.note(hadTerrain ? "The field and the terrain were swept away."
+                                  : "The other side of the field was swept clear.")
+            return
+        }
+
+        // Court Change hands the other side everything on yours and takes
+        // everything on theirs, hazards included.
+        if move.name == "Court Change" {
+            swap(&board.myScreens, &board.theirScreens)
+            board.note("The two sides of the field traded places.")
+            return
+        }
+
+        // Topsy-Turvy turns the target's stat changes upside down, which is
+        // the cheapest answer to a Belly Drum there is.
+        if move.name == "Topsy-Turvy" {
+            guard let index = reachableTarget() else { board.note("But it failed."); return }
+            let far = byMine ? board.theirs : board.mine
+            guard far[index].build.boosts.contains(where: { $0 != 0 }) else {
+                board.note("But it failed."); return
+            }
+            setFar(index) { $0.build.boosts = $0.build.boosts.map { -$0 } }
+            board.note("\(farName(index))'s stat changes were turned upside down.")
+            return
+        }
+
+        // Entrainment hands the target the user's ability; Role Play takes the
+        // target's; Simple Beam makes it Simple; Gastro Acid takes it away.
+        if ["Entrainment", "Role Play", "Simple Beam", "Gastro Acid"].contains(move.name) {
+            guard let index = reachableTarget() else { board.note("But it failed."); return }
+            let far = byMine ? board.theirs : board.mine
+            switch move.name {
+            case "Entrainment":
+                setFar(index) { $0.build.ability = team[slot].build.ability }
+                board.note("\(farName(index)) took on \(name)'s \(team[slot].build.ability).")
+            case "Role Play":
+                let taken = far[index].build.ability
+                setNear { $0.build.ability = taken }
+                board.note("\(name) copied \(farName(index))'s \(taken).")
+            case "Simple Beam":
+                setFar(index) { $0.build.ability = "Simple" }
+                board.note("\(farName(index))'s ability became Simple.")
+            default:
+                setFar(index) { $0.build.ability = "" }
+                board.note("\(farName(index))'s ability was suppressed.")
+            }
+            return
+        }
+
+        // Corrosive Gas takes everybody's item; Teatime makes everybody eat.
+        if move.name == "Corrosive Gas" {
+            var taken: [String] = []
+            for index in board.mine.indices.prefix(board.activeCount)
+            where !board.mine[index].fainted && !board.mine[index].build.item.isEmpty {
+                taken.append(board.mine[index].build.form.formLabel)
+                board.mine[index].build.item = ""
+            }
+            for index in board.theirs.indices.prefix(board.activeCount)
+            where !board.theirs[index].fainted && !board.theirs[index].build.item.isEmpty {
+                taken.append(board.theirs[index].build.form.formLabel)
+                board.theirs[index].build.item = ""
+            }
+            board.note(taken.isEmpty ? "But nobody was holding anything."
+                                     : "The gas took \(taken.joined(separator: ", "))'s items.")
+            return
+        }
+
+        // Reflect Type and Magic Powder rewrite a typing.
+        if move.name == "Reflect Type" || move.name == "Magic Powder" {
+            guard let index = reachableTarget() else { board.note("But it failed."); return }
+            if move.name == "Magic Powder" {
+                setFar(index) { $0.build.typeOverride = [.psychic] }
+                board.note("\(farName(index)) became a Psychic type.")
+            } else {
+                let far = byMine ? board.theirs : board.mine
+                let copied = far[index].types
+                setNear { $0.build.typeOverride = copied }
+                board.note("\(name) took on \(farName(index))'s typing.")
+            }
+            return
+        }
+
+        // Speed Swap and Power Trick move a stat rather than a stage.
+        if move.name == "Speed Swap" {
+            guard let index = reachableTarget() else { board.note("But it failed."); return }
+            let far = byMine ? board.theirs : board.mine
+            let ours = team[slot].build.stat(.speed), theirs = far[index].build.stat(.speed)
+            setNear { $0.build.statOverride = ($0.build.statOverride ?? [:])
+                .merging([Stat.speed.rawValue: theirs]) { _, new in new } }
+            setFar(index) { $0.build.statOverride = ($0.build.statOverride ?? [:])
+                .merging([Stat.speed.rawValue: ours]) { _, new in new } }
+            board.note("\(name) and \(farName(index)) swapped Speed.")
+            return
+        }
+        if move.name == "Power Trick" {
+            let attack = team[slot].build.stat(.attack)
+            let defense = team[slot].build.stat(.defense)
+            setNear { $0.build.statOverride = ($0.build.statOverride ?? [:])
+                .merging([Stat.attack.rawValue: defense,
+                          Stat.defense.rawValue: attack]) { _, new in new } }
+            board.note("\(name) swapped its Attack and Defense.")
+            return
+        }
+
+        // Decorate and Aromatic Mist pay the partner.
+        if move.name == "Decorate" || move.name == "Aromatic Mist" {
+            let partner = slot == 0 ? 1 : 0
+            let own = byMine ? board.mine : board.theirs
+            guard board.activeCount > 1, own.indices.contains(partner), !own[partner].fainted else {
+                board.note("But there was no one to help."); return
+            }
+            let paid: [Stat: Int] = move.name == "Decorate" ? [.attack: 2, .spAttack: 2]
+                                                            : [.spDefense: 1]
+            applySelf(paid, toMine: byMine, slot: partner, board: &board)
+            return
+        }
+
+        // Clangorous Soul spends a third of the bar to raise everything.
+        if move.name == "Clangorous Soul" {
+            let cost = team[slot].maxHP / 3
+            guard team[slot].hp > cost else { board.note("But it failed."); return }
+            setNear { $0.hp -= cost }
+            applySelf([.attack: 1, .defense: 1, .spAttack: 1, .spDefense: 1, .speed: 1],
+                      toMine: byMine, slot: slot, board: &board)
+            return
+        }
+
+        // Acupressure raises one stat, chosen at random, by two.
+        if move.name == "Acupressure" {
+            let stats: [Stat] = [.attack, .defense, .spAttack, .spDefense, .speed]
+            let picked = rolling ? (stats.randomElement(using: &TurnModel.dice) ?? .attack) : .attack
+            applySelf([picked: 2], toMine: byMine, slot: slot, board: &board)
+            return
+        }
+
+        // Heal Bell clears the whole side, bench included.
+        if move.name == "Heal Bell" || move.name == "Aromatherapy" {
+            var cured = 0
+            for index in (byMine ? board.mine : board.theirs).indices {
+                let carrying = (byMine ? board.mine : board.theirs)[index].status != .none
+                guard carrying else { continue }
+                if byMine { board.mine[index].status = .none; board.mine[index].asleepFor = 0 }
+                else { board.theirs[index].status = .none; board.theirs[index].asleepFor = 0 }
+                cured += 1
+            }
+            board.note(cured == 0 ? "But nobody was ill."
+                                  : "A bell rang and cleared \(cured) of them up.")
+            return
+        }
+
         // Howl boosts the whole side, not just the user. Matched on the
         // sentence rather than the name, and deliberately narrow: Coaching and
         // Gear Up read as "the user's allies" without the user, and are
