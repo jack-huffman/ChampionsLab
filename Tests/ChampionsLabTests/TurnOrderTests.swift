@@ -352,3 +352,38 @@ print("\n== sending one in ==")
         print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     }
 }
+
+extension TurnOrderTests {
+    /// A Tailwind is only worth setting when the room will let it work.
+    ///
+    /// Trick Room reverses the order, so doubling your Speed under one makes
+    /// you move later. The engine used to count a Tailwind as a flat gain
+    /// either way and would put one up into a Trick Room with four turns left
+    /// on it, which no player would do.
+    @MainActor func testTailwindIsWorthLessUnderATrickRoom() throws {
+        print("\n== a tailwind under a trick room ==")
+        func board(tailwind: Int, room: Int) -> Board {
+            var b = Board(mine: fighters([("Whimsicott", "Focus Sash", ["Tailwind", "Protect"]),
+                                          ("Milotic", "Leftovers", ["Protect"])]),
+                          theirs: fighters([("Garchomp", "Leftovers", ["Protect"]),
+                                            ("Kingambit", "Leftovers", ["Protect"])]),
+                          rules: store.rulebook, field: Field(isDoubles: true),
+                          alreadyEvolved: false)
+            b.narrating = false
+            b.myTailwind = tailwind
+            b.trickRoom = room
+            return b
+        }
+        let none = TurnModel.value(board(tailwind: 0, room: 0))
+        let clear = TurnModel.value(board(tailwind: 4, room: 0))
+        let buried = TurnModel.value(board(tailwind: 4, room: 5))
+        let expiring = TurnModel.value(board(tailwind: 4, room: 1))
+        print(String(format: "  no tailwind %+.2f | in the clear %+.2f | under a fresh room %+.2f"
+                     + " | under a room with one turn left %+.2f",
+                     none, clear, buried, expiring))
+        check("a tailwind in the clear is worth having", clear > none)
+        check("under a fresh trick room it is a liability", buried < none)
+        check("and worth setting again as the room runs out", expiring > none)
+        check("but worth less than one in the clear", expiring < clear)
+    }
+}

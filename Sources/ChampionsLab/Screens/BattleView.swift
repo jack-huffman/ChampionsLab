@@ -2647,13 +2647,24 @@ struct BattleView: View {
         return total
     }
 
+    /// Mega Evolution is once a game and cannot be taken back, so it is the
+    /// biggest decision on the screen. It used to read as a small grey capsule
+    /// beside the Pokémon's name, quieter than the move buttons underneath it,
+    /// and was easy to click past without noticing.
     private func megaToggle(slot: Int, becoming: Form) -> some View {
         let share = engineMegaShare(slot: slot)
-        return Button { megaSlot = megaSlot == slot ? nil : slot } label: {
-            HStack(spacing: 5) {
-                Image(systemName: megaSlot == slot ? "sparkles" : "circle.dashed")
-                    .font(.system(size: 10))
-                Text("Mega Evolve").font(.system(size: 11, weight: .semibold))
+        let on = megaSlot == slot
+        return Button { megaSlot = on ? nil : slot } label: {
+            HStack(spacing: 7) {
+                SpriteImage(form: becoming, side: 26)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(on ? "Mega Evolving" : "Mega Evolve")
+                        .font(.system(size: 12, weight: .bold))
+                    Text(on ? "Becomes \(becoming.formLabel) first" : "Once a game")
+                        .font(.system(size: 9))
+                        .foregroundStyle(on ? AnyShapeStyle(Palette.warn.opacity(0.85))
+                                            : AnyShapeStyle(.tertiary))
+                }
                 if thought != nil {
                     HStack(spacing: 3) {
                         Image(systemName: "cpu").font(.system(size: 8))
@@ -2662,23 +2673,30 @@ struct BattleView: View {
                             .font(.system(size: 10, weight: .heavy, design: .rounded))
                             .monospacedDigit()
                     }
-                    .padding(.horizontal, 6).padding(.vertical, 1)
-                    .background(Palette.accent.opacity(0.14))
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Palette.accent.opacity(0.16))
+                    .foregroundStyle(Palette.accent)
                     .clipShape(Capsule())
                     .help(share <= 0.005
                           ? "The engine holds the stone this turn — usually so its weather lands second, or to keep the option."
                           : "How often the engine's lines evolve now")
                 }
             }
-            .padding(.horizontal, 10).padding(.vertical, 5)
-            .background(megaSlot == slot ? Palette.warn.opacity(0.24) : Palette.surface)
-            .foregroundStyle(megaSlot == slot ? AnyShapeStyle(Palette.warn)
-                                              : AnyShapeStyle(.secondary))
-            .clipShape(Capsule())
-            .overlay(Capsule().strokeBorder(
-                megaSlot == slot ? Palette.warn.opacity(0.75) : Palette.hairline, lineWidth: 1))
+            .padding(.horizontal, 11).padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(on ? Palette.warn.opacity(0.22) : Palette.surfaceRaised)
+            )
+            .foregroundStyle(on ? AnyShapeStyle(Palette.warn) : AnyShapeStyle(.primary))
+            .overlay(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .strokeBorder(on ? Palette.warn : Palette.warn.opacity(0.45),
+                                  lineWidth: on ? 2 : 1.5)
+            )
+            .shadow(color: on ? Palette.warn.opacity(0.35) : .clear, radius: 7)
         }
         .buttonStyle(.plain)
+        .animation(.easeOut(duration: 0.18), value: on)
         .help("Becomes \(becoming.formLabel) before anything else happens this turn. "
               + "If both sides evolve, the slower one goes second — and when both bring "
               + "weather, the second one is the weather that stays.")

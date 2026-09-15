@@ -940,10 +940,29 @@ enum TurnModel {
             }
         }
         var out = side(board.mine) - side(board.theirs)
-        // Speed control is a real asset and the turn that sets it looks like a
-        // wasted one without this.
-        out += Double(board.myTailwind - board.theirTailwind) * 0.12
+        out += speedControl(board.myTailwind, under: board.trickRoom)
+            - speedControl(board.theirTailwind, under: board.trickRoom)
         return out
+    }
+
+    /// What a Tailwind is worth, given what the room is doing.
+    ///
+    /// Speed control is a real asset and the turn that sets it looks wasted
+    /// without saying so. But a Tailwind under a Trick Room is not an asset at
+    /// all — the room reverses the order, so doubling your Speed makes you
+    /// move *later*. The engine used to count it as a flat gain either way and
+    /// would cheerfully put a Tailwind up into a Trick Room that had four
+    /// turns left on it, which no player would do.
+    ///
+    /// Counted turn by turn: the turns the Tailwind runs inside the room are
+    /// worth what the turns outside it are worth, with the sign reversed. A
+    /// Trick Room with one turn left and a four-turn Tailwind comes out
+    /// positive, which is exactly when somebody would actually set it.
+    private static func speedControl(_ tailwind: Int, under trickRoom: Int) -> Double {
+        guard tailwind > 0 else { return 0 }
+        let reversed = Swift.min(tailwind, trickRoom)
+        let ordinary = Swift.max(0, tailwind - trickRoom)
+        return Double(ordinary - reversed) * 0.12
     }
 
     /// Quick Claw: a fifth of the time the holder goes first regardless.
