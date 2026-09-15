@@ -21,7 +21,7 @@ extension Move {
     struct Rules: Sendable {
         let aim: Aim
         let charge: Charge?
-        let secondary: Secondary?
+        let secondaries: [Secondary]
         let healing: Healing?
         let drainShare: Double?
         let targetDrops: [Stat: Int]
@@ -36,14 +36,40 @@ extension Move {
         init(parsing move: Move) {
             aim = move.computedAim
             charge = move.computedCharge
-            secondary = move.computedSecondary
+            // The dataset's list when it has one, which is every move in a
+            // dataset built with the reference table. The sentence parser is
+            // the fallback, and it can only ever produce one.
+            if let data = move.secondaryData {
+                secondaries = data.compactMap(\.parsed)
+            } else {
+                secondaries = [move.computedSecondary].compactMap { $0 }
+            }
             healing = move.computedHealing
             drainShare = move.computedDrainShare
-            targetDrops = move.computedTargetDrops
+
+            // Where the dataset supplies an effect, the sentence parser's
+            // version of the *same* effect is dropped, or the turn would apply
+            // it twice — Icy Wind taking two stages of Speed rather than one.
+            //
+            // Only the matching kind is dropped. Close Combat's own Defence
+            // loss is not a secondary in the reference table at all, so its
+            // parsed value is the only one there is and has to stay.
+            var suppliesDrops = false, suppliesSelfBoosts = false
+            var suppliesSelfDrops = false, suppliesConfusion = false
+            for effect in secondaries {
+                switch effect.kind {
+                case .drops:      suppliesDrops = true
+                case .selfBoosts: suppliesSelfBoosts = true
+                case .selfDrops:  suppliesSelfDrops = true
+                case .confuse:    suppliesConfusion = true
+                default: break
+                }
+            }
+            targetDrops = suppliesDrops ? [:] : move.computedTargetDrops
             targetBoosts = move.computedTargetBoosts
-            selfBoosts = move.computedSelfBoosts
-            selfDrops = move.computedSelfDrops
-            confuses = move.computedConfuses
+            selfBoosts = suppliesSelfBoosts ? [:] : move.computedSelfBoosts
+            selfDrops = suppliesSelfDrops ? [:] : move.computedSelfDrops
+            confuses = suppliesConfusion ? false : move.computedConfuses
             doublesAfterFailure = move.computedDoublesAfterFailure
             breaksProtect = move.computedBreaksProtect
             drawbacks = move.computeDrawbacks()
@@ -58,7 +84,10 @@ extension Move {
 
     var aim: Aim { rules.aim }
     var charge: Charge? { rules.charge }
-    var secondary: Secondary? { rules.secondary }
+    var secondaries: [Secondary] { rules.secondaries }
+    /// The first one, for the places that only need to know whether a move has
+    /// any secondary effect at all.
+    var secondary: Secondary? { rules.secondaries.first }
     var healing: Healing? { rules.healing }
     var drainShare: Double? { rules.drainShare }
     var targetDrops: [Stat: Int] { rules.targetDrops }
@@ -81,7 +110,7 @@ extension Move {
     /// idea what it does and will play it as a blank.
     var parsesIntoARule: Bool {
         let r = rules
-        if r.secondary != nil || r.healing != nil || r.drainShare != nil { return true }
+        if !r.secondaries.isEmpty || r.healing != nil || r.drainShare != nil { return true }
         if !r.targetDrops.isEmpty || !r.targetBoosts.isEmpty { return true }
         if !r.selfBoosts.isEmpty || !r.selfDrops.isEmpty { return true }
         if r.confuses || r.doublesAfterFailure || r.breaksProtect { return true }

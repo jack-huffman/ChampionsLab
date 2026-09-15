@@ -311,6 +311,20 @@ private struct Bench {
     /// out neutral, so a Colbur Berry had nothing to halve.
     let weakTo: [String: PokeType]
 
+    /// The surest flinch there is, not merely the first one. A 30% chance never
+    /// fires for an audit that does not roll dice, and Fake Out — the only
+    /// certain one — states its flinch outright rather than as a chance.
+    private static func surestFlinch(among legal: [Move]) -> Move? {
+        func flinchChance(_ move: Move) -> Int {
+            for effect in move.secondaries {
+                if case .flinch = effect.kind { return effect.chance }
+            }
+            return move.effect.hasPrefix("Makes the target flinch") ? 100 : 0
+        }
+        return legal.filter { flinchChance($0) > 0 }
+            .max { flinchChance($0) < flinchChance($1) }
+    }
+
     init(rules: Rulebook) {
         self.rules = rules
         func move(_ name: String) -> Move? { rules.moves.values.first { $0.name == name } }
@@ -367,9 +381,7 @@ private struct Bench {
             // chance never fires for an audit that does not roll dice, and
             // Fake Out — the only certain one — states its flinch outright
             // rather than as a chance, so it is not a parsed secondary at all.
-            legal.first { $0.effect.hasPrefix("Makes the target flinch") }
-                ?? legal.filter { if case .flinch = $0.rules.secondary?.kind { return true }; return false }
-                        .max { ($0.rules.secondary?.chance ?? 0) < ($1.rules.secondary?.chance ?? 0) },
+            Self.surestFlinch(among: legal),
             first { $0.rules.confuses },
             first { $0.name == "Protect" },
             first { $0.name == "Follow Me" || $0.name == "Rage Powder" },

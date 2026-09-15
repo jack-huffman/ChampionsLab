@@ -128,10 +128,14 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     let effect: String
     let effectRate: Double
     let learnable: Bool
+    /// Empty when the dataset was built without the reference table, which is
+    /// the one case the sentence parser is still used for these.
+    let secondaryData: [SecondaryData]?
 
     enum CodingKeys: String, CodingKey {
         case id, name, type, category, power, accuracy, pp, priority, target
         case flags, effect, learnable
+        case secondaryData = "secondaries"
         case neverMisses = "never_misses"
         case critRate = "crit_rate"
         case effectRate = "effect_rate"
@@ -353,9 +357,52 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
             case flinch
             case drops([Stat: Int])
             case confuse
+            /// Charge Beam's Special Attack, Ancient Power's five stages, Meteor
+            /// Mash's Attack: a secondary that pays the user rather than costing
+            /// the target. The sentence parser had no way to say this.
+            case selfBoosts([Stat: Int])
+            case targetBoosts([Stat: Int])
+            case selfDrops([Stat: Int])
         }
         let chance: Int
         let kind: Kind
+    }
+
+    /// A move's secondary effects exactly as the dataset carries them.
+    ///
+    /// Serebii writes what a move does in English and the only way to get it
+    /// out is to guess at the sentence. That was wrong for ninety-one of the
+    /// five hundred and ten legal moves, and for the Fang moves it could not
+    /// have been right at all: they have two secondary effects each and the
+    /// parser only ever produced one. These come from Showdown's move table
+    /// instead, by way of Scripts/mkshowdown.mjs.
+    struct SecondaryData: Codable, Hashable, Sendable {
+        let chance: Int
+        let kind: String
+        let status: String?
+        let stats: [String: Int]?
+
+        var parsed: Secondary? {
+            func table() -> [Stat: Int] {
+                var out: [Stat: Int] = [:]
+                for (name, amount) in stats ?? [:] {
+                    if let stat = Stat.named(name) { out[stat] = amount }
+                }
+                return out
+            }
+            switch kind {
+            case "status":
+                guard let status, let ailment = Ailment(rawValue: status) else { return nil }
+                return Secondary(chance: chance, kind: .status(ailment))
+            case "flinch":       return Secondary(chance: chance, kind: .flinch)
+            case "confuse":      return Secondary(chance: chance, kind: .confuse)
+            case "drops":        return Secondary(chance: chance, kind: .drops(table()))
+            case "targetBoosts": return Secondary(chance: chance, kind: .targetBoosts(table()))
+            case "selfBoosts":   return Secondary(chance: chance, kind: .selfBoosts(table()))
+            case "selfDrops":    return Secondary(chance: chance, kind: .selfDrops(table()))
+            default:             return nil
+            }
+        }
     }
 
     internal var computedSecondary: Secondary? {

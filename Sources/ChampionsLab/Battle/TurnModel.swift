@@ -344,10 +344,19 @@ struct Board {
     var declared: [String: Choice] = [:]
     var acted: Set<String> = []
 
-    /// How a repeat Protect is to come out this turn, when the search wants to
-    /// see one branch rather than roll: "m0" is your left slot, "t1" their
-    /// right. Cleared once the turn has been played.
-    var protectRulings: [String: Bool] = [:]
+    /// Coin flips already decided for this turn, so the search can follow a
+    /// branch instead of rolling. The key names the flip and the slot it
+    /// belongs to: "protect:m0" is your left slot trying a repeat Protect,
+    /// "secondary:t1" their right slot's move landing its secondary effect,
+    /// "poisontouch:m0", "quickclaw:m0". Cleared once the turn has been played.
+    ///
+    /// A played turn ignores this entirely and rolls.
+    var rulings: [String: Bool] = [:]
+
+    /// The key for one coin flip: which flip, whose side, which slot.
+    static func flip(_ what: String, _ mine: Bool, _ slot: Int) -> String {
+        "\(what):\(mine ? "m" : "t")\(slot)"
+    }
 
     /// Whether anybody is going to read the commentary. A played turn is read;
     /// the search plays out a thousand boards per solve and reads none of it,
@@ -865,9 +874,11 @@ enum TurnModel {
     /// Quick Claw: a fifth of the time the holder goes first regardless.
     /// Rolled once per turn per holder, when the turn is played; the search
     /// never counts on it, the way it never counts on a second Protect.
-    private static func quickClawed(_ fighter: Fighter, rolling: Bool) -> Bool {
-        guard fighter.build.item == "Quick Claw", rolling else { return false }
-        return Double.random(in: 0..<1) < 0.2
+    private static func quickClawed(_ fighter: Fighter, mine: Bool, slot: Int,
+                                    board: Board, rolling: Bool) -> Bool {
+        guard fighter.build.item == "Quick Claw" else { return false }
+        if rolling { return Double.random(in: 0..<1) < 0.2 }
+        return board.rulings[Board.flip("quickclaw", mine, slot)] ?? false
     }
 
     private static func priority(of choice: Choice, for fighter: Fighter) -> Int {
@@ -1034,7 +1045,7 @@ enum TurnModel {
             let choice = forced(out.mine[slot], given)
             guard !choice.isSwap else { continue }
             var bracket = priority(of: choice, for: out.mine[slot])
-            if quickClawed(out.mine[slot], rolling: rolling) {
+            if quickClawed(out.mine[slot], mine: true, slot: slot, board: out, rolling: rolling) {
                 bracket += 1
                 out.note("\(out.mine[slot].build.form.formLabel)'s Quick Claw let it move first.")
             }
@@ -1046,7 +1057,7 @@ enum TurnModel {
             let choice = forced(out.theirs[slot], given)
             guard !choice.isSwap else { continue }
             var bracket = priority(of: choice, for: out.theirs[slot])
-            if quickClawed(out.theirs[slot], rolling: rolling) {
+            if quickClawed(out.theirs[slot], mine: false, slot: slot, board: out, rolling: rolling) {
                 bracket += 1
                 out.note("\(out.theirs[slot].build.form.formLabel)'s Quick Claw let it move first.")
             }
@@ -1105,7 +1116,7 @@ enum TurnModel {
         out.beginStep()
         endOfTurn(&out, rolling: rolling)
         out.closeStep()
-        out.protectRulings = [:]
+        out.rulings = [:]
         out.declared = [:]
         out.acted = []
 
@@ -1120,23 +1131,63 @@ enum TurnModel {
     static func outcomes(_ board: Board, mine: Play, theirs: Play)
         -> [(board: Board, chance: Double)] {
         var chancy: [(key: String, chance: Double)] = []
-        func consider(_ choice: Choice, fighter: Fighter, key: String) {
+
+        /// A repeat Protect, which gets a third of the chance of the one before.
+        func considerProtect(_ choice: Choice, fighter: Fighter, mine side: Bool, slot: Int) {
             guard !fighter.fainted, fighter.protectStreak > 0 else { return }
             switch choice {
             case .protectSelf:
-                chancy.append((key, fighter.protectChance))
+                chancy.append((Board.flip("protect", side, slot), fighter.protectChance))
             case .attack(let index, _):
                 if fighter.moves.indices.contains(index),
                    Move.protectMoves.contains(fighter.moves[index].name) {
-                    chancy.append((key, fighter.protectChance))
+                    chancy.append((Board.flip("protect", side, slot), fighter.protectChance))
                 }
             default: break
             }
         }
-        if board.mine.indices.contains(0) { consider(mine.left, fighter: board.mine[0], key: "m0") }
-        if board.mine.indices.contains(1), board.activeCount > 1 { consider(mine.right, fighter: board.mine[1], key: "m1") }
-        if board.theirs.indices.contains(0) { consider(theirs.left, fighter: board.theirs[0], key: "t0") }
-        if board.theirs.indices.contains(1), board.activeCount > 1 { consider(theirs.right, fighter: board.theirs[1], key: "t1") }
+
+        // Everything else that turns on a dice roll. Collected separately from
+        // Protect because these are common — seventy-five legal moves carry a
+        // sub-100% secondary — and branching all of them at once would square
+        // the cost of a solve. Only the most likely few are followed.
+        var rolls: [(key: String, chance: Double)] = []
+        func considerRolls(_ choice: Choice, fighter: Fighter, mine side: Bool, slot: Int) {
+            guard !fighter.fainted else { return }
+            if fighter.build.item == "Quick Claw", !choice.isPass {
+                rolls.append((Board.flip("quickclaw", side, slot), 0.2))
+            }
+            guard case .attack(let index, _) = choice,
+                  fighter.moves.indices.contains(index) else { return }
+            let move = fighter.moves[index]
+            let chance = secondaryChance(of: move, for: fighter)
+            if chance > 0, chance < 100 {
+                rolls.append((Board.flip("secondary", side, slot), Double(chance) / 100))
+            }
+            if fighter.build.ability == "Poison Touch", move.makesContact, move.isDamaging {
+                rolls.append((Board.flip("poisontouch", side, slot), 0.3))
+            }
+        }
+
+        let actors: [(Choice, Fighter, Bool, Int)?] = [
+            board.mine.indices.contains(0) ? (mine.left, board.mine[0], true, 0) : nil,
+            board.mine.indices.contains(1) && board.activeCount > 1 ? (mine.right, board.mine[1], true, 1) : nil,
+            board.theirs.indices.contains(0) ? (theirs.left, board.theirs[0], false, 0) : nil,
+            board.theirs.indices.contains(1) && board.activeCount > 1 ? (theirs.right, board.theirs[1], false, 1) : nil,
+        ]
+        for case let (choice, fighter, side, slot)? in actors {
+            considerProtect(choice, fighter: fighter, mine: side, slot: slot)
+            considerRolls(choice, fighter: fighter, mine: side, slot: slot)
+        }
+
+        // The cap. Each extra coin flip doubles the number of boards, and this
+        // runs once per cell of a matrix that is often 35 by 19, so the whole
+        // solve is doubled with it. The likeliest flips are the ones worth
+        // following; the rest fall back to "only what is certain", which is
+        // where every one of them was before.
+        rolls.sort { $0.chance > $1.chance }
+        chancy += rolls.prefix(Self.branchedRolls)
+
         guard !chancy.isEmpty else {
             return [(resolve(board, mine: mine, theirs: theirs, narrating: false), 1)]
         }
@@ -1146,13 +1197,34 @@ enum TurnModel {
             var chance = 1.0
             for (bit, entry) in chancy.enumerated() {
                 let holds = mask & (1 << bit) != 0
-                ruled.protectRulings[entry.key] = holds
+                ruled.rulings[entry.key] = holds
                 chance *= holds ? entry.chance : 1 - entry.chance
             }
             out.append((resolve(ruled, mine: mine, theirs: theirs, narrating: false), chance))
         }
         return out.sorted { $0.chance > $1.chance }
     }
+
+    /// How many dice rolls beyond a repeat Protect the search will branch on.
+    ///
+    /// One, measured rather than guessed. Each extra flip doubles the boards a
+    /// cell produces, and the search answers by reaching fewer positions in the
+    /// same half second:
+    ///
+    ///     0    depth 3, 268 positions
+    ///     1    depth 3, 180 positions
+    ///     2    depth 2,  96 positions
+    ///
+    /// Two costs a whole ply, which is worth far more than pricing a second
+    /// coin flip. One keeps the depth and buys the biggest flip in the turn.
+    ///
+    /// Note that the flips not branched are not thrown away: every branch is
+    /// still priced exactly in the immediate term by `BattleEngine`, which
+    /// weighs all of them. What the cap limits is how many get searched deeper.
+    ///
+    /// The accuracy replay cannot settle this — it reads 5.3 at every setting,
+    /// because it predicts game outcomes from team lists and never sees a turn.
+    static let branchedRolls = 1
 
     /// Everything that happens after both sides have acted.
     ///
@@ -2232,10 +2304,12 @@ enum TurnModel {
             break
         }
 
-        if attacker.build.ability == "Poison Touch", rolling, !defender.fainted,
+        let touched: Bool
+        if rolling { touched = Double.random(in: 0..<1) < 0.3 }
+        else { touched = board.rulings[Board.flip("poisontouch", byMine, slot)] ?? false }
+        if attacker.build.ability == "Poison Touch", touched, !defender.fainted,
            defender.status == .none,
-           Double.random(in: 0..<1) < 0.3,
-           !defender.build.form.pokeTypes.contains(where: { [.poison, .steel].contains($0) }) {
+           !defender.types.contains(where: { [.poison, .steel].contains($0) }) {
             if hitMine { board.mine[hit].status = .poison } else { board.theirs[hit].status = .poison }
             board.note("\(attackerName)'s Poison Touch poisoned \(defenderName).")
         }
@@ -2359,20 +2433,59 @@ enum TurnModel {
     /// search, which averages, applies only what is certain — Nuzzle's
     /// paralysis, not Scald's three-in-ten burn — the way it treats Flame
     /// Body. Serene Grace doubles the odds; Sheer Force trades them away.
+    /// How likely a move's secondary effect is, once the user's ability has
+    /// had its say. Sheer Force trades it away for power; Serene Grace doubles
+    /// it. Worked out in one place because `outcomes` offers the branch and
+    /// `secondary` takes it, and the two disagreeing would price a coin flip
+    /// that never happens.
+    static func secondaryChance(of move: Move, for fighter: Fighter) -> Int {
+        guard let effect = move.secondaries.first else { return 0 }
+        return chance(of: effect, for: fighter)
+    }
+
+    /// One secondary's chance, once the user's ability has had its say.
+    static func chance(of effect: Move.Secondary, for fighter: Fighter) -> Int {
+        if fighter.build.ability == "Sheer Force" { return 0 }
+        if fighter.build.ability == "Serene Grace" { return Swift.min(100, effect.chance * 2) }
+        return effect.chance
+    }
+
     private static func secondary(of move: Move, byMine: Bool, hitMine: Bool, slot: Int, hit: Int,
                                   rolling: Bool, board: inout Board) {
-        guard let effect = move.secondary else { return }
+        guard !move.secondaries.isEmpty else { return }
         let attackerTeam = byMine ? board.mine : board.theirs
         let defenderTeam = hitMine ? board.mine : board.theirs
         guard attackerTeam.indices.contains(slot), defenderTeam.indices.contains(hit),
               !defenderTeam[hit].fainted else { return }
         let attacker = attackerTeam[slot], defender = defenderTeam[hit]
-        if attacker.build.ability == "Sheer Force" { return }
-        var chance = effect.chance
-        if attacker.build.ability == "Serene Grace" { chance = Swift.min(100, chance * 2) }
-        let happens = rolling ? Double.random(in: 0..<100) < Double(chance) : chance >= 100
-        guard happens else { return }
         let name = defender.build.form.formLabel
+        // Every secondary the move has, not the first one. Fire Fang, Ice Fang
+        // and Thunder Fang each carry two, and Triple Arrows carries a stat
+        // drop and a flinch at different odds; reading only the first meant
+        // half of each of those moves never happened.
+        for effect in move.secondaries {
+            let chance = TurnModel.chance(of: effect, for: attacker)
+            guard chance > 0 else { continue }
+            // A played turn rolls. The search takes the branch it was handed,
+            // and falls back to "only what is certain" when it was handed none.
+            let happens: Bool
+            if rolling { happens = Double.random(in: 0..<100) < Double(chance) }
+            else if let ruled = board.rulings[Board.flip("secondary", byMine, slot)] { happens = ruled }
+            else { happens = chance >= 100 }
+            guard happens else { continue }
+            apply(effect, chance: chance, of: move, byMine: byMine, hitMine: hitMine,
+                  slot: slot, hit: hit, name: name, board: &board)
+        }
+    }
+
+    /// One secondary effect landing.
+    private static func apply(_ effect: Move.Secondary, chance: Int, of move: Move,
+                              byMine: Bool, hitMine: Bool, slot: Int, hit: Int,
+                              name: String, board: inout Board) {
+        let defenderTeam = hitMine ? board.mine : board.theirs
+        let attackerTeam = byMine ? board.mine : board.theirs
+        guard defenderTeam.indices.contains(hit), attackerTeam.indices.contains(slot) else { return }
+        let defender = defenderTeam[hit]
         switch effect.kind {
         case .status(let ailment):
             guard defender.status == .none else { return }
@@ -2406,8 +2519,16 @@ enum TurnModel {
                    because: chance < 100 ? "the \(chance)% came up" : nil)
         case .drops(let drops):
             applyDrops(drops, toMine: hitMine, slot: hit, board: &board)
+        case .targetBoosts(let raises):
+            applySelf(raises, toMine: hitMine, slot: hit, board: &board)
+        case .selfBoosts(let raises):
+            // Charge Beam, Meteor Mash, Ancient Power, Steel Wing: the payment
+            // goes to whoever used the move, not to whoever was hit.
+            applySelf(raises, toMine: byMine, slot: slot, board: &board)
+        case .selfDrops(let drops):
+            applyDrops(drops, toMine: byMine, slot: slot, board: &board)
         case .confuse:
-            confuse(onMine: hitMine, slot: hit, board: &board, rolling: rolling, chance: chance)
+            confuse(onMine: hitMine, slot: hit, board: &board, rolling: false, chance: chance)
         }
     }
 
@@ -2587,7 +2708,7 @@ enum TurnModel {
         // Protect to it rather than nothing — which is what it is worth, and
         // is why a Gholdengo that has already protected is still not a free
         // Sucker Punch.
-        let ruling = board.protectRulings[(byMine ? "m" : "t") + "\(slot)"]
+        let ruling = board.rulings[Board.flip("protect", byMine, slot)]
         let works = rolling ? Double.random(in: 0..<1) < chance : (ruling ?? (chance >= 0.5))
         if works {
             if byMine { board.mine[slot].isProtected = true; board.mine[slot].protectStreak += 1 }

@@ -21,6 +21,24 @@ enum Stat: Int, CaseIterable, Identifiable, Codable {
 
     var id: Int { rawValue }
 
+    /// By the name the dataset uses.
+    ///
+    /// Returns nil for "accuracy" and "evasion", which are real stages in the
+    /// game and are not modelled here: stat stages are a six-slot array
+    /// throughout. Muddy Water, Night Daze, Mud-Slap and Sand Attack lose that
+    /// part of their effect, and the parity audit reports them.
+    static func named(_ name: String) -> Stat? {
+        switch name {
+        case "hp":        return .hp
+        case "attack":    return .attack
+        case "defense":   return .defense
+        case "spAttack":  return .spAttack
+        case "spDefense": return .spDefense
+        case "speed":     return .speed
+        default:          return nil
+        }
+    }
+
     var short: String {
         switch self {
         case .hp:        return "HP"

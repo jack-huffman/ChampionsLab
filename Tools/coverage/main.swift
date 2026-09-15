@@ -14,6 +14,44 @@ import SwiftUI
     let store = Store.shared
     let rules = store.rulebook
     let onlyGaps = CommandLine.arguments.contains("--gaps")
+    // Every legal move's parsed rules, as JSON, so they can be diffed against
+    // a reference implementation rather than eyeballed.
+    if CommandLine.arguments.contains("--dump-rules") {
+        var rows: [String] = []
+        for move in rules.moves.values.filter(\.learnable).sorted(by: { $0.id < $1.id }) {
+            let r = move.rules
+            func list(_ d: [Stat: Int]) -> String {
+                d.sorted { $0.key.rawValue < $1.key.rawValue }
+                    .map { "\($0.key)-\($0.value)" }.joined(separator: ",")
+            }
+            let sec = "[" + r.secondaries.map { s -> String in
+                let kind: String
+                switch s.kind {
+                case .status(let a):       kind = "status:\(a.rawValue)"
+                case .flinch:              kind = "flinch"
+                case .confuse:             kind = "confuse"
+                case .drops(let d):        kind = "drops:" + list(d)
+                case .targetBoosts(let d): kind = "targetBoosts:" + list(d)
+                case .selfBoosts(let d):   kind = "selfBoosts:" + list(d)
+                case .selfDrops(let d):    kind = "selfDrops:" + list(d)
+                }
+                return "{\"chance\":\(s.chance),\"kind\":\"\(kind)\"}"
+            }.joined(separator: ",") + "]"
+            func stats(_ d: [Stat: Int]) -> String {
+                "[" + d.sorted { $0.key.rawValue < $1.key.rawValue }
+                    .map { "\"\($0.key):\($0.value)\"" }.joined(separator: ",") + "]"
+            }
+            rows.append("""
+                \"\(move.id)\":{\"name\":\"\(move.name)\",\"secondaries\":\(sec),\
+                \"targetDrops\":\(stats(r.targetDrops)),\"selfBoosts\":\(stats(r.selfBoosts)),\
+                \"selfDrops\":\(stats(r.selfDrops)),\"targetBoosts\":\(stats(r.targetBoosts)),\
+                \"confuses\":\(r.confuses),\"damaging\":\(move.isDamaging)}
+                """)
+        }
+        print("{" + rows.joined(separator: ",\n") + "}")
+        exit(0)
+    }
+
     if let at = CommandLine.arguments.firstIndex(of: "--why") {
         for name in CommandLine.arguments[(at + 1)...] {
             print("== \(name) ==")

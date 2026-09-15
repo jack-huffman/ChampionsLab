@@ -874,6 +874,7 @@ def main():
 
     assign_stones(roster, items)
     mark_attested(items, overlay["meta_teams"], overlay["usage"], roster)
+    apply_showdown(moves)
 
     out = {
         "regulation": overlay["regulation"],
@@ -916,6 +917,63 @@ def main():
 
     write_changes(before, roster, moves, items)
     audit_overlay(overlay, roster, moves, items)
+
+
+SHOWDOWN = os.path.join(HERE, "data", "showdown.json")
+
+
+def apply_showdown(moves):
+    """Take each move's secondary effects and flags from Showdown's table.
+
+    Serebii writes what a move does in English, and the only way to get it out
+    is to guess at the sentence. That guessing was wrong for ninety-one of the
+    five hundred and ten legal moves — Heat Wave's burn, Crunch's Defence drop,
+    Iron Head's flinch, the second effect on every Fang move, which the
+    sentence parser could not have represented at all because it only ever
+    produced one.
+
+    Showdown writes the same thing as data. Serebii stays the authority on what
+    is *legal* here, which is the thing Showdown does not know: it has never
+    heard of Mega Golisopod.
+
+    Regenerate the table with Scripts/mkshowdown.mjs. If it is missing the
+    parsed-from-English values stay in place, and the run says so, because a
+    dataset that silently loses its move mechanics is worse than a loud one.
+    """
+    if not os.path.exists(SHOWDOWN):
+        print("    ! data/showdown.json missing — move effects stay as parsed from Serebii's prose")
+        print("      regenerate with: node --experimental-strip-types Scripts/mkshowdown.mjs '' data/showdown.json")
+        return
+    with open(SHOWDOWN, encoding="utf-8") as fh:
+        table = json.load(fh)["moves"]
+
+    def key(name):
+        return re.sub(r"[^a-z0-9]", "", name.lower())
+
+    matched = carried = flagged = 0
+    disagreed = {}
+    for move in moves.values():
+        ref = table.get(key(move["name"]))
+        if ref is None:
+            continue
+        matched += 1
+        move["secondaries"] = ref["secondaries"]
+        if ref["secondaries"]:
+            carried += 1
+        # Flags decide which ability answers a move. Serebii publishes these
+        # too and mostly agrees; where it does not, Showdown is the one that
+        # has been tested against the real game for twenty years.
+        for flag, on in ref["flags"].items():
+            if move.setdefault("flags", {}).get(flag, False) != on:
+                flagged += 1
+                disagreed.setdefault(flag, []).append(
+                    "%s %s" % ("+" if on else "-", move["name"]))
+            move["flags"][flag] = on
+    print("==> showdown: %d moves matched, %d carry a secondary effect, %d flags corrected"
+          % (matched, carried, flagged))
+    for flag in sorted(disagreed):
+        rows = disagreed[flag]
+        print("      %-12s %3d: %s" % (flag, len(rows), ", ".join(rows[:6])))
 
 
 def mark_attested(items, meta_teams, usage, roster):
