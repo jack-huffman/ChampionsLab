@@ -223,6 +223,12 @@ struct DamageResult {
     let targetHP: Int
     let effectiveness: Double
     let notes: [String]
+    /// How many strikes are already included in the totals above.
+    ///
+    /// One for an ordinary move. For a multi-hit move the numbers here are the
+    /// whole flurry, because that is what a calculator should show — and that
+    /// is a trap for anything that wants one blow. Divide by this to get one.
+    var strikes: Double = 1
 
     var minPercent: Double { Double(minDamage) / Double(targetHP) * 100 }
     var maxPercent: Double { Double(maxDamage) / Double(targetHP) * 100 }
@@ -739,7 +745,8 @@ enum DamageCalc {
                             maxDamage: damages.last ?? 0,
                             targetHP: defender.maxHP,
                             effectiveness: effectiveness,
-                            notes: notes)
+                            notes: notes,
+                            strikes: strikes)
     }
 
     /// `ignored` is a Mold Breaker on the other side: every type immunity an

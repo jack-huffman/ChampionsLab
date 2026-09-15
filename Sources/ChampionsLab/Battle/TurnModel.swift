@@ -2735,11 +2735,19 @@ enum TurnModel {
                 let accuracy = move.neverMisses || move.accuracy == 0
                     ? 1.0 : chanceToHit(move, attacker: actor, defender: defending[index],
                                         board: board) / 100
-                let oneBlow: Int = rolling
+                // One blow, not the flurry. `calculate` already multiplies a
+                // multi-hit move up by the strikes it assumes, because that is
+                // what the calculator screen should show — so taking its total
+                // as a single blow and multiplying by the blows again squared
+                // the move. Bullet Seed was doing three times three.
+                let whole: Int = rolling
                     ? Int.random(in: Swift.min(result.minDamage, result.maxDamage)
                                  ... Swift.max(result.minDamage, result.maxDamage),
                                  using: &TurnModel.dice)
                     : Int((Double(result.minDamage + result.maxDamage) / 2 * accuracy).rounded())
+                let oneBlow: Int = result.strikes > 1
+                    ? Swift.max(1, Int((Double(whole) / result.strikes).rounded()))
+                    : whole
 
                 // How many times it lands. Parental Bond adds a second blow at
                 // a quarter, which is the ability rather than the move, so the

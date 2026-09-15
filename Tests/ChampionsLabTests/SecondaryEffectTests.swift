@@ -163,8 +163,11 @@ extension SecondaryEffectTests {
         // And the damage actually doubles on the board.
         var board = Board(mine: fighters([("Kingambit", "Leftovers", ["Double Hit", "Protect"]),
                                           ("Milotic", "Leftovers", ["Protect"])]),
-                          theirs: fighters([("Garchomp", "Leftovers", ["Protect"]),
-                                            ("Whimsicott", "Leftovers", ["Protect"])]),
+                          // No Leftovers on the target: it heals a sixteenth at
+                          // the end of the turn, which comes quietly off the
+                          // damage being measured.
+                          theirs: fighters([("Garchomp", "", ["Protect"]),
+                                            ("Whimsicott", "", ["Protect"])]),
                           rules: store.rulebook, field: Field(isDoubles: true),
                           alreadyEvolved: false)
         board.narrating = false
@@ -177,9 +180,27 @@ extension SecondaryEffectTests {
                                           defender: board.theirs[0].build,
                                           move: move("Double Hit"),
                                           field: Field(isDoubles: true))
-        let once = (single.minDamage + single.maxDamage) / 2
-        print("  Double Hit took \(taken); one blow would be about \(once)")
-        check("it took roughly two blows, not one", taken > once * 3 / 2)
+        // `single` is badly named for what it holds: calculate() already totals
+        // a multi-hit move across its strikes, so this is *both* blows. This
+        // test used to call it one blow and then require the played damage to
+        // beat one and a half of it — which only ever passed because the turn
+        // model was multiplying by the blows a second time. The test was
+        // confirming the bug, which is why the bug lasted.
+        let bothBlows = (single.minDamage + single.maxDamage) / 2
+        let perBlow = Double(bothBlows) / single.strikes
+        print("  Double Hit took \(taken); the calculator totals \(bothBlows) "
+              + String(format: "across %.0f strikes (%.0f each)", single.strikes, perBlow))
+        check("the calculator is already totalling both blows", single.strikes == 2,
+              "\(single.strikes)")
+        // The played figure carries the move's accuracy — Double Hit lands 90
+        // times in a hundred — where the calculator's range does not, so the
+        // turn comes in a little under the calculator rather than level with it.
+        check("and the played move agrees with it",
+              Double(taken) > Double(bothBlows) * 0.75
+                  && Double(taken) < Double(bothBlows) * 1.1,
+              "\(taken) against \(bothBlows)")
+        check("which is two blows rather than one",
+              Double(taken) > perBlow * 1.5, "\(taken) against \(perBlow) a blow")
     }
 
     /// Defog clears the other side's screens, both sides' hazards, and the
@@ -448,6 +469,63 @@ extension SecondaryEffectTests {
             theirs: Play(left: .pass, right: .pass), rolling: false)
         let switches = swapped.steps.compactMap(\.action).filter { $0.category == "Switch" }
         check("a switch is recorded as one", switches.count == 1, "\(switches.count)")
+
+        print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
+    }
+
+    /// A multi-hit move does its hits once, not its hits squared
+    ///
+    /// `DamageCalc.calculate` already multiplies a multi-hit move up by the
+    /// strikes it assumes, because the calculator screen should show the whole
+    /// flurry. The turn model then took that total as a *single* blow and
+    /// multiplied by the blows again, so every multi-hit move did strikes
+    /// squared: Bullet Seed three times three, and Population Bomb — ten
+    /// hits — a hundred times one.
+    ///
+    /// The check is that a played turn agrees with the calculator, which is
+    /// the relationship that broke and the one worth pinning.
+    @MainActor func testAMultiHitMoveDoesNotSquareItself() throws {
+        print("\n== a flurry is not a flurry of flurries ==")
+        let mine = fighters([("Rillaboom", "Leftovers", ["Bullet Seed", "Protect"]),
+                             ("Milotic", "Leftovers", ["Protect"])])
+        let theirs = fighters([("Garchomp", "Leftovers", ["Protect"]),
+                               ("Kingambit", "Leftovers", ["Protect"])])
+        let start = Board(mine: mine, theirs: theirs, rules: store.rulebook,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+
+        let seed = store.data.moves.values.first { $0.name == "Bullet Seed" }!
+        let reckoned = DamageCalc.calculate(attacker: start.mine[0].build,
+                                            defender: start.theirs[0].build,
+                                            move: seed, field: start.field)
+        print("  the calculator says \(reckoned.minDamage)–\(reckoned.maxDamage) "
+              + "across \(reckoned.strikes) strikes")
+        check("the calculator is totalling the flurry", reckoned.strikes > 1,
+              "\(reckoned.strikes)")
+
+        // Played without rolling, so it takes the average of everything.
+        let before = start.theirs[0].hp
+        let played = TurnModel.resolve(start,
+            mine: Play(left: .attack(move: at(start.mine[0], "Bullet Seed"), target: 0),
+                       right: .pass),
+            theirs: Play(left: .pass, right: .pass), rolling: false)
+        let dealt = before - played.theirs[0].hp
+        for line in played.story where line.contains("hits") { print("    \(line)") }
+        print("  the turn dealt \(dealt), the calculator's middle is "
+              + "\((reckoned.minDamage + reckoned.maxDamage) / 2)")
+
+        // Within a quarter: the turn rounds per blow and the calculator rounds
+        // once, so they will not agree to the point. Squaring would be 3x out.
+        let middle = Double(reckoned.minDamage + reckoned.maxDamage) / 2
+        let ratio = middle > 0 ? Double(dealt) / middle : 0
+        print(String(format: "  ratio %.2f", ratio))
+        check("a played flurry matches the calculator", ratio > 0.75 && ratio < 1.25,
+              String(format: "%.2f", ratio))
+
+        // And the same in the other direction: nowhere near the target's whole
+        // bar from one 25-power move.
+        check("and 25 base power does not delete a Garchomp",
+              dealt < played.theirs[0].maxHP / 2,
+              "\(dealt) of \(played.theirs[0].maxHP)")
 
         print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     }
