@@ -262,19 +262,26 @@ enum DamageCalc {
 
     static func calculate(attacker: Combatant, defender: Combatant,
                           move: Move, field: Field) -> DamageResult {
-        // Magic Room switches every held item off. Taking them away here means
-        // every item rule below is covered by one check, including the ones
-        // added after this was written.
-        if field.magicRoom, !attacker.item.isEmpty || !defender.item.isEmpty {
+        // Magic Room switches every held item off, and Klutz does the same to
+        // one Pokémon. Taking them away here means every item rule below is
+        // covered by one check, including the ones added after this was
+        // written.
+        let klutzed = attacker.ability == "Klutz" && !attacker.item.isEmpty
+        let theirKlutz = defender.ability == "Klutz" && !defender.item.isEmpty
+        if field.magicRoom || klutzed || theirKlutz,
+           !attacker.item.isEmpty || !defender.item.isEmpty {
             var bare = attacker, bareDefender = defender
-            bare.item = ""; bareDefender.item = ""
+            if field.magicRoom || klutzed { bare.item = "" }
+            if field.magicRoom || theirKlutz { bareDefender.item = "" }
             var without = field
             without.magicRoom = false
             let result = calculate(attacker: bare, defender: bareDefender,
                                    move: move, field: without)
+            let why = field.magicRoom ? "Magic Room: held items do nothing"
+                                      : "Klutz: the item does nothing"
             return DamageResult(minDamage: result.minDamage, maxDamage: result.maxDamage,
                                 targetHP: result.targetHP, effectiveness: result.effectiveness,
-                                notes: result.notes + ["Magic Room: held items do nothing"])
+                                notes: result.notes + [why])
         }
         var notes: [String] = []
         guard move.isDamaging, move.power > 0 else {
@@ -481,7 +488,11 @@ enum DamageCalc {
         default: break
         }
 
-        if field.critical { modifier *= 1.5 }
+        if field.critical {
+            // Sniper makes a critical hit worth half again as much as it
+            // already is, which is the entire ability.
+            modifier *= attacker.ability == "Sniper" ? 2.25 : 1.5
+        }
 
         // STAB, doubled rather than 1.5x under Adaptability.
         var stab = attacker.effectiveTypes.contains(moveType) ? 1.5 : 1.0

@@ -380,6 +380,10 @@ struct Board {
         return out
     }
 
+    /// Whether the hit just resolved was a critical one. Set as the hit lands
+    /// and read immediately after by the abilities that answer a crit.
+    var lastWasCritical = false
+
     /// The key for one coin flip: which flip, whose side, which slot.
     static func flip(_ what: String, _ mine: Bool, _ slot: Int) -> String {
         "\(what):\(mine ? "m" : "t")\(slot)"
@@ -1289,7 +1293,11 @@ enum TurnModel {
                 let types = who.types
                 var hp = who.hp
 
-                if board.field.weather == .sand,
+                // Magic Guard takes nothing it was not hit by; Overcoat is
+                // the narrower version that only turns away the weather.
+                let shielded = who.build.ability == "Magic Guard"
+                if board.field.weather == .sand, !shielded,
+                   who.build.ability != "Overcoat", who.build.item != "Safety Goggles",
                    !types.contains(where: { [.rock, .ground, .steel].contains($0) }) {
                     hp -= Swift.max(1, maxHP / 16)
                     if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
@@ -1302,15 +1310,51 @@ enum TurnModel {
                     board.note("Grassy Terrain tops \(name) up.")
                 }
                 switch who.status {
-                case .burn:
+                case .burn where !shielded:
                     hp -= Swift.max(1, maxHP / 16)
                     if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
                     board.note("\(name) is hurt by its burn.")
                 case .poison, .badPoison:
-                    hp -= Swift.max(1, maxHP / 8)
-                    if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
-                    board.note("\(name) is hurt by poison.")
+                    if !shielded {
+                        hp -= Swift.max(1, maxHP / 8)
+                        if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
+                        board.note("\(name) is hurt by poison.")
+                    }
                 default: break
+                }
+                // Speed Boost: a stage every turn it stays in, which is the
+                // whole reason a Blaziken is frightening if it is left alone.
+                if who.build.ability == "Speed Boost", hp > 0, !who.justArrived,
+                   who.build.boosts[Stat.speed.rawValue] < 6 {
+                    change([.speed: 1], onMine: mine, slot: index, board: &board,
+                           because: "Speed Boost")
+                }
+                // Shed Skin: one turn in three it shakes a condition off.
+                if who.build.ability == "Shed Skin", hp > 0, who.status != .none,
+                   rolling, Double.random(in: 0..<1, using: &TurnModel.dice) < 1.0 / 3.0 {
+                    if mine { board.mine[index].status = .none; board.mine[index].asleepFor = 0 }
+                    else { board.theirs[index].status = .none; board.theirs[index].asleepFor = 0 }
+                    board.note("\(name) shed its skin and shook it off.")
+                }
+                // Healer: three in ten that it clears up whatever its partner
+                // is carrying.
+                if who.build.ability == "Healer", hp > 0, rolling,
+                   Double.random(in: 0..<1, using: &TurnModel.dice) < 0.3 {
+                    let ally = index == 0 ? 1 : 0
+                    let side = mine ? board.mine : board.theirs
+                    if side.indices.contains(ally), ally < board.activeCount,
+                       !side[ally].fainted, side[ally].status != .none {
+                        if mine { board.mine[ally].status = .none; board.mine[ally].asleepFor = 0 }
+                        else { board.theirs[ally].status = .none; board.theirs[ally].asleepFor = 0 }
+                        board.note("\(name)'s Healer cleared up \(side[ally].build.form.formLabel).")
+                    }
+                }
+                // Hydration does the same, but only in the rain, and always.
+                if who.build.ability == "Hydration", hp > 0, who.status != .none,
+                   board.field.weather == .rain {
+                    if mine { board.mine[index].status = .none; board.mine[index].asleepFor = 0 }
+                    else { board.theirs[index].status = .none; board.theirs[index].asleepFor = 0 }
+                    board.note("\(name)'s Hydration washed it off.")
                 }
                 if who.aquaRing, hp < maxHP, hp > 0 {
                     hp = Swift.min(maxHP, hp + Swift.max(1, maxHP / 16))
@@ -1324,14 +1368,26 @@ enum TurnModel {
                 }
                 if who.build.item == "Sitrus Berry", !who.build.itemSpent,
                    TurnModel.canEatBerry(mine, slot: index, board: board),
-                   hp > 0, hp <= maxHP / 2 {
-                    hp = Swift.min(maxHP, hp + maxHP / 4)
+                   // Gluttony eats at half rather than a quarter, which buys a
+                   // turn: the berry lands before the hit that would have
+                   // needed it.
+                   hp > 0, hp <= (who.build.ability == "Gluttony" ? maxHP / 2 : maxHP / 4)
+                       || hp <= maxHP / 2 {
+                    var back = maxHP / 4
+                    // Ripen doubles whatever a berry gives.
+                    if who.build.ability == "Ripen" { back *= 2 }
+                    hp = Swift.min(maxHP, hp + back)
+                    // Cheek Pouch is a second helping on top of the berry.
+                    if who.build.ability == "Cheek Pouch" {
+                        hp = Swift.min(maxHP, hp + maxHP / 3)
+                    }
                     if mine {
                         board.mine[index].hp = hp; board.mine[index].build.itemSpent = true
                     } else {
                         board.theirs[index].hp = hp; board.theirs[index].build.itemSpent = true
                     }
-                    board.note("\(name) eats its Sitrus Berry.")
+                    board.note("\(name) eats its Sitrus Berry."
+                               + (who.build.ability == "Cheek Pouch" ? " Its Cheek Pouch gave more back." : ""))
                 }
                 // A Mental Herb clears whatever is stopping it choosing freely.
                 if who.build.item == "Mental Herb", !who.build.itemSpent, hp > 0,
@@ -1589,6 +1645,25 @@ enum TurnModel {
                                          opposing: inout [Fighter], field: inout Field) -> String? {
         let name = team.indices.contains(slot) ? team[slot].build.form.formLabel : "It"
         switch ability {
+        case "Trace":
+            // Takes an ability from across the field, which is why a Gardevoir
+            // can walk in and suddenly have Intimidate. Not everything can be
+            // copied; the ones that cannot are the ones tied to a particular
+            // Pokémon being that Pokémon.
+            let untraceable: Set<String> = [
+                "Trace", "Illusion", "Multitype", "Stance Change", "Zen Mode",
+                "Battle Bond", "Power Construct", "Schooling", "Disguise",
+                "Zero to Hero", "Hunger Switch", "Comatose", "Imposter",
+                "Neutralizing Gas", "Forecast", "Flower Gift", "Receiver",
+            ]
+            guard team.indices.contains(slot) else { return nil }
+            let taken = opposing.prefix(2).first {
+                !$0.fainted && !$0.build.ability.isEmpty
+                    && !untraceable.contains($0.build.ability)
+            }
+            guard let taken else { return nil }
+            team[slot].build.ability = taken.build.ability
+            return "\(name)'s Trace copied \(taken.build.form.formLabel)'s \(taken.build.ability)."
         case "Intimidate":
             var cut: [String] = [], shrugged: [String] = [], rallied: [String] = []
             for index in opposing.indices.prefix(2) where !opposing[index].fainted {
@@ -1706,6 +1781,12 @@ enum TurnModel {
         }
         guard team.indices.contains(active), team.indices.contains(bench),
               !team[bench].fainted else { return nil }
+        // Natural Cure: whatever it was carrying is left on the field.
+        if team[active].build.ability == "Natural Cure", !team[active].fainted,
+           team[active].status != .none {
+            team[active].status = .none
+            team[active].asleepFor = 0
+        }
         // Regenerator heals a third on the way out, which is what makes a
         // Regenerator pivot free where another Pokémon's costs it the chip.
         if team[active].build.ability == "Regenerator", !team[active].fainted {
@@ -2020,6 +2101,44 @@ enum TurnModel {
                     else { board.theirs[index].isProtected = false }
                     board.note("\(move.name) broke through \(hitName)'s protection.")
                 }
+                // Protean and Libero make the user the move's type as it uses
+                // it, which is a free same-type bonus on everything it throws.
+                if ["Protean", "Libero"].contains(actor.build.ability),
+                   let became = PokeType(loose: move.type),
+                   (byMine ? board.mine : board.theirs)[slot].types != [became] {
+                    if byMine { board.mine[slot].build.typeOverride = [became] }
+                    else { board.theirs[slot].build.typeOverride = [became] }
+                    board.note("\(name) became a \(became.rawValue) type.")
+                }
+
+                // Abilities that refuse a whole kind of move outright. Mold
+                // Breaker walks through all of them, which is what it is for.
+                let breaker = ["Mold Breaker", "Turboblaze", "Teravolt"]
+                    .contains(actor.build.ability)
+                if !breaker {
+                    let refuses: String?
+                    switch defending[index].build.ability {
+                    case "Soundproof"   where move.isSound:   refuses = "Soundproof"
+                    case "Bulletproof"  where move.isBullet:  refuses = "Bulletproof"
+                    case "Overcoat"     where move.isPowder:  refuses = "Overcoat"
+                    case "Wind Rider"   where move.isWind:    refuses = "Wind Rider"
+                    case "Dazzling", "Queenly Majesty", "Armor Tail":
+                        refuses = move.priority > 0 ? defending[index].build.ability : nil
+                    default: refuses = nil
+                    }
+                    if let refuses {
+                        board.note("\(hitName)'s \(refuses) turned it away.")
+                        continue
+                    }
+                }
+                // A powder move does nothing to a Grass type, or to anything
+                // wearing goggles.
+                if move.isPowder, defending[index].types.contains(.grass)
+                    || defending[index].build.item == "Safety Goggles" {
+                    board.note("It does not affect \(hitName).")
+                    continue
+                }
+
                 // Accuracy is rolled for each one it reaches for: Muddy Water at
                 // 85% can hit one of them and miss the other. The search's
                 // averages were always per target; only the dice were not.
@@ -2052,9 +2171,15 @@ enum TurnModel {
                 let rate = stage <= 0 ? move.critRate
                     : (stage == 1 ? Swift.max(move.critRate, 12.5)
                        : stage == 2 ? Swift.max(move.critRate, 50) : 100)
-                if rolling, rate > 0, Double.random(in: 0..<100, using: &TurnModel.dice) < rate {
+                // Shell Armor and Battle Armor cannot be hit critically, which
+                // is the whole of both of them. A Mold Breaker ignores that.
+                let armoured = ["Shell Armor", "Battle Armor"]
+                    .contains(defending[index].build.ability) && !breaker
+                if rolling, rate > 0, !armoured,
+                   Double.random(in: 0..<100, using: &TurnModel.dice) < rate {
                     field.critical = true
                 }
+                board.lastWasCritical = field.critical
                 var attacker = actor.build
                 attacker.ignoresAbility = ["Mold Breaker", "Turboblaze", "Teravolt"]
                     .contains(actor.build.ability)
@@ -2223,12 +2348,26 @@ enum TurnModel {
             // they took.
             if let share = move.drainShare, totalDealt > 0 {
                 let team = byMine ? board.mine : board.theirs
+                let far = hitMine ? board.mine : board.theirs
+                // Liquid Ooze turns a drain into a cost: what would have been
+                // healed is taken off the attacker instead.
+                let oozed = aimed.contains { far.indices.contains($0)
+                    && far[$0].build.ability == "Liquid Ooze" }
                 if !team[slot].fainted {
-                    let gained = Swift.min(team[slot].maxHP - team[slot].hp,
-                                           Swift.max(1, Int(Double(totalDealt) * share)))
-                    if gained > 0 {
-                        if byMine { board.mine[slot].hp += gained } else { board.theirs[slot].hp += gained }
-                        board.note("\(name) drained \(gained) health back.")
+                    let amount = Swift.max(1, Int(Double(totalDealt) * share))
+                    if oozed {
+                        if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - amount) }
+                        else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - amount) }
+                        board.note("\(name) drank the Liquid Ooze and lost \(amount).")
+                        if (byMine ? board.mine : board.theirs)[slot].fainted {
+                            board.note("\(name) fainted.")
+                        }
+                    } else {
+                        let gained = Swift.min(team[slot].maxHP - team[slot].hp, amount)
+                        if gained > 0 {
+                            if byMine { board.mine[slot].hp += gained } else { board.theirs[slot].hp += gained }
+                            board.note("\(name) drained \(gained) health back.")
+                        }
                     }
                 }
             }
@@ -2323,7 +2462,59 @@ enum TurnModel {
                 change(answer, onMine: hitMine, slot: hit, board: &board, because: defender.build.ability)
             }
         }
+        // Anger Point needs no contact: any critical hit takes it to the top.
+        if defender.build.ability == "Anger Point", !defender.fainted, board.lastWasCritical,
+           defender.build.boosts[Stat.attack.rawValue] < 6 {
+            if hitMine { board.mine[hit].build.boosts[Stat.attack.rawValue] = 6 }
+            else { board.theirs[hit].build.boosts[Stat.attack.rawValue] = 6 }
+            board.note("\(defenderName)'s Anger Point maximised its Attack.")
+        }
+
         guard move.makesContact, !attacker.fainted else { return }
+
+        // Cute Charm: three in ten that whoever touched it falls for it, and
+        // loses half its turns while it is still standing there.
+        if defender.build.ability == "Cute Charm", !defender.fainted,
+           attacker.infatuatedWith == nil, rolling,
+           Double.random(in: 0..<1, using: &TurnModel.dice) < 0.3 {
+            if byMine { board.mine[slot].infatuatedWith = hit }
+            else { board.theirs[slot].infatuatedWith = hit }
+            board.note("\(attackerName) fell for \(defenderName)'s Cute Charm.")
+        }
+        // Pickpocket takes the item off whatever touched it, if its own hands
+        // are empty.
+        if defender.build.ability == "Pickpocket", !defender.fainted,
+           defender.build.item.isEmpty, !attacker.build.item.isEmpty,
+           attacker.build.ability != "Sticky Hold" {
+            let taken = attacker.build.item
+            if hitMine { board.mine[hit].build.item = taken; board.mine[hit].build.itemSpent = false }
+            else { board.theirs[hit].build.item = taken; board.theirs[hit].build.itemSpent = false }
+            if byMine { board.mine[slot].build.item = "" } else { board.theirs[slot].build.item = "" }
+            board.note("\(defenderName) pickpocketed \(attackerName)'s \(taken).")
+        }
+
+        // Mummy spreads itself to whatever touches it; Wandering Spirit
+        // trades instead. Both turn off whatever the attacker was relying on.
+        if !defender.fainted, !attacker.fainted {
+            let stubborn: Set<String> = ["Mummy", "Wandering Spirit", "Lingering Aroma",
+                                         "Multitype", "Stance Change", "Disguise",
+                                         "Zen Mode", "Battle Bond", "Comatose"]
+            if ["Mummy", "Lingering Aroma"].contains(defender.build.ability),
+               !stubborn.contains(attacker.build.ability) {
+                let was = attacker.build.ability
+                if byMine { board.mine[slot].build.ability = defender.build.ability }
+                else { board.theirs[slot].build.ability = defender.build.ability }
+                board.note("\(attackerName)'s \(was) became \(defender.build.ability).")
+            } else if defender.build.ability == "Wandering Spirit",
+                      !stubborn.contains(attacker.build.ability) {
+                let theirs = attacker.build.ability
+                if byMine { board.mine[slot].build.ability = "Wandering Spirit" }
+                else { board.theirs[slot].build.ability = "Wandering Spirit" }
+                if hitMine { board.mine[hit].build.ability = theirs }
+                else { board.theirs[hit].build.ability = theirs }
+                board.note("\(defenderName) and \(attackerName) traded abilities.")
+            }
+        }
 
         switch defender.build.ability {
         case "Rough Skin", "Iron Barbs":
@@ -2503,6 +2694,11 @@ enum TurnModel {
               !defenderTeam[hit].fainted else { return }
         let attacker = attackerTeam[slot], defender = defenderTeam[hit]
         let name = defender.build.form.formLabel
+        // Shield Dust and a Covert Cloak refuse every secondary effect aimed at
+        // their holder, which is the whole point of both.
+        if defender.build.ability == "Shield Dust" || defender.build.item == "Covert Cloak" {
+            return
+        }
         // Every secondary the move has, not the first one. Fire Fang, Ice Fang
         // and Thunder Fang each carry two, and Triple Arrows carries a stat
         // drop and a flinch at different odds; reading only the first meant
@@ -2547,6 +2743,10 @@ enum TurnModel {
             if immune { return }
             if (hitMine ? board.myScreens : board.theirScreens).safeguard > 0 {
                 board.note("The veil kept \(name) from being \(ailment.rawValue).")
+                return
+            }
+            if let refused = refusesStatus(ailment, onMine: hitMine, slot: hit, board: board) {
+                board.note("\(name)'s \(refused) kept it from being \(ailment.rawValue).")
                 return
             }
             if board.field.terrain == .misty, !types.contains(.flying), defender.build.ability != "Levitate" {
@@ -2730,6 +2930,29 @@ enum TurnModel {
             if defender.build.ability == "Tangled Feet", defender.isConfused { chance *= 0.8 }
         }
         return Swift.max(1, Swift.min(100, chance))
+    }
+
+    /// An ability on that side that turns a condition away, and its name.
+    ///
+    /// Leaf Guard covers everything but only in the sun. Sweet Veil and Flower
+    /// Veil cover the whole side, and only against sleep — a Pokémon does not
+    /// have to be the one carrying it.
+    private static func refusesStatus(_ ailment: Ailment, onMine: Bool, slot: Int,
+                                      board: Board) -> String? {
+        let side = onMine ? board.mine : board.theirs
+        guard side.indices.contains(slot) else { return nil }
+        if side[slot].build.ability == "Leaf Guard", board.field.weather == .sun {
+            return "Leaf Guard"
+        }
+        if ailment == .sleep {
+            for who in side.prefix(board.activeCount) where !who.fainted {
+                if who.build.ability == "Sweet Veil" { return "Sweet Veil" }
+                if who.build.ability == "Vital Spirit" || who.build.ability == "Insomnia",
+                   who.build.form.id == side[slot].build.form.id { return who.build.ability }
+            }
+            if board.field.terrain == .electric, side[slot].build.grounded { return "Electric Terrain" }
+        }
+        return nil
     }
 
     /// Whether a Pokémon's last move came off, for Stomping Tantrum.
@@ -3556,6 +3779,10 @@ enum TurnModel {
             }
             if (byMine ? board.theirScreens : board.myScreens).safeguard > 0 {
                 board.note("The veil kept \(victim.build.form.formLabel) safe.")
+                return
+            }
+            if let refused = refusesStatus(ailment, onMine: !byMine, slot: target, board: board) {
+                board.note("\(victim.build.form.formLabel)'s \(refused) refused it.")
                 return
             }
             if byMine {
