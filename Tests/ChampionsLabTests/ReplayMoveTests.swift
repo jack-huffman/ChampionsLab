@@ -369,4 +369,71 @@ final class ReplayMoveTests: HarnessCase {
 
         print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     }
+
+    /// First Impression works on a Pokémon's first turn, not on turn one
+    ///
+    /// A Golisopod pivoted in partway through turn five was not on the field
+    /// when that turn began, so its first turn is turn six. The flag used to be
+    /// cleared at the end of whatever turn it arrived in, which meant the only
+    /// turn it could have used the move was already too late — and the move it
+    /// is brought for could never be used at all after a pivot.
+    @MainActor func testFirstImpressionAfterAMidTurnSwitch() throws {
+        print("\n== the first turn is not turn one ==")
+        let mine = fighters([("Garchomp", "Leftovers", ["Protect", "Earthquake"]),
+                             ("Milotic", "Leftovers", ["Protect"]),
+                             // Sirfetch'd rather than Golisopod, which is the Pokémon
+                             // this was reported on: Golisopod's only ability is
+                             // Emergency Exit, so a hit big enough to notice sends it
+                             // straight back out and there is no mid-turn arrival left
+                             // to test. The rule under test is the same for both.
+                             ("Sirfetch'd", "Leftovers", ["First Impression", "Protect"])])
+        let theirs = fighters([("Rillaboom", "Leftovers", ["Bullet Seed", "Protect"]),
+                               ("Kingambit", "Leftovers", ["Protect"])])
+        var board = Board(mine: mine, theirs: theirs, rules: store.rulebook,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+
+        // Turn one: it is on the bench and Garchomp pivots out for it, so it
+        // arrives partway through the turn and takes a hit on the way in.
+        board = TurnModel.resolve(board,
+            mine: Play(left: .swap(to: 2), right: .attack(move: at(board.mine[1], "Protect"), target: 0)),
+            // Aimed at the partner, which protects. Whether the arriving
+            // Pokémon takes a hit on the way in is incidental to the rule —
+            // what matters is that it was not on the field when the turn
+            // began — and a hit large enough to be interesting killed it.
+            theirs: Play(left: .attack(move: at(board.theirs[0], "Bullet Seed"), target: 1),
+                         right: .pass),
+            rolling: false)
+        let pod = board.mine[0]
+        print("  after the pivot: \(pod.build.form.formLabel) on \(pod.hp)/\(pod.maxHP), "
+              + "first turn still ahead: \(pod.justArrived)")
+        check("it came in mid-turn", pod.build.form.formLabel == "Sirfetch'd",
+              pod.build.form.formLabel)
+        check("and its first turn has not happened yet", pod.justArrived)
+
+        // Turn two is its first turn on the field, so the move is legal and
+        // actually lands.
+        let before = board.theirs[0].hp
+        let hit = TurnModel.resolve(board,
+            mine: Play(left: .attack(move: at(board.mine[0], "First Impression"), target: 0),
+                       right: .pass),
+            theirs: Play(left: .pass, right: .pass), rolling: false)
+        let took = before - hit.theirs[0].hp
+        for line in hit.story where line.contains("Impression") { print("    \(line)") }
+        print("  First Impression took \(took)")
+        check("First Impression lands on the turn after it came in", took > 0, "took \(took)")
+
+        // And the turn after that it is too late, which is the other half of
+        // the rule.
+        let again = TurnModel.resolve(hit,
+            mine: Play(left: .attack(move: at(hit.mine[0], "First Impression"), target: 0),
+                       right: .pass),
+            theirs: Play(left: .pass, right: .pass), rolling: false)
+        let twice = hit.theirs[0].hp - again.theirs[0].hp
+        // Not `== 0`: the target holds Leftovers, so a turn in which it takes
+        // nothing is a turn in which it comes out ahead.
+        print("  and a turn later it took \(twice) (negative is its Leftovers)")
+        check("but not on the turn after that", twice <= 0, "took \(twice)")
+
+        print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
+    }
 }

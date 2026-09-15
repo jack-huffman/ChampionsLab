@@ -43,8 +43,21 @@ struct Fighter {
     let maxHP: Int
     /// Set during a turn: it has been made to flinch and will not act.
     var flinched = false
-    /// It came in this turn, which is what makes Fake Out legal.
+    /// Its first turn on the field, which is what makes Fake Out and First
+    /// Impression legal.
+    ///
+    /// Not the same as "arrived this turn". A Pokémon that comes in partway
+    /// through a turn — a chosen switch, a replacement after a faint — was not
+    /// there when that turn began, so its first turn is the *next* one. This
+    /// used to be cleared at the end of whatever turn it arrived in, which
+    /// meant a Golisopod pivoted in on turn five could never use First
+    /// Impression at all: by turn six, the only turn it could have, the flag
+    /// was already gone.
     var justArrived = true
+    /// Whether the arrival happened during this turn rather than before it.
+    /// Cleared at the top of every turn and set by landing, so the end of the
+    /// turn can tell the two apart.
+    var arrivedThisTurn = false
     /// It protected last turn, so doing it again is unreliable.
     var protectedLast = false
     /// Protecting this turn. Cleared at the end of it.
@@ -650,6 +663,7 @@ struct Board {
         }
         if side {
             mine[slot].justArrived = true
+            mine[slot].arrivedThisTurn = true
             mine[slot].seen = true
             mine[slot].isProtected = false
             mine[slot].lastMoveFailed = false
@@ -659,6 +673,7 @@ struct Board {
             }
         } else {
             theirs[slot].justArrived = true
+            theirs[slot].arrivedThisTurn = true
             theirs[slot].seen = true
             theirs[slot].isProtected = false
             theirs[slot].lastMoveFailed = false
@@ -1127,9 +1142,11 @@ enum TurnModel {
         out.narrating = narrating
         for index in out.mine.indices { out.mine[index].isProtected = false
                                         out.mine[index].flinched = false
+                                        out.mine[index].arrivedThisTurn = false
                                         out.mine[index].drawingFire = false }
         for index in out.theirs.indices { out.theirs[index].isProtected = false
                                           out.theirs[index].flinched = false
+                                          out.theirs[index].arrivedThisTurn = false
                                           out.theirs[index].drawingFire = false }
 
         let myChoices = [mine.left, mine.right]
@@ -1842,7 +1859,9 @@ enum TurnModel {
                 && board.mine[index].moves[$0].name == "Ally Switch" }) != true {
                 board.mine[index].switchStreak = 0
             }
-            board.mine[index].justArrived = false
+            // Arrived partway through this turn, so its first turn is the
+            // next one and the flag has to survive to reach it.
+            board.mine[index].justArrived = board.mine[index].arrivedThisTurn
             // A Helping Hand is good for one move, not for the game.
             board.mine[index].helped = false
             if board.mine[index].asleepFor > 0 {
@@ -1870,7 +1889,7 @@ enum TurnModel {
                 && board.theirs[index].moves[$0].name == "Ally Switch" }) != true {
                 board.theirs[index].switchStreak = 0
             }
-            board.theirs[index].justArrived = false
+            board.theirs[index].justArrived = board.theirs[index].arrivedThisTurn
             // A Helping Hand is good for one move, not for the game.
             board.theirs[index].helped = false
             if board.theirs[index].asleepFor > 0 {
@@ -2178,6 +2197,7 @@ enum TurnModel {
         team[active].build.statOverride = nil
         team.swapAt(active, bench)
         team[active].justArrived = true
+        team[active].arrivedThisTurn = true
         team[active].seen = true
         team[active].isProtected = false
 

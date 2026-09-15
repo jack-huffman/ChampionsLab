@@ -467,7 +467,7 @@ private struct Bench {
                 out += "/\(f.asleepFor)/\(f.protectStreak)/\(f.lastMoveFailed)/\(f.seen)"
                 out += "/\(f.build.status.rawValue)"
                 out += "/\(f.perishIn)/\(f.drowsyFor)/\(f.disabled ?? -1)/\(f.disabledFor)"
-                out += "/\(f.destinyBound)/\(f.octolocked)|"
+                out += "/\(f.destinyBound)/\(f.octolocked)/\(f.justArrived)|"
             }
         }
         out += "\(b.field.weather)\(b.field.terrain)\(b.myTailwind)\(b.theirTailwind)\(b.trickRoom)"

@@ -418,31 +418,50 @@ struct BeamLayer: View {
                            y: start.y + (end.y - start.y) * tailAt)
         let fade = progress > 0.62 ? 1 - (progress - 0.62) / 0.38 : 1
 
+        // Three passes, widest and faintest first: a soft halo, the beam
+        // proper, then a hot white core. One flat stroke read as a laser
+        // pointer; this reads as something thrown.
         var beam = Path()
         beam.move(to: tail)
         beam.addLine(to: head)
         context.stroke(beam, with: .linearGradient(
-            Gradient(colors: [colour.opacity(0), colour.opacity(0.85 * fade)]),
+            Gradient(colors: [colour.opacity(0), colour.opacity(0.30 * fade)]),
             startPoint: tail, endPoint: head),
-                       style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                       style: StrokeStyle(lineWidth: 26, lineCap: .round))
         context.stroke(beam, with: .linearGradient(
-            Gradient(colors: [colour.opacity(0), .white.opacity(0.75 * fade)]),
+            Gradient(colors: [colour.opacity(0), colour.opacity(0.90 * fade)]),
             startPoint: tail, endPoint: head),
-                       style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
+                       style: StrokeStyle(lineWidth: 13, lineCap: .round))
+        context.stroke(beam, with: .linearGradient(
+            Gradient(colors: [colour.opacity(0), .white.opacity(0.85 * fade)]),
+            startPoint: tail, endPoint: head),
+                       style: StrokeStyle(lineWidth: 4.5, lineCap: .round))
+        // A bright head, so the eye follows the front of it.
+        let nose = 7 * fade
+        context.fill(Path(ellipseIn: CGRect(x: head.x - nose, y: head.y - nose,
+                                            width: nose * 2, height: nose * 2)),
+                     with: .color(.white.opacity(0.8 * fade)))
 
         // The burst, once the head is there.
         guard landing, progress > 0.55 else { return }
         let bloom = (progress - 0.55) / 0.45
-        let radius = 8 + bloom * 30
-        let alpha = (1 - bloom) * 0.65
+        let radius = 14 + bloom * 54
+        let alpha = (1 - bloom) * 0.8
+        // Two rings and a flash: the second ring lags the first, which is what
+        // makes a burst look like it is expanding rather than just growing.
         context.stroke(
             Path(ellipseIn: CGRect(x: end.x - radius, y: end.y - radius,
                                    width: radius * 2, height: radius * 2)),
-            with: .color(colour.opacity(alpha)), lineWidth: 2.5)
+            with: .color(colour.opacity(alpha)), lineWidth: 4)
+        let inner = radius * 0.6
+        context.stroke(
+            Path(ellipseIn: CGRect(x: end.x - inner, y: end.y - inner,
+                                   width: inner * 2, height: inner * 2)),
+            with: .color(.white.opacity(alpha * 0.7)), lineWidth: 2)
         context.fill(
-            Path(ellipseIn: CGRect(x: end.x - radius * 0.45, y: end.y - radius * 0.45,
-                                   width: radius * 0.9, height: radius * 0.9)),
-            with: .color(colour.opacity(alpha * 0.5)))
+            Path(ellipseIn: CGRect(x: end.x - radius * 0.34, y: end.y - radius * 0.34,
+                                   width: radius * 0.68, height: radius * 0.68)),
+            with: .color(colour.opacity(alpha * 0.55)))
     }
 }
 
@@ -466,23 +485,27 @@ struct ImpactLayer: View {
             for target in flourish.targets {
                 let at = place(target)
                 let alpha = (1 - bloom) * 0.8
-                for spoke in 0..<9 {
-                    let angle = Double(spoke) / 9 * .pi * 2 + scatter(spoke) * 0.7
-                    let near = 6 + bloom * 16
-                    let far = near + 7 + scatter(spoke &+ 31) * 12 * bloom
+                for spoke in 0..<12 {
+                    let angle = Double(spoke) / 12 * .pi * 2 + scatter(spoke) * 0.7
+                    let near = 10 + bloom * 30
+                    let far = near + 14 + scatter(spoke &+ 31) * 24 * bloom
                     var spike = Path()
                     spike.move(to: CGPoint(x: at.x + cos(angle) * near,
                                            y: at.y + sin(angle) * near))
                     spike.addLine(to: CGPoint(x: at.x + cos(angle) * far,
                                               y: at.y + sin(angle) * far))
                     context.stroke(spike, with: .color(colour.opacity(alpha)),
-                                   style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
+                                   style: StrokeStyle(lineWidth: 4, lineCap: .round))
                 }
-                let radius = 5 + bloom * 22
+                let radius = 9 + bloom * 42
                 context.stroke(
                     Path(ellipseIn: CGRect(x: at.x - radius, y: at.y - radius,
                                            width: radius * 2, height: radius * 2)),
-                    with: .color(.white.opacity(alpha * 0.55)), lineWidth: 2)
+                    with: .color(.white.opacity(alpha * 0.6)), lineWidth: 3.5)
+                context.fill(
+                    Path(ellipseIn: CGRect(x: at.x - radius * 0.3, y: at.y - radius * 0.3,
+                                           width: radius * 0.6, height: radius * 0.6)),
+                    with: .color(colour.opacity(alpha * 0.5)))
             }
         }
         .allowsHitTesting(false)

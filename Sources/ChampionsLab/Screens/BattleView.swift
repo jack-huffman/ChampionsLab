@@ -111,7 +111,12 @@ struct BattleView: View {
 
     /// How long one move takes on screen. Four actions a turn, so this is the
     /// number that decides whether a turn feels brisk or slow.
-    static let flourishSeconds: Double = 0.44
+    static let flourishSeconds: Double = 0.52
+    /// How far through a move the blow actually lands. The beam is travelling
+    /// before this and bursting after it, and the board is held at the state
+    /// *before* the move until this moment — so the health bar drops as the
+    /// move arrives rather than before it has been thrown.
+    static let impactAt: Double = 0.55
 
     /// The move being shown right now, and when it started. The start date is
     /// what the animation reads, so nothing in this view changes per frame.
@@ -1530,6 +1535,18 @@ struct BattleView: View {
     /// Pokémon up and to the left, the second diagonally down from it, and
     /// theirs the same way across the line. Tinted by whatever weather is up,
     /// because that is the single most useful thing to see without reading.
+    /// Whether to draw the shield on a Pokémon.
+    ///
+    /// `isProtected` is true only *during* the turn, because the shield now
+    /// comes down at the end of the turn it covered — which is right, and
+    /// which quietly meant the dome never appeared at all, since the board the
+    /// screen draws between turns always had it false. So while the turn is
+    /// still playing out, whoever protected on it is shown protected.
+    private func guarding(_ fighter: Fighter) -> Bool {
+        guard !fighter.fainted else { return false }
+        return fighter.isProtected || (playback != nil && fighter.protectedLast)
+    }
+
     /// How far a card leans when it is throwing a physical move: a short step
     /// toward whoever it is hitting, and back.
     private func lunge(_ seat: Seat) -> CGSize {
@@ -1977,7 +1994,7 @@ struct BattleView: View {
                 // substitute's shell if it has one up. Both are things you have
                 // to know before choosing a move, and both were only visible by
                 // reading the log for them.
-                if fighter.isProtected && !fighter.fainted {
+                if guarding(fighter) {
                     Circle()
                         .fill(
                             RadialGradient(colors: [Palette.accent.opacity(0.05),
@@ -2001,7 +2018,7 @@ struct BattleView: View {
                     .shadow(color: hit ? Palette.bad.opacity(0.55) : .clear, radius: 9)
                     .animation(.spring(response: 0.32, dampingFraction: 0.5), value: hit)
                     .animation(.easeOut(duration: 0.35), value: fighter.fainted)
-                if fighter.isProtected && !fighter.fainted {
+                if guarding(fighter) {
                     Image(systemName: "shield.fill")
                         .font(.system(size: 11))
                         .foregroundStyle(Palette.accent)
@@ -3776,6 +3793,10 @@ struct BattleView: View {
         playback = Task { @MainActor in
             for (order, (index, step)) in actions.enumerated() {
                 guard !Task.isCancelled, let action = step.action else { return }
+                // Hold the field on the state before this action. `replay` and
+                // `at` already drive this for the scrubber; the playback just
+                // walks them.
+                at = Swift.max(0, index - 1)
                 // Health before this step: the step before it, or the health
                 // the turn started at for the first one.
                 let earlier = index > 0 ? steps[index - 1] : nil
@@ -3800,11 +3821,23 @@ struct BattleView: View {
                 flourish = Flourish(id: order, action: action, targets: reached)
                 flourishFrom = Date()
                 leanIn(action: action, at: reached, singles: board?.activeCount == 1)
-                try? await Task.sleep(nanoseconds: UInt64(BattleView.flourishSeconds * 1_000_000_000))
+                // Travel, then the blow: the step's own health is shown at the
+                // moment the move reaches, not when it was thrown.
+                let whole = BattleView.flourishSeconds
+                try? await Task.sleep(nanoseconds: UInt64(whole * BattleView.impactAt * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                at = index
+                try? await Task.sleep(
+                    nanoseconds: UInt64(whole * (1 - BattleView.impactAt) * 1_000_000_000))
             }
             guard !Task.isCancelled else { return }
             flourish = nil
             lunging = nil
+            // Rest on the last step rather than past it: the field shows the end
+            // of the turn, and the Back and Forward buttons still work from
+            // there, which is how a turn was reviewed before it was played out.
+            // Stepping forward off the end clears the replay, as it always did.
+            at = Swift.max(0, replay.count - 1)
             flash(hitMine: hitMine, hitTheirs: hitTheirs)
         }
     }
@@ -3825,18 +3858,23 @@ struct BattleView: View {
             ?? CGPoint(x: user.mine ? 0.75 : 0.25, y: from.y)
         let dx = toward.x - from.x, dy = toward.y - from.y
         let length = max(0.0001, (dx * dx + dy * dy).squareRoot())
-        let reach: CGFloat = 20
+        // Far enough to read as a charge rather than a twitch. A physical
+        // move is the Pokémon crossing the field and hitting something.
+        let reach: CGFloat = 52
         let step = CGSize(width: dx / length * reach, height: dy / length * reach)
         // `lunging` first and unanimated, so the card is eligible to move but
         // has not moved; then the offset animates from nothing to the lean.
         // Setting both at once put the card there without the step.
         lunging = user
         lungeBy = .zero
-        withAnimation(.easeOut(duration: 0.13)) { lungeBy = step }
+        // Out fast, arriving as the blow lands, then back slower — which is
+        // what a charge looks like and what a recoil from one looks like.
+        let strike = BattleView.flourishSeconds * BattleView.impactAt
+        withAnimation(.easeIn(duration: strike)) { lungeBy = step }
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 150_000_000)
+            try? await Task.sleep(nanoseconds: UInt64(strike * 1_000_000_000))
             guard lunging == user else { return }
-            withAnimation(.easeIn(duration: 0.20)) { lungeBy = .zero }
+            withAnimation(.easeOut(duration: BattleView.flourishSeconds * 0.45)) { lungeBy = .zero }
         }
     }
 
