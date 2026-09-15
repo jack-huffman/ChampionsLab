@@ -868,10 +868,40 @@ struct Dataset: Codable {
     let abilities: [String: AbilityEntry]
     let generated: String
     let sources: [String]
+    /// Where each part of this came from and what the merge did to it.
+    /// Optional because a dataset built before it existed has none.
+    let provenance: Provenance?
+
+    /// Counts from the build, so the app can say what it is standing on
+    /// rather than asking somebody to take its word for it.
+    struct Provenance: Codable, Sendable {
+        let reference: String?
+        let referenceGenerated: String?
+        let movesMatched: Int?
+        let movesWithSecondary: Int?
+        let flagsCorrected: Int?
+        let movesRebalanced: Int?
+        let formsSplit: Int?
+        let weightsCorrected: Int?
+        let forms: Int?
+        let formsWeighed: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case reference, forms
+            case referenceGenerated = "reference_generated"
+            case movesMatched = "moves_matched"
+            case movesWithSecondary = "moves_with_secondary"
+            case flagsCorrected = "flags_corrected"
+            case movesRebalanced = "moves_rebalanced"
+            case formsSplit = "forms_split"
+            case weightsCorrected = "weights_corrected"
+            case formsWeighed = "forms_weighed"
+        }
+    }
 
     enum CodingKeys: String, CodingKey {
         case regulation, rules, items, usage, notes, forms, moves, abilities
-        case generated, sources
+        case generated, sources, provenance
         case metaTeams = "meta_teams"
         case predictions
     }
@@ -881,6 +911,6 @@ struct Dataset: Codable {
         Dataset(regulation: regulation, rules: rules, items: items, usage: table,
                 metaTeams: metaTeams, predictions: predictions, notes: notes,
                 forms: forms, moves: moves, abilities: abilities,
-                generated: generated, sources: sources)
+                generated: generated, sources: sources, provenance: provenance)
     }
 }

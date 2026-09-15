@@ -888,6 +888,8 @@ def main():
         "forms": roster,
         "moves": moves,
         "abilities": abilities,
+        "provenance": dict(PROVENANCE, forms=len(roster),
+                           forms_weighed=sum(1 for f in roster if f.get("weight"))),
         "generated": time.strftime("%Y-%m-%d"),
         "sources": [
             "https://www.serebii.net/pokedex-champions/",
@@ -921,6 +923,10 @@ def main():
 
 
 SHOWDOWN = os.path.join(HERE, "data", "showdown.json")
+
+# Where each part of the dataset came from, written into it so the app can say
+# so. Filled in as the merge runs; empty when the reference table is absent.
+PROVENANCE = {}
 
 
 def showdown_form_keys(label, species):
@@ -1002,6 +1008,8 @@ def split_regional_forms(roster):
         if ref["weight"] and abs((form.get("weight") or 0) - ref["weight"]) > 0.05:
             form["weight"] = ref["weight"]
             reweighed += 1
+    PROVENANCE["forms_split"] = narrowed
+    PROVENANCE["weights_corrected"] = reweighed
     print("==> forms: %d had a shared ability list split apart, %d weights corrected"
           % (narrowed, reweighed))
 
@@ -1057,7 +1065,9 @@ def apply_showdown(moves):
         print("      regenerate with: node --experimental-strip-types Scripts/mkshowdown.mjs '' data/showdown.json")
         return
     with open(SHOWDOWN, encoding="utf-8") as fh:
-        table = json.load(fh)["moves"]
+        loaded = json.load(fh)
+    table = loaded["moves"]
+    table_generated = loaded.get("generated", "")
 
     def key(name):
         return re.sub(r"[^a-z0-9]", "", name.lower())
@@ -1065,6 +1075,7 @@ def apply_showdown(moves):
     matched = carried = flagged = 0
     disagreed = {}
     rebalanced = []
+    global PROVENANCE
     for move in moves.values():
         ref = table.get(key(move["name"]))
         if ref is None:
@@ -1111,6 +1122,14 @@ def apply_showdown(moves):
     for flag in sorted(disagreed):
         rows = disagreed[flag]
         print("      %-12s %3d: %s" % (flag, len(rows), ", ".join(rows[:6])))
+    PROVENANCE = {
+        "reference": "pokemon-showdown",
+        "reference_generated": table_generated,
+        "moves_matched": matched,
+        "moves_with_secondary": carried,
+        "flags_corrected": flagged,
+        "moves_rebalanced": len(rebalanced),
+    }
     if rebalanced:
         print("    %d moves differ from the main series:" % len(rebalanced))
         for row in sorted(rebalanced)[:20]:

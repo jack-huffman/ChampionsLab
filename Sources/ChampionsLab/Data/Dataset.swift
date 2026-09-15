@@ -41,7 +41,7 @@ final class Store: ObservableObject {
             // explain what went wrong instead of dying on start.
             data = Dataset(regulation: .placeholder, rules: .placeholder, items: [],
                            usage: [], metaTeams: [], predictions: [], notes: .placeholder, forms: [], moves: [:],
-                           abilities: [:], generated: "—", sources: [])
+                           abilities: [:], generated: "—", sources: [], provenance: nil)
             loadError = "\(error)"
         }
         bundledUsage = data.usage

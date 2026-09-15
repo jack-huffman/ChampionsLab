@@ -122,7 +122,9 @@ struct ParityView: View {
         VStack(alignment: .leading, spacing: 18) {
             header
             switch model.phase {
-            case .idle:     intro
+            case .idle:
+                intro
+                provenance
             case .working:  running
             case .finished:
                 if let failure = model.controlFailure { controlFailed(failure) }
@@ -187,6 +189,59 @@ struct ParityView: View {
                 }
             }
         }
+    }
+
+    /// Where the data underneath all this came from.
+    ///
+    /// The audit answers "does the model do what the dex says". This answers
+    /// the question underneath it — "and is the dex right" — which no amount of
+    /// playing turns can settle from the inside.
+    @ViewBuilder private var provenance: some View {
+        if let p = store.data.provenance {
+            Card {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("What this is built on")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Serebii's Champions dex decides what is legal here and what it "
+                         + "is worth. It describes what a move does in English, which is "
+                         + "not something to guess at, so the shape of each rule is taken "
+                         + "from a reference simulator instead. Where the two disagree on "
+                         + "a number, Champions wins: it is not wrong about its own game.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Palette.dim)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Divider()
+                    ForEach(rows(p), id: \.0) { label, value in
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(label).font(.system(size: 12))
+                            Spacer(minLength: 12)
+                            Text(value)
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(Palette.dim)
+                        }
+                    }
+                    Text("Dex built \(store.data.generated), reference read "
+                         + "\(p.referenceGenerated ?? "unknown").")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.fainter)
+                }
+            }
+        }
+    }
+
+    private func rows(_ p: Dataset.Provenance) -> [(String, String)] {
+        var out: [(String, String)] = []
+        if let n = p.movesMatched { out.append(("Moves whose mechanics are read from the reference", "\(n)")) }
+        if let n = p.movesWithSecondary { out.append(("Of those, carrying a secondary effect", "\(n)")) }
+        if let n = p.movesRebalanced { out.append(("Moves Champions changed from the main series", "\(n)")) }
+        if let n = p.flagsCorrected, n > 0 { out.append(("Move flags the dex had wrong", "\(n)")) }
+        if let n = p.formsSplit, n > 0 { out.append(("Forms whose merged ability list was split apart", "\(n)")) }
+        if let n = p.weightsCorrected, n > 0 { out.append(("Forms whose weight came from the wrong card", "\(n)")) }
+        if let n = p.formsWeighed, let all = p.forms {
+            out.append(("Forms carrying a weight, which four moves read", "\(n) of \(all)"))
+        }
+        return out
     }
 
     private var passes: [(String, String)] {
