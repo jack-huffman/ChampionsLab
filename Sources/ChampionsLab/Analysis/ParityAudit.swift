@@ -150,6 +150,19 @@ struct ParityAudit: Sendable {
         "Mirror Move": "Calls back whatever it was hit by.",
         "Copycat": "Calls back the last move used by anybody.",
         "Me First": "Calls the move the target has not used yet.",
+
+        // Abilities whose whole effect is telling the player something. The
+        // model has no player to tell, and an engine that already searches the
+        // position knows all of it anyway.
+        "Frisk": "Reveals the opponent's held item, which the search can already see.",
+        "Forewarn": "Reveals the opponent's strongest move, which the search can already see.",
+        "Anticipation": "Warns that the opponent has something dangerous, which the search already knows.",
+        "Illuminate": "Stops the holder's accuracy being lowered, and accuracy stages are not modelled.",
+        "Supersweet Syrup": "Lowers the opposing side's evasion, and evasion stages are not modelled.",
+        "Pickup": "Finds an item after the battle is over.",
+        "Cursed Body": "Disables a move by spending its Power Points, which are not tracked.",
+        "Rivalry": "Turns on the two Pokémon's genders, which the dataset does not carry.",
+        "Gluttony": "Brings a pinch berry forward to half health. Only the Sitrus is modelled, and it already fires there.",
     ]
 
     // MARK: - Running it

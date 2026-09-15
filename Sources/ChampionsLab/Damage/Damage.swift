@@ -427,6 +427,18 @@ enum DamageCalc {
             power *= 2
             notes.append("Electromorphosis: the stored charge doubles it")
         }
+        if attacker.ability == "Mega Launcher", move.isPulse {
+            power *= 1.5
+            notes.append("Mega Launcher: +50%")
+        }
+        // Parental Bond hits twice, the second for a quarter. Priced as the
+        // one blow it adds up to rather than played out as two, which is close
+        // and keeps a turn a turn; the secondaries of the second hit are what
+        // this gives up.
+        if attacker.ability == "Parental Bond", move.isDamaging, !move.isSpread {
+            power *= 1.25
+            notes.append("Parental Bond: a second hit at a quarter")
+        }
         if attacker.ability == "Fire Mane", moveType == .fire {
             power *= 1.5
             notes.append("Fire Mane: +50%")

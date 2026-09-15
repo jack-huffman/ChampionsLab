@@ -18,6 +18,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -38,6 +39,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -58,6 +60,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -86,6 +89,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -106,6 +110,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -126,6 +131,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -154,6 +160,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -174,6 +181,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -194,6 +202,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -214,6 +223,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -234,6 +244,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -254,6 +265,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -274,6 +286,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -294,6 +307,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -319,6 +333,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -339,6 +354,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -359,6 +375,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -379,6 +396,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -399,6 +417,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -419,6 +438,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -451,6 +471,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -479,6 +500,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -499,6 +521,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -519,6 +542,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -539,6 +563,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -567,6 +592,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -587,6 +613,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -607,6 +634,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -627,6 +655,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -647,6 +676,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -667,6 +697,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -687,6 +718,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -707,6 +739,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -732,6 +765,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -752,6 +786,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -772,6 +807,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -792,6 +828,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -812,6 +849,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": true,
     "protectable": true,
     "reflectable": false
    }
@@ -840,6 +878,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -868,6 +907,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -888,6 +928,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -908,6 +949,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -928,6 +970,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -953,6 +996,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -973,6 +1017,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -993,6 +1038,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1013,6 +1059,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -1039,6 +1086,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1059,6 +1107,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1079,6 +1128,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -1099,6 +1149,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -1119,6 +1170,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1139,6 +1191,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1159,6 +1212,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1179,6 +1233,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1199,6 +1254,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1219,6 +1275,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -1239,6 +1296,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -1259,6 +1317,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1279,6 +1338,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1304,6 +1364,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1324,6 +1385,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1352,6 +1414,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1372,6 +1435,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -1392,6 +1456,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1418,6 +1483,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1444,6 +1510,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1472,6 +1539,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1498,6 +1566,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1518,6 +1587,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": true
    }
@@ -1538,6 +1608,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1558,6 +1629,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -1584,6 +1656,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1604,6 +1677,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1630,6 +1704,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1650,6 +1725,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1676,6 +1752,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1701,6 +1778,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1721,6 +1799,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1741,6 +1820,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1761,6 +1841,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1787,6 +1868,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1807,6 +1889,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1827,6 +1910,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1847,6 +1931,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1875,6 +1960,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1895,6 +1981,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -1915,6 +2002,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1935,6 +2023,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1955,6 +2044,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -1983,6 +2073,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2011,6 +2102,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2031,6 +2123,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2059,6 +2152,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2079,6 +2173,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -2107,6 +2202,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2127,6 +2223,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2147,6 +2244,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2167,6 +2265,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -2187,6 +2286,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2207,6 +2307,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2233,6 +2334,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2253,6 +2355,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -2273,6 +2376,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -2293,6 +2397,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -2313,6 +2418,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -2333,6 +2439,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2353,6 +2460,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -2373,6 +2481,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -2401,6 +2510,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2421,6 +2531,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -2446,6 +2557,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2474,6 +2586,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2494,6 +2607,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -2514,6 +2628,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2534,6 +2649,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2554,6 +2670,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2574,6 +2691,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2594,6 +2712,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2614,6 +2733,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -2634,6 +2754,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -2654,6 +2775,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2674,6 +2796,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2694,6 +2817,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -2714,6 +2838,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -2734,6 +2859,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2760,6 +2886,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2780,6 +2907,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2800,6 +2928,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2820,6 +2949,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": true
    }
@@ -2840,6 +2970,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -2865,6 +2996,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2893,6 +3025,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -2913,6 +3046,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -2933,6 +3067,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -2953,6 +3088,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -2973,6 +3109,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -2993,6 +3130,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3013,6 +3151,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -3033,6 +3172,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -3053,6 +3193,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -3073,6 +3214,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -3093,6 +3235,7 @@
     "bullet": false,
     "wind": false,
     "powder": true,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -3113,6 +3256,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3133,6 +3277,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -3153,6 +3298,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3173,6 +3319,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3193,6 +3340,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -3213,6 +3361,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3239,6 +3388,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3267,6 +3417,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3295,6 +3446,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3315,6 +3467,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3335,6 +3488,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -3355,6 +3509,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3375,6 +3530,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3400,6 +3556,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": true,
     "protectable": true,
     "reflectable": false
    }
@@ -3420,6 +3577,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -3440,6 +3598,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3460,6 +3619,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -3480,6 +3640,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -3500,6 +3661,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -3520,6 +3682,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -3540,6 +3703,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -3560,6 +3724,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -3580,6 +3745,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -3600,6 +3766,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3620,6 +3787,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3640,6 +3808,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3660,6 +3829,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -3680,6 +3850,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3706,6 +3877,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3726,6 +3898,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3751,6 +3924,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3771,6 +3945,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -3791,6 +3966,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -3811,6 +3987,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3831,6 +4008,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3856,6 +4034,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3876,6 +4055,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3896,6 +4076,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3916,6 +4097,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3936,6 +4118,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -3956,6 +4139,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -3976,6 +4160,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4002,6 +4187,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4022,6 +4208,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -4042,6 +4229,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4062,6 +4250,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -4082,6 +4271,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4102,6 +4292,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4122,6 +4313,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4142,6 +4334,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": true,
     "protectable": true,
     "reflectable": false
    }
@@ -4162,6 +4355,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4187,6 +4381,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4207,6 +4402,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4227,6 +4423,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4247,6 +4444,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4267,6 +4465,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4287,6 +4486,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4307,6 +4507,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4335,6 +4536,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4355,6 +4557,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4375,6 +4578,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4395,6 +4599,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4420,6 +4625,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4448,6 +4654,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4468,6 +4675,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4488,6 +4696,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4508,6 +4717,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -4528,6 +4738,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4548,6 +4759,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4568,6 +4780,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -4588,6 +4801,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4608,6 +4822,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4628,6 +4843,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4648,6 +4864,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4676,6 +4893,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4696,6 +4914,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -4722,6 +4941,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4742,6 +4962,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -4762,6 +4983,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4782,6 +5004,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -4810,6 +5033,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4830,6 +5054,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -4850,6 +5075,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4878,6 +5104,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4898,6 +5125,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4918,6 +5146,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4938,6 +5167,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4963,6 +5193,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -4983,6 +5214,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -5003,6 +5235,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5023,6 +5256,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5043,6 +5277,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -5063,6 +5298,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5088,6 +5324,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5108,6 +5345,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -5128,6 +5366,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5148,6 +5387,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5168,6 +5408,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -5188,6 +5429,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -5208,6 +5450,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5228,6 +5471,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5248,6 +5492,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5276,6 +5521,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5301,6 +5547,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5321,6 +5568,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -5341,6 +5589,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5367,6 +5616,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5397,6 +5647,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5425,6 +5676,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5445,6 +5697,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5471,6 +5724,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5491,6 +5745,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5511,6 +5766,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5531,6 +5787,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5551,6 +5808,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5571,6 +5829,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5591,6 +5850,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5619,6 +5879,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5645,6 +5906,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5671,6 +5933,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5697,6 +5960,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5717,6 +5981,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -5745,6 +6010,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5765,6 +6031,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -5785,6 +6052,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5805,6 +6073,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5825,6 +6094,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5850,6 +6120,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5870,6 +6141,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -5890,6 +6162,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -5910,6 +6183,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5930,6 +6204,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5950,6 +6225,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5978,6 +6254,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -5998,6 +6275,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6018,6 +6296,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6038,6 +6317,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6064,6 +6344,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6084,6 +6365,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -6104,6 +6386,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -6124,6 +6407,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6150,6 +6434,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6176,6 +6461,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6202,6 +6488,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6222,6 +6509,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6242,6 +6530,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6262,6 +6551,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6282,6 +6572,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6302,6 +6593,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6322,6 +6614,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6342,6 +6635,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6362,6 +6656,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6382,6 +6677,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6402,6 +6698,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6422,6 +6719,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -6442,6 +6740,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6462,6 +6761,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6482,6 +6782,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6502,6 +6803,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6522,6 +6824,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6542,6 +6845,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6562,6 +6866,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6582,6 +6887,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6602,6 +6908,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6630,6 +6937,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6650,6 +6958,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6670,6 +6979,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -6690,6 +7000,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -6710,6 +7021,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6730,6 +7042,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6750,6 +7063,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6770,6 +7084,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6790,6 +7105,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6810,6 +7126,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6830,6 +7147,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6850,6 +7168,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6870,6 +7189,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6890,6 +7210,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6910,6 +7231,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6930,6 +7252,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6950,6 +7273,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6970,6 +7294,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -6990,6 +7315,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7010,6 +7336,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7030,6 +7357,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7050,6 +7378,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7070,6 +7399,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7090,6 +7420,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7110,6 +7441,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7130,6 +7462,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7150,6 +7483,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7170,6 +7504,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7190,6 +7525,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7210,6 +7546,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7230,6 +7567,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7250,6 +7588,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7270,6 +7609,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7290,6 +7630,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7310,6 +7651,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7330,6 +7672,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7350,6 +7693,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7370,6 +7714,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -7390,6 +7735,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -7410,6 +7756,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -7430,6 +7777,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -7450,6 +7798,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7478,6 +7827,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -7498,6 +7848,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7518,6 +7869,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -7538,6 +7890,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7558,6 +7911,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7578,6 +7932,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7598,6 +7953,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -7618,6 +7974,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -7638,6 +7995,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -7664,6 +8022,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -7684,6 +8043,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -7704,6 +8064,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -7724,6 +8085,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7744,6 +8106,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -7764,6 +8127,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7784,6 +8148,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7804,6 +8169,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -7824,6 +8190,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7849,6 +8216,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -7869,6 +8237,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -7889,6 +8258,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -7909,6 +8279,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -7929,6 +8300,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7949,6 +8321,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -7969,6 +8342,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -7989,6 +8363,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -8009,6 +8384,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": true,
     "protectable": true,
     "reflectable": true
    }
@@ -8034,6 +8410,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8054,6 +8431,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8074,6 +8452,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8100,6 +8479,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8120,6 +8500,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8140,6 +8521,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -8160,6 +8542,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8180,6 +8563,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8200,6 +8584,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8220,6 +8605,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8240,6 +8626,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8260,6 +8647,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8280,6 +8668,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8300,6 +8689,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8320,6 +8710,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8340,6 +8731,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8360,6 +8752,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8380,6 +8773,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8400,6 +8794,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8420,6 +8815,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8440,6 +8836,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8460,6 +8857,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8480,6 +8878,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8500,6 +8899,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8520,6 +8920,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8540,6 +8941,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8560,6 +8962,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8580,6 +8983,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -8600,6 +9004,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -8620,6 +9025,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8640,6 +9046,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8660,6 +9067,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8680,6 +9088,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -8705,6 +9114,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8725,6 +9135,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8745,6 +9156,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8765,6 +9177,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8785,6 +9198,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -8805,6 +9219,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8825,6 +9240,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -8850,6 +9266,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8870,6 +9287,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -8890,6 +9308,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -8910,6 +9329,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8930,6 +9350,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -8950,6 +9371,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -8976,6 +9398,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9002,6 +9425,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9032,6 +9456,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9052,6 +9477,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9078,6 +9504,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9098,6 +9525,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9118,6 +9546,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9143,6 +9572,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9163,6 +9593,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9191,6 +9622,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9211,6 +9643,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -9231,6 +9664,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9257,6 +9691,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9283,6 +9718,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9303,6 +9739,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -9323,6 +9760,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9343,6 +9781,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -9363,6 +9802,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9383,6 +9823,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -9403,6 +9844,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -9428,6 +9870,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9456,6 +9899,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9476,6 +9920,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9496,6 +9941,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9516,6 +9962,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9536,6 +9983,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9556,6 +10004,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9576,6 +10025,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -9596,6 +10046,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9616,6 +10067,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -9636,6 +10088,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -9656,6 +10109,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9676,6 +10130,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9696,6 +10151,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9716,6 +10172,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -9736,6 +10193,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9756,6 +10214,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9776,6 +10235,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9802,6 +10262,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9822,6 +10283,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9842,6 +10304,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9862,6 +10325,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9890,6 +10354,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9910,6 +10375,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -9930,6 +10396,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -9950,6 +10417,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -9970,6 +10438,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -9996,6 +10465,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10016,6 +10486,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10036,6 +10507,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10056,6 +10528,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10076,6 +10549,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10104,6 +10578,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10124,6 +10599,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10144,6 +10620,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -10164,6 +10641,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10192,6 +10670,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10212,6 +10691,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10240,6 +10720,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10260,6 +10741,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10280,6 +10762,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10308,6 +10791,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10336,6 +10820,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10356,6 +10841,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10376,6 +10862,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10401,6 +10888,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10421,6 +10909,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10441,6 +10930,7 @@
     "bullet": false,
     "wind": false,
     "powder": true,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -10461,6 +10951,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10481,6 +10972,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10501,6 +10993,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10521,6 +11014,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10541,6 +11035,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10561,6 +11056,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10581,6 +11077,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10601,6 +11098,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10627,6 +11125,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10647,6 +11146,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10673,6 +11173,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -10693,6 +11194,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10713,6 +11215,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10733,6 +11236,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10753,6 +11257,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10773,6 +11278,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10793,6 +11299,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10813,6 +11320,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10833,6 +11341,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10853,6 +11362,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10873,6 +11383,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10893,6 +11404,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10913,6 +11425,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10933,6 +11446,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10953,6 +11467,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10973,6 +11488,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -10993,6 +11509,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -11013,6 +11530,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -11033,6 +11551,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -11053,6 +11572,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -11073,6 +11593,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": true
    }
@@ -11093,6 +11614,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -11113,6 +11635,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11133,6 +11656,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11153,6 +11677,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11173,6 +11698,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11193,6 +11719,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11213,6 +11740,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11233,6 +11761,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -11253,6 +11782,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11281,6 +11811,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11301,6 +11832,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -11321,6 +11853,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11341,6 +11874,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11369,6 +11903,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11389,6 +11924,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -11409,6 +11945,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -11429,6 +11966,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -11449,6 +11987,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11469,6 +12008,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11489,6 +12029,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11509,6 +12050,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -11529,6 +12071,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -11549,6 +12092,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11569,6 +12113,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -11597,6 +12142,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11617,6 +12163,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -11645,6 +12192,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11665,6 +12213,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11685,6 +12234,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -11713,6 +12263,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11733,6 +12284,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11753,6 +12305,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -11773,6 +12326,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -11799,6 +12353,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11824,6 +12379,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11852,6 +12408,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11880,6 +12437,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11908,6 +12466,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11936,6 +12495,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -11956,6 +12516,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -11976,6 +12537,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12004,6 +12566,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12032,6 +12595,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12052,6 +12616,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -12072,6 +12637,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12092,6 +12658,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -12112,6 +12679,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12137,6 +12705,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12157,6 +12726,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -12185,6 +12755,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12205,6 +12776,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12225,6 +12797,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12245,6 +12818,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12265,6 +12839,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12285,6 +12860,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -12305,6 +12881,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -12331,6 +12908,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12357,6 +12935,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12377,6 +12956,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12397,6 +12977,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -12417,6 +12998,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -12445,6 +13027,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12465,6 +13048,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12485,6 +13069,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -12517,6 +13102,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12537,6 +13123,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12557,6 +13144,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": true,
     "protectable": true,
     "reflectable": false
    }
@@ -12577,6 +13165,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12597,6 +13186,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12617,6 +13207,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12637,6 +13228,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12657,6 +13249,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12677,6 +13270,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -12697,6 +13291,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12717,6 +13312,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12737,6 +13333,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12757,6 +13354,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -12777,6 +13375,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12797,6 +13396,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12817,6 +13417,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -12837,6 +13438,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12857,6 +13459,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12877,6 +13480,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12897,6 +13501,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12917,6 +13522,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": true
    }
@@ -12945,6 +13551,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12965,6 +13572,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -12991,6 +13599,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13011,6 +13620,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -13037,6 +13647,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13057,6 +13668,7 @@
     "bullet": false,
     "wind": false,
     "powder": true,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -13083,6 +13695,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13109,6 +13722,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13129,6 +13743,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13149,6 +13764,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13169,6 +13785,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13197,6 +13814,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13217,6 +13835,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13237,6 +13856,7 @@
     "bullet": false,
     "wind": false,
     "powder": true,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -13263,6 +13883,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13283,6 +13904,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13303,6 +13925,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -13323,6 +13946,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13343,6 +13967,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13363,6 +13988,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -13383,6 +14009,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13411,6 +14038,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13431,6 +14059,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13451,6 +14080,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13471,6 +14101,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13491,6 +14122,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13511,6 +14143,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -13536,6 +14169,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13556,6 +14190,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13584,6 +14219,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13604,6 +14240,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13624,6 +14261,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13644,6 +14282,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -13664,6 +14303,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13684,6 +14324,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13704,6 +14345,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13724,6 +14366,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -13752,6 +14395,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13772,6 +14416,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13792,6 +14437,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13812,6 +14458,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13832,6 +14479,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -13852,6 +14500,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13872,6 +14521,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -13892,6 +14542,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13918,6 +14569,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13938,6 +14590,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13958,6 +14611,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -13978,6 +14632,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -13998,6 +14653,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -14018,6 +14674,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14038,6 +14695,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14058,6 +14716,7 @@
     "bullet": false,
     "wind": false,
     "powder": true,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -14078,6 +14737,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14098,6 +14758,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14118,6 +14779,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -14146,6 +14808,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14166,6 +14829,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14194,6 +14858,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14214,6 +14879,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14234,6 +14900,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -14254,6 +14921,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -14274,6 +14942,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -14294,6 +14963,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14314,6 +14984,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -14340,6 +15011,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14360,6 +15032,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -14380,6 +15053,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14400,6 +15074,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14420,6 +15095,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14440,6 +15116,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14460,6 +15137,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14480,6 +15158,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -14500,6 +15179,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14520,6 +15200,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": true
    }
@@ -14540,6 +15221,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14560,6 +15242,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14585,6 +15268,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14605,6 +15289,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -14630,6 +15315,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14658,6 +15344,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14678,6 +15365,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14706,6 +15394,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14726,6 +15415,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14746,6 +15436,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -14771,6 +15462,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14791,6 +15483,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14811,6 +15504,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -14831,6 +15525,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -14851,6 +15546,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14871,6 +15567,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14897,6 +15594,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14917,6 +15615,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14937,6 +15636,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -14957,6 +15657,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -14977,6 +15678,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -15003,6 +15705,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15023,6 +15726,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -15043,6 +15747,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15063,6 +15768,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -15083,6 +15789,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -15109,6 +15816,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15129,6 +15837,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15149,6 +15858,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -15175,6 +15885,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15195,6 +15906,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15215,6 +15927,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -15241,6 +15954,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15261,6 +15975,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -15287,6 +16002,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15307,6 +16023,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15327,6 +16044,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15355,6 +16073,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15375,6 +16094,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15395,6 +16115,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15423,6 +16144,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15451,6 +16173,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15471,6 +16194,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15491,6 +16215,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -15511,6 +16236,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15531,6 +16257,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15551,6 +16278,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -15571,6 +16299,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -15591,6 +16320,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -15611,6 +16341,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15637,6 +16368,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15657,6 +16389,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -15677,6 +16410,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15697,6 +16431,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -15717,6 +16452,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -15737,6 +16473,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15757,6 +16494,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -15782,6 +16520,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15802,6 +16541,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -15834,6 +16574,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15854,6 +16595,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -15874,6 +16616,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -15894,6 +16637,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -15920,6 +16664,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15940,6 +16685,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -15960,6 +16706,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -15988,6 +16735,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16008,6 +16756,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16033,6 +16782,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16053,6 +16803,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16073,6 +16824,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16093,6 +16845,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -16113,6 +16866,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16133,6 +16887,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16153,6 +16908,7 @@
     "bullet": false,
     "wind": false,
     "powder": true,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -16173,6 +16929,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -16199,6 +16956,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16225,6 +16983,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16251,6 +17010,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16271,6 +17031,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16291,6 +17052,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16311,6 +17073,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16337,6 +17100,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16357,6 +17121,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -16377,6 +17142,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16405,6 +17171,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16425,6 +17192,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -16445,6 +17213,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16470,6 +17239,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16490,6 +17260,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -16510,6 +17281,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -16530,6 +17302,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -16550,6 +17323,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16570,6 +17344,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16590,6 +17365,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16610,6 +17386,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -16630,6 +17407,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16656,6 +17434,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16676,6 +17455,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16696,6 +17476,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16716,6 +17497,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16736,6 +17518,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16756,6 +17539,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -16776,6 +17560,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -16796,6 +17581,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16816,6 +17602,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": true
    }
@@ -16836,6 +17623,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -16856,6 +17644,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16884,6 +17673,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16904,6 +17694,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16924,6 +17715,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -16944,6 +17736,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -16964,6 +17757,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -16984,6 +17778,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -17010,6 +17805,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17030,6 +17826,7 @@
     "bullet": false,
     "wind": false,
     "powder": true,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -17050,6 +17847,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -17078,6 +17876,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17098,6 +17897,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": true
    }
@@ -17124,6 +17924,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17149,6 +17950,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17169,6 +17971,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17189,6 +17992,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17217,6 +18021,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17237,6 +18042,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": true
    }
@@ -17257,6 +18063,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -17283,6 +18090,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -17308,6 +18116,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17328,6 +18137,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17348,6 +18158,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17368,6 +18179,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17388,6 +18200,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17408,6 +18221,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17433,6 +18247,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17453,6 +18268,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17473,6 +18289,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -17493,6 +18310,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -17513,6 +18331,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17541,6 +18360,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17561,6 +18381,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -17581,6 +18402,7 @@
     "bullet": false,
     "wind": false,
     "powder": true,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -17601,6 +18423,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17621,6 +18444,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -17641,6 +18465,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -17661,6 +18486,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17681,6 +18507,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -17701,6 +18528,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17721,6 +18549,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17741,6 +18570,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17761,6 +18591,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17781,6 +18612,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -17801,6 +18633,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -17821,6 +18654,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17841,6 +18675,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17861,6 +18696,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -17881,6 +18717,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -17901,6 +18738,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -17921,6 +18759,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -17941,6 +18780,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17961,6 +18801,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -17981,6 +18822,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -18001,6 +18843,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18021,6 +18864,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -18041,6 +18885,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18061,6 +18906,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18081,6 +18927,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18101,6 +18948,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -18121,6 +18969,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18141,6 +18990,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -18161,6 +19011,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -18181,6 +19032,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18201,6 +19053,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -18221,6 +19074,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -18241,6 +19095,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -18261,6 +19116,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": true
    }
@@ -18281,6 +19137,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -18301,6 +19158,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18321,6 +19179,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -18341,6 +19200,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18361,6 +19221,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -18381,6 +19242,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -18401,6 +19263,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18421,6 +19284,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18441,6 +19305,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18461,6 +19326,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": true,
     "protectable": true,
     "reflectable": false
    }
@@ -18481,6 +19347,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18501,6 +19368,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18521,6 +19389,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18541,6 +19410,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18561,6 +19431,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18587,6 +19458,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18613,6 +19485,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18633,6 +19506,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18653,6 +19527,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18683,6 +19558,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18711,6 +19587,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18737,6 +19614,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18763,6 +19641,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18783,6 +19662,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -18803,6 +19683,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -18823,6 +19704,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -18843,6 +19725,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -18871,6 +19754,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18891,6 +19775,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -18911,6 +19796,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -18931,6 +19817,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": true
    }
@@ -18951,6 +19838,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -18979,6 +19867,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -18999,6 +19888,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -19019,6 +19909,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19039,6 +19930,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19059,6 +19951,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -19079,6 +19972,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -19111,6 +20005,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19131,6 +20026,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19151,6 +20047,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19171,6 +20068,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19199,6 +20097,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19219,6 +20118,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19239,6 +20139,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19265,6 +20166,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19285,6 +20187,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -19310,6 +20213,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19335,6 +20239,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19355,6 +20260,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19375,6 +20281,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19395,6 +20302,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19415,6 +20323,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19435,6 +20344,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19455,6 +20365,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -19475,6 +20386,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19495,6 +20407,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -19515,6 +20428,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19535,6 +20449,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19555,6 +20470,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19575,6 +20491,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19601,6 +20518,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19621,6 +20539,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19646,6 +20565,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19666,6 +20586,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19686,6 +20607,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19711,6 +20633,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": true,
     "protectable": true,
     "reflectable": false
    }
@@ -19731,6 +20654,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19751,6 +20675,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -19771,6 +20696,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19791,6 +20717,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19811,6 +20738,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19831,6 +20759,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19851,6 +20780,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": true
    }
@@ -19871,6 +20801,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19897,6 +20828,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19917,6 +20849,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -19943,6 +20876,7 @@
     "bullet": false,
     "wind": true,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19963,6 +20897,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -19983,6 +20918,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -20003,6 +20939,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -20023,6 +20960,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -20043,6 +20981,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -20063,6 +21002,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -20083,6 +21023,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -20103,6 +21044,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": false,
     "reflectable": false
    }
@@ -20123,6 +21065,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -20143,6 +21086,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -20163,6 +21107,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -20183,6 +21128,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -20203,6 +21149,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": true
    }
@@ -20229,6 +21176,7 @@
     "bullet": true,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -20254,6 +21202,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -20279,6 +21228,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -20307,6 +21257,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -20335,6 +21286,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -20363,6 +21315,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }
@@ -20389,6 +21342,7 @@
     "bullet": false,
     "wind": false,
     "powder": false,
+    "pulse": false,
     "protectable": true,
     "reflectable": false
    }

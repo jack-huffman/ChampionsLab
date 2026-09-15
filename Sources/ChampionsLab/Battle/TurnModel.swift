@@ -1366,6 +1366,37 @@ enum TurnModel {
                     else { board.theirs[index].status = .none; board.theirs[index].asleepFor = 0 }
                     board.note("\(name) shed its skin and shook it off.")
                 }
+                // Moody: one stat up two stages, another down one, chosen at
+                // random. A search cannot price a coin flip with six faces, so
+                // it takes nothing.
+                if who.build.ability == "Moody", hp > 0, rolling {
+                    let stats: [Stat] = [.attack, .defense, .spAttack, .spDefense, .speed]
+                    if let up = stats.randomElement(using: &TurnModel.dice),
+                       let down = stats.filter({ $0 != up }).randomElement(using: &TurnModel.dice) {
+                        change([up: 2], onMine: mine, slot: index, board: &board, because: "Moody")
+                        change([down: -1], onMine: mine, slot: index, board: &board, because: "Moody")
+                    }
+                }
+                // Mimicry takes the terrain's type while it stands on it.
+                if who.build.ability == "Mimicry", hp > 0 {
+                    let became: PokeType? = switch board.field.terrain {
+                    case .electric: .electric
+                    case .grassy:   .grass
+                    case .psychic:  .psychic
+                    case .misty:    .fairy
+                    case .none:     nil
+                    }
+                    let wanted = became.map { [$0] } ?? []
+                    let holds = mine ? board.mine[index].build.typeOverride
+                                     : board.theirs[index].build.typeOverride
+                    if (holds ?? []) != wanted {
+                        if mine { board.mine[index].build.typeOverride = wanted.isEmpty ? nil : wanted }
+                        else { board.theirs[index].build.typeOverride = wanted.isEmpty ? nil : wanted }
+                        if let became {
+                            board.note("\(name)'s Mimicry made it a \(became.rawValue) type.")
+                        }
+                    }
+                }
                 // Harvest: in the sun, the berry it ate comes back.
                 if who.build.ability == "Harvest", who.build.itemSpent, hp > 0,
                    who.build.item.hasSuffix("Berry"),
@@ -2645,6 +2676,13 @@ enum TurnModel {
             default: break
             }
         }
+        // Stench: one hit in ten makes the target flinch, from either side of
+        // the field, which is the whole of it.
+        if attacker.build.ability == "Stench", !defender.fainted, rolling,
+           Double.random(in: 0..<1, using: &TurnModel.dice) < 0.1 {
+            flinch(onMine: hitMine, slot: hit, board: &board, because: "the stench")
+        }
+
         // Aftermath and Innards Out charge whoever landed the finishing hit.
         if defender.fainted, !attacker.fainted {
             var lost = 0
@@ -2879,6 +2917,7 @@ enum TurnModel {
     private static func applySelf(_ boosts: [Stat: Int], toMine: Bool, slot: Int,
                                   board: inout Board) {
         change(boosts, onMine: toMine, slot: slot, board: &board)
+        opportunist(after: boosts, onMine: toMine, board: &board)
     }
 
     /// Protect, with the odds the game gives it: certain the first time, a
@@ -3162,6 +3201,21 @@ enum TurnModel {
             if defender.build.ability == "Tangled Feet", defender.isConfused { chance *= 0.8 }
         }
         return Swift.max(1, Swift.min(100, chance))
+    }
+
+    /// Opportunist: whatever the other side just gained, it gains too.
+    ///
+    /// Called after a raise lands, and deliberately only for a raise on the
+    /// far side — copying its own partner's would be a loop.
+    private static func opportunist(after raised: [Stat: Int], onMine: Bool,
+                                    board: inout Board) {
+        let watchers = onMine ? board.theirs : board.mine
+        let positive = raised.filter { $0.value > 0 }
+        guard !positive.isEmpty else { return }
+        for index in watchers.indices.prefix(board.activeCount)
+        where !watchers[index].fainted && watchers[index].build.ability == "Opportunist" {
+            change(positive, onMine: !onMine, slot: index, board: &board, because: "Opportunist")
+        }
     }
 
     /// An ability on that side that turns a condition away, and its name.

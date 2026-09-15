@@ -202,6 +202,8 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     var isSlicing: Bool { flags["slicing"] == true }
     var isBullet: Bool { flags["bullet"] == true }
     var isWind: Bool { flags["wind"] == true }
+    /// Aura and pulse moves, which Mega Launcher is paid for.
+    var isPulse: Bool { flags["pulse"] == true }
     var isPowder: Bool { flags["powder"] == true }
     var isProtectable: Bool { flags["protectable"] != false }
 

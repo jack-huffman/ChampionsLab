@@ -99,6 +99,7 @@ for (const move of Object.values(Moves)) {
     flags: Object.fromEntries([['contact', 'contact'], ['sound', 'sound'],
       ['punch', 'punch'], ['bite', 'bite'], ['slicing', 'slicing'],
       ['bullet', 'bullet'], ['wind', 'wind'], ['powder', 'powder'],
+      ['pulse', 'pulse'],
       ['protect', 'protectable'], ['reflectable', 'reflectable']]
       .map(([their, ours]) => [ours, !!flags[their]])),
   };
