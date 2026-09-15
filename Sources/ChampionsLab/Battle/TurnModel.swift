@@ -817,9 +817,12 @@ extension Board {
     /// `chooser` is the six doing the choosing, `against` the six it is being
     /// chosen against, and `opposite` a team to stand on the other side while
     /// the chooser's members are built into fighters.
-    private static func benchGuesses(for chooser: Team, against other: Team,
-                                     opposite: Team, leadIDs: Set<String>,
-                                     behind: Int, rules: Rulebook, field: Field) -> [BenchGuess] {
+    /// Not private: `Tools/reading` asks this the same question the engine
+    /// asks, but conditioned on the leads a real player actually sent out
+    /// rather than the ones the engine assumed they would.
+    static func benchGuesses(for chooser: Team, against other: Team,
+                             opposite: Team, leadIDs: Set<String>,
+                             behind: Int, rules: Rulebook, field: Field) -> [BenchGuess] {
         let grid = Matchup(mine: chooser, theirs: other, rules: rules, field: field)
         // Every Pokémon on the chooser's six as a fighter, so a guess can be
         // played out rather than only scored.

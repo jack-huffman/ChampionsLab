@@ -8,6 +8,7 @@
 #   make duel       two engines play each other; the only check that measures
 #                   playing strength rather than whether a rule fires
 #   make replays    real ladder games: exact teams, exact choices, turn by turn
+#   make reading    how well the engine reads which four they bring
 #   make delta      pick up a new Champions release without re-scraping the world
 #   make full-sync  re-fetch every page
 #   make snapshot   render every screen to build/shots/*.png
@@ -23,7 +24,7 @@
 SHELL := /bin/bash
 NICE  := nice -n 15
 
-.PHONY: test warnings hitch coverage profile accuracy snapshot app dmg data check clean delta full-sync duel replays
+.PHONY: test warnings hitch coverage profile accuracy snapshot app dmg data check clean delta full-sync duel replays reading
 
 test:
 	$(NICE) swift test 2>&1 | tail -25
@@ -72,6 +73,12 @@ duel:
 # only data with a turn in it.
 replays:
 	./Scripts/mkreplays.py --pages 20
+
+# The engine's whole two-board solve rests on a guess about the opponent's back
+# two, and nothing measured that guess until there were real games to check it
+# against.
+reading:
+	$(NICE) ./Tools/reading.sh
 
 # Rebuild from the page cache. Cannot see a new release: every page it needs
 # is already on disk.
