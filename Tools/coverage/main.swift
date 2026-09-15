@@ -52,6 +52,19 @@ import SwiftUI
         exit(0)
     }
 
+    // The whole type chart, as JSON, so it can be diffed against a reference.
+    if CommandLine.arguments.contains("--dump-types") {
+        var rows: [String] = []
+        for attacking in PokeType.allCases {
+            for defending in PokeType.allCases {
+                let m = TypeChart.multiplier(attacking, into: defending)
+                rows.append("\"\(attacking.rawValue.lowercased())->\(defending.rawValue.lowercased())\":\(m)")
+            }
+        }
+        print("{" + rows.joined(separator: ",") + "}")
+        exit(0)
+    }
+
     if let at = CommandLine.arguments.firstIndex(of: "--why") {
         for name in CommandLine.arguments[(at + 1)...] {
             print("== \(name) ==")

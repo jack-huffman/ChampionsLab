@@ -875,6 +875,7 @@ def main():
     assign_stones(roster, items)
     mark_attested(items, overlay["meta_teams"], overlay["usage"], roster)
     apply_showdown(moves)
+    split_regional_forms(roster)
 
     out = {
         "regulation": overlay["regulation"],
@@ -920,6 +921,89 @@ def main():
 
 
 SHOWDOWN = os.path.join(HERE, "data", "showdown.json")
+
+
+def showdown_form_keys(label, species):
+    """Every key the reference table might file a Champions form under.
+
+    Serebii writes "Alolan Ninetales" and "Mega Charizard X"; the reference
+    table writes "Ninetales-Alola" and "Charizard-Mega-X". Neither is wrong,
+    they just have to be introduced.
+    """
+    def key(text):
+        return re.sub(r"[^a-z0-9]", "", text.lower())
+
+    out = []
+    mega = re.match(r"^Mega (.+?)(?: ([XYZ]))?$", label)
+    if mega:
+        base = key(mega.group(1))
+        if mega.group(2):
+            out.append(base + "mega" + mega.group(2).lower())
+        out.append(base + "mega")
+    for word, tag in (("Alolan", "alola"), ("Galarian", "galar"),
+                      ("Hisuian", "hisui"), ("Paldean", "paldea")):
+        if label.startswith(word + " "):
+            rest = label[len(word) + 1:]
+            variant = re.search(r"\((.+?)\)", rest)
+            base = key(re.sub(r"\s*\(.*\)", "", rest))
+            if variant:
+                out.append(base + tag + key(variant.group(1)))
+            out.append(base + tag)
+    bracket = re.search(r"\((.+?)\)$", label)
+    if bracket:
+        base = key(re.sub(r"\s*\(.*\)$", "", label))
+        out.append(base + key(bracket.group(1)))
+        # "Indeedee (Female)" is filed as "indeedeef".
+        out.append(base + key(bracket.group(1))[0])
+    out.append(key(label))
+    return out
+
+
+def split_regional_forms(roster):
+    """Give each form only the abilities and the weight that are its own.
+
+    Serebii's Champions pages file a regional form on its base form's card, so
+    both come back carrying the union: Ninetales and Alolan Ninetales each with
+    Flash Fire, Drought, Snow Cloak and Snow Warning, and nothing to say which
+    two are whose. The builder would let a plain Ninetales bring Snow Warning.
+
+    The reference table keeps them apart, so it is used to split the list back
+    up — but only ever to *narrow* it. An ability the Champions page does not
+    list is never added, because Champions decides what is legal here.
+
+    Weight gets the same treatment, and needed it: Alolan Raichu was carrying
+    plain Raichu's thirty kilograms rather than its own twenty-one, and Low
+    Kick, Grass Knot, Heavy Slam and Heat Crash all read that number.
+    """
+    if not os.path.exists(SHOWDOWN):
+        return
+    with open(SHOWDOWN, encoding="utf-8") as fh:
+        forms = json.load(fh).get("forms", {})
+    if not forms:
+        return
+
+    narrowed = reweighed = 0
+    for form in roster:
+        ref = None
+        for key in showdown_form_keys(form["form_label"], form["species"]):
+            if key in forms:
+                ref = forms[key]
+                break
+        if ref is None:
+            continue
+        ours = [a["name"] for a in form.get("abilities", [])]
+        theirs = [a for a in ref["abilities"] if a in ours]
+        # Only when it actually splits something, and never down to nothing:
+        # a Champions-only form the table has never seen keeps what it has.
+        if theirs and len(theirs) < len(ours):
+            keep = set(theirs)
+            form["abilities"] = [a for a in form["abilities"] if a["name"] in keep]
+            narrowed += 1
+        if ref["weight"] and abs((form.get("weight") or 0) - ref["weight"]) > 0.05:
+            form["weight"] = ref["weight"]
+            reweighed += 1
+    print("==> forms: %d had a shared ability list split apart, %d weights corrected"
+          % (narrowed, reweighed))
 
 
 def champions_odds(move, secondaries):

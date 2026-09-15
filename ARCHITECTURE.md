@@ -190,6 +190,62 @@ read as missing for exactly this reason. `ParityAuditTests` counts the
 properties on `Fighter`, `Screens` and `Combatant` and fails when one is added
 without the fingerprint learning to see it.
 
+## Measuring whether a change made it play better
+
+Every other check here measures something other than playing strength.
+`make test` says a rule fires. `make coverage` says a rule exists. `make
+accuracy` predicts who wins from two team lists and never watches a turn — it
+reads 5.3 points whatever the battle model does, which was discovered the hard
+way while trying to decide how many dice rolls the search should branch on.
+
+`make duel` plays. Two engines, one game, to the end, many times over.
+
+```
+make duel                          both sides on current settings
+./Tools/duel.sh --rolls 1,0        branch one coin flip against none
+./Tools/duel.sh --budget 0.5,0.15  half a second against a seventh
+./Tools/duel.sh --games 400        more games, tighter answer
+```
+
+Fairness is the whole design. Teams are drawn from the real usage table, every
+matchup is played twice with the sides swapped, and the dice are seeded per
+game with the same seed used for the mirror — so both halves of a pair face the
+same luck and the same draw, and what is left is the engines. Each side is
+asked for its move on its own view of the board, so neither is handed the
+other's hidden bench.
+
+Run it with both sides set the same first. That measures the noise floor, and
+the result should sit near even; anything else is a bug in the harness rather
+than a finding. The report prints two standard errors alongside the win rate
+and says plainly when a difference is inside them.
+
+## The data this is built on
+
+Two sources, each used for what it is good at.
+
+**Serebii** is the authority on what is legal in Champions and what it is
+worth: which forms exist, that Mega Golisopod is Bug/Steel with Tough Claws,
+what a Pokémon can learn, and Champions' own balance — Astral Barrage hits for
+110 here and 120 in the main series. Scraped by `Scripts/mkdata.py`.
+
+**Showdown** is the authority on the *shape* of a rule. Serebii writes what a
+move does in English, and guessing at the sentence was wrong for ninety-one of
+the five hundred and ten legal moves: Heat Wave never burned, Crunch never
+dropped Defence, and the Fang moves could not have worked at all because they
+carry two secondary effects each and the parser only ever produced one.
+`Scripts/mkshowdown.mjs` reads its move table into `data/showdown.json`.
+
+Where they disagree, **Champions wins on numbers and Showdown on structure**.
+Iron Head's flinch is 20% here and 30% in the main series, and there is no
+reason to think Champions is wrong about its own game — so the odds are read
+back out of Serebii's sentence and matched, in order, onto the effects Showdown
+named. Differences are recorded on the move as `mainline` and shown in the move
+list rather than corrected away.
+
+Showdown's items and abilities are JavaScript event handlers rather than data,
+so they cannot be imported the same way. They stay hand-written, and the parity
+audit is what says whether they work.
+
 ## Keeping up with a new release
 
 Champions will keep adding Pokémon, Megas, moves and items. Three ways to

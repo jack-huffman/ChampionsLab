@@ -18,7 +18,7 @@
 SHELL := /bin/bash
 NICE  := nice -n 15
 
-.PHONY: test warnings hitch coverage profile accuracy snapshot app dmg data check clean delta full-sync
+.PHONY: test warnings hitch coverage profile accuracy snapshot app dmg data check clean delta full-sync duel
 
 test:
 	$(NICE) swift test 2>&1 | tail -25
@@ -54,6 +54,13 @@ app:
 
 dmg:
 	$(NICE) ./Scripts/make-dmg.sh
+
+# Two engines, one game, played to the end, many times over. The only check
+# here that measures playing strength rather than whether a rule fires.
+#   make duel                       both sides on current settings
+#   ./Tools/duel.sh --rolls 1,0     branch one coin flip against none
+duel:
+	$(NICE) ./Tools/duel.sh --games 60
 
 # Rebuild from the page cache. Cannot see a new release: every page it needs
 # is already on disk.

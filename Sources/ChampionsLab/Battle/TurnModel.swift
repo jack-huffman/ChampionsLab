@@ -353,6 +353,33 @@ struct Board {
     /// A played turn ignores this entirely and rolls.
     var rulings: [String: Bool] = [:]
 
+    /// The same position seen from the other chair.
+    ///
+    /// Everything on a board is written from one side's point of view — "mine"
+    /// and "theirs", my screens and theirs, what I can see of their bench. To
+    /// ask the engine what the *other* side should do, the whole thing has to
+    /// be turned round. Used by the duel tool to put two engines in one game,
+    /// and by anything else that needs to think as the opponent.
+    var flipped: Board {
+        var out = self
+        swap(&out.mine, &out.theirs)
+        swap(&out.myScreens, &out.theirScreens)
+        swap(&out.myTailwind, &out.theirTailwind)
+        swap(&out.theirBenchGuesses, &out.myBenchGuesses)
+        // The per-slot keys name a side, so they have to be relabelled too.
+        func relabel(_ table: [String: Bool]) -> [String: Bool] {
+            Dictionary(uniqueKeysWithValues: table.map { key, value in
+                (key.replacingOccurrences(of: ":m", with: ":@")
+                    .replacingOccurrences(of: ":t", with: ":m")
+                    .replacingOccurrences(of: ":@", with: ":t"), value)
+            })
+        }
+        out.rulings = relabel(rulings)
+        out.declared = [:]
+        out.acted = []
+        return out
+    }
+
     /// The key for one coin flip: which flip, whose side, which slot.
     static func flip(_ what: String, _ mine: Bool, _ slot: Int) -> String {
         "\(what):\(mine ? "m" : "t")\(slot)"
@@ -1224,7 +1251,9 @@ enum TurnModel {
     ///
     /// The accuracy replay cannot settle this — it reads 5.3 at every setting,
     /// because it predicts game outcomes from team lists and never sees a turn.
-    static let branchedRolls = 1
+    /// A `var` only so the duel tool can hold one engine at a different
+    /// setting from the other. Nothing in the app changes it.
+    nonisolated(unsafe) static var branchedRolls = 1
 
     /// Everything that happens after both sides have acted.
     ///

@@ -104,11 +104,37 @@ for (const move of Object.values(Moves)) {
   };
 }
 
+// -------------------------------------------------------------- forms ----
+//
+// Serebii's Champions pages file a regional form's abilities on its base
+// form's card, merged into one list. Ninetales and Alolan Ninetales come back
+// carrying Flash Fire, Drought, Snow Cloak and Snow Warning between them, with
+// nothing to say which two belong to which -- so the builder would happily
+// give a plain Ninetales Snow Warning and an Alolan one Drought.
+//
+// Showdown files them separately. This is read to split the merged list back
+// apart, and for weights, which Serebii also takes from the wrong card: our
+// Alolan Raichu had plain Raichu's thirty kilograms rather than its own
+// twenty-one, and four moves now work their power out from that.
+
+const { Pokedex } = await import(pathToFileURL(join(root, 'data/pokedex.ts')).href);
+const forms = {};
+for (const [id, p] of Object.entries(Pokedex)) {
+  if (!p.baseStats) continue;
+  forms[id] = {
+    name: p.name,
+    abilities: Object.values(p.abilities ?? {}),
+    weight: p.weightkg ?? null,
+    types: p.types ?? [],
+  };
+}
+
 const json = JSON.stringify({
-  source: 'pokemon-showdown data/moves.ts',
+  source: 'pokemon-showdown data/moves.ts and data/pokedex.ts',
   generated: new Date().toISOString().slice(0, 10),
   moves: table,
+  forms,
 }, null, 1);
 if (process.argv[3]) writeFileSync(process.argv[3], json + '\n');
 else process.stdout.write(json + '\n');
-process.stderr.write(`showdown: ${Object.keys(table).length} moves\n`);
+process.stderr.write(`showdown: ${Object.keys(table).length} moves, ${Object.keys(forms).length} forms\n`);
