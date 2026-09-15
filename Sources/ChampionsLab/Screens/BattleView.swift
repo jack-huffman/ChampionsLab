@@ -2013,8 +2013,18 @@ struct BattleView: View {
         return (build, field)
     }
 
+    /// What a move does to a target, as three pieces rather than one
+    /// sentence: the damage, what it becomes against that target's Mega, and
+    /// how to colour it.
+    ///
+    /// Kept apart because the move tiles have to line up. Glued into one
+    /// string it read "36–42% · 3HKO · as Mega Salamence 25–30%", which wraps
+    /// to three lines on one tile and one on the next, and a grid of four
+    /// buttons no two of which are the same height is hard to read at a
+    /// glance and harder to click confidently.
     private func preview(_ board: Board, fighter: Fighter, slot: Int,
-                         choice: Choice, only: Int? = nil) -> (text: String, tint: Color)? {
+                         choice: Choice, only: Int? = nil)
+        -> (text: String, mega: String?, tint: Color)? {
         guard case .attack(let index, let target) = choice,
               fighter.moves.indices.contains(index) else { return nil }
         let move = fighter.moves[index]
@@ -2060,7 +2070,8 @@ struct BattleView: View {
         let knockout = low >= hp ? "KO" : (high >= hp ? "may KO" : "\(hits)HKO")
         let tint: Color = best > 1 ? Palette.good
             : (best < 1 && best > 0 ? Palette.dim : Palette.accent)
-        var text = "\(lowShare)–\(highShare)% · \(knockout)"
+        let text = "\(lowShare)–\(highShare)% · \(knockout)"
+        var megaRead: String?
         // Mega Evolution happens before any move, so a target that could
         // evolve may take this hit as its Mega — with its Mega's defences and
         // ability. Said beside the plain number, because the difference
@@ -2082,12 +2093,15 @@ struct BattleView: View {
             if asMega.maxDamage > 0 {
                 let l2 = Int((Double(asMega.minDamage) / Double(max(1, fullHP)) * 100).rounded())
                 let h2 = Int((Double(asMega.maxDamage) / Double(max(1, fullHP)) * 100).rounded())
-                text += " · as \(mega.formLabel) \(l2)–\(h2)%"
+                // "Mega 25–30%", not "as Mega Salamence 25–30%". Which Mega it
+                // is, is on the card across the field; the tile has room for
+                // the number and not the name.
+                megaRead = "Mega \(l2)–\(h2)%"
             } else {
-                text += " · no effect on \(mega.formLabel)"
+                megaRead = "nothing to its Mega"
             }
         }
-        return (text, tint)
+        return (text, megaRead, tint)
     }
 
     /// The Mega a species most likely becomes, by what the ladder carries:
@@ -2732,15 +2746,16 @@ struct BattleView: View {
         // What it does to each of them, on the tile, before anything is
         // clicked. The point of a practice board is seeing the numbers — and
         // a target it cannot touch is said so, not left off.
-        let perTarget: [(name: String, text: String, tint: Color)] = (aim == .foe || aim == .spread) && move.isDamaging
+        let perTarget: [(name: String, text: String, mega: String?, tint: Color)] =
+            (aim == .foe || aim == .spread) && move.isDamaging
             ? (0..<min(board.activeCount, board.theirs.count)).compactMap { target in
                 guard !board.theirs[target].fainted else { return nil }
                 let name = board.theirs[target].build.form.formLabel
                 guard let read = preview(board, fighter: fighter, slot: slot,
                                          choice: .attack(move: index, target: target),
                                          only: target)
-                else { return (name, "no effect", Palette.dim) }
-                return (name, read.text, read.tint)
+                else { return (name, "no effect", nil, Palette.dim) }
+                return (name, read.text, read.mega, read.tint)
             } : []
         return Button {
             guard usable else { return }
@@ -2830,21 +2845,42 @@ struct BattleView: View {
                         .opacity(0.85)
                     Spacer(minLength: 0)
                 }
-                HStack(spacing: 6) {
-                    Image(systemName: aimSymbol(aim)).font(.system(size: 9))
+                // One line per target, each with room for a name and a
+                // number. Flowed inline they wrapped wherever the name
+                // happened to be long, so no two tiles were the same height.
+                VStack(alignment: .leading, spacing: 2) {
                     if perTarget.isEmpty {
-                        Text(aimLabel(aim)).font(.system(size: 10))
+                        HStack(spacing: 6) {
+                            Image(systemName: aimSymbol(aim)).font(.system(size: 9))
+                            Text(aimLabel(aim)).font(.system(size: 10)).lineLimit(1)
+                            if !usable {
+                                Text(aim == .party ? "· nobody has fainted yet"
+                                                   : "· only on the turn it comes in")
+                                    .font(.system(size: 10, weight: .semibold)).lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                        }
                     }
-                    ForEach(Array(perTarget.enumerated()), id: \.offset) { position, read in
-                        if position > 0 { Text("·").opacity(0.5) }
-                        Text(read.name).font(.system(size: 10)).lineLimit(1)
-                        Text(read.text)
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .monospacedDigit()
-                    }
-                    if !usable {
-                        Text(aim == .party ? "· nobody has fainted yet" : "· only on the turn it comes in")
-                            .font(.system(size: 10, weight: .semibold))
+                    ForEach(Array(perTarget.enumerated()), id: \.offset) { _, read in
+                        HStack(spacing: 5) {
+                            Image(systemName: aimSymbol(aim)).font(.system(size: 9))
+                            Text(read.name)
+                                .font(.system(size: 10)).lineLimit(1)
+                                .layoutPriority(-1)
+                            Spacer(minLength: 4)
+                            Text(read.text)
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .monospacedDigit().lineLimit(1).fixedSize()
+                            if let mega = read.mega {
+                                Text(mega)
+                                    .font(.system(size: 9, design: .rounded))
+                                    .monospacedDigit().lineLimit(1).fixedSize()
+                                    .padding(.horizontal, 4).padding(.vertical, 1)
+                                    .background(.white.opacity(0.18))
+                                    .clipShape(Capsule())
+                                    .help("What it does if that one Mega Evolves first, which happens before any move.")
+                            }
+                        }
                     }
                     Spacer(minLength: 0)
                 }
@@ -2852,7 +2888,10 @@ struct BattleView: View {
             }
             .foregroundStyle(.white)
             .padding(.horizontal, 14).padding(.vertical, 11)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // Every tile the same height, whatever it has to say. A grid of
+            // four buttons no two of which are the same size is hard to read
+            // at a glance and harder to click confidently.
+            .frame(maxWidth: .infinity, minHeight: 96, maxHeight: 96, alignment: .topLeading)
             .background(
                 LinearGradient(colors: [type.color, type.color.opacity(0.7)],
                                startPoint: .topLeading, endPoint: .bottomTrailing))
