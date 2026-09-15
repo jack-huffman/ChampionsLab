@@ -38,7 +38,10 @@ enum SelfPlay {
             // Four damaging moves it can actually learn, plus Protect when it
             // has it: enough to make the turns mean something.
             let known = form.moves.compactMap { rules.move($0) }
-            var picked = known.filter { $0.isDamaging && $0.power >= 60 }
+            // Moves it can actually put its stat behind, for the same reason.
+            let wants = form.attack >= form.spAttack ? "Physical" : "Special"
+            let hits = known.filter { $0.isDamaging && $0.power >= 60 && $0.category == wants }
+            var picked = (hits.isEmpty ? known.filter { $0.isDamaging && $0.power >= 60 } : hits)
                 .sorted { $0.power > $1.power }.prefix(3).map(\.id)
             if let protect = known.first(where: { $0.name == "Protect" }) {
                 picked.append(protect.id)
@@ -47,12 +50,19 @@ enum SelfPlay {
                 picked += known.filter { !picked.contains($0.id) }.prefix(4 - picked.count).map(\.id)
             }
             slot.moves = Array(picked.prefix(4))
+
+            // Built towards whichever side it actually hits from. Putting every
+            // Pokémon on Attack was fair, because both engines faced the same
+            // teams, but it made half the field play like nothing anybody
+            // brings — a Special Attack Pokémon with no Special Attack is not
+            // a position worth learning from.
+            let physical = form.attack >= form.spAttack
             var sp = Array(repeating: 0, count: 6)
             sp[Stat.hp.rawValue] = 20
-            sp[Stat.attack.rawValue] = 23
+            sp[(physical ? Stat.attack : Stat.spAttack).rawValue] = 23
             sp[Stat.speed.rawValue] = 23
             slot.sp = sp
-            slot.alignmentName = "Adamant"
+            slot.alignmentName = physical ? "Adamant" : "Modest"
             slots.append(slot)
         }
         out.slots = slots
@@ -75,10 +85,17 @@ enum SelfPlay {
     /// for the far side means the board turned round. Neither is handed the
     /// other's hidden bench: the two-board solve already keeps that honest, and
     /// an evaluation that leaked it would be measuring the wrong thing.
-    static func play<G: RandomNumberGenerator>(
+    static func play(
         mine: Team, theirs: Team, rules: Rulebook,
         forMine: Seat, forTheirs: Seat,
-        limit: Int = 40, dice: inout G) -> Outcome {
+        limit: Int = 40, dice: RandomNumberGenerator) -> Outcome {
+
+        // The battle's own dice, not just the engine's play sampling. Handing
+        // both halves of a mirrored pair the same stream is what lets the
+        // mirroring cancel the luck as well as the draw.
+        let wasDice = TurnModel.dice
+        TurnModel.dice = dice
+        defer { TurnModel.dice = wasDice }
 
         var board = Board(mine: mine, theirs: theirs, rules: rules,
                           field: Field(isDoubles: true), alreadyEvolved: false)
@@ -90,9 +107,9 @@ enum SelfPlay {
             if board.isOut(mine: true) { return Outcome(winner: .theirs, turns: turn) }
 
             TurnModel.branchedRolls = forMine.branchedRolls
-            let ours = choose(forMine.engine, on: board, using: &dice)
+            let ours = choose(forMine.engine, on: board)
             TurnModel.branchedRolls = forTheirs.branchedRolls
-            let theirsPlay = choose(forTheirs.engine, on: board.flipped, using: &dice)
+            let theirsPlay = choose(forTheirs.engine, on: board.flipped)
 
             TurnModel.branchedRolls = forMine.branchedRolls
             board = TurnModel.resolve(board, mine: ours, theirs: theirsPlay, rolling: true)
@@ -112,13 +129,12 @@ enum SelfPlay {
     /// a mix for a reason: always playing its favourite makes an engine
     /// readable, and two engines that both do it play a stranger game than
     /// either would against a person.
-    private static func choose<G: RandomNumberGenerator>(
-        _ engine: BattleEngine, on board: Board, using dice: inout G) -> Play {
+    private static func choose(_ engine: BattleEngine, on board: Board) -> Play {
         let thought = engine.think(board)
         guard !thought.plays.isEmpty else { return Play(left: .pass, right: .pass) }
         let total = thought.mix.reduce(0, +)
         guard total > 0 else { return thought.plays[0] }
-        var roll = Double.random(in: 0..<total, using: &dice)
+        var roll = Double.random(in: 0..<total, using: &TurnModel.dice)
         for (index, weight) in thought.mix.enumerated() {
             roll -= weight
             if roll <= 0, thought.plays.indices.contains(index) { return thought.plays[index] }

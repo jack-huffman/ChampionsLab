@@ -22,9 +22,14 @@
 //  How it is kept fair.
 //
 //  Teams are drawn from the real usage table, and every matchup is played
-//  twice with the sides swapped, so a lucky draw helps both engines equally.
-//  The dice are seeded per game and the seed is reused for the mirror, so the
-//  two halves of a pair face the same luck. What is left is the engines.
+//  twice with the *engines* swapped between the chairs and everything else —
+//  the teams, the dice, the seat that wins speed ties — held identical. Two
+//  identical engines therefore split every pair exactly, and a lucky draw
+//  cannot help one of them.
+//  The dice are seeded per game and the same seed is used for the mirror, so
+//  the two halves of a pair face the same draw *and* the same luck: the same
+//  damage rolls, the same flinches, the same misses. What is left is the
+//  engines.
 
 import AppKit
 import Foundation
@@ -103,6 +108,11 @@ func pair(_ flag: String, _ fallback: (Double, Double)) -> (Double, Double) {
     var wins = (a: 0, b: 0)
     var draws = 0
     var turnsPlayed = 0
+    // The statistic that matters for a paired design: a pair where one engine
+    // took both halves of the same game is evidence, and a pair that split is
+    // the two of them agreeing.
+    var sweeps = (a: 0, b: 0)
+    var split = 0
     var dice = Seeded(seed: seed)
 
     for game in 0..<games {
@@ -113,24 +123,37 @@ func pair(_ flag: String, _ fallback: (Double, Double)) -> (Double, Double) {
         let left = SelfPlay.team(from: pool, rules: rules, using: &picker)
         let right = SelfPlay.team(from: pool, rules: rules, using: &picker)
 
+        // The same two teams both times, the same dice both times, and only
+        // the engines change chairs.
+        //
+        // Swapping the *teams* instead, which is what this did first, meant
+        // each engine kept the same team in both halves — so the draw never
+        // cancelled and a strong team simply handed its engine both games. It
+        // showed up as two identical engines going 7-1 on four pairs. This way
+        // a pair of identical engines splits every pair exactly, and what is
+        // left to measure is the only thing that differs.
+        //
+        // It cancels the seat as well as the draw: a speed tie is broken in
+        // favour of whoever is sitting in the near chair, and each engine sits
+        // there once.
+        var tookIt = (a: 0, b: 0)
         for swapped in [false, true] {
-            let mine = swapped ? right : left
-            let theirs = swapped ? left : right
-            let first = swapped ? b : a
-            let second = swapped ? a : b
-            var rolling = Seeded(seed: gameSeed)
+            let near = swapped ? b : a
+            let far = swapped ? a : b
             let result = SelfPlay.play(
-                mine: mine, theirs: theirs, rules: rules,
-                forMine: SelfPlay.Seat(engine: first.engine, branchedRolls: first.branchedRolls),
-                forTheirs: SelfPlay.Seat(engine: second.engine, branchedRolls: second.branchedRolls),
-                dice: &rolling)
+                mine: left, theirs: right, rules: rules,
+                forMine: SelfPlay.Seat(engine: near.engine, branchedRolls: near.branchedRolls),
+                forTheirs: SelfPlay.Seat(engine: far.engine, branchedRolls: far.branchedRolls),
+                dice: Seeded(seed: gameSeed))
             turnsPlayed += result.turns
             switch result.winner {
-            case .mine:  if swapped { wins.b += 1 } else { wins.a += 1 }
-            case .theirs: if swapped { wins.a += 1 } else { wins.b += 1 }
-            case .none:  draws += 1
+            case .mine:   if swapped { wins.b += 1; tookIt.b += 1 } else { wins.a += 1; tookIt.a += 1 }
+            case .theirs: if swapped { wins.a += 1; tookIt.a += 1 } else { wins.b += 1; tookIt.b += 1 }
+            case .none:   draws += 1
             }
         }
+        if tookIt.a == 2 { sweeps.a += 1 } else if tookIt.b == 2 { sweeps.b += 1 }
+        else if tookIt.a == 1 && tookIt.b == 1 { split += 1 }
         if (game + 1) % 10 == 0 {
             FileHandle.standardError.write(
                 "  \(game + 1)/\(games): A \(wins.a), B \(wins.b), drawn \(draws)\n"
@@ -141,19 +164,31 @@ func pair(_ flag: String, _ fallback: (Double, Double)) -> (Double, Double) {
     let decided = wins.a + wins.b
     print("  A won \(wins.a), B won \(wins.b), \(draws) went the distance")
     guard decided > 0 else { print("\n  Nothing was decided; every game timed out."); return }
-    let share = Double(wins.a) / Double(decided)
-    // Two standard errors on a coin flip of this many trials, which is the
-    // width inside which a difference means nothing.
-    let error = 2 * (0.5 / Double(decided).squareRoot())
-    print(String(format: "  A takes %.1f%% of decided games, give or take %.1f",
-                 share * 100, error * 100))
-    print(String(format: "  %.1f turns per game on average", Double(turnsPlayed) / Double(games * 2)))
+    print(String(format: "  %.1f turns per game on average",
+                 Double(turnsPlayed) / Double(games * 2)))
+    print()
+
+    // Because everything except the engines is held identical across a pair,
+    // two identical engines split every pair. So the pairs that did *not*
+    // split are the whole of the evidence, and the ones that did carry none.
+    let telling = sweeps.a + sweeps.b
+    print("  Of \(games) pairs: \(split) split, A took both in \(sweeps.a), B took both in \(sweeps.b)")
+    guard telling > 0 else {
+        print("\n  Every pair split. On these games the two engines are")
+        print("  indistinguishable — which is the right answer when nothing differs.")
+        return
+    }
+    let share = Double(sweeps.a) / Double(telling)
+    // Two standard errors on a coin flip of the pairs that carried evidence.
+    let error = 2 * (0.5 / Double(telling).squareRoot())
+    print(String(format: "  Of the %d pairs that tell us anything, A took %.0f%%, give or take %.0f",
+                 telling, share * 100, error * 100))
     print()
     if abs(share - 0.5) <= error {
-        print("  That is inside the noise. On this many games the two are level;")
-        print("  run more before believing a difference either way.")
+        print("  That is inside the noise. Run more pairs before believing a")
+        print("  difference either way.")
     } else {
-        print("  \(share > 0.5 ? "A" : "B") is genuinely ahead at this number of games.")
+        print("  \(share > 0.5 ? "A" : "B") is genuinely ahead at this number of pairs.")
     }
 }
 

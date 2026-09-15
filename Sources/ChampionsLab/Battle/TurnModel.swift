@@ -904,7 +904,7 @@ enum TurnModel {
     private static func quickClawed(_ fighter: Fighter, mine: Bool, slot: Int,
                                     board: Board, rolling: Bool) -> Bool {
         guard fighter.build.item == "Quick Claw" else { return false }
-        if rolling { return Double.random(in: 0..<1) < 0.2 }
+        if rolling { return Double.random(in: 0..<1, using: &TurnModel.dice) < 0.2 }
         return board.rulings[Board.flip("quickclaw", mine, slot)] ?? false
     }
 
@@ -1254,6 +1254,20 @@ enum TurnModel {
     /// A `var` only so the duel tool can hold one engine at a different
     /// setting from the other. Nothing in the app changes it.
     nonisolated(unsafe) static var branchedRolls = 1
+
+    /// Every roll a played turn makes goes through here.
+    ///
+    /// The system generator cannot be seeded, which made a battle impossible to
+    /// replay and made the duel harness noisier than it needed to be: the two
+    /// halves of a mirrored pair faced different luck, so the mirroring only
+    /// cancelled the *draw* and not the dice. With one generator behind all of
+    /// it, both halves can be handed the same stream and what is left is the
+    /// engines.
+    ///
+    /// Unsafe in name only. A played turn is resolved from one thread at a
+    /// time — the app's on the main actor, the duel's in its own loop — and the
+    /// search never touches this at all, because a search does not roll.
+    nonisolated(unsafe) static var dice: RandomNumberGenerator = SystemRandomNumberGenerator()
 
     /// Everything that happens after both sides have acted.
     ///
@@ -1756,7 +1770,7 @@ enum TurnModel {
             markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return
         }
-        if actor.status == .paralysis, rolling, Double.random(in: 0...1) < 0.25 {
+        if actor.status == .paralysis, rolling, Double.random(in: 0...1, using: &TurnModel.dice) < 0.25 {
             board.note("\(name) is paralysed and cannot move.")
             dropCharge(byMine: byMine, slot: slot, board: &board)
             markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
@@ -1770,7 +1784,7 @@ enum TurnModel {
             if !far.indices.contains(loves) || far[loves].fainted {
                 if byMine { board.mine[slot].infatuatedWith = nil }
                 else { board.theirs[slot].infatuatedWith = nil }
-            } else if rolling, Double.random(in: 0..<1) < 0.5 {
+            } else if rolling, Double.random(in: 0..<1, using: &TurnModel.dice) < 0.5 {
                 board.note("\(name) is immobilised by love.")
                 dropCharge(byMine: byMine, slot: slot, board: &board)
                 markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
@@ -1796,11 +1810,11 @@ enum TurnModel {
                 board.note("\(name) snapped out of its confusion.")
             } else {
                 board.note("\(name) is confused.")
-                if rolling, Double.random(in: 0..<1) < 1.0 / 3.0 {
+                if rolling, Double.random(in: 0..<1, using: &TurnModel.dice) < 1.0 / 3.0 {
                     let attack = Double(actor.build.stagedStat(.attack))
                     let defence = Double(actor.build.stagedStat(.defense))
                     let base = (2.0 * 50 / 5 + 2) * 40 * attack / defence / 50 + 2
-                    let hurt = Swift.max(1, Int(base * Double.random(in: 0.85...1.0)))
+                    let hurt = Swift.max(1, Int(base * Double.random(in: 0.85...1.0, using: &TurnModel.dice)))
                     if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - hurt) }
                     else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - hurt) }
                     board.note("It hurt itself in its confusion for \(hurt).")
@@ -2010,7 +2024,7 @@ enum TurnModel {
                 // 85% can hit one of them and miss the other. The search's
                 // averages were always per target; only the dice were not.
                 if rolling, !move.neverMisses, move.accuracy > 0,
-                   Double.random(in: 0...100) > chanceToHit(move, attacker: actor,
+                   Double.random(in: 0...100, using: &TurnModel.dice) > chanceToHit(move, attacker: actor,
                                                             defender: defending[index],
                                                             board: board) {
                     board.note(aimed.count > 1 ? "\(hitName) avoided it." : "It missed.")
@@ -2038,7 +2052,7 @@ enum TurnModel {
                 let rate = stage <= 0 ? move.critRate
                     : (stage == 1 ? Swift.max(move.critRate, 12.5)
                        : stage == 2 ? Swift.max(move.critRate, 50) : 100)
-                if rolling, rate > 0, Double.random(in: 0..<100) < rate {
+                if rolling, rate > 0, Double.random(in: 0..<100, using: &TurnModel.dice) < rate {
                     field.critical = true
                 }
                 var attacker = actor.build
@@ -2075,14 +2089,15 @@ enum TurnModel {
                                         board: board) / 100
                 let dealt: Int = rolling
                     ? Int.random(in: Swift.min(result.minDamage, result.maxDamage)
-                                 ... Swift.max(result.minDamage, result.maxDamage))
+                                 ... Swift.max(result.minDamage, result.maxDamage),
+                                 using: &TurnModel.dice)
                     : Int((Double(result.minDamage + result.maxDamage) / 2 * accuracy).rounded())
 
                 // A one-hit knockout does exactly that, three times in ten,
                 // and nothing at all the rest of the time. It is worked out
                 // here rather than from power, because its listed power is 1.
                 if move.isOHKO {
-                    let lands = rolling ? Double.random(in: 0..<1) < 0.3 : false
+                    let lands = rolling ? Double.random(in: 0..<1, using: &TurnModel.dice) < 0.3 : false
                     if defending[index].types.contains(.ice), move.id == "sheercold" {
                         board.note("It does not affect \(hitName).")
                         continue
@@ -2319,7 +2334,7 @@ enum TurnModel {
         case "Flame Body", "Static", "Poison Point":
             // Three in ten. A search averages, so it does not apply these at
             // all rather than applying them to everybody.
-            guard rolling, Double.random(in: 0..<1) < 0.3, attacker.status == .none else { break }
+            guard rolling, Double.random(in: 0..<1, using: &TurnModel.dice) < 0.3, attacker.status == .none else { break }
             let ailment: Ailment = defender.build.ability == "Flame Body" ? .burn
                 : defender.build.ability == "Static" ? .paralysis : .poison
             let immune = (ailment == .burn && attacker.build.form.pokeTypes.contains(.fire))
@@ -2334,7 +2349,7 @@ enum TurnModel {
         }
 
         let touched: Bool
-        if rolling { touched = Double.random(in: 0..<1) < 0.3 }
+        if rolling { touched = Double.random(in: 0..<1, using: &TurnModel.dice) < 0.3 }
         else { touched = board.rulings[Board.flip("poisontouch", byMine, slot)] ?? false }
         if attacker.build.ability == "Poison Touch", touched, !defender.fainted,
            defender.status == .none,
@@ -2498,7 +2513,7 @@ enum TurnModel {
             // A played turn rolls. The search takes the branch it was handed,
             // and falls back to "only what is certain" when it was handed none.
             let happens: Bool
-            if rolling { happens = Double.random(in: 0..<100) < Double(chance) }
+            if rolling { happens = Double.random(in: 0..<100, using: &TurnModel.dice) < Double(chance) }
             else if let ruled = board.rulings[Board.flip("secondary", byMine, slot)] { happens = ruled }
             else { happens = chance >= 100 }
             guard happens else { continue }
@@ -2580,7 +2595,7 @@ enum TurnModel {
         }
         // Two to five turns of it. The search takes the shortest, so it never
         // counts on more than the game guarantees.
-        let turns = rolling ? Int.random(in: 2...5) : 2
+        let turns = rolling ? Int.random(in: 2...5, using: &TurnModel.dice) : 2
         if onMine { board.mine[slot].confusedFor = turns } else { board.theirs[slot].confusedFor = turns }
         board.note("\(name) became confused" + (chance < 100 ? " — the \(chance)% came up." : "."))
     }
@@ -2738,7 +2753,7 @@ enum TurnModel {
         // is why a Gholdengo that has already protected is still not a free
         // Sucker Punch.
         let ruling = board.rulings[Board.flip("protect", byMine, slot)]
-        let works = rolling ? Double.random(in: 0..<1) < chance : (ruling ?? (chance >= 0.5))
+        let works = rolling ? Double.random(in: 0..<1, using: &TurnModel.dice) < chance : (ruling ?? (chance >= 0.5))
         if works {
             if byMine { board.mine[slot].isProtected = true; board.mine[slot].protectStreak += 1 }
             else { board.theirs[slot].isProtected = true; board.theirs[slot].protectStreak += 1 }
@@ -3265,7 +3280,7 @@ enum TurnModel {
                 return
             }
             let chance = pow(1.0 / 3.0, Double(own[slot].switchStreak))
-            guard rolling ? Double.random(in: 0..<1) < chance : chance >= 0.5 else {
+            guard rolling ? Double.random(in: 0..<1, using: &TurnModel.dice) < chance : chance >= 0.5 else {
                 if byMine { board.mine[slot].switchStreak = 0 } else { board.theirs[slot].switchStreak = 0 }
                 board.note("But it failed — \(Int((chance * 100).rounded()))% after using it last turn.")
                 return
@@ -3546,11 +3561,11 @@ enum TurnModel {
             if byMine {
                 board.theirs[target].status = ailment
                 if ailment == .sleep { board.theirs[target].asleepFor = rolling
-                    ? Int.random(in: 1...3) : 2 }
+                    ? Int.random(in: 1...3, using: &TurnModel.dice) : 2 }
             } else {
                 board.mine[target].status = ailment
                 if ailment == .sleep { board.mine[target].asleepFor = rolling
-                    ? Int.random(in: 1...3) : 2 }
+                    ? Int.random(in: 1...3, using: &TurnModel.dice) : 2 }
             }
             board.note("\(victim.build.form.formLabel) is \(ailment.rawValue).")
             // Synchronize hands the condition straight back. It was wired to

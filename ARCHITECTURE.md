@@ -208,11 +208,17 @@ make duel                          both sides on current settings
 ```
 
 Fairness is the whole design. Teams are drawn from the real usage table, every
-matchup is played twice with the sides swapped, and the dice are seeded per
-game with the same seed used for the mirror — so both halves of a pair face the
-same luck and the same draw, and what is left is the engines. Each side is
-asked for its move on its own view of the board, so neither is handed the
-other's hidden bench.
+matchup is played twice with the sides swapped, and one seeded generator drives
+both the draw and the battle itself — the same seed for both halves of a pair,
+so they face the same teams, the same damage rolls, the same flinches and the
+same misses. What is left is the engines. Each side is asked for its move on
+its own view of the board, so neither is handed the other's hidden bench, and
+`FlippedBoardTests` holds that turning the board round changes nothing about
+how a turn resolves.
+
+Every roll a played turn makes goes through `TurnModel.dice` for this reason. A
+search never touches it, because a search does not roll — it branches and
+weighs instead, which is what `branchedRolls` caps.
 
 Run it with both sides set the same first. That measures the noise floor, and
 the result should sit near even; anything else is a bug in the harness rather
