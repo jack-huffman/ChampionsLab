@@ -368,6 +368,11 @@ struct Board {
     /// secret away.
     var myRoster: [String] = []
     var theirRoster: [String] = []
+    /// Whether each side's evaluation counts the stat stages on its Pokémon.
+    /// Per side, and only so that one can be measured against the other — in
+    /// play both are on.
+    var myCountsStages = true
+    var theirCountsStages = true
 
     /// Derive both sides' weights from the duel table.
     ///
@@ -552,6 +557,7 @@ struct Board {
         swap(&out.myWorth, &out.theirWorth)
         swap(&out.myBeats, &out.theirBeats)
         swap(&out.myRoster, &out.theirRoster)
+        swap(&out.myCountsStages, &out.theirCountsStages)
         // The per-slot keys name a side, so they have to be relabelled too.
         func relabel(_ table: [String: Bool]) -> [String: Bool] {
             Dictionary(uniqueKeysWithValues: table.map { key, value in
@@ -1142,7 +1148,7 @@ enum TurnModel {
     /// still has to be answered, and a model that values only health throws
     /// bodies away for chip damage.
     static func value(_ board: Board) -> Double {
-        func side(_ team: [Fighter], _ worth: [String: Double]) -> Double {
+        func side(_ team: [Fighter], _ worth: [String: Double], _ countStages: Bool) -> Double {
             team.reduce(0) { total, fighter in
                 guard !fighter.fainted else { return total }
                 // Only a Pokémon that has stood on the field carries a weight.
@@ -1158,15 +1164,56 @@ enum TurnModel {
                 // as it did before there were any.
                 let weight = fighter.seen ? (worth[fighter.build.form.id] ?? 1) : 1
                 return total + weight * (0.35 + 0.65 * fighter.share)
+                    + (countStages ? stages(fighter) : 0)
             }
         }
         // Both sides weighed, which is what lets the engine prefer to knock out
         // the Pokémon that actually threatens it. Only what has been seen
         // carries a weight, which is where the hidden-information rule is kept.
-        var out = side(board.mine, board.myWorth) - side(board.theirs, board.theirWorth)
+        var out = side(board.mine, board.myWorth, board.myCountsStages)
+            - side(board.theirs, board.theirWorth, board.theirCountsStages)
         out += speedControl(board.myTailwind, under: board.trickRoom)
             - speedControl(board.theirTailwind, under: board.trickRoom)
         return out
+    }
+
+    /// What the stat stages on a Pokémon are worth.
+    ///
+    /// They were worth nothing at all, which made every disruption move look
+    /// like a wasted turn. An Intimidate, a Snarl, an Icy Wind, a Parting Shot
+    /// — the whole way a support Pokémon earns its slot — showed up only as
+    /// whatever damage the search happened to see inside its horizon, and at a
+    /// short budget that horizon is a turn or two. So the engine would not pay
+    /// a turn to take an attacker's Attack away, and could not see why anybody
+    /// would cycle an Intimidate in and out to keep doing it.
+    ///
+    /// Priced off the damage multiplier a stage actually produces rather than
+    /// counted flat, because the two are not the same shape: +1 is half again,
+    /// while −1 is a third off. A stage on the attacking stat a Pokémon does
+    /// not use is worth almost nothing, which is why the two are told apart.
+    private static func stages(_ fighter: Fighter) -> Double {
+        let boosts = fighter.build.boosts
+        guard boosts.count >= 6, boosts.contains(where: { $0 != 0 }) else { return 0 }
+        func multiplier(_ stage: Int) -> Double {
+            stage >= 0 ? Double(2 + stage) / 2 : 2 / Double(2 - stage)
+        }
+        func worth(_ stat: Stat, _ scale: Double) -> Double {
+            let stage = boosts[stat.rawValue]
+            guard stage != 0 else { return 0 }
+            return (multiplier(stage) - 1) * scale
+        }
+        // Whichever side it actually attacks from. The other is nearly idle:
+        // a Special Attack drop on a Rillaboom costs it almost nothing.
+        let physical = fighter.build.form.attack >= fighter.build.form.spAttack
+        var out = worth(physical ? .attack : .spAttack, 0.16)
+        out += worth(physical ? .spAttack : .attack, 0.03)
+        // Taking a hit is worth about what landing one is.
+        out += worth(.defense, 0.11)
+        out += worth(.spDefense, 0.11)
+        // Speed only pays when it changes who goes first, which this cannot
+        // see from here, so it is priced low and honestly.
+        out += worth(.speed, 0.07)
+        return Swift.max(-0.9, Swift.min(0.9, out))
     }
 
     /// What a Tailwind is worth, given what the room is doing.
