@@ -50,7 +50,7 @@ struct MoveQuality {
 
 extension Move {
     /// The self-inflicted costs and oddities parsed out of the effect text.
-    struct Drawbacks {
+    struct Drawbacks: Sendable {
         /// Fraction of the damage dealt taken back — Brave Bird, Head Smash.
         var recoil = 0.0
         /// Fraction of max HP taken unconditionally — Steel Beam.
@@ -90,13 +90,9 @@ extension Move {
     /// multi-hit, which put a dozen regular expressions inside every single
     /// damage roll -- roughly 167,000 of them in one pass of the anti-meta
     /// picks, which took that from a second to eighteen.
-    private static let drawbackCache = Memo<String, Drawbacks>()
+    var drawbacks: Drawbacks { rules.drawbacks }
 
-    var drawbacks: Drawbacks {
-        Move.drawbackCache.value(id) { computeDrawbacks() }
-    }
-
-    private func computeDrawbacks() -> Drawbacks {
+    internal func computeDrawbacks() -> Drawbacks {
         var out = Drawbacks()
         let text = effect
 

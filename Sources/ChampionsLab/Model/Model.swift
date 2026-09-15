@@ -114,7 +114,7 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
 
     /// Feint, Phantom Force, Shadow Force: goes through Protect and takes it
     /// down, so everything else aimed there this turn lands too.
-    var breaksProtect: Bool {
+    internal var computedBreaksProtect: Bool {
         effect.lowercased().contains("removes the effects of those moves")
     }
 
@@ -152,7 +152,7 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     /// Target" covers Protect, Swords Dance, Helping Hand and Thunder Wave,
     /// which are aimed at four different things. Spread moves it does get
     /// right, and the rest is read from what the move does.
-    enum Aim {
+    enum Aim: Sendable {
         /// One opponent, and you pick which.
         case foe
         /// Everything it can reach; no choice to make.
@@ -167,13 +167,15 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
         case party
     }
 
-    var aim: Aim {
+    internal var computedAim: Aim {
         if isSpread { return .spread }
         if Move.partyMoves.contains(name) { return .party }
         if Move.sideMoves.contains(name) { return .side }
         if Move.allyMoves.contains(name) { return .ally }
         if Move.selfMoves.contains(name) { return .user }
-        if !isDamaging, !selfBoosts.isEmpty, targetDrops.isEmpty { return .user }
+        // The computed forms, not the memoised ones: this *is* the parse, and
+        // asking the memo for a move it is still parsing never returns.
+        if !isDamaging, !computedSelfBoosts.isEmpty, computedTargetDrops.isEmpty { return .user }
         return .foe
     }
 
@@ -220,7 +222,7 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     /// what speed control looks like outside Tailwind, and "Lowers the target's
     /// Attack and Sp. Atk stats by 1 stage" is Parting Shot. Read from the same
     /// sentence the boosts are, because it is written the same way.
-    var targetDrops: [Stat: Int] {
+    internal var computedTargetDrops: [Stat: Int] {
         guard let match = effect.range(
             of: #"Lowers (?:the )?targets?'? .+? stats? by \d+ stage"#,
             options: .regularExpression) else { return [:] }
@@ -250,7 +252,7 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     /// A move that takes a turn to wind up: what the user does on the first
     /// turn, whether it is out of reach while doing it, and the weather that
     /// lets it skip the wait. Read from the text, which is regular about it.
-    struct Charge {
+    struct Charge: Sendable {
         /// Fly, Dig, Dive, Bounce, Phantom Force: nothing reaches it meanwhile.
         let hides: Bool
         /// Solar Beam fires at once in sun, Electro Shot in rain.
@@ -260,7 +262,7 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
         let boosts: [Stat: Int]
     }
 
-    var charge: Charge? {
+    internal var computedCharge: Charge? {
         let lower = effect.lowercased()
         guard lower.contains("status on the turn this move is used then attacks on the following turn")
         else { return nil }
@@ -294,7 +296,7 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     /// The share of the damage dealt that comes back to the user: Leech Life,
     /// Drain Punch, Giga Drain and Horn Leech at half, Draining Kiss at three
     /// quarters. Read from the text.
-    var drainShare: Double? {
+    internal var computedDrainShare: Double? {
         guard let match = effect.range(of: #"restored by (\d+)/(\d+) of the damage dealt"#,
                                        options: .regularExpression) else { return nil }
         let numbers = effect[match].split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
@@ -305,8 +307,8 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     /// What a hit does besides damage, and how often: Scald's burn three times
     /// in ten, Nuzzle's paralysis every time, Rock Slide's flinch, a chance of
     /// a stage off the target. Read from the text, which is regular about it.
-    struct Secondary {
-        enum Kind {
+    struct Secondary: Sendable {
+        enum Kind: Sendable {
             case status(Ailment)
             case flinch
             case drops([Stat: Int])
@@ -316,7 +318,7 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
         let kind: Kind
     }
 
-    var secondary: Secondary? {
+    internal var computedSecondary: Secondary? {
         let text = effect
         func ailment(_ verb: String) -> Ailment? {
             switch verb {
@@ -373,15 +375,15 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     /// What a healing move gives back, as a share of the bar, and to whom.
     /// Recover's half to the user, Heal Pulse's half to the partner, Life
     /// Dew's quarter to both; Synthesis and its kind read the weather.
-    struct Healing {
-        enum Whom { case user, partner, both }
+    struct Healing: Sendable {
+        enum Whom: Sendable { case user, partner, both }
         let share: Double
         let whom: Whom
         /// Two thirds in sun, a quarter in any other weather.
         let sunlit: Bool
     }
 
-    var healing: Healing? {
+    internal var computedHealing: Healing? {
         let text = effect
         if text.hasPrefix("Fully restores the user's HP") { return Healing(share: 1, whom: .user, sunlit: false) }
         guard let match = text.range(of: #"Restores (\d+)/(\d+) of (the user's|the target's|the max HP of the user and its allies|the max HP of the user or an ally|its) max HP|Restores (\d+)/(\d+) of the max HP of the user (and its allies|or an ally)"#,
@@ -397,7 +399,7 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
 
     /// Confuse Ray, Swagger, Flatter, Dynamic Punch: the target ends up
     /// confused whatever else the move does.
-    var confuses: Bool {
+    internal var computedConfuses: Bool {
         let lower = effect.lowercased()
         return lower.hasPrefix("confuses the target") || lower.contains("and confuses it")
             || lower.contains("confuses all other")
@@ -405,7 +407,7 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
 
     /// Swagger's two stages of Attack, Flatter's one of Special Attack: a
     /// raise handed to the target, which only makes sense with the confusion.
-    var targetBoosts: [Stat: Int] {
+    internal var computedTargetBoosts: [Stat: Int] {
         guard let match = effect.range(of: #"Boosts the target's (.+?) stats? by (\d+) stage"#,
                                        options: .regularExpression) else { return [:] }
         let phrase = String(effect[match])
@@ -421,18 +423,18 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
 
     /// Stomping Tantrum: twice the power after a turn the user's move missed,
     /// failed, or never happened.
-    var doublesAfterFailure: Bool {
+    internal var computedDoublesAfterFailure: Bool {
         effect.lowercased().contains("doubled if the user couldn't act or its move missed or failed")
     }
 
-    var selfBoosts: [Stat: Int] { ownChanges(verb: "Boosts") }
+    internal var computedSelfBoosts: [Stat: Int] { ownChanges(verb: "Boosts") }
 
     /// What a move costs the user in stages: Close Combat's Defence and
     /// Special Defence, Overheat's two stages of Special Attack. Positive
     /// numbers, the way the drops on a target are.
-    var selfDrops: [Stat: Int] { ownChanges(verb: "Lowers") }
+    internal var computedSelfDrops: [Stat: Int] { ownChanges(verb: "Lowers") }
 
-    private func ownChanges(verb: String) -> [Stat: Int] {
+    internal func ownChanges(verb: String) -> [Stat: Int] {
         guard let match = effect.range(of: "\(verb) the user's .+? stats? by \\d+ stage",
                                        options: .regularExpression) else { return [:] }
         let phrase = String(effect[match])
