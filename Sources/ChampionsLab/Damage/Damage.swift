@@ -44,6 +44,13 @@ struct Field {
     /// Carried on the field rather than on the Pokémon, because it is a fact
     /// about this turn and `Combatant` is what the parity audit fingerprints.
     var targetJustArrived = false
+    /// A Fairy Aura is standing somewhere on the field. It powers up Fairy
+    /// moves for *everybody*, which is why it is a property of the field
+    /// rather than of whoever is holding it.
+    var fairyAura = false
+    /// The attacker's partner has Steely Spirit, which pays for its Steel
+    /// moves as well as its own.
+    var alliedSteelySpirit = false
     /// Cloud Nine or Air Lock is on the field, so the weather is decoration.
     /// Kept separate from clearing the weather outright, because the weather
     /// is still *there* — it comes back the moment the ability leaves.
@@ -73,6 +80,10 @@ struct Combatant {
     /// At a third of its health or less, which is when Blaze and its family
     /// switch on. A build on paper is never low; a battle sets this.
     var lowHP = false
+    /// A condition it is carrying. Set at the point of use the way `lowHP`
+    /// and `atFullHP` are, because a build on paper has no status and only a
+    /// battle knows: Marvel Scale and Quick Feet are both paid for being ill.
+    var status: Ailment = .none
     /// Its last move missed, failed or never happened, which is what
     /// Stomping Tantrum is waiting for.
     var lastMoveFailed = false
@@ -128,6 +139,9 @@ struct Combatant {
         case "Iron Ball", "Macho Brace":        speed *= 0.5
         default: break
         }
+        // Quick Feet is half again as fast while ill, and it ignores the
+        // paralysis that would otherwise be halving it.
+        if ability == "Quick Feet", status != .none { speed *= 1.5 }
         switch ability {
         case "Swift Swim"   where field.weather == .rain:      speed *= 2
         case "Chlorophyll"  where field.weather == .sun:       speed *= 2
@@ -392,6 +406,31 @@ enum DamageCalc {
             power *= 1.5
             notes.append("Sharpness: +50%")
         }
+        // Champions gives some of its Megas an ability that rewrites a move's
+        // type on the way out. Done here, before anything reads `moveType`, so
+        // the same-type bonus and the type chart both see the new one.
+        switch attacker.ability {
+        case "Dragonize" where moveType == .normal:
+            moveType = .dragon
+            power *= 1.2
+            notes.append("Dragonize: Normal becomes Dragon, +20%")
+        case "Liquid Voice" where move.isSound:
+            moveType = .water
+            notes.append("Liquid Voice: the sound becomes Water")
+        default: break
+        }
+        if attacker.ability == "Fire Mane", moveType == .fire {
+            power *= 1.5
+            notes.append("Fire Mane: +50%")
+        }
+        if moveType == .steel, attacker.ability == "Steely Spirit" || field.alliedSteelySpirit {
+            power *= 1.5
+            notes.append("Steely Spirit: +50%")
+        }
+        if moveType == .fairy, field.fairyAura {
+            power *= 1.33
+            notes.append("Fairy Aura: +33%")
+        }
         // Analytic pays for going second, which is the one thing a slow
         // attacker has going for it.
         if attacker.ability == "Analytic", field.movingLast {
@@ -487,6 +526,13 @@ enum DamageCalc {
         }
         // Fur Coat is a second Defense, and the reason a Furfrou wall exists.
         if defender.ability == "Fur Coat", physical { defense *= 2 }
+        // Marvel Scale is paid for being ill; Grass Pelt for standing on grass.
+        if defender.ability == "Marvel Scale", defender.status != .none, physical {
+            defense *= 1.5
+        }
+        if defender.ability == "Grass Pelt", field.terrain == .grassy, physical {
+            defense *= 1.5
+        }
         if defender.item == "Assault Vest", !physical { defense *= 1.5 }
         if defender.item == "Eviolite" { defense *= 1.5 }
         if field.weather == .snow, defender.effectiveTypes.contains(.ice), physical {
@@ -678,12 +724,13 @@ enum DamageCalc {
                                               defender: Combatant, ignored: Bool = false,
                                               notes: inout [String]) -> Double {
         switch (ignored ? "" : defender.ability, moveType) {
-        case ("Levitate", .ground):
-            notes.append("Levitate: immune to Ground")
+        case ("Levitate", .ground), ("Eelevate", .ground):
+            notes.append("\(defender.ability): immune to Ground")
             return 0
         case ("Flash Fire", .fire), ("Water Absorb", .water), ("Volt Absorb", .electric),
              ("Sap Sipper", .grass), ("Storm Drain", .water), ("Lightning Rod", .electric),
-             ("Motor Drive", .electric), ("Dry Skin", .water):
+             ("Motor Drive", .electric), ("Dry Skin", .water),
+             ("Earth Eater", .ground), ("Well-Baked Body", .fire):
             notes.append("\(defender.ability): absorbed")
             return 0
         case ("Thick Fat", .fire), ("Thick Fat", .ice):

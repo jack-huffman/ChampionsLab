@@ -1673,6 +1673,17 @@ enum TurnModel {
                                          opposing: inout [Fighter], field: inout Field) -> String? {
         let name = team.indices.contains(slot) ? team[slot].build.form.formLabel : "It"
         switch ability {
+        case "Curious Medicine":
+            // Wipes its own side's stat changes on the way in, which is a cost
+            // as often as it is a cure.
+            var cleared: [String] = []
+            for index in team.indices.prefix(2)
+            where !team[index].fainted && team[index].build.boosts.contains(where: { $0 != 0 }) {
+                team[index].build.boosts = Array(repeating: 0, count: 6)
+                cleared.append(team[index].build.form.formLabel)
+            }
+            guard !cleared.isEmpty else { return nil }
+            return "\(name)'s Curious Medicine reset \(cleared.joined(separator: " and "))."
         case "Trace":
             // Takes an ability from across the field, which is why a Gardevoir
             // can walk in and suddenly have Intimidate. Not everything can be
@@ -2129,6 +2140,15 @@ enum TurnModel {
                     else { board.theirs[index].isProtected = false }
                     board.note("\(move.name) broke through \(hitName)'s protection.")
                 }
+                // Unseen Fist reaches through a Protect with anything that makes
+                // contact; Piercing Drill does the same for a quarter damage.
+                if defending[index].isProtected, move.isProtectable, move.makesContact,
+                   ["Unseen Fist", "Piercing Drill"].contains(actor.build.ability) {
+                    if hitMine { board.mine[index].isProtected = false }
+                    else { board.theirs[index].isProtected = false }
+                    board.note("\(actor.build.ability) reached through \(hitName)'s protection.")
+                }
+
                 // Protean and Libero make the user the move's type as it uses
                 // it, which is a free same-type bonus on everything it throws.
                 if ["Protean", "Libero"].contains(actor.build.ability),
@@ -2180,8 +2200,14 @@ enum TurnModel {
                 reached += 1
                 var defender = defending[index].build
                 defender.atFullHP = defending[index].hp == defending[index].maxHP
+                defender.status = defending[index].status
                 var field = board.calcField
                 field.targetJustArrived = defending[index].justArrived
+                // A Fairy Aura anywhere on the field powers up Fairy moves for
+                // everybody, which is what makes it an aura.
+                field.fairyAura = (board.mine + board.theirs)
+                    .prefix(board.activeCount * 2)
+                    .contains { !$0.fainted && $0.build.ability == "Fairy Aura" }
                 // Analytic is paid for going after the target has already had
                 // its turn, which is exactly what `acted` records.
                 field.movingLast = board.acted.contains((hitMine ? "m" : "t") + "\(index)")
@@ -2205,6 +2231,11 @@ enum TurnModel {
                 if actor.build.item == "Leek",
                    actor.build.form.species.contains("farfetch") { stage += 2 }
                 if actor.build.item == "Razor Claw" || actor.build.item == "Scope Lens" { stage += 1 }
+                if actor.build.ability == "Super Luck" { stage += 1 }
+                // Merciless always crits a poisoned target, which is the
+                // entire reason a Toxapex threatens anything.
+                if actor.build.ability == "Merciless",
+                   [.poison, .badPoison].contains(defending[index].status) { stage = 3 }
                 let rate = stage <= 0 ? move.critRate
                     : (stage == 1 ? Swift.max(move.critRate, 12.5)
                        : stage == 2 ? Swift.max(move.critRate, 50) : 100)
@@ -2221,6 +2252,13 @@ enum TurnModel {
                 attacker.ignoresAbility = ["Mold Breaker", "Turboblaze", "Teravolt"]
                     .contains(actor.build.ability)
                 attacker.lowHP = actor.hp * 3 <= actor.maxHP
+                attacker.status = actor.status
+                // Steely Spirit pays for its partner's Steel moves too.
+                let ourAlly = slot == 0 ? 1 : 0
+                let ourSide = byMine ? board.mine : board.theirs
+                field.alliedSteelySpirit = ourSide.indices.contains(ourAlly)
+                    && ourAlly < board.activeCount && !ourSide[ourAlly].fainted
+                    && ourSide[ourAlly].build.ability == "Steely Spirit"
                 attacker.lastMoveFailed = actor.lastMoveFailed
                 // Supreme Overlord and Last Respects count the fallen. Never
                 // filled in before, so neither ever went off in a battle.
@@ -2230,6 +2268,40 @@ enum TurnModel {
                 }
                 let result = DamageCalc.calculate(attacker: attacker, defender: defender,
                                                   move: move, field: field)
+
+                // An absorbed hit is not merely a hit that did nothing. The
+                // calculator already zeroes the damage; what it cannot do is
+                // pay the ability out, because it has no board to pay into.
+                if result.effectiveness == 0, !breaker,
+                   result.notes.contains(where: { $0.contains("absorbed") }) {
+                    let who = defending[index].build.ability
+                    let heals = ["Water Absorb", "Volt Absorb", "Dry Skin", "Earth Eater"]
+                    if heals.contains(who) {
+                        let back = Swift.max(1, defending[index].maxHP / 4)
+                        let gained = Swift.min(defending[index].maxHP - defending[index].hp, back)
+                        if gained > 0 {
+                            if hitMine { board.mine[index].hp += gained }
+                            else { board.theirs[index].hp += gained }
+                            board.note("\(hitName)'s \(who) drank it in for \(gained).")
+                        } else {
+                            board.note("\(hitName)'s \(who) absorbed it.")
+                        }
+                    } else {
+                        let paid: [Stat: Int]
+                        switch who {
+                        case "Sap Sipper":    paid = [.attack: 1]
+                        case "Motor Drive":   paid = [.speed: 1]
+                        case "Storm Drain", "Lightning Rod": paid = [.spAttack: 1]
+                        case "Flash Fire":    paid = [.spAttack: 1]
+                        default:              paid = [:]
+                        }
+                        if paid.isEmpty { board.note("\(hitName)'s \(who) absorbed it.") }
+                        else {
+                            change(paid, onMine: hitMine, slot: index, board: &board, because: who)
+                        }
+                    }
+                    continue
+                }
                 if field.critical { board.note("  A critical hit!") }
 
                 // 3. What the far side brings to it. These are the calculator's
@@ -2685,6 +2757,11 @@ enum TurnModel {
         guard team.indices.contains(slot), !team[slot].fainted else { return }
         let name = team[slot].build.form.formLabel
         let ability = team[slot].build.ability
+        // Big Pecks keeps its Defense where it is, and nothing else.
+        if ability == "Big Pecks", drops.keys.contains(.defense), drops.count == 1 {
+            board.note("\(name)'s Big Pecks kept its Defense where it was.")
+            return
+        }
         if ["Clear Body", "White Smoke", "Full Metal Body", "Mirror Armor"].contains(ability) {
             board.note("\(name)'s \(ability) kept its stats where they were.")
             return
@@ -2799,6 +2876,7 @@ enum TurnModel {
                           && types.contains(where: { [.poison, .steel].contains($0) }))
                     || defender.build.ability == "Immunity"
             case .freeze: immune = types.contains(.ice)
+                || defender.build.ability == "Magma Armor"
             case .sleep, .none: immune = true
             }
             if immune { return }
