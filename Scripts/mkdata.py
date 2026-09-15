@@ -922,6 +922,34 @@ def main():
 SHOWDOWN = os.path.join(HERE, "data", "showdown.json")
 
 
+def champions_odds(move, secondaries):
+    """Showdown's structure, Serebii's numbers.
+
+    Champions is not the main series and is free to rebalance. Serebii's
+    Champions Attackdex is the authority on what a move does *here*, and it
+    already writes the odds into the sentence: "Has a 20% chance of making the
+    target flinch." What it does not do is say clearly which effect those odds
+    belong to, or that a move has two of them, which is the part Showdown is
+    read for.
+
+    So the shape comes from Showdown and the percentages from Serebii, matched
+    in the order both write them. Iron Head is the case that matters today: 20%
+    here, 30% in the main series. Taking Showdown's number would have quietly
+    replaced a Champions rebalance with a main-series value.
+    """
+    if not secondaries:
+        return secondaries
+    stated = [int(n) for n in re.findall(r"(\d+)% chance", move.get("effect", ""))]
+    if len(stated) != len(secondaries):
+        return secondaries
+    out = []
+    for odds, effect in zip(stated, secondaries):
+        entry = dict(effect)
+        entry["chance"] = odds
+        out.append(entry)
+    return out
+
+
 def apply_showdown(moves):
     """Take each move's secondary effects and flags from Showdown's table.
 
@@ -952,17 +980,42 @@ def apply_showdown(moves):
 
     matched = carried = flagged = 0
     disagreed = {}
+    rebalanced = []
     for move in moves.values():
         ref = table.get(key(move["name"]))
         if ref is None:
             continue
         matched += 1
-        move["secondaries"] = ref["secondaries"]
-        if ref["secondaries"]:
+        move["secondaries"] = champions_odds(move, ref["secondaries"])
+        if move["secondaries"]:
             carried += 1
         # Flags decide which ability answers a move. Serebii publishes these
         # too and mostly agrees; where it does not, Showdown is the one that
         # has been tested against the real game for twenty years.
+        # What Champions changed from the main series. Worth recording rather
+        # than correcting: Serebii's Champions Attackdex is the authority for
+        # this game, and a competitive player wants to know that Beak Blast
+        # hits for 120 here and 100 everywhere else.
+        #
+        # Power 0 against power 1 is not a change; both are placeholders for a
+        # move whose damage is worked out from something else.
+        changed = {}
+        for field, ours, mainline in (("power", move["power"], ref["power"]),
+                                      ("accuracy", move["accuracy"], ref["accuracy"]),
+                                      ("type", move["type"], ref["type"]),
+                                      ("priority", move["priority"], ref["priority"])):
+            if ours == mainline:
+                continue
+            if field == "power" and {ours, mainline} <= {0, 1}:
+                continue
+            # 0 here means "no accuracy check", which is the same thing as 100.
+            if field == "accuracy" and {ours, mainline} <= {0, 100}:
+                continue
+            changed[field] = mainline
+        if changed:
+            move["mainline"] = changed
+            rebalanced.append("%s (%s)" % (move["name"], ", ".join(
+                "%s %s->%s" % (f, v, move[f]) for f, v in sorted(changed.items()))))
         for flag, on in ref["flags"].items():
             if move.setdefault("flags", {}).get(flag, False) != on:
                 flagged += 1
@@ -974,6 +1027,10 @@ def apply_showdown(moves):
     for flag in sorted(disagreed):
         rows = disagreed[flag]
         print("      %-12s %3d: %s" % (flag, len(rows), ", ".join(rows[:6])))
+    if rebalanced:
+        print("    %d moves differ from the main series:" % len(rebalanced))
+        for row in sorted(rebalanced)[:20]:
+            print("      %s" % row)
 
 
 def mark_attested(items, meta_teams, usage, roster):

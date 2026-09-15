@@ -84,6 +84,13 @@ for (const move of Object.values(Moves)) {
   table[move.name.toLowerCase().replace(/[^a-z0-9]/g, '')] = {
     name: move.name,
     secondaries,
+    // Kept so the generator can say what Champions changed. `accuracy: true`
+    // in Showdown means the move cannot miss, which this writes as 0 to match
+    // how the dataset already spells it.
+    power: move.basePower,
+    accuracy: move.accuracy === true ? 0 : move.accuracy,
+    type: move.type,
+    priority: move.priority,
     // Flags decide which ability answers a move: Tough Claws wants contact,
     // Iron Fist a punch, Strong Jaw a bite, Punk Rock a sound. Emitted as
     // true *and* false, because an absent flag is a fact too -- Serebii

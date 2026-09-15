@@ -131,10 +131,64 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     /// Empty when the dataset was built without the reference table, which is
     /// the one case the sentence parser is still used for these.
     let secondaryData: [SecondaryData]?
+    /// Where Champions differs from the main series, keyed by field: what the
+    /// main series has. Present only on the thirty-odd moves it changed.
+    ///
+    /// Recorded rather than corrected. Serebii's Champions Attackdex is the
+    /// authority for this game, and Astral Barrage really does hit for 110
+    /// here and 120 everywhere else. Knowing that is worth something to
+    /// somebody deciding what to bring.
+    let mainline: [String: MainlineValue]?
+
+    /// One main-series value, which is a number for most fields and a name for
+    /// the type.
+    enum MainlineValue: Codable, Hashable, Sendable {
+        case number(Int)
+        case text(String)
+
+        init(from decoder: Decoder) throws {
+            let box = try decoder.singleValueContainer()
+            if let n = try? box.decode(Int.self) { self = .number(n) }
+            else { self = .text(try box.decode(String.self)) }
+        }
+        func encode(to encoder: Encoder) throws {
+            var box = encoder.singleValueContainer()
+            switch self {
+            case .number(let n): try box.encode(n)
+            case .text(let t): try box.encode(t)
+            }
+        }
+        var shown: String {
+            switch self {
+            case .number(let n): return "\(n)"
+            case .text(let t): return t
+            }
+        }
+    }
+
+    /// What Champions changed, as a sentence, or nil if it changed nothing.
+    var rebalance: String? {
+        guard let mainline, !mainline.isEmpty else { return nil }
+        let parts = mainline.sorted { $0.key < $1.key }.map { field, was -> String in
+            switch field {
+            case "power":    return "\(power) power, up from \(was.shown)"
+            case "accuracy": return "\(accuracy)% accurate, was \(was.shown)%"
+            case "type":     return "\(type) here, \(was.shown) in the main series"
+            case "priority": return "priority \(priority), was \(was.shown)"
+            default:         return "\(field) \(was.shown)"
+            }
+        }
+        // "up from" reads wrong for a nerf; say it plainly either way.
+        var said = parts.joined(separator: ", ")
+        if case .number(let was)? = mainline["power"], was > power {
+            said = said.replacingOccurrences(of: "up from", with: "down from")
+        }
+        return said
+    }
 
     enum CodingKeys: String, CodingKey {
         case id, name, type, category, power, accuracy, pp, priority, target
-        case flags, effect, learnable
+        case flags, effect, learnable, mainline
         case secondaryData = "secondaries"
         case neverMisses = "never_misses"
         case critRate = "crit_rate"

@@ -92,6 +92,20 @@ struct MoveDexView: View {
                                     .padding(.leading, 28)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
+                            // Champions rebalanced about thirty moves. Someone
+                            // deciding what to bring wants to know that Astral
+                            // Barrage hits softer here than they are used to.
+                            if let rebalance = move.rebalance {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                        .font(.system(size: 9))
+                                    Text("Changed for Champions: \(rebalance).")
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .font(.system(size: 11))
+                                .foregroundStyle(Palette.warn)
+                                .padding(.leading, 28)
+                            }
                         }
                         .padding(.vertical, 5)
                         .padding(.horizontal, 10)
