@@ -1245,14 +1245,20 @@ enum TurnModel {
                 }
                 // Cud Chew: a Grass-eater brings its berry back up the turn
                 // after eating it.
-                if who.build.ability == "Cud Chew", who.build.itemSpent, hp > 0,
-                   who.chewedOn { 
-                    if mine { board.mine[index].build.itemSpent = false; board.mine[index].chewedOn = false }
-                    else { board.theirs[index].build.itemSpent = false; board.theirs[index].chewedOn = false }
-                    board.note("\(name)'s Cud Chew brought its \(who.build.item) back up.")
-                } else if who.build.ability == "Cud Chew", who.build.itemSpent, hp > 0,
-                          who.build.item.hasSuffix("Berry") {
-                    if mine { board.mine[index].chewedOn = true } else { board.theirs[index].chewedOn = true }
+                // Cud Chew brings a berry back up at the end of the turn after
+                // it was eaten. Read fresh from the board rather than from
+                // `who`, which was copied before this turn's berry was eaten —
+                // so the turn it ate one never counted, and the ability paid
+                // out one turn late for its whole life.
+                let now = mine ? board.mine[index] : board.theirs[index]
+                if now.build.ability == "Cud Chew", hp > 0 {
+                    if now.chewedOn {
+                        if mine { board.mine[index].build.itemSpent = false; board.mine[index].chewedOn = false }
+                        else { board.theirs[index].build.itemSpent = false; board.theirs[index].chewedOn = false }
+                        board.note("\(name)'s Cud Chew brought its \(now.build.item) back up.")
+                    } else if now.build.itemSpent, now.build.item.hasSuffix("Berry") {
+                        if mine { board.mine[index].chewedOn = true } else { board.theirs[index].chewedOn = true }
+                    }
                 }
                 if hp <= 0 {
                     if mine { board.mine[index].hp = 0 } else { board.theirs[index].hp = 0 }
@@ -1610,8 +1616,8 @@ enum TurnModel {
         team[active].cannotEscape = false
         team[active].aquaRing = false
         team[active].stockpile = 0
-        team[active].build.typeOverride = []
-        team[active].build.statOverride = [:]
+        team[active].build.typeOverride = nil
+        team[active].build.statOverride = nil
         team.swapAt(active, bench)
         team[active].justArrived = true
         team[active].seen = true
@@ -2321,7 +2327,7 @@ enum TurnModel {
         }
         // Flower Veil covers the Grass types on its own side, itself included.
         let partner = slot == 0 ? 1 : 0
-        if team[slot].build.form.pokeTypes.contains(.grass),
+        if team[slot].types.contains(.grass),
            team.indices.contains(partner), !team[partner].fainted,
            team[partner].build.ability == "Flower Veil" || ability == "Flower Veil" {
             board.note("\(name) is covered by Flower Veil; its stats stay where they are.")
@@ -2395,8 +2401,7 @@ enum TurnModel {
             synchronize(ailment, from: hitMine, slot: hit, onto: byMine, slot: slot, board: &board)
         case .flinch:
             // Only matters if it has yet to move this turn; the flag clears at
-            // the turn's start either way.
-            guard defender.build.ability != "Inner Focus" else { return }
+            // the turn's start either way. Inner Focus is handled inside.
             flinch(onMine: hitMine, slot: hit, board: &board,
                    because: chance < 100 ? "the \(chance)% came up" : nil)
         case .drops(let drops):
@@ -2511,9 +2516,19 @@ enum TurnModel {
 
     /// Make something flinch, and let a Steadfast take the Speed it is owed
     /// for the trouble.
+    /// Make something flinch, if anything can.
+    ///
+    /// Inner Focus is checked here rather than at the call sites. It was
+    /// guarded on the secondary-effect path only, so a Fake Out — the one move
+    /// whose whole purpose is the flinch — went straight through the ability
+    /// that exists to stop it.
     private static func flinch(onMine: Bool, slot: Int, board: inout Board, because: String? = nil) {
         let team = onMine ? board.mine : board.theirs
         guard team.indices.contains(slot), !team[slot].fainted else { return }
+        if team[slot].build.ability == "Inner Focus" {
+            board.note("\(team[slot].build.form.formLabel)'s Inner Focus kept it going.")
+            return
+        }
         if onMine { board.mine[slot].flinched = true } else { board.theirs[slot].flinched = true }
         let name = team[slot].build.form.formLabel
         board.note("\(name) flinched" + (because.map { " — \($0)." } ?? "."))
@@ -2534,6 +2549,11 @@ enum TurnModel {
         if attacker.build.ability == "No Guard" || defender.build.ability == "No Guard" { return 100 }
         if attacker.build.ability == "Compound Eyes" { chance *= 1.3 }
         if attacker.build.ability == "Victory Star" { chance *= 1.1 }
+        // A Wide Lens was being read when a set was scored and ignored when
+        // the move was actually thrown, so the builder recommended it and the
+        // battle pretended it was not there.
+        if attacker.build.item == "Wide Lens" { chance *= 1.1 }
+        if attacker.build.item == "Zoom Lens", defender.build.item != "" { chance *= 1.2 }
         // Nothing dodges a Keen Eye, and a Mold Breaker ignores the dodging
         // ability entirely.
         let blind = attacker.build.ability == "Keen Eye"
@@ -2859,8 +2879,8 @@ enum TurnModel {
             let far = byMine ? board.theirs : board.mine
             for stat in pair {
                 let averaged = (team[slot].build.stat(stat) + far[index].build.stat(stat)) / 2
-                setNear { $0.build.statOverride[stat.rawValue] = averaged }
-                setFar(index) { $0.build.statOverride[stat.rawValue] = averaged }
+                setNear { $0.build.statOverride = ($0.build.statOverride ?? [:]).merging([stat.rawValue: averaged]) { _, new in new } }
+                setFar(index) { $0.build.statOverride = ($0.build.statOverride ?? [:]).merging([stat.rawValue: averaged]) { _, new in new } }
             }
             board.note("\(name) and \(farName(index)) split their"
                        + " \(move.name == "Guard Split" ? "defences" : "attacking power").")
@@ -3264,20 +3284,25 @@ enum TurnModel {
             if byMine { board.theirs[index].tauntedFor = 3 } else { board.mine[index].tauntedFor = 3 }
             board.note("\(who) was taunted: nothing but attacks for three turns.")
             return
-        case "Reflect":
+        case "Reflect", "Light Screen", "Aurora Veil":
+            // A Light Clay lengthens all three, not just Reflect. It was only
+            // being read for Reflect, so a Light Clay Light Screen — which is
+            // most of them — quietly ran the standard five turns.
             let turns = team[slot].build.item == "Light Clay" ? 8 : 5
-            if byMine { board.myScreens.reflect = turns } else { board.theirScreens.reflect = turns }
-            board.note("Reflect went up for \(turns) turns.")
-            return
-        case "Light Screen":
-            if byMine { board.myScreens.lightScreen = 5 }
-            else { board.theirScreens.lightScreen = 5 }
-            board.note("Light Screen went up.")
-            return
-        case "Aurora Veil":
-            if byMine { board.myScreens.auroraVeil = 5 }
-            else { board.theirScreens.auroraVeil = 5 }
-            board.note("Aurora Veil went up.")
+            if byMine {
+                switch move.name {
+                case "Reflect":      board.myScreens.reflect = turns
+                case "Light Screen": board.myScreens.lightScreen = turns
+                default:             board.myScreens.auroraVeil = turns
+                }
+            } else {
+                switch move.name {
+                case "Reflect":      board.theirScreens.reflect = turns
+                case "Light Screen": board.theirScreens.lightScreen = turns
+                default:             board.theirScreens.auroraVeil = turns
+                }
+            }
+            board.note("\(move.name) went up for \(turns) turns.")
             return
         case "Helping Hand":
             // Its whole effect is on a partner's move this turn, and the turn
@@ -3378,6 +3403,10 @@ enum TurnModel {
                     ? Int.random(in: 1...3) : 2 }
             }
             board.note("\(victim.build.form.formLabel) is \(ailment.rawValue).")
+            // Synchronize hands the condition straight back. It was wired to
+            // the secondary effects of attacks only, so a Will-O-Wisp — the
+            // most common way anything gets burned — went one way.
+            synchronize(ailment, from: !byMine, slot: target, onto: byMine, slot: slot, board: &board)
             return
         }
         board.note("Nothing came of it.")

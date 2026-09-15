@@ -84,10 +84,10 @@ struct Combatant {
     /// A stat the battle overwrote, by index, replacing what the build works
     /// out. Guard Split and Power Split average two Pokémon's raw stats, which
     /// is not a stage change and cannot be expressed as one.
-    var statOverride: [Int: Int] = [:]
+    var statOverride: [Int: Int]?
 
     func stat(_ stat: Stat) -> Int {
-        if let forced = statOverride[stat.rawValue] { return forced }
+        if let forced = statOverride?[stat.rawValue] { return forced }
         return ChampionsStats.value(base: form.stats[stat.rawValue],
                                     sp: sp[stat.rawValue], stat: stat, alignment: alignment)
     }
@@ -129,14 +129,17 @@ struct Combatant {
 
     /// A type the battle gave it, replacing what the dex says. Soak makes its
     /// target a pure Water type; Terastallisation and the -ate abilities would
-    /// live here too. Empty unless something changed it.
-    var typeOverride: [PokeType] = []
+    /// live here too.
+    ///
+    /// Optional rather than an empty array, and the stat override below the
+    /// same, because this struct is copied millions of times while a team is
+    /// being built. Two empty heap-backed collections on it cost the builder
+    /// 13 ms of unbroken main thread; nil costs nothing to copy.
+    var typeOverride: [PokeType]?
 
     /// The types it actually has right now. Every rule that asks about type
     /// reads this, so a Soaked Garchomp really does take a Thunderbolt.
-    var effectiveTypes: [PokeType] {
-        typeOverride.isEmpty ? form.pokeTypes : typeOverride
-    }
+    var effectiveTypes: [PokeType] { typeOverride ?? form.pokeTypes }
 
     /// Items that add a fifth to one type of move.
     static let typeBoostItems: [String: PokeType] = [

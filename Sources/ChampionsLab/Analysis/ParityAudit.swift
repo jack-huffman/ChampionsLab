@@ -305,6 +305,11 @@ private struct Bench {
     var theirPlayNames: [String] { theirMoves.map(\.name) }
     /// One attack per type, for the other side to throw.
     let oneOfEachType: [Move]
+    /// For each attacking type, a type it is super effective against. A resist
+    /// berry only halves a super-effective hit, and the bench's own typing made
+    /// every one of them inert: Dark into a Psychic-and-Fighting Gallade comes
+    /// out neutral, so a Colbur Berry had nothing to halve.
+    let weakTo: [String: PokeType]
 
     init(rules: Rulebook) {
         self.rules = rules
@@ -330,6 +335,14 @@ private struct Bench {
         }
         var seenTypes = Set<String>()
         oneOfEachType = typed.filter { seenTypes.insert($0.type).inserted }
+        var weak: [String: PokeType] = [:]
+        for move in typed {
+            guard weak[move.type] == nil, let attacking = PokeType(loose: move.type) else { continue }
+            weak[move.type] = PokeType.allCases.first {
+                TypeChart.multiplier(attacking, into: $0) > 1
+            }
+        }
+        weakTo = weak.compactMapValues { $0 }
         probes = ([typed.first { $0.makesContact },
                    typed.first { $0.category == "Special" },
                    typed.first(where: \.isSpread),
@@ -341,15 +354,25 @@ private struct Bench {
         func first(_ test: (Move) -> Bool) -> Move? { status.first(where: test) }
         ourStatus = [first { !$0.rules.targetDrops.isEmpty },
                      first { !$0.rules.selfBoosts.isEmpty },
-                     first { $0.isSound }].compactMap { $0 }
+                     first { $0.isSound },
+                     // A screen, so a rule about how long screens last has one.
+                     first { $0.name == "Reflect" || $0.name == "Light Screen" }]
+            .compactMap { $0 }
         provocations = [
             legal.first { $0.makesContact && $0.isDamaging && $0.accuracy >= 95 },
             first { !$0.rules.targetDrops.isEmpty },
             first { $0.effect.hasPrefix("Burns the target") },
             first { $0.effect.hasPrefix("Paralyzes the target") },
-            legal.first { if case .flinch = $0.rules.secondary?.kind { return true }; return false },
+            // The surest flinch there is, not merely the first one. A 30%
+            // chance never fires for an audit that does not roll dice, and
+            // Fake Out — the only certain one — states its flinch outright
+            // rather than as a chance, so it is not a parsed secondary at all.
+            legal.first { $0.effect.hasPrefix("Makes the target flinch") }
+                ?? legal.filter { if case .flinch = $0.rules.secondary?.kind { return true }; return false }
+                        .max { ($0.rules.secondary?.chance ?? 0) < ($1.rules.secondary?.chance ?? 0) },
             first { $0.rules.confuses },
             first { $0.name == "Protect" },
+            first { $0.name == "Follow Me" || $0.name == "Rage Powder" },
         ].compactMap { $0 }
 
         let versatile = rules.forms.max { $0.moves.count < $1.moves.count }?.formLabel ?? ""
@@ -359,6 +382,10 @@ private struct Bench {
                 guard let form = rules.forms.first(where: { $0.formLabel == name }) else { return nil }
                 var slot = TeamSlot(formID: form.id)
                 slot.ability = form.abilities.first?.name ?? ""
+                // Holding something, because several rules are about losing it.
+                // With empty hands Unburden has nothing to spend and Symbiosis
+                // nothing to pass, and both read as missing.
+                slot.item = "Sitrus Berry"
                 slot.moves = moves.map(\.id)
                 var sp = Array(repeating: 0, count: 6)
                 sp[Stat.attack.rawValue] = 32; sp[Stat.speed.rawValue] = 32; sp[Stat.hp.rawValue] = 2
@@ -407,8 +434,8 @@ private struct Bench {
                 if traits { out += "/\(f.build.item)/\(f.build.ability)" }
                 out += "/\(f.seededFrom ?? -1)/\(f.critStage)/\(f.build.form.id)"
                 out += "/\(f.substitute)/\(f.infatuatedWith ?? -1)/\(f.tormented)/\(f.cannotEscape)"
-                out += "/\(f.aquaRing)/\(f.stockpile)/\(f.goesNext)/\(f.build.typeOverride)"
-                out += "/\(f.build.statOverride.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" })"
+                out += "/\(f.aquaRing)/\(f.stockpile)/\(f.goesNext)/\(f.build.typeOverride ?? [])"
+                out += "/\((f.build.statOverride ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" })"
                 out += "/\(f.asleepFor)/\(f.protectStreak)/\(f.lastMoveFailed)/\(f.seen)|"
             }
         }
@@ -502,11 +529,33 @@ private struct Bench {
             for terrain in [Terrain.none, .grassy, .electric, .psychic, .misty] {
                 var field = reference.field
                 field.weather = weather; field.terrain = terrain
+                // Once more with the holder weak to the move, which is the
+                // only condition a resist berry fires under.
                 for move in typed {
-                    for low in [false, true] {
+                    guard let weak = weakTo[move.type] else { continue }
+                    var plainWeak = reference.mine[0].build, alteredWeak = altered
+                    plainWeak.typeOverride = [weak]; alteredWeak.typeOverride = [weak]
+                    let them = reference.theirs[0].build
+                    if DamageCalc.calculate(attacker: them, defender: plainWeak, move: move, field: field).maxDamage
+                        != DamageCalc.calculate(attacker: them, defender: alteredWeak, move: move, field: field).maxDamage {
+                        return "damage taken from a super-effective \(move.name)"
+                    }
+                }
+                for move in typed {
+                    // Health, a graveyard and a failed move: three states a
+                    // damage rule can turn on that a fresh board never has.
+                    // Supreme Overlord counts the fallen and was invisible
+                    // without the second of them.
+                    for state in [(low: false, fallen: 0, failed: false),
+                                  (low: true, fallen: 0, failed: false),
+                                  (low: false, fallen: 2, failed: false),
+                                  (low: false, fallen: 0, failed: true)] {
+                        let low = state.low
                         var plainOne = reference.mine[0].build, alteredOne = altered
                         plainOne.lowHP = low; alteredOne.lowHP = low
                         plainOne.atFullHP = !low; alteredOne.atFullHP = !low
+                        plainOne.fallenAllies = state.fallen; alteredOne.fallenAllies = state.fallen
+                        plainOne.lastMoveFailed = state.failed; alteredOne.lastMoveFailed = state.failed
                         let them = reference.theirs[0].build
                         if DamageCalc.calculate(attacker: plainOne, defender: them, move: move, field: field).maxDamage
                             != DamageCalc.calculate(attacker: alteredOne, defender: them, move: move, field: field).maxDamage { return "damage dealt, \(move.name) in \(weather)/\(terrain)" }
@@ -549,7 +598,13 @@ private struct Bench {
             guard let (one, two) = staged(shape, .none, .none) else {
                 return "on entry, \(shape)"
             }
-            for (index, answer) in theirPlays.enumerated() {
+            // Their partner drawing fire, so a rule about ignoring redirection
+            // has something to ignore.
+            let redirect = theirMoves.firstIndex { $0.name == "Follow Me" || $0.name == "Rage Powder" }
+            let withRedirect = redirect.map {
+                [Play(left: .pass, right: .attack(move: $0, target: 0))]
+            } ?? []
+            for (index, answer) in (theirPlays + withRedirect).enumerated() {
                 for (probe, probeMove) in ([nil] + acting.indices.map { $0 }).enumerated() {
                     _ = probe
                     let ours = probeMove.map { Play(left: .attack(move: $0, target: 0), right: .pass) }
@@ -557,10 +612,26 @@ private struct Bench {
                     if outcome(one, mine: ours, theirs: answer, traits: false)
                         != outcome(two, mine: ours, theirs: answer, traits: false) {
                         let what = probeMove.map { "using \(acting[$0].name)" } ?? "waiting"
-                        return "\(what) into \(theirPlayNames[index]), \(shape)"
+                        let against = index < theirPlayNames.count
+                            ? theirPlayNames[index] : "a partner drawing fire"
+                        return "\(what) into \(against), \(shape)"
                     }
                 }
             }
+            // A second turn on the back of the first. Cud Chew brings its berry
+            // up at the end of the turn *after* it ate it, Harvest and Speed
+            // Boost compound, and a single turn can see none of that.
+            if shape == .aboutToEatABerry || shape == .healthy {
+                for answer in [idle, theirPlays[0]] {
+                    let oneAfter = TurnModel.resolve(one, mine: idle, theirs: answer, rolling: false)
+                    let twoAfter = TurnModel.resolve(two, mine: idle, theirs: answer, rolling: false)
+                    if outcome(oneAfter, mine: idle, theirs: answer, traits: false)
+                        != outcome(twoAfter, mine: idle, theirs: answer, traits: false) {
+                        return "over two turns, \(shape)"
+                    }
+                }
+            }
+
             // Walking out, which is the whole of Regenerator and Natural Cure.
             if one.mine.count > 2 {
                 let away = Play(left: .swap(to: 2), right: .pass)
@@ -609,6 +680,7 @@ private struct Bench {
     private enum Shape: CaseIterable {
         case healthy, dented, onOnePoint, targetOnOnePoint, itemSpent, screensUp
         case alliesFallen, aboutToEatABerry, foeHoldingABerry, alreadyBurned
+        case grassOnThisSide, tongueTied
 
         func applied(to board: Board) -> Board {
             var out = board
@@ -645,6 +717,15 @@ private struct Bench {
                 out.theirs[0].hp = max(1, out.theirs[0].maxHP / 5)
             case .alreadyBurned:
                 out.mine[0].status = .burn
+            case .tongueTied:
+                // Taunted and held to its last move: what a Mental Herb is for.
+                out.mine[0].tauntedFor = 3
+                out.mine[0].encoredFor = 3
+            case .grassOnThisSide:
+                // Flower Veil only covers Grass types, and the bench has none,
+                // so the rule had nobody to protect.
+                out.mine[0].build.typeOverride = [.grass]
+                out.mine[1].build.typeOverride = [.grass]
             }
             return out
         }
