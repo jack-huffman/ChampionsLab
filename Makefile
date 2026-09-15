@@ -7,6 +7,7 @@
 #   make accuracy   the engine against real games (slow; needs data/matches.json)
 #   make duel       two engines play each other; the only check that measures
 #                   playing strength rather than whether a rule fires
+#   make replays    real ladder games: exact teams, exact choices, turn by turn
 #   make delta      pick up a new Champions release without re-scraping the world
 #   make full-sync  re-fetch every page
 #   make snapshot   render every screen to build/shots/*.png
@@ -22,7 +23,7 @@
 SHELL := /bin/bash
 NICE  := nice -n 15
 
-.PHONY: test warnings hitch coverage profile accuracy snapshot app dmg data check clean delta full-sync duel
+.PHONY: test warnings hitch coverage profile accuracy snapshot app dmg data check clean delta full-sync duel replays
 
 test:
 	$(NICE) swift test 2>&1 | tail -25
@@ -65,6 +66,12 @@ dmg:
 #   ./Tools/duel.sh --rolls 1,0     branch one coin flip against none
 duel:
 	$(NICE) ./Tools/duel.sh --games 60
+
+# Real games in this exact format, from Showdown's replay archive. Everything
+# else here measures the engine against a team list and a result; this is the
+# only data with a turn in it.
+replays:
+	./Scripts/mkreplays.py --pages 20
 
 # Rebuild from the page cache. Cannot see a new release: every page it needs
 # is already on disk.
