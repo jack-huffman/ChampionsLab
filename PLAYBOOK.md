@@ -28,16 +28,17 @@ calibrated too, not merely ordered — a +30 four wins 76%. Re-check with
 **Look for Pokémon to exclude: poor typing either way, redundant roles, combo
 pieces that should not be split.** — *Team Preview*
 
-**Partly.** The grid handles typing and matchup. Role redundancy and
-"combo pieces that should not be split" are only warnings in prose
-(`BringFour.warnings`), never part of the score — so a four that leaves your
-only redirection at home is *described* as a mistake without being *ranked* as
-one.
+**In.** The grid handles typing and matchup, and `BringFour.abandoned` now
+*scores* the jobs a four leaves at home — the only speed control is worth 10
+points off, the only redirection 7, the only Fake Out 5. It used to say
+"this four has no speed control: Whimsicott is staying home" in prose and then
+rank the four as though nothing had happened. A warning nobody is scored
+against is a warning nobody takes.
 
 **A good team makes team preview easier: more viable leads, more flexibility.**
 
-**Out.** Nothing measures a team's flexibility. The lab could: count how many
-distinct fours win at a decent rate rather than only the best one.
+**In.** The per-team report counts how many of the fours a team actually
+brought won at least half their games. One good four is one plan.
 
 ---
 
@@ -68,9 +69,12 @@ threat. — *What Is Pressure*
 
 **Partly, and implicitly.** `TurnGame` solves a simultaneous-move equilibrium,
 so a threatened knockout already shows up as a payoff the other side must
-answer. That *is* pressure, arrived at from the other end. What is missing is
-the article's diagnostic being available as a reading: the app cannot tell you
-*which* of your Pokémon is under pressure and why.
+answer. That *is* pressure, arrived at from the other end.
+
+**Still out**, and deliberately: the article's *diagnostic* — being told which
+of your Pokémon is under pressure and why — is an interface feature rather than
+an engine one. It would not make the engine play better, which is what the rest
+of this file is about.
 
 ---
 
@@ -124,8 +128,14 @@ rather than betting on either.
 **A Protect on a redirection Pokémon usually backfires — they simply
 double-target the other one.** — *Sandover vs Ferraris*
 
-**Out.** Worth a rule: the engine does not know that Protecting the Rage
-Powder user hands the turn over.
+**Not a rule, and it should not be one.** Tested, and it is conditional:
+drawing the fire trades the redirector's health for the partner's, so which way
+it goes depends on which of the two is worth more. With no weights the engine
+can only compare health, so it shelters the frail redirector and lets the Mega
+take two hits. Told what they are worth — Charizard 1.12 against Indeedee
+0.81 — it moves 0.225 towards drawing the fire. The maxim is a consequence of
+valuing your Pokémon properly rather than a rule to bolt on.
+See `testDrawingFireDependsOnWhatThePartnerIsWorth`.
 
 ---
 
@@ -164,11 +174,11 @@ it (`make lab ARGS="--ab-stages"`).
 **"All of your Pokemon will function in exactly the same way no matter how much
 health they have left."** — *1 HP Is Infinitely More Than 0 HP*
 
-**Partly, and the constant is a guess.** `value()` prices a living Pokémon at
-`0.35 + 0.65 × health`, so one on 1 HP is worth about a third of a healthy one.
-The article's argument is that its *function* has not degraded at all — only
-its survivability has. The 0.35 was never tuned against anything and the
-article suggests it is too low. One number, trivially A/B-able.
+**Tunable now, and being measured.** `value()` prices a living Pokémon at
+`floor + (1 − floor) × health`, and the floor is a per-side setting rather than
+a number buried in an expression. The article's argument is that a Pokémon's
+*function* does not degrade at all — only its survivability does — which says
+the old 0.35 is too low. `make lab ARGS="--ab-floor"` settles it.
 
 ---
 
@@ -177,10 +187,15 @@ article suggests it is too low. One number, trivially A/B-able.
 **Ask: can I stop it going up, and how bad is it if it does. Then minimise the
 turns they get to use it.** — *Battling Against Trick Room*
 
-**Partly.** The engine knows Trick Room reverses order and prices a Tailwind
-set under it correctly — it will not put one up into four turns of room. It
-does not deliberately stall, and it does not know the trick of *not* knocking
-out the support so the other side wastes their own turns.
+**Mostly in.** Having a Trick Room up is now worth something to whichever side
+is slower on the field, scaled by the turns left — so setting one is not a
+spent turn and running one down is an achievement, which is what makes the
+engine stall it rather than ignore it. It already priced a Tailwind set under a
+room correctly.
+
+Still out: the trick of deliberately *not* knocking out their support, so the
+other side wastes its own Trick Room turns on a Pokémon that cannot use them.
+That is a second-order idea and no attempt has been made at it.
 
 ---
 
@@ -207,10 +222,16 @@ Than You Think*
 changes in the chance of winning rather than in material, because the curve is
 not linear.
 
-What is still missing is *within-turn* variance. The search averages over
-damage rolls and accuracy rather than carrying a spread, so it cannot yet tell
-a reliable 8 from a coin flip between 0 and 16. That needs the search to carry
-distributions, which is a much larger job than this one.
+**Accuracy is now handled too.** The search averages, so a Stone Edge was
+scored as 80% of a knockout — which reads exactly like a guaranteed hit for 80%
+of the damage, and those are different bets. `TurnGame.asWinChance` splits the
+gain back into the branch that lands and the branch that does not and puts each
+through the curve separately. Ahead, the miss costs more than the hit buys and
+the engine wants the sure thing; behind, it takes the swing.
+
+Still averaged: the *damage roll* itself. A move that does 40–60 and one that
+reliably does 50 look the same. That needs the search to carry distributions
+rather than means, which is a much larger job.
 
 ---
 

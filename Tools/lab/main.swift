@@ -185,12 +185,21 @@ struct Report: Codable {
 @MainActor
 func runShard(index: Int, of shards: Int, games: Int, budget: Double,
               focus: String?, versus: [String], spread: Int, abTest: Bool,
-              stageTest: Bool, winTest: Bool, seed: UInt64) -> Report {
+              stageTest: Bool, winTest: Bool, mineOnly: Bool, floorTest: Bool,
+              seed: UInt64) -> Report {
     let store = Store.shared
     if let error = store.loadError { FileHandle.standardError.write(Data("dataset: \(error)\n".utf8)); exit(1) }
     let rules = store.rulebook
-    let teams = SelfPlay.teams(from: store.data, rules: rules)
-    guard teams.count >= 2 else { return Report() }
+    let field = SelfPlay.teams(from: store.data, rules: rules)
+    // `--mine` puts the teams actually registered in the app on one side and
+    // the published field on the other, which is the question an owner of a
+    // team has: how does *this* do against what is out there.
+    let registered = mineOnly ? store.teams.filter { $0.slots.count >= 4 } : []
+    let teams = mineOnly ? registered + field : field
+    guard teams.count >= 2, !(mineOnly && registered.isEmpty) else {
+        if mineOnly { FileHandle.standardError.write(Data("no registered teams\n".utf8)) }
+        return Report()
+    }
 
     let engine = BattleEngine(rules: rules, budget: budget)
     let seat = SelfPlay.Seat(engine: engine, branchedRolls: 1)
@@ -208,6 +217,15 @@ func runShard(index: Int, of shards: Int, games: Int, budget: Double,
             exit(1)
         }
         pairings = [(a, b), (b, a)]
+    } else if mineOnly {
+        // Every registered team against every published one, both ways round,
+        // so each spends equal time in each chair.
+        for a in 0..<registered.count {
+            for b in registered.count..<teams.count {
+                pairings.append((a, b))
+                pairings.append((b, a))
+            }
+        }
     } else {
         for a in teams.indices {
             for b in teams.indices where a != b {
@@ -237,7 +255,9 @@ func runShard(index: Int, of shards: Int, games: Int, budget: Double,
             bringSpread: spread,
             weightedMine: true, weightedTheirs: !abTest,
             stagesMine: true, stagesTheirs: !stageTest,
-            forWinMine: true, forWinTheirs: !winTest)
+            forWinMine: true, forWinTheirs: !winTest,
+            floorMine: floorTest ? 0.55 : Board.aliveFloor,
+            floorTheirs: Board.aliveFloor)
 
         record(ledger, mine: teams[a].name, theirs: teams[b].name, into: &report)
         played += 1
@@ -335,7 +355,8 @@ func pad(_ text: String, _ width: Int) -> String {
 }
 
 @MainActor
-func describe(_ report: Report, focus: String?, seconds: Double) {
+func describe(_ report: Report, focus: String?, seconds: Double,
+              mineNames: Set<String> = []) {
     let teams = report.teams.values.sorted {
         let a = $0.games == 0 ? 0 : Double($0.wins) / Double($0.games)
         let b = $1.games == 0 ? 0 : Double($1.wins) / Double($1.games)
@@ -369,7 +390,9 @@ func describe(_ report: Report, focus: String?, seconds: Double) {
     // With no focus, the top and bottom of the table are the two worth
     // spelling out: the best team says what is working and the worst says
     // what is not.
-    if let focus {
+    if mineNames.isEmpty == false {
+        for team in teams where mineNames.contains(team.name) { describeTeam(team) }
+    } else if let focus {
         for team in teams where team.name == focus { describeTeam(team) }
     } else {
         if let best = teams.first { describeTeam(best) }
@@ -587,6 +610,15 @@ func describeTeam(_ team: TeamRecord) {
               + "\(pad("\(record.damageDealt)", 7)) \(pad("\(record.damageTaken)", 6))")
     }
 
+    // How many different fours actually work. A team with one good four is a
+    // team with one plan, and "a good team will make things easier for you"
+    // at preview means having several.
+    let tried = team.brings.filter { $0.value[1] >= 5 }
+    if tried.count >= 2 {
+        let working = tried.filter { Double($0.value[0]) / Double($0.value[1]) >= 0.5 }.count
+        print("    \(working) of \(tried.count) fours it brought won at least half their games")
+    }
+
     // Moves it carries and never uses.
     var used: [String: Int] = [:]
     for (_, record) in team.members {
@@ -639,6 +671,11 @@ func main() {
     let stageTest = has("--ab-stages")
     // And for scoring a turn by the chance of winning rather than by material.
     let winTest = has("--ab-win")
+    let mineOnly = has("--mine")
+    // What a living Pokémon is worth before health is counted. The old 0.35
+    // was never tuned; the argument is that a Pokémon on 1 HP still attacks
+    // for full, so it should be higher.
+    let floorTest = has("--ab-floor")
     let started = Date()
 
     // A child doing its slice: run it, print the JSON, done.
@@ -648,13 +685,15 @@ func main() {
         let report = runShard(index: parts[0], of: parts[1], games: games, budget: budget,
                               focus: focus, versus: versus, spread: spread,
                               abTest: abTest, stageTest: stageTest,
-                              winTest: winTest, seed: seed)
+                              winTest: winTest, mineOnly: mineOnly,
+                              floorTest: floorTest, seed: seed)
         let blob = try! JSONEncoder().encode(report)
         FileHandle.standardOutput.write(blob)
         return
     }
 
     print("==> lab: \(games) games, budget \(budget)s, \(workers) worker\(workers == 1 ? "" : "s")"
+          + (mineOnly ? ", your teams against the field" : "")
           + (versus.count == 2 ? ", \(versus[0]) vs \(versus[1])" : "")
           + (focus.map { ", focused on \($0)" } ?? "")
           + (spread > 1 ? ", drawing from the top \(spread) fours" : ""))
@@ -663,7 +702,8 @@ func main() {
     if workers == 1 {
         report = runShard(index: 0, of: 1, games: games, budget: budget, focus: focus,
                           versus: versus, spread: spread, abTest: abTest,
-                          stageTest: stageTest, winTest: winTest, seed: seed)
+                          stageTest: stageTest, winTest: winTest,
+                          mineOnly: mineOnly, floorTest: floorTest, seed: seed)
     } else {
         // Each child plays its own slice and hands back a ledger. Sharding by
         // process rather than by thread because the turn model's dice are
@@ -683,6 +723,8 @@ func main() {
             if abTest { argv.append("--ab") }
             if stageTest { argv.append("--ab-stages") }
             if winTest { argv.append("--ab-win") }
+            if mineOnly { argv.append("--mine") }
+            if floorTest { argv.append("--ab-floor") }
             task.arguments = argv
             let pipe = Pipe()
             task.standardOutput = pipe
@@ -702,15 +744,19 @@ func main() {
 
     let seconds = Date().timeIntervalSince(started)
     report.seconds = seconds
-    if abTest || stageTest || winTest {
+    if abTest || stageTest || winTest || floorTest {
         describeAB(report, seconds: seconds,
-                   what: winTest ? "playing for the win rather than for material"
+                   what: floorTest ? "valuing a Pokémon on 1 HP nearer to a healthy one"
+                        : winTest ? "playing for the win rather than for material"
                         : stageTest ? "counting the stat stages on the board"
                                     : "knowing what your Pokémon are worth")
     }
     else if has("--calibrate") { describeCalibration(report, seconds: seconds) }
     else if versus.count == 2 { describeVersus(report, versus: versus, seconds: seconds) }
-    else { describe(report, focus: focus, seconds: seconds) }
+    else {
+        describe(report, focus: focus, seconds: seconds,
+                 mineNames: mineOnly ? Set(Store.shared.teams.map(\.name)) : [])
+    }
 
     if let path = flag("--json") {
         let encoder = JSONEncoder()

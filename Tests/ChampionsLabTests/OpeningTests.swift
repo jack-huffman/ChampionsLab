@@ -135,3 +135,89 @@ final class OpeningTests: HarnessCase {
         print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     }
 }
+
+extension OpeningTests {
+    /// Whether to draw the fire or hide behind Protect is a question about
+    /// what the partner is worth
+    ///
+    /// The claim, from the Sandover annotation, is that a Protect on a Follow
+    /// Me or Rage Powder Pokémon usually backfires: the other side simply
+    /// double-targets the one that is not protected.
+    ///
+    /// It turns out not to be a rule the engine should be given, because it is
+    /// not unconditional. Drawing the fire trades the redirector's health for
+    /// the partner's, and which way that trade goes depends entirely on which
+    /// of the two is worth more. What decides it is exactly the matchup
+    /// weighting — and with no weights on the board, the engine can only
+    /// compare health, so it shelters the frail redirector and lets the Mega
+    /// take two hits.
+    ///
+    /// So this checks the mechanism rather than the maxim: told what its
+    /// Pokémon are worth, the engine changes its mind.
+    @MainActor func testDrawingFireDependsOnWhatThePartnerIsWorth() throws {
+        print("\n== protecting the redirection ==")
+        // Indeedee rather than Farigiraf, which learns neither redirection move;
+        // Follow Me rather than Rage Powder, which a Grass type ignores
+        // outright; and two attackers with no priority, since priority would be
+        // answered by the ability rather than by the redirection.
+        let mine = fighters([("Indeedee", "Leftovers", ["Follow Me", "Protect", "Psychic"]),
+                             ("Charizard", "Charizardite Y", ["Heat Wave", "Protect"]),
+                             ("Garchomp", "Leftovers", ["Earthquake", "Protect"]),
+                             ("Milotic", "Leftovers", ["Surf", "Protect"])])
+        let theirs = fighters([("Kingambit", "Life Orb", ["Iron Head", "Protect"]),
+                               ("Gholdengo", "Life Orb", ["Make It Rain", "Protect"]),
+                               ("Garchomp", "Life Orb", ["Earthquake", "Protect"]),
+                               ("Milotic", "Leftovers", ["Surf", "Protect"])])
+        var board = Board(mine: mine, theirs: theirs, rules: store.rulebook,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+        board.sendOutLeads()
+
+        let bare = TurnGame(board: board)
+        let powder = at(board.mine[0], "Follow Me")
+        let guard0 = at(board.mine[0], "Protect")
+        let wave = at(board.mine[1], "Heat Wave")
+
+        // Both sides attacking the fragile partner, with the redirector either
+        // pulling the fire or hiding behind a Protect.
+        let theirBest = Play(left: .attack(move: at(board.theirs[0], "Iron Head"), target: 1),
+                             right: .attack(move: at(board.theirs[1], "Make It Rain"), target: 1))
+        let draw = Play(left: .attack(move: powder, target: 0),
+                        right: .attack(move: wave, target: 0))
+        let hide = Play(left: .protectSelf(move: guard0),
+                        right: .attack(move: wave, target: 0))
+        let flatDraw = bare.settle(draw, theirBest).expected
+        let flatHide = bare.settle(hide, theirBest).expected
+        print(String(format: "  worth nothing to it: drawing %.3f, hiding %.3f",
+                     flatDraw, flatHide))
+        check("with no weights it shelters the frail one and lets the Mega take both",
+              flatHide > flatDraw, String(format: "%.3f against %.3f", flatHide, flatDraw))
+
+        // Now tell it what the two are actually worth to this team.
+        var weighted = board
+        weighted.myBeats = Worth.table(for: mine, against: theirs,
+                                       rules: store.rulebook, field: Field(isDoubles: true))
+        weighted.myRoster = mine.slots.compactMap { $0.battleForm(in: store.rulebook)?.id }
+        // Both rosters: the weights are counted against who is standing on the
+        // *other* side, so leaving theirs empty leaves nothing to count.
+        weighted.theirRoster = theirs.slots.compactMap { $0.battleForm(in: store.rulebook)?.id }
+        weighted.refreshWorth()
+        let zard = weighted.mine[1].build.form.id
+        let helper = weighted.mine[0].build.form.id
+        print(String(format: "  it is told: %@ %.2f, %@ %.2f",
+                     weighted.mine[1].build.form.formLabel, weighted.myWorth[zard] ?? 1,
+                     weighted.mine[0].build.form.formLabel, weighted.myWorth[helper] ?? 1))
+        check("the Mega is worth more than the redirector",
+              (weighted.myWorth[zard] ?? 1) > (weighted.myWorth[helper] ?? 1))
+
+        let told = TurnGame(board: weighted)
+        let toldDraw = told.settle(draw, theirBest).expected
+        let toldHide = told.settle(hide, theirBest).expected
+        print(String(format: "  told what they are worth: drawing %.3f, hiding %.3f",
+                     toldDraw, toldHide))
+        check("knowing that narrows the gap, or closes it",
+              (toldDraw - toldHide) > (flatDraw - flatHide),
+              String(format: "%.3f against %.3f", toldDraw - toldHide, flatDraw - flatHide))
+
+        print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
+    }
+}

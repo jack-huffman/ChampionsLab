@@ -378,6 +378,16 @@ struct Board {
     /// can be measured against the other; in play both are on.
     var myPlaysForWin = true
     var theirPlaysForWin = true
+    /// What a Pokémon is worth for being alive at all, before health.
+    ///
+    /// Per side so it can be measured; in play both are the same. The number
+    /// had never been tuned against anything, and the argument against it is
+    /// specific: "all of your Pokemon will function in exactly the same way no
+    /// matter how much health they have left" — a Pokémon on 1 HP attacks for
+    /// exactly what a healthy one does, and only its survivability has gone.
+    var myAliveFloor = Board.aliveFloor
+    var theirAliveFloor = Board.aliveFloor
+    static let aliveFloor = 0.35
 
     /// Derive both sides' weights from the duel table.
     ///
@@ -564,6 +574,7 @@ struct Board {
         swap(&out.myRoster, &out.theirRoster)
         swap(&out.myCountsStages, &out.theirCountsStages)
         swap(&out.myPlaysForWin, &out.theirPlaysForWin)
+        swap(&out.myAliveFloor, &out.theirAliveFloor)
         // The per-slot keys name a side, so they have to be relabelled too.
         func relabel(_ table: [String: Bool]) -> [String: Bool] {
             Dictionary(uniqueKeysWithValues: table.map { key, value in
@@ -1154,7 +1165,8 @@ enum TurnModel {
     /// still has to be answered, and a model that values only health throws
     /// bodies away for chip damage.
     static func value(_ board: Board) -> Double {
-        func side(_ team: [Fighter], _ worth: [String: Double], _ countStages: Bool) -> Double {
+        func side(_ team: [Fighter], _ worth: [String: Double], _ countStages: Bool,
+                  _ floor: Double) -> Double {
             team.reduce(0) { total, fighter in
                 guard !fighter.fainted else { return total }
                 // Only a Pokémon that has stood on the field carries a weight.
@@ -1169,17 +1181,18 @@ enum TurnModel {
                 // Worth is around one, so a side with no weights scores exactly
                 // as it did before there were any.
                 let weight = fighter.seen ? (worth[fighter.build.form.id] ?? 1) : 1
-                return total + weight * (0.35 + 0.65 * fighter.share)
+                return total + weight * (floor + (1 - floor) * fighter.share)
                     + (countStages ? stages(fighter) : 0)
             }
         }
         // Both sides weighed, which is what lets the engine prefer to knock out
         // the Pokémon that actually threatens it. Only what has been seen
         // carries a weight, which is where the hidden-information rule is kept.
-        var out = side(board.mine, board.myWorth, board.myCountsStages)
-            - side(board.theirs, board.theirWorth, board.theirCountsStages)
+        var out = side(board.mine, board.myWorth, board.myCountsStages, board.myAliveFloor)
+            - side(board.theirs, board.theirWorth, board.theirCountsStages, board.theirAliveFloor)
         out += speedControl(board.myTailwind, under: board.trickRoom)
             - speedControl(board.theirTailwind, under: board.trickRoom)
+        out += trickRoomEdge(board)
         return out
     }
 
@@ -1246,6 +1259,35 @@ enum TurnModel {
     /// three, which is about where a real game with a Pokémon in hand sits.
     static func winChance(_ value: Double) -> Double {
         1 / (1 + exp(-value * 0.72))
+    }
+
+    /// What a Trick Room is worth, and to whom.
+    ///
+    /// It was worth nothing. The room reverses the order, so the engine saw
+    /// its effect inside the search — the slow Pokémon moving first — and
+    /// nothing at all about having it up. Setting one therefore looked like a
+    /// spent turn, and running one down looked like no achievement, which is
+    /// the opposite of how a game around Trick Room is actually played:
+    ///
+    ///     "Your goal is to minimise the number of turns where your opponent
+    ///      can actually benefit from Trick Room."
+    ///
+    /// Credited to whichever side is slower on the field, because that is the
+    /// side it is for, and scaled by the turns left — a room with one turn on
+    /// it is nearly spent.
+    private static func trickRoomEdge(_ board: Board) -> Double {
+        guard board.trickRoom > 0 else { return 0 }
+        func speed(_ team: [Fighter]) -> Int {
+            let up = team.prefix(board.activeCount).filter { !$0.fainted }
+            guard !up.isEmpty else { return 0 }
+            return up.reduce(0) { $0 + $1.build.speed(in: board.field) } / up.count
+        }
+        let mine = speed(board.mine), theirs = speed(board.theirs)
+        guard mine != theirs else { return 0 }
+        // Half a Pokémon at its fullest, falling away as the room runs out.
+        let turns = Swift.min(4, board.trickRoom)
+        let worth = 0.13 * Double(turns)
+        return mine < theirs ? worth : -worth
     }
 
     /// What a Tailwind is worth, given what the room is doing.

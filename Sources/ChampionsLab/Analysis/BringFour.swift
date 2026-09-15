@@ -233,6 +233,36 @@ struct BringFour {
         Int((turn.value * 15).rounded().clamped(to: -25...25))
     }
 
+    /// What a four gives up by leaving a job at home.
+    ///
+    /// Leaving your only Tailwind setter, your only redirection or your only
+    /// Fake Out on the bench changes what the team *is*, and the picker knew
+    /// that — it has said so in prose since it was written:
+    ///
+    ///     "This four has no speed control: Whimsicott is staying home."
+    ///
+    /// It said so and then ranked the four as though nothing had happened.
+    /// A warning nobody is scored against is a warning nobody takes.
+    private func abandoned(_ four: [Form]) -> Int {
+        var lost = 0
+        for (moves, cost) in [(["Tailwind", "Trick Room"], 10),
+                              (["Follow Me", "Rage Powder"], 7),
+                              (["Fake Out"], 5)] {
+            let names = Set(moves)
+            func holders(_ forms: [Form]) -> Int {
+                forms.filter { form in
+                    guard let slot = matchup.myPairs.first(where: { $0.1.id == form.id })?.0
+                    else { return false }
+                    return slot.moves.contains { names.contains(rules.move($0)?.name ?? "") }
+                }.count
+            }
+            // Only a loss if the six had it and the four does not. A team that
+            // never had a Fake Out is not giving one up.
+            if holders(matchup.myForms) > 0, holders(four) == 0 { lost += cost }
+        }
+        return lost
+    }
+
     /// What winning the opening exchange is worth to the ranking.
     ///
     /// On the same scale as the tempo bonus and capped a little lower: taking
@@ -292,8 +322,8 @@ struct BringFour {
             out.append(Plan(bring: ordered, benched: benched, opening: opening,
                             edge: rated.score,
                             turnOne: turn,
-                            score: (rated.score + tempoBonus(turn) + openingBonus(opening))
-                                .clamped(to: -100...100),
+                            score: (rated.score + tempoBonus(turn) + openingBonus(opening)
+                                    - abandoned(four)).clamped(to: -100...100),
                             reasons: reasons(four: ordered, benched: benched, turn: turn,
                                              likely: likely, focusKOs: rated.focusKOs),
                             warnings: warnings(four: ordered, benched: benched,

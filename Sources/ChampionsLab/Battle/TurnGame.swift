@@ -343,8 +343,10 @@ struct TurnGame {
         for (i, mine) in myPlays.enumerated() {
             await breathe("turn matrix")
             for (j, theirs) in theirPlays.enumerated() {
-                payoff[i][j] = asWinChance(settle(mine, theirs).expected
-                    - forgone(mine, myOffence) + forgone(theirs, theirOffence))
+                payoff[i][j] = asWinChance(
+                    settle(mine, theirs).expected
+                        - forgone(mine, myOffence) + forgone(theirs, theirOffence),
+                    reliability: reliability(of: mine, forMine: true))
             }
         }
         await breathe("turn solve")
@@ -379,8 +381,10 @@ struct TurnGame {
                                 count: myPlays.count)
         for (i, mine) in myPlays.enumerated() {
             for (j, theirs) in theirPlays.enumerated() {
-                payoff[i][j] = asWinChance(settle(mine, theirs).expected
-                    - forgone(mine, myOffence) + forgone(theirs, theirOffence))
+                payoff[i][j] = asWinChance(
+                    settle(mine, theirs).expected
+                        - forgone(mine, myOffence) + forgone(theirs, theirOffence),
+                    reliability: reliability(of: mine, forMine: true))
             }
         }
         let (myMix, ownTheirMix, ownValue) = TurnGame.equilibrium(payoff, iterations: iterations)
@@ -442,10 +446,53 @@ struct TurnGame {
     /// Taken on the whole adjusted figure rather than on the raw one, so the
     /// tempo a Protect gives up is converted along with everything else and
     /// keeps meaning what it meant.
-    func asWinChance(_ gain: Double) -> Double {
+    ///
+    /// `reliability` is how much of the gain is actually going to arrive — the
+    /// accuracy of the moves being thrown. It matters because the search
+    /// averages: a Stone Edge is scored as 80% of a knockout, which reads
+    /// exactly like a guaranteed hit for 80% of the damage, and those are
+    /// completely different bets. Splitting the gain back into the branch that
+    /// lands and the branch that does not, and putting each through the curve
+    /// separately, is what tells them apart — and it is the reason the curve
+    /// was worth having:
+    ///
+    ///     "Using Stone Edge as a primary win condition is sub-optimal;
+    ///      missing it effectively led to an immediate loss."
+    ///
+    /// Ahead, the miss branch costs more than the hit branch buys and the
+    /// engine wants the sure thing. Behind, it is the other way round, which
+    /// is when a real player takes the swing.
+    func asWinChance(_ gain: Double, reliability: Double = 1) -> Double {
         guard board.myPlaysForWin else { return gain }
         let before = TurnModel.value(board)
-        return TurnModel.winChance(before + gain) - TurnModel.winChance(before)
+        let now = TurnModel.winChance(before)
+        guard reliability < 0.999, reliability > 0.05 else {
+            return TurnModel.winChance(before + gain) - now
+        }
+        // `gain` is already thinned by accuracy, so dividing by it recovers
+        // what landing would actually be worth.
+        let landed = TurnModel.winChance(before + gain / reliability) - now
+        let missed = TurnModel.winChance(before) - now
+        return reliability * landed + (1 - reliability) * missed
+    }
+
+    /// How much of what a play promises is going to arrive.
+    ///
+    /// The worst accuracy among the attacks it throws rather than the product:
+    /// two 80% moves on the same turn is not a 64% turn, it is two separate
+    /// bets, and the one that decides the position is the one that matters.
+    func reliability(of play: Play, forMine mine: Bool) -> Double {
+        let team = mine ? board.mine : board.theirs
+        var worst = 1.0
+        for (slot, choice) in [play.left, play.right].enumerated() {
+            guard case .attack(let index, _) = choice,
+                  team.indices.contains(slot), !team[slot].fainted,
+                  team[slot].moves.indices.contains(index) else { continue }
+            let move = team[slot].moves[index]
+            guard move.isDamaging, !move.neverMisses, move.accuracy > 0 else { continue }
+            worst = Swift.min(worst, Double(move.accuracy) / 100)
+        }
+        return worst
     }
 
     // MARK: - Looking one turn further
