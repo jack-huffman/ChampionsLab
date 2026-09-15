@@ -124,6 +124,45 @@ an answer to a position that has since moved on is dropped rather than
 applied to the wrong board. The timing harness holds the line: no stretch of
 main-thread work longer than four frames.
 
+## How a rule gets into the model
+
+There are five places a rule can live, and which one it belongs in is decided
+by how the dex writes it — not by taste.
+
+| | when | examples |
+|---|---|---|
+| **read from the text** | the dex prints the rule in a regular sentence | two-turn moves, drains, secondary effects, stat changes, healing, target drops |
+| **a named closed set** | a small family whose sentences read alike but whose effects differ | `Move.protectMoves`, `partyMoves`, `sideMoves`, `allyMoves`, `selfMoves` |
+| **named by id** | one-off arithmetic no sentence could carry | Weather Ball, Rising Voltage, Last Respects, Stomping Tantrum, Sucker Punch |
+| **a case in the turn model** | a move that changes the shape of a turn | Leech Seed, Taunt, Encore, Parting Shot, Ally Switch, the guards |
+| **an ability or item hook** | abilities have no grammar to parse; each is a `case` where it fires | `entryAbility`, `contact`, the pinch abilities, `speed(in:)`, White Herb |
+
+A move's text is parsed **once** into `Move.Rules` and shared (see Swift 6
+above): reading a rule from the text is what keeps the model honest, and
+memoising it is what makes that affordable.
+
+The hooks a rule can attach to are fixed, and a new rule goes in the one that
+matches: arrival, priority, accuracy, the roll, after the hit, the end of the
+turn.
+
+## What is implemented, and what is not
+
+`make coverage` answers this, and it does not trust a list anybody has to
+remember to update:
+
+- **moves** are audited by *using* them. Every legal move is put on a Pokémon
+  and used, and the board is compared before and after. A status move that
+  changes nothing is a move the model does not implement, whatever anyone
+  believed.
+- **abilities and items** are audited by reading the model's own source. If
+  the name appears nowhere, nothing can be happening.
+
+Both are ranked by measured usage, so a gap on a Pokémon in a quarter of games
+comes before one nobody brings. The audit found the `Lowers the target's …`
+regex silently failing where `Lowers targets' …` worked, which had disabled
+Screech, Scary Face, Noble Roar and every other single-target drop in the
+game.
+
 ## Checking a change
 
 ```

@@ -414,6 +414,19 @@ def parse_move_flags(page):
     return flags
 
 
+# Values Serebii's Champions pages print wrong, with the evidence for saying
+# so. Kept deliberately short: the dex is the authority, and every entry here
+# is a claim that one particular cell contradicts the rest of the same dex.
+MOVE_CORRECTIONS = {
+    # Serebii's Champions page prints Quick Guard at +1. Every other priority
+    # on the same pages matches the main series exactly -- Protect +4, its own
+    # sibling Wide Guard +3, Fake Out +3, Trick Room -7 -- and at +1 the move
+    # loses to the Fake Out it exists to stop, which is not a move anyone would
+    # print. Read as a typo for the main series' +3.
+    "quickguard": {"priority": 3},
+}
+
+
 def parse_move(slug, label):
     page = fetch("/attackdex-champions/%s.shtml" % slug, delay=0.15)
     if not page:
@@ -472,6 +485,7 @@ def parse_move(slug, label):
         "flags": parse_move_flags(page),
         "effect": (effect.group(1).strip() if effect else "")[:500],
         "effect_rate": float(rate.group(1)) if rate else 0.0,
+        **MOVE_CORRECTIONS.get(slug, {}),
     }
 
 

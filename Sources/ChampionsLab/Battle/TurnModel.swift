@@ -91,6 +91,15 @@ struct Fighter {
     /// Ally Switches landed in a row. Like Protect, each one after the first
     /// has a third of the chance of the one before.
     var switchStreak = 0
+    /// Seeded: an eighth of its health goes across the field every turn, to
+    /// whoever is standing where the seed came from.
+    var seededFrom: Int?
+    /// Turns of Taunt left: it cannot use a status move while this is running.
+    var tauntedFor = 0
+    /// Bracing this turn: it lives on one health point rather than fainting.
+    var enduring = false
+    /// Stages of critical-hit ratio, from Focus Energy or a Dragon Cheer.
+    var critStage = 0
     /// What it is held to, if anything.
     var encored: Choice? {
         guard encoredFor > 0, let last = lastMove, moves.indices.contains(last) else { return nil }
@@ -119,8 +128,10 @@ struct Screens {
     var reflect = 0
     var lightScreen = 0
     var auroraVeil = 0
-    /// Wide Guard, which lasts the turn rather than five of them.
+    /// Wide Guard and Quick Guard, which last the turn rather than five of
+    /// them: one turns away what hits everybody, the other what moves first.
     var wideGuard = false
+    var quickGuard = false
 
     var any: Bool { reflect > 0 || lightScreen > 0 || auroraVeil > 0 }
     mutating func tick() {
@@ -128,6 +139,7 @@ struct Screens {
         lightScreen = max(0, lightScreen - 1)
         auroraVeil = max(0, auroraVeil - 1)
         wideGuard = false
+        quickGuard = false
     }
     /// Whether a move of this kind is halved coming in.
     func blunt(_ move: Move) -> Bool {
@@ -1070,9 +1082,45 @@ enum TurnModel {
         }
         board.myScreens.tick()
         board.theirScreens.tick()
+
+        // Seeds drain across the field, to whoever is standing where the seed
+        // was thrown from. A seeded Pokémon that has fainted drains nothing.
+        for side in [true, false] {
+            let count = Swift.min(board.activeCount, (side ? board.mine : board.theirs).count)
+            for index in 0..<count {
+                let seeded = (side ? board.mine : board.theirs)[index]
+                guard let from = seeded.seededFrom, !seeded.fainted else { continue }
+                let taken = Swift.max(1, seeded.maxHP / 8)
+                let name = seeded.build.form.formLabel
+                if side { board.mine[index].hp = Swift.max(0, board.mine[index].hp - taken) }
+                else { board.theirs[index].hp = Swift.max(0, board.theirs[index].hp - taken) }
+                var line = "\(name) had \(taken) drained by the seed."
+                // Back to whoever is standing in the slot it came from.
+                let other = side ? board.theirs : board.mine
+                if other.indices.contains(from), !other[from].fainted {
+                    let healed = Swift.min(other[from].maxHP - other[from].hp, taken)
+                    if healed > 0 {
+                        if side { board.theirs[from].hp += healed } else { board.mine[from].hp += healed }
+                        line += " \(other[from].build.form.formLabel) took it back."
+                    }
+                }
+                board.note(line)
+                if (side ? board.mine : board.theirs)[index].fainted {
+                    board.note("\(name) fainted.")
+                }
+            }
+        }
+
         for index in board.mine.indices {
             board.mine[index].protectedLast = board.mine[index].isProtected
             if !board.mine[index].isProtected { board.mine[index].protectStreak = 0 }
+            board.mine[index].enduring = false
+            if board.mine[index].tauntedFor > 0 {
+                board.mine[index].tauntedFor -= 1
+                if board.mine[index].tauntedFor == 0 {
+                    board.note("\(board.mine[index].build.form.formLabel) shook off the taunt.")
+                }
+            }
             if board.mine[index].lastMove.map({ board.mine[index].moves.indices.contains($0)
                 && board.mine[index].moves[$0].name == "Ally Switch" }) != true {
                 board.mine[index].switchStreak = 0
@@ -1086,6 +1134,13 @@ enum TurnModel {
         for index in board.theirs.indices {
             board.theirs[index].protectedLast = board.theirs[index].isProtected
             if !board.theirs[index].isProtected { board.theirs[index].protectStreak = 0 }
+            board.theirs[index].enduring = false
+            if board.theirs[index].tauntedFor > 0 {
+                board.theirs[index].tauntedFor -= 1
+                if board.theirs[index].tauntedFor == 0 {
+                    board.note("\(board.theirs[index].build.form.formLabel) shook off the taunt.")
+                }
+            }
             if board.theirs[index].lastMove.map({ board.theirs[index].moves.indices.contains($0)
                 && board.theirs[index].moves[$0].name == "Ally Switch" }) != true {
                 board.theirs[index].switchStreak = 0
@@ -1238,6 +1293,9 @@ enum TurnModel {
         team[active].protectStreak = 0
         team[active].confusedFor = 0
         team[active].encoredFor = 0
+        team[active].tauntedFor = 0
+        team[active].seededFrom = nil
+        team[active].critStage = 0
         team[active].lastMove = nil
         team.swapAt(active, bench)
         team[active].justArrived = true
@@ -1314,6 +1372,12 @@ enum TurnModel {
             guard actor.moves.indices.contains(moveIndex) else { return }
             let move = actor.moves[moveIndex]
             remember(byMine: byMine, slot: slot, move: moveIndex, target: target, board: &board)
+            // Taunted: nothing but attacks until it wears off.
+            if !move.isDamaging, actor.tauntedFor > 0 {
+                board.note("\(name) cannot use \(move.name) — it is still taunted.")
+                markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                return
+            }
             guard move.isDamaging else {
                 let before = board.story.count
                 support(move, byMine: byMine, slot: slot, target: target,
@@ -1374,6 +1438,14 @@ enum TurnModel {
                 ? board.myScreens : board.theirScreens
             if move.isSpread, farScreens.wideGuard {
                 board.note("Wide Guard blocked it.")
+                markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                return
+            }
+            // Quick Guard turns away anything that moves first, which is what
+            // a Fake Out team is actually afraid of.
+            if move.priority > 0, target < Choice.allyTarget, farScreens.quickGuard {
+                board.note("Quick Guard blocked it.")
+                markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
                 return
             }
             // Armor Tail and Queenly Majesty refuse priority outright: nothing
@@ -1493,8 +1565,13 @@ enum TurnModel {
                 // already knows what one does — half again, and it goes through
                 // screens and the target's defensive boosts — it only needed
                 // telling when one happened.
-                if rolling, move.critRate > 0,
-                   Double.random(in: 0..<100) < move.critRate {
+                // A move's own rate, raised by anything the user is carrying:
+                // one stage is an eighth, two is a half, three is certain.
+                let stage = actor.critStage
+                let rate = stage <= 0 ? move.critRate
+                    : (stage == 1 ? Swift.max(move.critRate, 12.5)
+                       : stage == 2 ? Swift.max(move.critRate, 50) : 100)
+                if rolling, rate > 0, Double.random(in: 0..<100) < rate {
                     field.critical = true
                 }
                 var attacker = actor.build
@@ -1533,6 +1610,10 @@ enum TurnModel {
 
                 var landed = dealt
                 var sashed = false
+                if defending[index].enduring, dealt >= defending[index].hp {
+                    landed = defending[index].hp - 1
+                    board.note("\(hitName) endured it.")
+                }
                 if defending[index].build.item == "Focus Sash",
                    !defending[index].build.itemSpent,
                    defending[index].hp == defending[index].maxHP,
@@ -1929,6 +2010,22 @@ enum TurnModel {
         }
     }
 
+    /// A Pokémon leaving the field under its own move — Parting Shot, and
+    /// whatever else pivots. Whoever is waiting comes in and does what
+    /// arriving does.
+    private static func leave(byMine: Bool, slot: Int, board: inout Board) {
+        let team = byMine ? board.mine : board.theirs
+        guard let next = (board.activeCount..<team.count).first(where: { !team[$0].fainted }) else {
+            board.note("\(team[slot].build.form.formLabel) had nowhere to go.")
+            return
+        }
+        let leaving = team[slot].build.form.formLabel
+        if byMine { board.mine.swapAt(slot, next) } else { board.theirs.swapAt(slot, next) }
+        let arriving = (byMine ? board.mine : board.theirs)[slot].build.form.formLabel
+        board.note("\(leaving) went out; \(arriving) came in.")
+        board.landed(mine: byMine, slot: slot)
+    }
+
     /// Whether a Pokémon's last move came off, for Stomping Tantrum.
     private static func markFailed(byMine: Bool, slot: Int, board: inout Board, failed: Bool) {
         if byMine, board.mine.indices.contains(slot) { board.mine[slot].lastMoveFailed = failed }
@@ -2081,6 +2178,20 @@ enum TurnModel {
             return
         }
 
+        // Parting Shot: the drops land and then the user leaves, which is the
+        // whole point of it — a free switch that costs them two stages.
+        if move.name == "Parting Shot" {
+            let far = byMine ? board.theirs : board.mine
+            let index = far.indices.contains(target) && target < board.activeCount ? target : 0
+            if far.indices.contains(index), !far[index].fainted, !far[index].isProtected {
+                applyDrops([.attack: 1, .spAttack: 1], toMine: !byMine, slot: index, board: &board)
+            } else if far.indices.contains(index), far[index].isProtected {
+                board.note("\(far[index].build.form.formLabel) protected itself.")
+            }
+            leave(byMine: byMine, slot: slot, board: &board)
+            return
+        }
+
         // Ally Switch: the two of yours trade places, which is how a Pokémon
         // steps out of the way of something aimed at where it was standing.
         // Like Protect, doing it again is a third as likely to work.
@@ -2194,6 +2305,72 @@ enum TurnModel {
             if byMine { board.myScreens.wideGuard = true }
             else { board.theirScreens.wideGuard = true }
             board.note("A wide barrier went up.")
+            return
+        case "Quick Guard":
+            if byMine { board.myScreens.quickGuard = true }
+            else { board.theirScreens.quickGuard = true }
+            board.note("A quick barrier went up.")
+            return
+        case "Coaching":
+            // The partner's Attack and Defence, which is what makes it a
+            // doubles move rather than a wasted turn.
+            let partner = slot == 0 ? 1 : 0
+            let own = byMine ? board.mine : board.theirs
+            guard board.activeCount > 1, own.indices.contains(partner), !own[partner].fainted else {
+                board.note("But there was no one to coach.")
+                return
+            }
+            applySelf([.attack: 1, .defense: 1], toMine: byMine, slot: partner, board: &board)
+            return
+        case "Focus Energy", "Dragon Cheer":
+            // Focus Energy is the user's own; Dragon Cheer is the partner's,
+            // and worth twice as much to a Dragon.
+            if move.name == "Focus Energy" {
+                if byMine { board.mine[slot].critStage += 2 } else { board.theirs[slot].critStage += 2 }
+                board.note("\(name) is getting fired up.")
+            } else {
+                let partner = slot == 0 ? 1 : 0
+                let own = byMine ? board.mine : board.theirs
+                guard board.activeCount > 1, own.indices.contains(partner), !own[partner].fainted else {
+                    board.note("But there was no one to cheer for.")
+                    return
+                }
+                let dragon = own[partner].build.form.pokeTypes.contains(.dragon) ? 2 : 1
+                if byMine { board.mine[partner].critStage += dragon }
+                else { board.theirs[partner].critStage += dragon }
+                board.note("\(own[partner].build.form.formLabel) was cheered on.")
+            }
+            return
+        case "Endure":
+            if byMine { board.mine[slot].enduring = true } else { board.theirs[slot].enduring = true }
+            board.note("\(name) braced to survive whatever comes.")
+            return
+        case "Leech Seed":
+            let far = byMine ? board.theirs : board.mine
+            let index = far.indices.contains(target) && target < board.activeCount ? target : 0
+            guard far.indices.contains(index), !far[index].fainted else { return }
+            let who = far[index].build.form.formLabel
+            if far[index].isProtected { board.note("\(who) protected itself."); return }
+            if far[index].build.form.pokeTypes.contains(.grass) {
+                board.note("\(who) is a Grass type; the seed found nowhere to take hold.")
+                return
+            }
+            if far[index].seededFrom != nil { board.note("\(who) is already seeded."); return }
+            if byMine { board.theirs[index].seededFrom = slot } else { board.mine[index].seededFrom = slot }
+            board.note("\(who) was seeded.")
+            return
+        case "Taunt":
+            let far = byMine ? board.theirs : board.mine
+            let index = far.indices.contains(target) && target < board.activeCount ? target : 0
+            guard far.indices.contains(index), !far[index].fainted else { return }
+            let who = far[index].build.form.formLabel
+            if far[index].isProtected { board.note("\(who) protected itself."); return }
+            if far[index].build.ability == "Oblivious" || far[index].build.ability == "Aroma Veil" {
+                board.note("\(who)'s \(far[index].build.ability) ignored it.")
+                return
+            }
+            if byMine { board.theirs[index].tauntedFor = 3 } else { board.mine[index].tauntedFor = 3 }
+            board.note("\(who) was taunted: nothing but attacks for three turns.")
             return
         case "Reflect":
             if byMine { board.myScreens.reflect = 5 } else { board.theirScreens.reflect = 5 }

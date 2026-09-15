@@ -224,13 +224,18 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     /// sentence the boosts are, because it is written the same way.
     internal var computedTargetDrops: [Stat: Int] {
         guard let match = effect.range(
-            of: #"Lowers (?:the )?targets?'? .+? stats? by \d+ stage"#,
+            // "targets'" and "the target's" both appear, and the apostrophe
+            // falls in different places: a spread move lowers *targets'*
+            // Speed, a single-target one lowers *the target's*. Missing the
+            // second spelling quietly silenced Screech, Scary Face, Noble Roar
+            // and every other single-target drop in the game.
+            of: #"Lowers (?:the )?targets?'?s? .+? stats? by \d+ stage"#,
             options: .regularExpression) else { return [:] }
         let phrase = String(effect[match])
         guard let amount = phrase.range(of: #"\d+"#, options: [.regularExpression, .backwards])
             .flatMap({ Int(phrase[$0]) }) else { return [:] }
         let statsPart = phrase
-            .replacingOccurrences(of: #"^Lowers (?:the )?targets?'? "#, with: "",
+            .replacingOccurrences(of: #"^Lowers (?:the )?targets?'?s? "#, with: "",
                                   options: .regularExpression)
             .replacingOccurrences(of: #" stats? by \d+ stage"#, with: "",
                                   options: .regularExpression)

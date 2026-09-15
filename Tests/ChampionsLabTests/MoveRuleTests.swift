@@ -449,4 +449,148 @@ print("\n== the tech ==")
 
         print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     }
+
+    /// the support moves a doubles format is actually played with
+    @MainActor func testTheSupportMoves() throws {
+        print("== the support moves ==")
+        let helpers = fighters([("Whimsicott", "Focus Sash",
+                                 ["Quick Guard", "Coaching", "Leech Seed", "Taunt"]),
+                                ("Garchomp", "Life Orb", ["Dragon Claw", "Swords Dance", "Protect"])])
+        let quick = fighters([("Incineroar", "Sitrus Berry", ["Fake Out", "Flare Blitz", "Protect"]),
+                              ("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"])])
+        let board = Board(mine: helpers, theirs: quick, rules: store.rulebook,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+
+        // Quick Guard turns away what moves first.
+        let guarded = TurnModel.resolve(board,
+            mine: Play(left: .attack(move: at(board.mine[0], "Quick Guard"), target: 0),
+                       right: .attack(move: at(board.mine[1], "Swords Dance"), target: 0)),
+            theirs: Play(left: .attack(move: at(board.theirs[0], "Fake Out"), target: 1),
+                         right: .attack(move: at(board.theirs[1], "Wood Hammer"), target: 1)))
+        for line in guarded.story where line.contains("Quick Guard") { print("    \(line)") }
+        check("Quick Guard turns away a Fake Out",
+              !guarded.mine[1].flinched && guarded.mine[1].build.boosts[Stat.attack.rawValue] == 2,
+              "flinched \(guarded.mine[1].flinched)")
+        check("and lets an ordinary attack through",
+              guarded.mine[1].hp < board.mine[1].maxHP, "\(guarded.mine[1].hp)/\(board.mine[1].maxHP)")
+
+        // Coaching is the partner's two stages.
+        let coached = TurnModel.resolve(board,
+            mine: Play(left: .attack(move: at(board.mine[0], "Coaching"), target: 0),
+                       right: .attack(move: at(board.mine[1], "Protect"), target: 0)),
+            theirs: Play(left: .attack(move: at(board.theirs[0], "Protect"), target: 0),
+                         right: .attack(move: at(board.theirs[1], "Protect"), target: 0)))
+        check("Coaching raises the partner's Attack and Defence",
+              coached.mine[1].build.boosts[Stat.attack.rawValue] == 1
+                && coached.mine[1].build.boosts[Stat.defense.rawValue] == 1,
+              "\(coached.mine[1].build.boosts)")
+
+        // Leech Seed drains across the field and heals the thrower's slot.
+        // Against Garchomp, not Incineroar: Whimsicott has Prankster, and a
+        // Prankster's status move does not touch a Dark type at all.
+        var seedBoard = Board(mine: helpers, theirs: soaked, rules: store.rulebook,
+                              field: Field(isDoubles: true), alreadyEvolved: false)
+        seedBoard.mine[0].hp = seedBoard.mine[0].maxHP / 2
+        let seeded = TurnModel.resolve(seedBoard,
+            mine: Play(left: .attack(move: at(seedBoard.mine[0], "Leech Seed"), target: 0),
+                       right: .attack(move: at(seedBoard.mine[1], "Protect"), target: 0)),
+            // Attacking, not Protecting: a seed thrown at a Protect bounces.
+            theirs: Play(left: .attack(move: at(seedBoard.theirs[0], "Swords Dance"), target: 0),
+                         right: .attack(move: at(seedBoard.theirs[1], "Swords Dance"), target: 0)))
+        for line in seeded.story where line.contains("seed") { print("    \(line)") }
+        check("the seed takes hold and drains the same turn",
+              seeded.theirs[0].seededFrom == 0 && seeded.theirs[0].hp < seedBoard.theirs[0].maxHP,
+              "\(seeded.theirs[0].hp)/\(seeded.theirs[0].maxHP)")
+        check("and what it drains comes back",
+              seeded.mine[0].hp > seedBoard.mine[0].hp,
+              "\(seedBoard.mine[0].hp) -> \(seeded.mine[0].hp)")
+        // Grass shrugs it off, and so does a Dark type facing a Prankster.
+        var grassy = Board(mine: helpers, theirs: standing, rules: store.rulebook,
+                           field: Field(isDoubles: true), alreadyEvolved: false)
+        grassy.mine[0].build.ability = "Infiltrator"     // not Prankster, so the Dark rule is not what is being tested
+        let refused = TurnModel.resolve(grassy,
+            mine: Play(left: .attack(move: at(grassy.mine[0], "Leech Seed"), target: 1),
+                       right: .attack(move: at(grassy.mine[1], "Protect"), target: 0)),
+            theirs: Play(left: .attack(move: at(grassy.theirs[0], "Swords Dance"), target: 0),
+                         right: .attack(move: at(grassy.theirs[1], "Wood Hammer"), target: 1)))
+        for line in refused.story where line.contains("Grass type") { print("    \(line)") }
+        check("a Grass type cannot be seeded", refused.theirs[1].seededFrom == nil)
+
+        // Taunt: nothing but attacks.
+        // Rillaboom, not Incineroar: the Prankster rule again.
+        let taunted = TurnModel.resolve(board,
+            mine: Play(left: .attack(move: at(board.mine[0], "Taunt"), target: 1),
+                       right: .attack(move: at(board.mine[1], "Protect"), target: 0)),
+            theirs: Play(left: .attack(move: at(board.theirs[0], "Flare Blitz"), target: 1),
+                         right: .attack(move: at(board.theirs[1], "Wood Hammer"), target: 1)))
+        check("Taunt lands", taunted.theirs[1].tauntedFor > 0, "\(taunted.theirs[1].tauntedFor)")
+        let silenced = TurnModel.resolve(taunted,
+            mine: Play(left: .attack(move: at(taunted.mine[0], "Protect"), target: 0),
+                       right: .attack(move: at(taunted.mine[1], "Protect"), target: 0)),
+            theirs: Play(left: .attack(move: at(taunted.theirs[0], "Flare Blitz"), target: 0),
+                         right: .attack(move: at(taunted.theirs[1], "Protect"), target: 0)))
+        for line in silenced.story where line.contains("taunted") { print("    \(line)") }
+        check("and a taunted Pokémon cannot Protect",
+              !silenced.theirs[1].isProtected
+                && silenced.story.contains { $0.contains("still taunted") })
+
+        print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
+    }
+
+    /// Parting Shot, Endure and Focus Energy
+    @MainActor func testPivotsAndBracing() throws {
+        print("== pivots and bracing ==")
+        let pivots = fighters([("Incineroar", "Sitrus Berry", ["Parting Shot", "Endure", "Flare Blitz"]),
+                               ("Whimsicott", "Focus Sash", ["Protect"]),
+                               ("Garchomp", "Life Orb", ["Dragon Claw", "Protect"])])
+        let board = Board(mine: pivots, theirs: soaked, rules: store.rulebook,
+                          field: Field(isDoubles: true), alreadyEvolved: false)
+        let shot = TurnModel.resolve(board,
+            mine: Play(left: .attack(move: at(board.mine[0], "Parting Shot"), target: 0),
+                       right: .attack(move: at(board.mine[1], "Protect"), target: 0)),
+            theirs: Play(left: .attack(move: at(board.theirs[0], "Swords Dance"), target: 0),
+                         right: .attack(move: at(board.theirs[1], "Swords Dance"), target: 0)))
+        for line in shot.story where line.contains("came in") || line.contains("fell") { print("    \(line)") }
+        check("Parting Shot takes two stages off the target",
+              shot.theirs[0].build.boosts[Stat.attack.rawValue] == 1
+                && shot.theirs[0].build.boosts[Stat.spAttack.rawValue] == -1,
+              "\(shot.theirs[0].build.boosts)")
+        check("and the user leaves",
+              shot.mine[0].build.form.formLabel == "Garchomp" && shot.mine[0].seen,
+              shot.mine[0].build.form.formLabel)
+
+        // Endure: one health point, not none.
+        var doomed = Board(mine: pivots, theirs: standing, rules: store.rulebook,
+                           field: Field(isDoubles: true), alreadyEvolved: false)
+        doomed.mine[0].hp = 1
+        doomed.mine[0].build.item = ""      // no berry to do Endure's job for it
+        let endured = TurnModel.resolve(doomed,
+            mine: Play(left: .attack(move: at(doomed.mine[0], "Endure"), target: 0),
+                       right: .attack(move: at(doomed.mine[1], "Protect"), target: 0)),
+            theirs: Play(left: .attack(move: at(doomed.theirs[0], "Earthquake"), target: 0),
+                         right: .attack(move: at(doomed.theirs[1], "Wood Hammer"), target: 0)),
+            rolling: true)
+        for line in endured.story where line.contains("endured") { print("    \(line)") }
+        check("Endure leaves it on one health point", endured.mine[0].hp == 1 && !endured.mine[0].fainted,
+              "\(endured.mine[0].hp)")
+        check("and wears off at the end of the turn", !endured.mine[0].enduring)
+
+        // Focus Energy: every hit a critical, at three stages.
+        var eager = board
+        eager.mine[0].critStage = 3
+        var crits = 0
+        for _ in 0..<40 {
+            let rolled = TurnModel.resolve(eager,
+                mine: Play(left: .attack(move: at(eager.mine[0], "Flare Blitz"), target: 0),
+                           right: .attack(move: at(eager.mine[1], "Protect"), target: 0)),
+                theirs: Play(left: .attack(move: at(eager.theirs[0], "Swords Dance"), target: 0),
+                             right: .attack(move: at(eager.theirs[1], "Swords Dance"), target: 0)),
+                rolling: true)
+            if rolled.story.contains(where: { $0.contains("critical") }) { crits += 1 }
+        }
+        print("  40 hits at three stages of crit ratio: \(crits) critical")
+        check("three stages of crit ratio is every hit", crits == 40, "\(crits)")
+
+        print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
+    }
 }

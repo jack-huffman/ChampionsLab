@@ -2,6 +2,8 @@
 #
 #   make test       the test suite (swift test): turn model, search, arithmetic
 #   make hitch      main-thread stretches and search budgets, optimised build
+#   make coverage   what the battle model implements, and what it does not
+#   make profile    where a search spends its time
 #   make accuracy   the engine against real games (slow; needs data/matches.json)
 #   make snapshot   render every screen to build/shots/*.png
 #   make app        build ChampionsLab.app into ~/Applications
@@ -16,7 +18,7 @@
 SHELL := /bin/bash
 NICE  := nice -n 15
 
-.PHONY: test warnings hitch accuracy snapshot app dmg data check clean
+.PHONY: test warnings hitch coverage profile accuracy snapshot app dmg data check clean
 
 test:
 	$(NICE) swift test 2>&1 | tail -25
@@ -33,6 +35,16 @@ hitch:
 
 accuracy:
 	$(NICE) ./Tools/accuracy.sh
+
+# What the battle model implements, and what it does not. Moves are audited by
+# using them; abilities and items by reading the model. Ranked by usage, so
+# the gaps that matter come first.
+coverage:
+	$(NICE) ./Tools/coverage.sh
+
+# Where a search spends its time. Optimise what this says is slow.
+profile:
+	$(NICE) ./Tools/profile.sh
 
 snapshot:
 	$(NICE) ./Tools/snapshot.sh
