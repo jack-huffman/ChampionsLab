@@ -120,28 +120,73 @@ extension Move {
 }
 
 extension Move {
-    /// How many times this lands, given who is throwing it.
+    /// Triple Axel and Triple Kick get stronger with each blow: 20, 40, 60
+    /// and 10, 20, 30. Held by name because it is a function in the reference
+    /// rather than a piece of data, and it is a closed set of two.
+    var escalates: Bool { id == "tripleaxel" || id == "triplekick" }
+
+    /// How much damage this lands, counted in blows.
     ///
-    /// A played turn rolls inside the range, weighted the way the game weights
-    /// it: two and three hits are three times as likely as four and five. The
-    /// search takes the average of exactly that, which for a two-to-five move
-    /// is three. Skill Link always lands the most.
-    func blows(for ability: String, rolling: Bool,
+    /// Not a hit count: a number to multiply one blow's damage by. Three
+    /// separate things make those differ.
+    ///
+    /// A plain multi-hit move lands two to five times, weighted the way the
+    /// game weights it — two and three are three times as likely as four and
+    /// five — and its accuracy is rolled once for the whole attack.
+    ///
+    /// Population Bomb, Triple Axel and Triple Kick roll accuracy for *every*
+    /// blow and stop at the first miss, so ten blows at 90% is about six, not
+    /// ten. `accuracy` here is the chance one blow lands, and the caller has
+    /// already applied it once, which is why the sum starts at the zeroth
+    /// power.
+    ///
+    /// And the two Triples get stronger as they go, so their blows are worth
+    /// one, two and three of the first rather than one each.
+    func blows(for ability: String, accuracy: Double, rolling: Bool,
                using dice: inout RandomNumberGenerator) -> Double {
         guard let hits, hits.count == 2, hits[1] > 1 else { return 1 }
         let fewest = hits[0], most = hits[1]
-        if ability == "Skill Link" { return Double(most) }
-        guard fewest != most else { return Double(most) }
+        let perBlow = multiaccuracy == true
+
+        // How many blows are thrown, before any of them can miss.
+        let thrown: Int
+        if ability == "Skill Link" || fewest == most {
+            thrown = most
+        } else if !rolling {
+            // The average of the game's weighting, which for two-to-five is
+            // exactly three. Kept as a whole number so escalation can use it.
+            thrown = (fewest == 2 && most == 5) ? 3 : (fewest + most) / 2
+        } else if fewest == 2 && most == 5 {
+            let roll = Double.random(in: 0..<1, using: &dice)
+            thrown = roll < 0.375 ? 2 : roll < 0.75 ? 3 : roll < 0.875 ? 4 : 5
+        } else {
+            thrown = Int.random(in: fewest...most, using: &dice)
+        }
+
+        /// What one blow is worth, the first being one.
+        func worth(_ blow: Int) -> Double { escalates ? Double(blow) : 1 }
+
+        guard perBlow else {
+            return (1...Swift.max(1, thrown)).reduce(0) { $0 + worth($1) }
+        }
+        let chance = Swift.max(0, Swift.min(1, accuracy))
         guard rolling else {
-            // The weighted average. For the usual two-to-five it is three.
-            guard fewest == 2, most == 5 else { return Double(fewest + most) / 2 }
-            return 3
+            // Expected value. The caller applied one accuracy already, so the
+            // first blow is certain here and each one after costs another.
+            var total = 0.0
+            for blow in 1...Swift.max(1, thrown) {
+                total += worth(blow) * pow(chance, Double(blow - 1))
+            }
+            return total
         }
-        guard fewest == 2, most == 5 else {
-            return Double(Int.random(in: fewest...most, using: &dice))
+        // A played turn: the first blow has already landed, and each one after
+        // has to be rolled for. The attack ends at the first miss.
+        var total = worth(1)
+        for blow in 2...Swift.max(2, thrown) where thrown >= blow {
+            guard Double.random(in: 0..<1, using: &dice) < chance else { break }
+            total += worth(blow)
         }
-        let roll = Double.random(in: 0..<1, using: &dice)
-        return roll < 0.375 ? 2 : roll < 0.75 ? 3 : roll < 0.875 ? 4 : 5
+        return total
     }
 
     /// Guillotine, Fissure, Horn Drill, Sheer Cold. Their listed power is 1,

@@ -2195,6 +2195,29 @@ enum TurnModel {
                     board.note("It was drawn to \(defenders[pulled].build.form.formLabel).")
                 }
             }
+            // Dragon Darts, and nothing else in the game. Its two darts go
+            // one to each foe in a double battle rather than both to the one
+            // it was aimed at — and when only one of them can be reached,
+            // because the other is protecting or already down, both darts go
+            // there instead. Aiming it at a Protect is how it ends up hitting
+            // the partner twice.
+            var dartedTwice = false
+            if move.smartTarget == true, !atAlly, board.activeCount > 1 {
+                let far = hitMine ? board.mine : board.theirs
+                let reachable = (0..<Swift.min(board.activeCount, far.count)).filter {
+                    !far[$0].fainted && !far[$0].hidden
+                        && !(far[$0].isProtected && move.isProtectable)
+                }
+                if reachable.count > 1 {
+                    aimed = reachable
+                    board.note("The darts split, one to each.")
+                } else if let only = reachable.first {
+                    aimed = [only]
+                    dartedTwice = true
+                    if only != target { board.note("Both darts went to \(far[only].build.form.formLabel).") }
+                }
+            }
+
             var totalDealt = 0
             var reached = 0
             for index in aimed {
@@ -2419,14 +2442,26 @@ enum TurnModel {
                 // How many times it lands. Parental Bond adds a second blow at
                 // a quarter, which is the ability rather than the move, so the
                 // two are counted together and the log says which is which.
-                let blows = move.blows(for: actor.build.ability, rolling: rolling,
-                                       using: &TurnModel.dice)
+                // A split dart is one blow each; both darts on one target is
+                // the move's own two.
+                var blows = move.blows(for: actor.build.ability, accuracy: accuracy,
+                                       rolling: rolling, using: &TurnModel.dice)
+                if move.smartTarget == true, board.activeCount > 1 {
+                    blows = dartedTwice ? 2 : 1
+                }
+                // Parental Bond adds its own second blow, but not to a move
+                // that already throws several and not to Dragon Darts, which
+                // the reference marks as refusing it outright.
                 let bonded = actor.build.ability == "Parental Bond"
                     && move.isDamaging && !move.isSpread && blows == 1
+                    && move.smartTarget != true
                 let dealt = Int((Double(oneBlow) * blows).rounded())
                         + (bonded ? Swift.max(1, oneBlow / 4) : 0)
                 if blows > 1 {
-                    board.note("  \(Int(blows)) hits, \(oneBlow) each.")
+                    board.note(move.escalates
+                               ? String(format: "  %d blows, each harder than the last.",
+                                        move.hits?.last ?? 0)
+                               : "  \(Int(blows.rounded())) hits, \(oneBlow) each.")
                 }
                 if bonded { board.note("  Parental Bond: a second blow at a quarter.") }
 

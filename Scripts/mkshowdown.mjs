@@ -93,6 +93,12 @@ for (const move of Object.values(Moves)) {
     // thirty-five power attack when it is two of them.
     hits: Array.isArray(move.multihit) ? move.multihit
         : (move.multihit ? [move.multihit, move.multihit] : null),
+    // Accuracy rolled per blow rather than once, so the attack stops at the
+    // first miss: Population Bomb lands about six of its ten, not ten.
+    multiaccuracy: !!move.multiaccuracy,
+    // Dragon Darts and nothing else: in a double battle the two darts go one
+    // to each foe, and both to the same one when only one can be reached.
+    smartTarget: !!move.smartTarget,
     power: move.basePower,
     accuracy: move.accuracy === true ? 0 : move.accuracy,
     type: move.type,

@@ -1085,6 +1085,10 @@ def apply_showdown(moves):
         if ref.get("hits"):
             move["hits"] = ref["hits"]
             multihit += 1
+        if ref.get("multiaccuracy"):
+            move["multiaccuracy"] = True
+        if ref.get("smartTarget"):
+            move["smart_target"] = True
         if move["secondaries"]:
             carried += 1
         # Flags decide which ability answers a move. Serebii publishes these

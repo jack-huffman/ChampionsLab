@@ -137,6 +137,12 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     /// when it is two of them — half the damage, on a move a third of the
     /// format carries.
     let hits: [Int]?
+    /// Accuracy is rolled for each blow rather than once for the move, so it
+    /// stops at the first miss. Population Bomb lands about six of its ten.
+    let multiaccuracy: Bool?
+    /// Dragon Darts and nothing else: in a double battle the two darts go one
+    /// to each foe, and both to the same one when only one can be reached.
+    let smartTarget: Bool?
     /// Where Champions differs from the main series, keyed by field: what the
     /// main series has. Present only on the thirty-odd moves it changed.
     ///
@@ -194,7 +200,8 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, name, type, category, power, accuracy, pp, priority, target
-        case flags, effect, learnable, mainline, hits
+        case flags, effect, learnable, mainline, hits, multiaccuracy
+        case smartTarget = "smart_target"
         case secondaryData = "secondaries"
         case neverMisses = "never_misses"
         case critRate = "crit_rate"

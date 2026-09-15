@@ -122,16 +122,43 @@ extension SecondaryEffectTests {
     /// when it does the right amount.
     @MainActor func testAMultiHitMoveLandsEveryBlow() throws {
         print("\n== every blow lands ==")
+        // A plain multi-hit move: accuracy is rolled once for the attack, so
+        // its blows are worth one each.
         for (name, expected) in [("Double Hit", 2.0), ("Dual Wingbeat", 2.0),
-                                 ("Triple Axel", 3.0), ("Bullet Seed", 3.0)] {
+                                 ("Bullet Seed", 3.0)] {
             var dice: RandomNumberGenerator = SystemRandomNumberGenerator()
-            let blows = move(name).blows(for: "", rolling: false, using: &dice)
-            print("  \(name.padding(toLength: 14, withPad: " ", startingAt: 0))\(blows) blows")
+            let blows = move(name).blows(for: "", accuracy: 1, rolling: false, using: &dice)
+            print("  \(name.padding(toLength: 16, withPad: " ", startingAt: 0))\(blows) blows")
             check("\(name) lands \(expected) blows to the search", blows == expected)
         }
         var dice: RandomNumberGenerator = SystemRandomNumberGenerator()
-        let linked = move("Bullet Seed").blows(for: "Skill Link", rolling: false, using: &dice)
+        let linked = move("Bullet Seed").blows(for: "Skill Link", accuracy: 1,
+                                               rolling: false, using: &dice)
         check("Skill Link always lands five", linked == 5)
+
+        // Triple Axel gets stronger with each blow — 20, 40, 60 — and rolls
+        // accuracy for every one, so it stops at the first miss. All three
+        // landing is worth six of the first; at 90% a blow it is about 4.7.
+        let axelSure = move("Triple Axel").blows(for: "", accuracy: 1,
+                                                 rolling: false, using: &dice)
+        let axelReal = move("Triple Axel").blows(for: "", accuracy: 0.9,
+                                                 rolling: false, using: &dice)
+        // `blows` counts from the first blow onwards; the caller has already
+        // applied one accuracy factor, so the landed total is that times 0.9.
+        let axelLanded = axelReal * 0.9
+        print(String(format: "  Triple Axel     %.2f blows if nothing misses, %.2f landed at 90%%",
+                     axelSure, axelLanded))
+        check("three escalating blows are worth six of the first", axelSure == 6)
+        check("and about 4.7 of that survives the misses",
+              axelLanded > 4.6 && axelLanded < 4.8)
+
+        // Population Bomb throws ten and stops at the first miss, so at 90%
+        // it lands about six.
+        let bomb = move("Population Bomb").blows(for: "", accuracy: 0.9,
+                                                 rolling: false, using: &dice)
+        let bombLanded = bomb * 0.9
+        print(String(format: "  Population Bomb %.2f of its ten land, at 90%% a blow", bombLanded))
+        check("about six of the ten land", bombLanded > 5.5 && bombLanded < 6.2)
 
         // And the damage actually doubles on the board.
         var board = Board(mine: fighters([("Kingambit", "Leftovers", ["Double Hit", "Protect"]),
@@ -201,5 +228,52 @@ extension SecondaryEffectTests {
               spun.myScreens.spikes == 0 && !spun.myScreens.stealthRock)
         check("and leaves the other side alone", spun.theirScreens.spikes == 3)
         check("and leaves the terrain alone", spun.field.terrain == .grassy)
+    }
+}
+
+extension SecondaryEffectTests {
+    /// Dragon Darts splits between the two foes, and both darts land on
+    /// whichever one can still be reached.
+    ///
+    /// The only move in the game that targets this way. Aimed at a Pokémon
+    /// that then protects, both darts go to its partner — which is the reason
+    /// anybody thinks about which of the two to aim it at.
+    @MainActor func testDragonDartsSplitsAndRedirects() throws {
+        print("\n== where the darts go ==")
+        func board() -> Board {
+            // Neither of theirs may be a Fairy type: Dragon does not touch
+            // one at all, and an immune partner cannot show a dart arriving.
+            var b = Board(mine: fighters([("Garchomp", "Leftovers", ["Dragon Darts", "Protect"]),
+                                          ("Milotic", "Leftovers", ["Protect"])]),
+                          theirs: fighters([("Kingambit", "Leftovers", ["Protect"]),
+                                            ("Incineroar", "Leftovers", ["Protect"])]),
+                          rules: store.rulebook, field: Field(isDoubles: true),
+                          alreadyEvolved: false)
+            b.narrating = false
+            b.sendOutLeads()
+            return b
+        }
+
+        // Nobody protecting: one dart each.
+        let open = board()
+        let split = TurnModel.resolve(open,
+            mine: Play(left: .attack(move: at(open.mine[0], "Dragon Darts"), target: 0), right: .pass),
+            theirs: Play(left: .pass, right: .pass), rolling: false)
+        let leftHit = open.theirs[0].hp - split.theirs[0].hp
+        let rightHit = open.theirs[1].hp - split.theirs[1].hp
+        print("  nobody protecting: left took \(leftHit), right took \(rightHit)")
+        check("both of them were hit", leftHit > 0 && rightHit > 0)
+
+        // The one it was aimed at protects: both darts go to the partner.
+        let guarded = board()
+        let redirected = TurnModel.resolve(guarded,
+            mine: Play(left: .attack(move: at(guarded.mine[0], "Dragon Darts"), target: 0), right: .pass),
+            theirs: Play(left: .protectSelf(move: at(guarded.theirs[0], "Protect")), right: .pass),
+            rolling: false)
+        let blocked = guarded.theirs[0].hp - redirected.theirs[0].hp
+        let doubled = guarded.theirs[1].hp - redirected.theirs[1].hp
+        print("  aimed one protects: it took \(blocked), its partner took \(doubled)")
+        check("the protecting one took nothing", blocked <= 0)
+        check("and its partner took both darts", doubled > rightHit)
     }
 }
