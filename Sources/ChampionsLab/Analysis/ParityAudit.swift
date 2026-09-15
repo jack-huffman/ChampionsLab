@@ -459,7 +459,7 @@ private struct Bench {
                 if traits { out += "/\(f.build.item)/\(f.build.ability)" }
                 out += "/\(f.seededFrom ?? -1)/\(f.critStage)/\(f.build.form.id)"
                 out += "/\(f.substitute)/\(f.infatuatedWith ?? -1)/\(f.tormented)/\(f.cannotEscape)"
-                out += "/\(f.aquaRing)/\(f.stockpile)/\(f.goesNext)/\(f.goesLast)/\(f.charged)"
+                out += "/\(f.aquaRing)/\(f.stockpile)/\(f.goesNext)/\(f.goesLast)/\(f.charged)/\(f.helped)"
                 out += "/\(f.build.typeOverride ?? [])"
                 out += "/\((f.build.statOverride ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" })"
                 out += "/\(f.asleepFor)/\(f.protectStreak)/\(f.lastMoveFailed)/\(f.seen)"
@@ -514,8 +514,13 @@ private struct Bench {
         cluttered.mine[0].build.boosts[Stat.attack.rawValue] = 2
         cluttered.theirs[0].build.boosts[Stat.defense.rawValue] = 2
 
-        let using = Play(left: .attack(move: 0, target: 0), right: .pass)
-        let passing = Play(left: .pass, right: .pass)
+        // The partner attacks in both, so a move whose whole effect lands on
+        // the partner's move — Helping Hand, Decorate, Coaching — has
+        // something to land on. It is in *both* plays, so the only thing that
+        // differs between them is still the move being tested.
+        let using = Play(left: .attack(move: 0, target: 0),
+                         right: .attack(move: 0, target: 0))
+        let passing = Play(left: .pass, right: .attack(move: 0, target: 0))
         // Their answers: nothing, a single-target attack, a Protect, and a
         // spread move — without that last one Wide Guard has nothing to turn
         // away and reads as missing.

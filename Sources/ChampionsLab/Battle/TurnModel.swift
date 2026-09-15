@@ -107,6 +107,9 @@ struct Fighter {
     var goesNext = false
     /// Electromorphosis: the next Electric move it throws is twice as strong.
     var charged = false
+    /// Its partner used Helping Hand on it this turn: half again on the move
+    /// it is about to use, and gone at the end of the turn.
+    var helped = false
     /// Quash sent it to the back of the queue: it acts last regardless of
     /// Speed. The mirror image of `goesNext`, and cleared the same way.
     var goesLast = false
@@ -398,6 +401,14 @@ struct Board {
     /// Whether the hit just resolved was a critical one. Set as the hit lands
     /// and read immediately after by the abilities that answer a crit.
     var lastWasCritical = false
+
+    /// A line that explains the one above it rather than standing alone.
+    ///
+    /// "Garchomp used Earthquake" is a thing that happened; the spread penalty,
+    /// the terrain halving it and what each target took are its reasons. The
+    /// log hangs these under it instead of listing nine equal events, and the
+    /// two-space prefix is the whole protocol.
+    mutating func detail(_ line: String) { note("  " + line) }
 
     /// The key for one coin flip: which flip, whose side, which slot.
     static func flip(_ what: String, _ mine: Bool, _ slot: Int) -> String {
@@ -1681,6 +1692,8 @@ enum TurnModel {
                 board.mine[index].switchStreak = 0
             }
             board.mine[index].justArrived = false
+            // A Helping Hand is good for one move, not for the game.
+            board.mine[index].helped = false
             if board.mine[index].asleepFor > 0 {
                 // Early Bird sleeps through half of it.
                 let quick = board.mine[index].build.ability == "Early Bird"
@@ -1706,6 +1719,8 @@ enum TurnModel {
                 board.theirs[index].switchStreak = 0
             }
             board.theirs[index].justArrived = false
+            // A Helping Hand is good for one move, not for the game.
+            board.theirs[index].helped = false
             if board.theirs[index].asleepFor > 0 {
                 // Early Bird sleeps through half of it.
                 let quick = board.theirs[index].build.ability == "Early Bird"
@@ -2229,7 +2244,7 @@ enum TurnModel {
                     continue
                 }
                 if defending[index].isProtected, move.isProtectable {
-                    board.note("\(hitName) protected itself.")
+                    board.detail("\(hitName) protected itself.")
                     continue
                 }
                 // Feint: through the Protect, and the Protect is gone — so the
@@ -2282,7 +2297,7 @@ enum TurnModel {
                 // wearing goggles.
                 if move.isPowder, defending[index].types.contains(.grass)
                     || defending[index].build.item == "Safety Goggles" {
-                    board.note("It does not affect \(hitName).")
+                    board.detail("It does not affect \(hitName).")
                     continue
                 }
 
@@ -2293,7 +2308,7 @@ enum TurnModel {
                    Double.random(in: 0...100, using: &TurnModel.dice) > chanceToHit(move, attacker: actor,
                                                             defender: defending[index],
                                                             board: board) {
-                    board.note(aimed.count > 1 ? "\(hitName) avoided it." : "It missed.")
+                    board.detail(aimed.count > 1 ? "\(hitName) avoided it." : "It missed.")
                     continue
                 }
                 reached += 1
@@ -2301,6 +2316,7 @@ enum TurnModel {
                 defender.atFullHP = defending[index].hp == defending[index].maxHP
                 defender.status = defending[index].status
                 var field = board.calcField
+                field.helpingHand = actor.helped
                 field.targetJustArrived = defending[index].justArrived
                 // A Fairy Aura anywhere on the field powers up Fairy moves for
                 // everybody, which is what makes it an aura.
@@ -2414,18 +2430,18 @@ enum TurnModel {
                     }
                     continue
                 }
-                if field.critical { board.note("  A critical hit!") }
+                if field.critical { board.detail("A critical hit!") }
 
                 // 3. What the far side brings to it. These are the calculator's
                 // own notes, so the commentary cannot drift from the maths.
                 for line in result.notes where worthSaying(line) {
-                    board.note("  \(line)")
+                    board.detail(line)
                 }
                 if actor.status.halvesPhysical, move.category == "Physical" {
-                    board.note("  \(name) is burned, so it hits softer.")
+                    board.detail("\(name) is burned, so it hits softer.")
                 }
                 if result.effectiveness == 0 {
-                    board.note("It does not affect \(hitName).")
+                    board.detail("It does not affect \(hitName).")
                     continue
                 }
 
@@ -2458,12 +2474,12 @@ enum TurnModel {
                 let dealt = Int((Double(oneBlow) * blows).rounded())
                         + (bonded ? Swift.max(1, oneBlow / 4) : 0)
                 if blows > 1 {
-                    board.note(move.escalates
-                               ? String(format: "  %d blows, each harder than the last.",
-                                        move.hits?.last ?? 0)
-                               : "  \(Int(blows.rounded())) hits, \(oneBlow) each.")
+                    board.detail(move.escalates
+                                 ? String(format: "%d blows, each harder than the last.",
+                                          move.hits?.last ?? 0)
+                                 : "\(Int(blows.rounded())) hits, \(oneBlow) each.")
                 }
-                if bonded { board.note("  Parental Bond: a second blow at a quarter.") }
+                if bonded { board.detail("Parental Bond: a second blow at a quarter.") }
 
                 // A one-hit knockout does exactly that, three times in ten,
                 // and nothing at all the rest of the time. It is worked out
@@ -2471,7 +2487,7 @@ enum TurnModel {
                 if move.isOHKO {
                     let lands = rolling ? Double.random(in: 0..<1, using: &TurnModel.dice) < 0.3 : false
                     if defending[index].types.contains(.ice), move.id == "sheercold" {
-                        board.note("It does not affect \(hitName).")
+                        board.detail("It does not affect \(hitName).")
                         continue
                     }
                     if lands {
@@ -2504,7 +2520,7 @@ enum TurnModel {
                 var sashed = false
                 if defending[index].enduring, dealt >= defending[index].hp {
                     landed = defending[index].hp - 1
-                    board.note("\(hitName) endured it.")
+                    board.detail("\(hitName) endured it.")
                 }
                 if defending[index].build.item == "Focus Sash",
                    !defending[index].build.itemSpent,
@@ -2528,13 +2544,13 @@ enum TurnModel {
                 let share = Int((Double(landed) / Double(Swift.max(1, defending[index].maxHP))
                                  * 100).rounded())
                 if result.effectiveness > 1 {
-                    board.note("It is super effective. \(hitName) took \(landed) (\(share)%).")
+                    board.detail("It is super effective. \(hitName) took \(landed) (\(share)%).")
                 } else if result.effectiveness < 1 {
-                    board.note("\(hitName) resists it — \(landed) (\(share)%).")
+                    board.detail("\(hitName) resists it — \(landed) (\(share)%).")
                 } else {
-                    board.note("\(hitName) took \(landed) (\(share)%).")
+                    board.detail("\(hitName) took \(landed) (\(share)%).")
                 }
-                if sashed { board.note("\(hitName) hung on with its Focus Sash.") }
+                if sashed { board.detail("\(hitName) hung on with its Focus Sash.") }
 
                 // 5. Afterwards: what the move does beyond the damage, and what
                 // the target's own ability does back.
@@ -2556,7 +2572,7 @@ enum TurnModel {
                           rolling: rolling, board: &board)
                 let after = hitMine ? board.mine[index] : board.theirs[index]
                 if after.hp == 0 {
-                    board.note("\(hitName) fainted.")
+                    board.detail("\(hitName) fainted.")
                     // Moxie and its kin take something from the knockout.
                     switch actor.build.ability {
                     case "Moxie", "Chilling Neigh":
@@ -4365,11 +4381,23 @@ enum TurnModel {
             board.note("\(move.name) went up for \(turns) turns.")
             return
         case "Helping Hand":
-            // Its whole effect is on a partner's move this turn, and the turn
-            // order here means the partner may already have gone. Counted as a
-            // boost to the ally so the rest of the turn sees it.
+            // Half again on the partner's move this turn, and nothing after it.
+            //
+            // This used to raise the partner's Attack and Special Attack by a
+            // stage instead, on the reasoning that the partner may already have
+            // moved and a stat change is at least visible. That was wrong twice
+            // over: a stage is 50% of the *stat* rather than of the move's
+            // power, so it compounds differently with screens and items, and a
+            // stage does not go away at the end of the turn. A Helping Hand
+            // that leaves its partner permanently stronger is a different move.
             let ally = slot == 0 ? 1 : 0
-            applySelf([.attack: 1, .spAttack: 1], toMine: byMine, slot: ally, board: &board)
+            let own = byMine ? board.mine : board.theirs
+            guard board.activeCount > 1, own.indices.contains(ally), !own[ally].fainted else {
+                board.note("But there was no one to help.")
+                return
+            }
+            if byMine { board.mine[ally].helped = true } else { board.theirs[ally].helped = true }
+            board.note("\(name) lent \(own[ally].build.form.formLabel) a hand.")
             return
         default:
             break

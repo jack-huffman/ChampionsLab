@@ -277,3 +277,40 @@ extension SecondaryEffectTests {
         check("and its partner took both darts", doubled > rightHit)
     }
 }
+
+extension SecondaryEffectTests {
+    /// Helping Hand is half again on one move, not a stat change that lasts.
+    @MainActor func testHelpingHandBoostsOneMoveAndThenStops() throws {
+        print("\n== a helping hand lasts one move ==")
+        func board() -> Board {
+            var b = Board(mine: fighters([("Kingambit", "Leftovers", ["Iron Head", "Protect"]),
+                                          ("Milotic", "Leftovers", ["Helping Hand", "Protect"])]),
+                          theirs: fighters([("Garchomp", "Leftovers", ["Protect"]),
+                                            ("Incineroar", "Leftovers", ["Protect"])]),
+                          rules: store.rulebook, field: Field(isDoubles: true),
+                          alreadyEvolved: false)
+            b.narrating = false
+            b.sendOutLeads()
+            return b
+        }
+        let alone = board()
+        let plain = TurnModel.resolve(alone,
+            mine: Play(left: .attack(move: at(alone.mine[0], "Iron Head"), target: 0), right: .pass),
+            theirs: Play(left: .pass, right: .pass), rolling: false)
+        let unaided = alone.theirs[0].hp - plain.theirs[0].hp
+
+        let helped = board()
+        let lent = TurnModel.resolve(helped,
+            mine: Play(left: .attack(move: at(helped.mine[0], "Iron Head"), target: 0),
+                       right: .attack(move: at(helped.mine[1], "Helping Hand"), target: 0)),
+            theirs: Play(left: .pass, right: .pass), rolling: false)
+        let aided = helped.theirs[0].hp - lent.theirs[0].hp
+        print("  Iron Head alone took \(unaided), with a hand \(aided)")
+        check("the hand made the move hit harder", aided > unaided)
+
+        // And it is a power boost, not a stat change that outlives the turn.
+        check("no stat change was left behind",
+              lent.mine[0].build.boosts.allSatisfy { $0 == 0 })
+        check("and the hand itself is gone", !lent.mine[0].helped)
+    }
+}

@@ -223,6 +223,25 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         board.mine[0].build.boosts[Stat.spAttack.rawValue] = 2
         board.theirs[0].build.boosts[Stat.attack.rawValue] = -1
         board.theirs[1].status = .burn
+        // A real turn played out, so the log shows its reasons nested under
+        // the thing they explain rather than as a column of equal boxes.
+        let exchanged = TurnModel.resolve(
+            board,
+            mine: Play(left: .attack(move: 0, target: 0), right: .attack(move: 0, target: 0)),
+            theirs: Play(left: .attack(move: 0, target: 0), right: .attack(move: 0, target: 0)),
+            rolling: true)
+        render(BattleView(playing: exchanged, logging: exchanged.story),
+               named: "battle-log-dark",
+               size: CGSize(width: 1180, height: 900), dark: true)
+        // One of each side protecting, and a substitute up, so the sprite
+        // markings show. Both are things you have to know before choosing a
+        // move and were only readable out of the log.
+        var guarded = board
+        guarded.mine[1].isProtected = true
+        guarded.theirs[0].isProtected = true
+        guarded.theirs[1].substitute = 40
+        render(BattleView(playing: guarded), named: "battle-protect-dark",
+               size: CGSize(width: 1180, height: 900), dark: true)
         render(BattleView(playing: board), named: "battle-dark",
                size: CGSize(width: 1280, height: 860), dark: true)
         // And the Fight grid, which is what most turns are spent looking at.

@@ -127,8 +127,13 @@ struct BattleView: View {
          playing: Board? = nil,
          showing: Command = .menu,
          reviewing: [TurnReview] = [],
+         logging: [String] = [],
          thinking seeded: (BattleEngine.Result, TurnGame.Solution)? = nil) {
         _command = State(initialValue: showing)
+        if !logging.isEmpty {
+            _log = State(initialValue: logging)
+            _panel = State(initialValue: .log)
+        }
         if !reviewing.isEmpty {
             _review = State(initialValue: reviewing)
             _panel = State(initialValue: .review)
@@ -1153,8 +1158,13 @@ struct BattleView: View {
                         else { afterGame }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    // Two fifths of the width. It was a fixed 340 points,
+                    // which on a wide window left the engine's reasoning in a
+                    // narrow column wrapping every other word while the
+                    // orders beside it had room to spare. A floor keeps it
+                    // readable if the window is dragged narrow.
                     sidePanel
-                        .frame(width: 340)
+                        .frame(width: Swift.max(340, geo.size.width * 0.4))
                         .frame(maxHeight: .infinity, alignment: .top)
                 }
                 .frame(height: half)
@@ -1351,43 +1361,106 @@ struct BattleView: View {
     /// What has happened, oldest at the top and the latest at the bottom where
     /// a conversation puts it, with each turn ruled off from the last. It
     /// follows the newest line on its own.
+    /// One thing that happened, with whatever the model had to say about it.
+    ///
+    /// The turn model already marks a detail by opening the line with two
+    /// spaces — "  A critical hit!", "  Spread: x0.75" — and the log used to
+    /// render every line as its own identical rounded box, so a turn read as
+    /// nine separate events of equal weight. They are one event and its
+    /// reasons, and now they look like it.
+    private struct LogEntry: Identifiable {
+        let id: Int
+        let headline: String
+        let details: [String]
+        let isDivider: Bool
+    }
+
+    private var logEntries: [LogEntry] {
+        var out: [LogEntry] = []
+        for (index, line) in log.enumerated() {
+            if line.hasPrefix(BattleView.dividerMark) {
+                out.append(LogEntry(id: index,
+                                    headline: String(line.dropFirst()).uppercased(),
+                                    details: [], isDivider: true))
+                continue
+            }
+            let detail = line.hasPrefix("  ")
+            let text = line.trimmingCharacters(in: .whitespaces)
+            guard !text.isEmpty else { continue }
+            // A detail with nothing above it to belong to still has to appear.
+            if detail, let last = out.last, !last.isDivider {
+                // A spread move works each target out separately, so the same
+                // reason arrives once per target: "Spread: x0.75" twice, the
+                // terrain halving it twice. Said once is enough.
+                guard !last.details.contains(text) else { continue }
+                out[out.count - 1] = LogEntry(id: last.id, headline: last.headline,
+                                              details: last.details + [text],
+                                              isDivider: false)
+            } else {
+                out.append(LogEntry(id: index, headline: text, details: [], isDivider: false))
+            }
+        }
+        return out
+    }
+
     private var logPanel: some View {
-        let lines = Array(log.enumerated())
-        let latest = lines.last { !$0.element.hasPrefix(BattleView.dividerMark) }?.offset
-        let body = VStack(alignment: .leading, spacing: 6) {
-            if log.isEmpty {
+        let entries = logEntries
+        let latest = entries.last { !$0.isDivider }?.id
+        // The last *entry*, not the last line: a detail line is folded into
+        // the entry above it and no longer carries an id of its own, so
+        // scrolling to `log.count - 1` would sometimes aim at nothing.
+        let bottom = entries.last?.id ?? 0
+        let body = VStack(alignment: .leading, spacing: 5) {
+            if entries.isEmpty {
                 Text("Nothing has happened yet.").font(.system(size: 11))
                     .foregroundStyle(.tertiary)
             }
-            ForEach(lines, id: \.offset) { index, line in
-                if line.hasPrefix(BattleView.dividerMark) {
+            ForEach(entries) { entry in
+                if entry.isDivider {
                     HStack(spacing: 8) {
                         Rectangle().fill(Palette.hairline).frame(height: 1)
-                        Text(String(line.dropFirst()).uppercased())
+                        Text(entry.headline)
                             .font(.system(size: 9, weight: .heavy)).kerning(1.2)
                             .foregroundStyle(.tertiary)
                             .fixedSize()
                         Rectangle().fill(Palette.hairline).frame(height: 1)
                     }
                     .padding(.vertical, 6)
-                    .id(index)
+                    .id(entry.id)
                 } else {
-                    Text(line)
-                        .font(.system(size: 11, weight: index == latest ? .medium : .regular))
-                        .foregroundStyle(index == latest ? AnyShapeStyle(.primary)
-                                                         : AnyShapeStyle(.secondary))
-                        .padding(.horizontal, 8).padding(.vertical, 5)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(index == latest ? Palette.accent.opacity(0.12)
-                                                    : Palette.surfaceRaised.opacity(0.5))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .id(index)
+                    let live = entry.id == latest
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(entry.headline)
+                            .font(.system(size: 11, weight: live ? .semibold : .regular))
+                            .foregroundStyle(live ? AnyShapeStyle(.primary)
+                                                  : AnyShapeStyle(.secondary))
+                            .fixedSize(horizontal: false, vertical: true)
+                        // The reasons, hung under the thing they explain.
+                        ForEach(Array(entry.details.enumerated()), id: \.offset) { _, detail in
+                            HStack(alignment: .top, spacing: 6) {
+                                Rectangle()
+                                    .fill(live ? Palette.accent.opacity(0.45) : Palette.hairline)
+                                    .frame(width: 2)
+                                Text(detail)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.tertiary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.leading, 2)
+                        }
+                    }
+                    .padding(.horizontal, 9).padding(.vertical, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(live ? Palette.accent.opacity(0.12)
+                                     : Palette.surfaceRaised.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .id(entry.id)
                 }
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .topLeading)
+
         return Group {
             if snapshotMode {
                 body
@@ -1396,10 +1469,10 @@ struct BattleView: View {
                     ScrollView {
                         body
                     }
-                    .onAppear { proxy.scrollTo(log.count - 1, anchor: .bottom) }
-                    .onChange(of: log.count) { count in
+                    .onAppear { proxy.scrollTo(bottom, anchor: .bottom) }
+                    .onChange(of: log.count) { _ in
                         withAnimation(.easeOut(duration: 0.25)) {
-                            proxy.scrollTo(count - 1, anchor: .bottom)
+                            proxy.scrollTo(bottom, anchor: .bottom)
                         }
                     }
                 }
@@ -1782,6 +1855,26 @@ struct BattleView: View {
             : (health > 0.2 ? Palette.warn : Palette.bad)
         return VStack(spacing: 4) {
             ZStack(alignment: .topTrailing) {
+                // Behind the sprite: a dome while it is protecting, and a
+                // substitute's shell if it has one up. Both are things you have
+                // to know before choosing a move, and both were only visible by
+                // reading the log for them.
+                if fighter.isProtected && !fighter.fainted {
+                    Circle()
+                        .fill(
+                            RadialGradient(colors: [Palette.accent.opacity(0.05),
+                                                    Palette.accent.opacity(0.30)],
+                                           center: .center, startRadius: 16, endRadius: 46)
+                        )
+                        .overlay(Circle().strokeBorder(Palette.accent.opacity(0.75), lineWidth: 1.5))
+                        .frame(width: 88, height: 88)
+                        .transition(.scale.combined(with: .opacity))
+                } else if fighter.substitute > 0 && !fighter.fainted {
+                    Circle()
+                        .strokeBorder(Palette.dim.opacity(0.55),
+                                      style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                        .frame(width: 88, height: 88)
+                }
                 SpriteImage(form: fighter.build.form, side: 78)
                     .opacity(fighter.fainted ? 0.22 : 1)
                     .saturation(fighter.fainted ? 0 : 1)
@@ -1802,6 +1895,23 @@ struct BattleView: View {
                         .font(.system(size: 10))
                         .foregroundStyle(Palette.warn)
                         .help("Mega Evolved")
+                }
+                if fighter.isProtected && !fighter.fainted {
+                    Image(systemName: "shield.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.accent)
+                        .padding(3)
+                        .background(Palette.surface, in: Circle())
+                        .offset(x: 2, y: 54)
+                        .help("Protecting this turn. Most attacks will not reach it.")
+                } else if fighter.substitute > 0 && !fighter.fainted {
+                    Image(systemName: "person.fill.viewfinder")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.dim)
+                        .padding(3)
+                        .background(Palette.surface, in: Circle())
+                        .offset(x: 2, y: 54)
+                        .help("A substitute is taking the hits, worth \(fighter.substitute).")
                 }
             }
             Text(fighter.build.form.formLabel)
