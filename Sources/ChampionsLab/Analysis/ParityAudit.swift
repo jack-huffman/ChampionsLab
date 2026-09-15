@@ -459,7 +459,7 @@ private struct Bench {
                 if traits { out += "/\(f.build.item)/\(f.build.ability)" }
                 out += "/\(f.seededFrom ?? -1)/\(f.critStage)/\(f.build.form.id)"
                 out += "/\(f.substitute)/\(f.infatuatedWith ?? -1)/\(f.tormented)/\(f.cannotEscape)"
-                out += "/\(f.aquaRing)/\(f.stockpile)/\(f.goesNext)/\(f.charged)"
+                out += "/\(f.aquaRing)/\(f.stockpile)/\(f.goesNext)/\(f.goesLast)/\(f.charged)"
                 out += "/\(f.build.typeOverride ?? [])"
                 out += "/\((f.build.statOverride ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" })"
                 out += "/\(f.asleepFor)/\(f.protectStreak)/\(f.lastMoveFailed)/\(f.seen)"
@@ -471,7 +471,7 @@ private struct Bench {
         for side in [b.myScreens, b.theirScreens] {
             out += "/\(side.reflect)/\(side.lightScreen)/\(side.auroraVeil)"
             out += "/\(side.wideGuard)/\(side.quickGuard)/\(side.safeguard)"
-            out += "/\(side.spikes)/\(side.toxicSpikes)/\(side.stealthRock)"
+            out += "/\(side.spikes)/\(side.toxicSpikes)/\(side.stealthRock)/\(side.stickyWeb)"
             out += "/\(side.wishAmount)/\(side.wishTurns)"
         }
         return out
@@ -507,6 +507,7 @@ private struct Bench {
         cluttered.myScreens.reflect = 4; cluttered.myScreens.lightScreen = 4
         cluttered.myScreens.spikes = 2; cluttered.myScreens.stealthRock = true
         cluttered.theirScreens.auroraVeil = 4; cluttered.theirScreens.toxicSpikes = 1
+        cluttered.theirScreens.stickyWeb = true
         cluttered.theirScreens.safeguard = 3
         cluttered.field.terrain = .grassy
         cluttered.terrainTurns = 4

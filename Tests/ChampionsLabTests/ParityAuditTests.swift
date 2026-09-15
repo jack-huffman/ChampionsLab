@@ -35,8 +35,8 @@ final class ParityAuditTests: HarnessCase {
     @MainActor func testTheFingerprintKeepsUpWithTheBoard() throws {
         print("\n== the audit can see the whole board ==")
         let fighter = Fighter(build: Combatant(form: store.data.forms[0]), moves: [])
-        let counts = [("Fighter", Mirror(reflecting: fighter).children.count, 37),
-                      ("Screens", Mirror(reflecting: Screens()).children.count, 11),
+        let counts = [("Fighter", Mirror(reflecting: fighter).children.count, 38),
+                      ("Screens", Mirror(reflecting: Screens()).children.count, 12),
                       ("Combatant", Mirror(reflecting: fighter.build).children.count, 16)]
         for (name, found, expected) in counts {
             print("  \(name): \(found) properties, fingerprint written for \(expected)")
@@ -61,7 +61,10 @@ final class ParityAuditTests: HarnessCase {
                      "Haze", "Defog", "Court Change", "Topsy-Turvy", "Entrainment",
                      "Role Play", "Simple Beam", "Gastro Acid", "Corrosive Gas",
                      "Reflect Type", "Magic Powder", "Speed Swap", "Power Trick",
-                     "Decorate", "Aromatic Mist", "Clangorous Soul", "Heal Bell"]
+                     "Decorate", "Aromatic Mist", "Clangorous Soul", "Heal Bell",
+                     "Sticky Web", "Quash", "Recycle", "Stuff Cheeks", "Teatime",
+                     "Forest's Curse", "Trick-or-Treat", "Ingrain", "Fairy Lock",
+                     "Magnetic Flux", "Chilly Reception"]
         let silent = ParityAudit.movesThatDoNothing(names, rules: store.rulebook)
         print("  \(names.count - silent.count) of \(names.count) change the game")
         if !silent.isEmpty { print("  nothing happens for: \(silent.joined(separator: ", "))") }
