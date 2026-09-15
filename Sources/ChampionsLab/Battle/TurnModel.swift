@@ -3547,6 +3547,18 @@ enum TurnModel {
                             board: Board) -> Double {
         guard !move.neverMisses, move.accuracy > 0 else { return 100 }
         var chance = Double(move.accuracy)
+        // What the sky does to a move's accuracy. Hurricane and Thunder are
+        // certain in rain and half-blind in sun, and a Blizzard does not miss
+        // in snow — which is most of the reason a rain team runs Thunder and a
+        // snow team runs Blizzard at all. None of it was here, so a Hurricane
+        // under a rain the team had built its whole turn around was still
+        // rolling 70.
+        switch board.field.weather {
+        case .rain where move.id == "hurricane" || move.id == "thunder": return 100
+        case .snow where move.id == "blizzard": return 100
+        case .sun where move.id == "hurricane" || move.id == "thunder": chance = 50
+        default: break
+        }
         // No Guard makes everything land, from either side of it.
         if attacker.build.ability == "No Guard" || defender.build.ability == "No Guard" { return 100 }
         if attacker.build.ability == "Compound Eyes" { chance *= 1.3 }

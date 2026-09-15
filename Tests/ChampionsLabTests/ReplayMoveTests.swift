@@ -323,4 +323,50 @@ final class ReplayMoveTests: HarnessCase {
 
         print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
     }
+
+    /// The sky decides whether Hurricane, Thunder and Blizzard land
+    ///
+    /// These are the reason a rain team runs Thunder and a snow team runs
+    /// Blizzard: 70 accuracy is a gamble, and the weather takes the gamble
+    /// away. None of it was modelled, so a Hurricane thrown under the rain the
+    /// whole team was built around was still rolling 70.
+    @MainActor func testWeatherDecidesTheseAccuracies() throws {
+        print("\n== weather and accuracy ==")
+        let mine = fighters([("Pelipper", "Focus Sash", ["Hurricane", "Protect"]),
+                             ("Milotic", "Leftovers", ["Protect"])])
+        let theirs = fighters([("Garchomp", "Leftovers", ["Protect"]),
+                               ("Rillaboom", "Leftovers", ["Protect"])])
+        func chance(_ moveName: String, _ sky: Weather, on team: Team) -> Double {
+            let board = Board(mine: team, theirs: theirs, rules: store.rulebook,
+                              field: Field(weather: sky, isDoubles: true), alreadyEvolved: false)
+            let move = store.data.moves.values.first { $0.name == moveName }!
+            return TurnModel.chanceToHit(move, attacker: board.mine[0],
+                                         defender: board.theirs[0], board: board)
+        }
+        let clear = chance("Hurricane", .none, on: mine)
+        let wet = chance("Hurricane", .rain, on: mine)
+        let bright = chance("Hurricane", .sun, on: mine)
+        print("  Hurricane: clear \(Int(clear)), rain \(Int(wet)), sun \(Int(bright))")
+        check("Hurricane is 70 with nothing up", clear == 70, "\(clear)")
+        check("certain in rain", wet == 100, "\(wet)")
+        check("and half-blind in sun", bright == 50, "\(bright)")
+
+        let thunder = fighters([("Raichu", "Focus Sash", ["Thunder", "Protect"]),
+                                ("Milotic", "Leftovers", ["Protect"])])
+        print("  Thunder: rain \(Int(chance("Thunder", .rain, on: thunder))), "
+              + "sun \(Int(chance("Thunder", .sun, on: thunder)))")
+        check("Thunder is certain in rain and halved in sun",
+              chance("Thunder", .rain, on: thunder) == 100
+                  && chance("Thunder", .sun, on: thunder) == 50)
+
+        let blizzard = fighters([("Blastoise", "Leftovers", ["Blizzard", "Protect"]),
+                                 ("Milotic", "Leftovers", ["Protect"])])
+        let snowy = chance("Blizzard", .snow, on: blizzard)
+        let dry = chance("Blizzard", .rain, on: blizzard)
+        print("  Blizzard: snow \(Int(snowy)), rain \(Int(dry))")
+        check("Blizzard does not miss in snow, and is a gamble without it",
+              snowy == 100 && dry == 70, "\(snowy)/\(dry)")
+
+        print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
+    }
 }

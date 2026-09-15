@@ -2082,8 +2082,19 @@ struct BattleView: View {
         }
         .frame(width: 118)
         .padding(.vertical, 8).padding(.horizontal, 4)
-        .background(fighter.fainted ? Color.clear : Palette.surfaceRaised.opacity(0.55))
+        // Nearly opaque, with an edge. At 55% the tile was reading whatever was
+        // behind it, which used to be a plain background and is now weather and
+        // terrain — so the cards went muddy the moment the field had anything
+        // on it. A Pokémon's card is the thing you read the game off; it has to
+        // sit on top of the room rather than in it.
+        .background(fighter.fainted ? Color.clear : Palette.surfaceRaised.opacity(0.94))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            if !fighter.fainted {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Palette.hairline.opacity(0.7), lineWidth: 1)
+            }
+        }
         // In the tile's own corner rather than the sprite's, and on a backdrop:
         // a sprite is not a reliable background — Charizard's wing reaches into
         // exactly this space — and a stat change is something you check at a

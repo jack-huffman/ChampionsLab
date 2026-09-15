@@ -49,11 +49,23 @@ struct WeatherLayer: View {
     /// counter you can see without reading one.
     var strength: Double = 1
 
+    /// Nothing moves while the window is in the background. A battlefield
+    /// nobody is looking at does not need to keep raining, and this screen
+    /// shares a machine with a search that wants every core it can get.
+    @Environment(\.controlActiveState) private var active
+    /// And nothing moves at all if the system has been asked to keep still.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         if weather == .none || strength <= 0.01 {
             Color.clear
+        } else if reduceMotion {
+            // The weather is still information, so it stays — as a wash of
+            // colour rather than as movement.
+            Rectangle().fill(still.opacity(0.10 * strength)).allowsHitTesting(false)
         } else {
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { slice in
+            TimelineView(.animation(minimumInterval: 1.0 / 20.0,
+                                    paused: active == .inactive)) { slice in
                 Canvas(opaque: false, rendersAsynchronously: false) { context, size in
                     let t = slice.date.timeIntervalSinceReferenceDate
                     switch weather {
@@ -74,29 +86,46 @@ struct WeatherLayer: View {
         }
     }
 
+    /// The colour each sky washes the field in when it is not moving.
+    private var still: Color {
+        switch weather {
+        case .rain: return Color(red: 0.42, green: 0.60, blue: 0.92)
+        case .snow: return Color(red: 0.74, green: 0.88, blue: 0.98)
+        case .sand: return Color(red: 0.80, green: 0.70, blue: 0.44)
+        case .sun:  return Color(red: 1.0, green: 0.84, blue: 0.42)
+        case .none: return .clear
+        }
+    }
+
     // -- rain ----------------------------------------------------------------
     //
-    // Short slanted streaks, falling fast and at a constant angle. Rain reads
-    // as rain because of the streak: a round drop at this size looks like
-    // snow, and it is the direction that separates them at a glance.
+    // Short slanted streaks. Rain reads as rain because of the streak: a round
+    // drop at this size looks like snow, and the direction is what separates
+    // them at a glance.
+    //
+    // The first version had ninety drops falling three times this fast. That
+    // reads as static rather than as weather: it pulled the eye off the board,
+    // and it cost a great deal more than it was worth on a machine that has a
+    // search to run. Weather is the room the battle is in, not a thing to
+    // watch.
 
     private func rain(_ context: inout GraphicsContext, _ size: CGSize, _ t: Double) {
-        let drops = 90
+        let drops = 26
         let colour = Color(red: 0.55, green: 0.74, blue: 1.0)
         let lean = size.height * 0.10
         for index in 0..<drops {
             let column = scatter(index)
-            let speed = 1.5 + scatter(index &+ 991) * 0.9
+            let speed = 0.42 + scatter(index &+ 991) * 0.26
             // fmod rather than a wrap check: a drop that reaches the bottom is
             // the same drop starting again at the top, one row over.
             let fall = (t * speed + scatter(index &+ 77)).truncatingRemainder(dividingBy: 1)
             let y = fall * (size.height + 40) - 20
             let x = column * (size.width + lean * 2) - lean + fall * lean
-            let length = 9 + scatter(index &+ 313) * 11
+            let length = 8 + scatter(index &+ 313) * 9
             var streak = Path()
             streak.move(to: CGPoint(x: x, y: y))
             streak.addLine(to: CGPoint(x: x - lean * 0.06 * length, y: y + length))
-            context.stroke(streak, with: .color(colour.opacity(0.10 + scatter(index &+ 5) * 0.16)),
+            context.stroke(streak, with: .color(colour.opacity(0.05 + scatter(index &+ 5) * 0.07)),
                            lineWidth: 1)
         }
     }
@@ -107,11 +136,11 @@ struct WeatherLayer: View {
     // slow rain: a flake does not fall in a straight line, and the eye knows.
 
     private func snow(_ context: inout GraphicsContext, _ size: CGSize, _ t: Double) {
-        let flakes = 65
+        let flakes = 22
         let colour = Color(red: 0.88, green: 0.95, blue: 1.0)
         for index in 0..<flakes {
             let column = scatter(index)
-            let speed = 0.10 + scatter(index &+ 401) * 0.10
+            let speed = 0.05 + scatter(index &+ 401) * 0.05
             let fall = (t * speed + scatter(index &+ 53)).truncatingRemainder(dividingBy: 1)
             let y = fall * (size.height + 30) - 15
             let sway = sin(t * (0.5 + scatter(index &+ 131)) + scatter(index) * 9) * 13
@@ -120,7 +149,7 @@ struct WeatherLayer: View {
             context.fill(
                 Path(ellipseIn: CGRect(x: x - radius, y: y - radius,
                                        width: radius * 2, height: radius * 2)),
-                with: .color(colour.opacity(0.20 + scatter(index &+ 7) * 0.35)))
+                with: .color(colour.opacity(0.10 + scatter(index &+ 7) * 0.16)))
         }
     }
 
@@ -130,11 +159,11 @@ struct WeatherLayer: View {
     // go sideways. Long thin ellipses, because a mote at speed is a smear.
 
     private func sand(_ context: inout GraphicsContext, _ size: CGSize, _ t: Double) {
-        let motes = 80
+        let motes = 26
         let colour = Color(red: 0.86, green: 0.75, blue: 0.48)
         for index in 0..<motes {
             let row = scatter(index)
-            let speed = 0.5 + scatter(index &+ 233) * 0.8
+            let speed = 0.18 + scatter(index &+ 233) * 0.26
             let blow = (t * speed + scatter(index &+ 19)).truncatingRemainder(dividingBy: 1)
             let x = blow * (size.width + 60) - 30
             let drift = sin(t * 0.7 + scatter(index) * 11) * 9
@@ -142,7 +171,7 @@ struct WeatherLayer: View {
             let length = 5 + scatter(index &+ 811) * 12
             context.fill(
                 Path(ellipseIn: CGRect(x: x, y: y, width: length, height: 1.6)),
-                with: .color(colour.opacity(0.12 + scatter(index &+ 3) * 0.22)))
+                with: .color(colour.opacity(0.06 + scatter(index &+ 3) * 0.10)))
         }
     }
 
@@ -165,11 +194,11 @@ struct WeatherLayer: View {
             shaft.addLine(to: CGPoint(x: x + width - lean, y: size.height + 10))
             shaft.addLine(to: CGPoint(x: x - lean, y: size.height + 10))
             shaft.closeSubpath()
-            context.fill(shaft, with: .color(colour.opacity(0.030 + pulse * 0.045)))
+            context.fill(shaft, with: .color(colour.opacity(0.016 + pulse * 0.020)))
         }
         // And a warmth over the whole thing, so the field itself looks lit.
         context.fill(Path(CGRect(origin: .zero, size: size)),
-                     with: .color(colour.opacity(0.020 + 0.015 * sin(t * 0.3))))
+                     with: .color(colour.opacity(0.012 + 0.008 * sin(t * 0.3))))
     }
 }
 
@@ -185,11 +214,17 @@ struct TerrainLayer: View {
     let terrain: Terrain
     var strength: Double = 1
 
+    @Environment(\.controlActiveState) private var active
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         if terrain == .none || strength <= 0.01 {
             Color.clear
+        } else if reduceMotion {
+            Rectangle().fill(tint.opacity(0.08 * strength)).allowsHitTesting(false)
         } else {
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { slice in
+            TimelineView(.animation(minimumInterval: 1.0 / 20.0,
+                                    paused: active == .inactive)) { slice in
                 Canvas(opaque: false, rendersAsynchronously: false) { context, size in
                     let t = slice.date.timeIntervalSinceReferenceDate
                     let colour = tint
@@ -199,7 +234,7 @@ struct TerrainLayer: View {
                         Path(CGRect(x: 0, y: size.height * 0.62,
                                     width: size.width, height: size.height * 0.38)),
                         with: .linearGradient(
-                            Gradient(colors: [colour.opacity(0), colour.opacity(0.14)]),
+                            Gradient(colors: [colour.opacity(0), colour.opacity(0.09)]),
                             startPoint: CGPoint(x: 0, y: size.height * 0.62),
                             endPoint: CGPoint(x: 0, y: size.height)))
                     switch terrain {
@@ -230,7 +265,7 @@ struct TerrainLayer: View {
     /// Blades drifting up off the floor and fading as they go.
     private func grassy(_ context: inout GraphicsContext, _ size: CGSize,
                         _ t: Double, _ colour: Color) {
-        for index in 0..<34 {
+        for index in 0..<16 {
             let rise = (t * (0.09 + scatter(index &+ 29) * 0.08)
                         + scatter(index)).truncatingRemainder(dividingBy: 1)
             let x = scatter(index &+ 500) * size.width
@@ -240,7 +275,7 @@ struct TerrainLayer: View {
             blade.move(to: CGPoint(x: x, y: y))
             blade.addQuadCurve(to: CGPoint(x: x + 2.5, y: y - height),
                                control: CGPoint(x: x + 4.5, y: y - height * 0.5))
-            context.stroke(blade, with: .color(colour.opacity((1 - rise) * 0.5)), lineWidth: 1.4)
+            context.stroke(blade, with: .color(colour.opacity((1 - rise) * 0.30)), lineWidth: 1.4)
         }
     }
 
@@ -248,7 +283,7 @@ struct TerrainLayer: View {
     /// when it is in the floor rather than going anywhere.
     private func electric(_ context: inout GraphicsContext, _ size: CGSize,
                           _ t: Double, _ colour: Color) {
-        for index in 0..<26 {
+        for index in 0..<12 {
             let phase = sin(t * (1.8 + scatter(index &+ 43) * 2.4) + scatter(index) * 12)
             guard phase > 0.55 else { continue }
             let x = scatter(index &+ 900) * size.width
@@ -258,14 +293,14 @@ struct TerrainLayer: View {
             bolt.move(to: CGPoint(x: x, y: y - length / 2))
             bolt.addLine(to: CGPoint(x: x + 2.5, y: y))
             bolt.addLine(to: CGPoint(x: x - 1.5, y: y + length / 2))
-            context.stroke(bolt, with: .color(colour.opacity((phase - 0.55) * 1.7)), lineWidth: 1.3)
+            context.stroke(bolt, with: .color(colour.opacity((phase - 0.55) * 1.0)), lineWidth: 1.3)
         }
     }
 
     /// Slow rings turning over, going nowhere.
     private func psychic(_ context: inout GraphicsContext, _ size: CGSize,
                          _ t: Double, _ colour: Color) {
-        for index in 0..<14 {
+        for index in 0..<8 {
             let grow = (t * 0.16 + scatter(index)).truncatingRemainder(dividingBy: 1)
             let x = scatter(index &+ 300) * size.width
             let y = size.height * (0.70 + scatter(index &+ 91) * 0.26)
@@ -273,14 +308,14 @@ struct TerrainLayer: View {
             context.stroke(
                 Path(ellipseIn: CGRect(x: x - radius, y: y - radius * 0.35,
                                        width: radius * 2, height: radius * 0.7)),
-                with: .color(colour.opacity((1 - grow) * 0.70)), lineWidth: 1.4)
+                with: .color(colour.opacity((1 - grow) * 0.42)), lineWidth: 1.4)
         }
     }
 
     /// Soft blobs sliding sideways, overlapping into fog.
     private func misty(_ context: inout GraphicsContext, _ size: CGSize,
                        _ t: Double, _ colour: Color) {
-        for index in 0..<14 {
+        for index in 0..<8 {
             let slide = (t * (0.03 + scatter(index &+ 7) * 0.04)
                          + scatter(index)).truncatingRemainder(dividingBy: 1)
             let x = slide * (size.width + 160) - 80
@@ -289,7 +324,7 @@ struct TerrainLayer: View {
             context.fill(
                 Path(ellipseIn: CGRect(x: x - radius, y: y - radius * 0.4,
                                        width: radius * 2, height: radius * 0.8)),
-                with: .color(colour.opacity(0.06 + scatter(index &+ 3) * 0.05)))
+                with: .color(colour.opacity(0.035 + scatter(index &+ 3) * 0.030)))
         }
     }
 }
