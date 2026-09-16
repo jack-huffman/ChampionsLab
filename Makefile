@@ -77,6 +77,16 @@ duel:
 lab:
 	$(NICE) ./Tools/lab.sh --games 120 $(ARGS)
 
+# Does the engine choose what people choose? Rebuilds every turn-one position
+# in the replay corpus -- the only turn that can be rebuilt exactly -- and
+# compares its pick against what was actually played, split by how strong the
+# players were.
+#   make moves
+#   make moves ARGS="--rated 1400 --budget 0.25"
+#   make moves ARGS="--from data/replays-heldout.json"
+moves:
+	$(NICE) ./Tools/moves.sh --games 1400 $(ARGS)
+
 # Real games in this exact format, from Showdown's replay archive. Everything
 # else here measures the engine against a team list and a result; this is the
 # only data with a turn in it.
