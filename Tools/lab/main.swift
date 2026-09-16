@@ -186,7 +186,7 @@ struct Report: Codable {
 func runShard(index: Int, of shards: Int, games: Int, budget: Double,
               focus: String?, versus: [String], spread: Int, abTest: Bool,
               stageTest: Bool, winTest: Bool, mineOnly: Bool, floorTest: Bool,
-              crude: Bool, level: Bool, seed: UInt64) -> Report {
+              crude: Bool, level: Bool, learnTest: Bool, seed: UInt64) -> Report {
     let store = Store.shared
     if let error = store.loadError { FileHandle.standardError.write(Data("dataset: \(error)\n".utf8)); exit(1) }
     let rules = store.rulebook
@@ -257,9 +257,51 @@ func runShard(index: Int, of shards: Int, games: Int, budget: Double,
     }
     guard !pairings.isEmpty else { return Report() }
 
+    // -- learning from your own record, measured on games it has not seen ----
+    //
+    // The app lets a team's measured record move the bring-four ranking. This
+    // asks whether that is worth anything, and the only honest way to ask is a
+    // split: learn the fours from one block of games, then judge on a second
+    // block the learning has never met. Fitting and judging on the same games
+    // is how the bring-rate prior looked like a clear win and turned out to be
+    // mostly overfitting.
+    var learned: [String: [String: (wins: Int, games: Int)]] = [:]
+    if learnTest {
+        var training: [String: [String: [Int]]] = [:]
+        let trainingGames = Swift.max(40, games / 2)
+        var trained = 0, at = 0
+        while trained < trainingGames {
+            let (a, b) = pairings[at % pairings.count]
+            at += 1
+            let dice = SplitMix64(seed: seed &+ UInt64(at) &* 0x9E37_79B9_7F4A_7C15)
+            let ledger = SelfPlay.playLogged(
+                mine: teams[a], theirs: teams[b], rules: rules,
+                forMine: seat, forTheirs: seat, limit: 40, dice: dice, bringSpread: spread)
+            for (name, picked, won) in [(teams[a].name, ledger.pickedMine, ledger.winner == .mine),
+                                        (teams[b].name, ledger.pickedTheirs, ledger.winner == .theirs)]
+            where !picked.isEmpty {
+                let four = picked.sorted().joined(separator: " + ")
+                var pair = training[name]?[four] ?? [0, 0]
+                pair[0] += won ? 1 : 0; pair[1] += 1
+                training[name, default: [:]][four] = pair
+            }
+            trained += 1
+            if trained % 40 == 0 {
+                FileHandle.standardError.write(
+                    Data("    shard \(index): learning \(trained)/\(trainingGames)\n".utf8))
+            }
+        }
+        for (name, fours) in training {
+            learned[name] = fours.filter { $0.value[1] >= 8 }
+                .mapValues { (wins: $0[0], games: $0[1]) }
+        }
+    }
+
     var report = Report()
     var played = 0
-    var order = 0
+    // Start past the training block, so the judging games are ones the learning
+    // has not already seen.
+    var order = learnTest ? Swift.max(40, games / 2) : 0
     // Round-robin over the pairings until this shard has played its share.
     while played < games {
         let (a, b) = pairings[order % pairings.count]
@@ -278,7 +320,10 @@ func runShard(index: Int, of shards: Int, games: Int, budget: Double,
             stagesMine: true, stagesTheirs: !stageTest,
             forWinMine: true, forWinTheirs: !winTest,
             floorMine: floorTest ? 0.55 : Board.aliveFloor,
-            floorTheirs: Board.aliveFloor)
+            floorTheirs: Board.aliveFloor,
+            // Only the side in the "mine" chair gets its own history.
+            measuredMine: learnTest ? (learned[teams[a].name] ?? [:]) : [:],
+            measuredTheirs: [:])
 
         record(ledger, mine: teams[a].name, theirs: teams[b].name, into: &report)
         played += 1
@@ -701,6 +746,9 @@ func main() {
     let crude = has("--crude-spreads")
     // Level your own teams down to the same planned build as the field.
     let level = has("--level")
+    // Does a team's own measured record improve its bring, on games the record
+    // has never seen?
+    let learnTest = has("--ab-learned")
     let started = Date()
 
     // A child doing its slice: run it, print the JSON, done.
@@ -711,7 +759,8 @@ func main() {
                               focus: focus, versus: versus, spread: spread,
                               abTest: abTest, stageTest: stageTest,
                               winTest: winTest, mineOnly: mineOnly,
-                              floorTest: floorTest, crude: crude, level: level, seed: seed)
+                              floorTest: floorTest, crude: crude, level: level,
+                              learnTest: learnTest, seed: seed)
         let blob = try! JSONEncoder().encode(report)
         FileHandle.standardOutput.write(blob)
         return
@@ -731,7 +780,7 @@ func main() {
                           versus: versus, spread: spread, abTest: abTest,
                           stageTest: stageTest, winTest: winTest,
                           mineOnly: mineOnly, floorTest: floorTest,
-                          crude: crude, level: level, seed: seed)
+                          crude: crude, level: level, learnTest: learnTest, seed: seed)
     } else {
         // Each child plays its own slice and hands back a ledger. Sharding by
         // process rather than by thread because the turn model's dice are
@@ -755,6 +804,7 @@ func main() {
             if floorTest { argv.append("--ab-floor") }
             if crude { argv.append("--crude-spreads") }
             if level { argv.append("--level") }
+            if learnTest { argv.append("--ab-learned") }
             task.arguments = argv
             let pipe = Pipe()
             task.standardOutput = pipe
@@ -774,9 +824,10 @@ func main() {
 
     let seconds = Date().timeIntervalSince(started)
     report.seconds = seconds
-    if abTest || stageTest || winTest || floorTest {
+    if abTest || stageTest || winTest || floorTest || learnTest {
         describeAB(report, seconds: seconds,
-                   what: floorTest ? "valuing a Pokémon on 1 HP nearer to a healthy one"
+                   what: learnTest ? "leaning on the team's own measured record"
+                        : floorTest ? "valuing a Pokémon on 1 HP nearer to a healthy one"
                         : winTest ? "playing for the win rather than for material"
                         : stageTest ? "counting the stat stages on the board"
                                     : "knowing what your Pokémon are worth")

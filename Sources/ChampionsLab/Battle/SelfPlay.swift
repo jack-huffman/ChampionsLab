@@ -191,7 +191,12 @@ enum SelfPlay {
         stagesMine: Bool = true, stagesTheirs: Bool = true,
         forWinMine: Bool = true, forWinTheirs: Bool = true,
         floorMine: Double = Board.aliveFloor,
-        floorTheirs: Double = Board.aliveFloor) -> Ledger {
+        floorTheirs: Double = Board.aliveFloor,
+        /// What each side has been measured to do with each four, for the
+        /// picker to lean on. Per side, so one can be given the benefit of its
+        /// own history while the other picks on theory alone.
+        measuredMine: [String: (wins: Int, games: Int)] = [:],
+        measuredTheirs: [String: (wins: Int, games: Int)] = [:]) -> Ledger {
 
         // The battle's own dice, not just the engine's play sampling. Handing
         // both halves of a mirrored pair the same stream is what lets the
@@ -221,12 +226,15 @@ enum SelfPlay {
             var score = 0
             var choices = 0
         }
-        func fourOf(_ team: Team, against foe: Team) -> Chosen {
+        func fourOf(_ team: Team, against foe: Team,
+                    measured: [String: (wins: Int, games: Int)]) -> Chosen {
             let whole = Chosen(team: team,
                                picked: team.slots.compactMap { $0.battleForm(in: rules)?.formLabel })
             guard team.slots.count > 4 else { return whole }
             let grid = Matchup(mine: team, theirs: foe, rules: rules, field: field)
-            let plans = BringFour(matchup: grid, rules: rules, bring: 4).plans
+            var picker = BringFour(matchup: grid, rules: rules, bring: 4)
+            picker.measured = measured
+            let plans = picker.plans
             guard !plans.isEmpty else { return whole }
             // A spread of zero or less means every four is in play, which is
             // what measuring the ranking needs: the bottom of the list has to
@@ -243,8 +251,8 @@ enum SelfPlay {
             return Chosen(team: out, picked: plan.bring.map(\.formLabel),
                           rank: at + 1, score: plan.score, choices: plans.count)
         }
-        let myFour = fourOf(mine, against: theirs)
-        let theirFour = fourOf(theirs, against: mine)
+        let myFour = fourOf(mine, against: theirs, measured: measuredMine)
+        let theirFour = fourOf(theirs, against: mine, measured: measuredTheirs)
         var board = Board(mine: myFour.team, theirs: theirFour.team, rules: rules,
                           field: field, alreadyEvolved: false)
         board.activeCount = 2
