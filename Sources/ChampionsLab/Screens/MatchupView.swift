@@ -26,6 +26,19 @@ struct MatchupView: View {
     @State private var solvingTurn = false
     @Environment(\.snapshotMode) private var snapshotMode
 
+    /// Two ways of asking about the same opponent.
+    ///
+    /// The grid is what the matchup looks like before a turn is played; the
+    /// tree is what your decisions inside it are worth. They were two tabs that
+    /// each opened by asking who you were playing, which is one question asked
+    /// twice — so the opponent is chosen once, above, and this says what to do
+    /// with the answer.
+    enum Mode: String, CaseIterable, Identifiable {
+        case grid = "The matchup", lines = "Your lines"
+        var id: String { rawValue }
+    }
+    @State private var mode: Mode = .grid
+
     /// Meta archetypes first, then the user's other saved teams.
     private var opponent: Team? {
         if let meta = store.data.metaTeams.first(where: { $0.id == opponentID }) {
@@ -54,8 +67,22 @@ struct MatchupView: View {
             Divider()
             if team.slots.isEmpty {
                 EmptyHint(symbol: "person.3", title: "Add Pokémon to your team first")
-            } else if let matchup {
-                if snapshotMode { content(matchup) } else { ScrollView { content(matchup) } }
+            } else if let matchup, let opponent {
+                HStack {
+                    Picker("", selection: $mode) {
+                        ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented).labelsHidden().frame(width: 260)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 7)
+                Divider()
+                switch mode {
+                case .grid:
+                    if snapshotMode { content(matchup) } else { ScrollView { content(matchup) } }
+                case .lines:
+                    TreeView(team: team, against: opponent)
+                }
             } else {
                 EmptyHint(symbol: "arrow.left.arrow.right.square",
                           title: "Choose an opponent",

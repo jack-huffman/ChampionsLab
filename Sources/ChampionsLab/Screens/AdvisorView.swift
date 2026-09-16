@@ -13,6 +13,13 @@ struct AdvisorView: View {
     let onAdd: ((Form) -> Void)?
     /// Applies a whole refined team in place. nil when the team is locked.
     var onReplace: ((Team) -> Void)? = nil
+    /// Rendered inside another screen's scroller, so it must not bring its own.
+    ///
+    /// The report composes this view rather than copying its cards. An earlier
+    /// attempt reached for `.content` on a view it had built but never placed,
+    /// which compiles and then dies at runtime: a detached view never receives
+    /// the environment, so its `@EnvironmentObject` is not there to read.
+    var embedded = false
 
     @State private var picks: [Forecast.Pick] = []
     @State private var refinements: [TeamRefiner.Suggestion] = []
@@ -28,7 +35,7 @@ struct AdvisorView: View {
         Group {
             if team.slots.isEmpty {
                 emptyState
-            } else if snapshotMode {
+            } else if snapshotMode || embedded {
                 content
             } else {
                 ScrollView { content }

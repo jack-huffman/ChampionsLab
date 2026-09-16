@@ -9,6 +9,14 @@ struct TeamAnalysisView: View {
     /// Hand back a team with a planned spread applied, when the screen that
     /// owns the team can save it.
     var onReplace: ((Team) -> Void)? = nil
+    /// The field to read the grade under, when the report's picker is driving.
+    ///
+    /// Deliberately not applied to `ownField`: that is the weather the team
+    /// sets for *itself*, and a spread is planned against it whatever the
+    /// reader is currently looking at the grade through.
+    var field: Field?
+    /// Rendered inside another screen's scroller, so it must not bring its own.
+    var embedded = false
 
     @State private var spreads: [Int: SpreadPlanner.Plan] = [:]
     @State private var planning = false
@@ -153,10 +161,10 @@ struct TeamAnalysisView: View {
     @Environment(\.snapshotMode) private var snapshotMode
 
     @ViewBuilder var body: some View {
-        if snapshotMode { content } else { ScrollView { content } }
+        if snapshotMode || embedded { content } else { ScrollView { content } }
     }
 
-    var content: some View {
+    private var content: some View {
         VStack(alignment: .leading, spacing: 16) {
                 if team.slots.isEmpty {
                     EmptyHint(symbol: "chart.bar.doc.horizontal",
@@ -169,14 +177,13 @@ struct TeamAnalysisView: View {
                     defensiveCard
                     coverageCard
                     speedCard
-                    suggestionsCard
                 }
         }
         .padding(20)
     }
 
     private var gradeCard: some View {
-        let grade = analysis.grade(field: Field(isDoubles: team.isDoubles))
+        let grade = analysis.grade(field: field ?? Field(isDoubles: team.isDoubles))
         return Card(padding: 18) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center, spacing: 18) {
@@ -358,39 +365,53 @@ struct TeamAnalysisView: View {
         }
     }
 
-    private var suggestionsCard: some View {
-        let suggestions = analysis.suggestions(field: Field(isDoubles: team.isDoubles))
-        return Card {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(title: "Would patch this team",
-                              subtitle: "Ranked by how well they cover what is currently exposed.")
-                if suggestions.isEmpty {
-                    Text("No clear gaps to patch.")
-                        .font(.system(size: 12)).foregroundStyle(.tertiary)
+}
+
+// MARK: - Threat matrix
+
+/// The threat list on its own, so the report can carry it without the picker
+/// and the scroller that the standalone screen needed.
+///
+/// It used to be a tab of its own. It is evidence for the grade rather than a
+/// separate question — "what beats this team" is the same enquiry as "how good
+/// is this team" — so it now sits under them.
+struct ThreatsCard: View {
+    @EnvironmentObject private var store: Store
+    let team: Team
+    let field: Field
+    /// How many to show before the reader asks for the rest.
+    ///
+    /// The whole list is forty rows and it used to have a tab to itself. Inside
+    /// a report it is the longest thing on the page by a distance, and the
+    /// bottom two thirds of it is the part you already beat — so the ones that
+    /// beat you are shown and the rest is a click away.
+    var shortlist = 10
+    @State private var all = false
+    @Environment(\.snapshotMode) private var snapshotMode
+
+    var body: some View {
+        let rows = TeamAnalysis(team: team, store: store).threats(field: field)
+        let shown = (all || snapshotMode) ? rows : Array(rows.prefix(shortlist))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                SectionHeader(title: "What beats it",
+                              subtitle: "Every threat the format actually brings, worst first, "
+                                      + "weighed by how often people bring it.")
+                Spacer(minLength: 8)
+                if rows.count > shortlist, !snapshotMode {
+                    Button(all ? "Show the worst \(shortlist)"
+                               : "Show all \(rows.count)") { all.toggle() }
+                        .controlSize(.small)
                 }
-                ForEach(suggestions) { suggestion in
-                    HStack(spacing: 10) {
-                        SpriteImage(form: suggestion.form, side: 34)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(suggestion.form.formLabel)
-                                .font(.system(size: 12, weight: .medium))
-                            Text(suggestion.reason)
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        HStack(spacing: 3) {
-                            ForEach(suggestion.form.pokeTypes) { TypeChip(type: $0, size: .small) }
-                        }
-                    }
-                    .padding(.vertical, 3)
-                }
+            }
+            ForEach(shown) { row in ThreatRow(assessment: row) }
+            if !all, rows.count > shown.count, !snapshotMode {
+                Text("\(rows.count - shown.count) more, and this team already handles them.")
+                    .font(.system(size: 10)).foregroundStyle(.tertiary)
             }
         }
     }
 }
-
-// MARK: - Threat matrix
 
 struct ThreatMatrixView: View {
     @EnvironmentObject private var store: Store

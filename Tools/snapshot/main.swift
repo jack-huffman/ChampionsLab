@@ -107,9 +107,9 @@ func renderAll() {
            size: CGSize(width: 1180, height: 2900), dark: true)
     render(OverviewView(), named: "overview-light",
            size: CGSize(width: 1180, height: 2900), dark: false)
-    render(TeamAnalysisView(team: team), named: "analysis-dark",
-           size: CGSize(width: 1000, height: 2300), dark: true)
-    render(TeamAnalysisView(team: team), named: "analysis-light",
+    render(TeamReportView(team: team, onAdd: { _ in }), named: "analysis-dark",
+           size: CGSize(width: 1000, height: 5200), dark: true)
+    render(TeamReportView(team: team, onAdd: { _ in }), named: "analysis-light",
            size: CGSize(width: 1000, height: 2300), dark: false)
     // Versus screen against the Big Six, with a real opposing list.
     // A saved team as it opens: locked, read-only, no pickers.

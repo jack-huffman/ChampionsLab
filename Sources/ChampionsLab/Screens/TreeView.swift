@@ -19,6 +19,12 @@ struct TreeView: View {
     /// A finished walk handed in, so a shot can show the findings without
     /// spending a minute searching for them.
     var seeded: MatchupTree.Report?
+    /// The opponent, when the screen around this one already asked for it.
+    ///
+    /// Versus and Lines were two tabs that each began by asking who you were
+    /// playing, which is one question. The answer now comes from above and this
+    /// keeps its own picker only for standing alone.
+    var against: Team?
     @EnvironmentObject private var store: Store
     @StateObject private var model = TreeModel()
 
@@ -41,7 +47,9 @@ struct TreeView: View {
         }
         .onDisappear { model.stop() }
         .onAppear {
-            if opponent.isEmpty { opponent = store.data.metaTeams.first?.name ?? "" }
+            if against == nil, opponent.isEmpty {
+                opponent = store.data.metaTeams.first?.name ?? ""
+            }
         }
     }
 
@@ -50,13 +58,15 @@ struct TreeView: View {
     private var controls: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                Picker("Against", selection: $opponent) {
-                    ForEach(store.data.metaTeams.map(\.name).sorted(), id: \.self) { name in
-                        Text(name).tag(name)
+                if against == nil {
+                    Picker("Against", selection: $opponent) {
+                        ForEach(store.data.metaTeams.map(\.name).sorted(), id: \.self) { name in
+                            Text(name).tag(name)
+                        }
                     }
+                    .frame(width: 230).labelsHidden().controlSize(.small)
+                    .disabled(model.running)
                 }
-                .frame(width: 230).labelsHidden().controlSize(.small)
-                .disabled(model.running)
 
                 Picker("Depth", selection: $depth) {
                     Text("2 turns — seconds").tag(2)
@@ -79,7 +89,7 @@ struct TreeView: View {
                 } else {
                     Button(report == nil ? "Walk it" : "Walk it again") { start() }
                         .controlSize(.small)
-                        .disabled(team.slots.count < 2 || opponent.isEmpty)
+                        .disabled(team.slots.count < 2 || theirTeam == nil)
                 }
                 Spacer(minLength: 0)
                 if model.running {
@@ -112,7 +122,8 @@ struct TreeView: View {
             leadPicker(title: team.name.isEmpty ? "Yours" : team.name,
                        forms: myForms, chosen: $myLead)
             Spacer(minLength: 0)
-            leadPicker(title: opponent, forms: theirForms, chosen: $theirLead)
+            leadPicker(title: against?.name.isEmpty == false ? against!.name : opponent,
+                       forms: theirForms, chosen: $theirLead)
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
     }
@@ -121,10 +132,14 @@ struct TreeView: View {
         team.slots.compactMap { $0.battleForm(in: store.rulebook)?.formLabel }
     }
 
+    /// Whoever is on the other side, however it was chosen.
+    private var theirTeam: Team? {
+        if let against { return against.slots.isEmpty ? nil : against }
+        return store.data.metaTeams.first { $0.name == opponent }.map { store.opponentTeam($0) }
+    }
+
     private var theirForms: [String] {
-        guard let meta = store.data.metaTeams.first(where: { $0.name == opponent }) else { return [] }
-        return store.opponentTeam(meta).slots
-            .compactMap { $0.battleForm(in: store.rulebook)?.formLabel }
+        theirTeam?.slots.compactMap { $0.battleForm(in: store.rulebook)?.formLabel } ?? []
     }
 
     @ViewBuilder private func leadPicker(title: String, forms: [String],
@@ -170,9 +185,8 @@ struct TreeView: View {
     }
 
     private func start() {
-        guard let meta = store.data.metaTeams.first(where: { $0.name == opponent }) else { return }
-        model.start(mine: order(team, by: myLead), theirs: order(store.opponentTeam(meta),
-                                                                 by: theirLead),
+        guard let theirTeam else { return }
+        model.start(mine: order(team, by: myLead), theirs: order(theirTeam, by: theirLead),
                     rules: store.rulebook, depth: depth, playouts: playouts)
     }
 

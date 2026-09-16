@@ -179,9 +179,8 @@ struct TeamEditor: View {
     @Environment(\.snapshotMode) private var snapshotMode
 
     enum Tab: String, CaseIterable, Identifiable {
-        case build = "Build", assist = "Assist", analysis = "Analysis"
-        case threats = "Threats", versus = "Versus", simulate = "Simulate"
-        case lines = "Lines"
+        case build = "Build", analyse = "Analyse"
+        case versus = "Versus", simulate = "Simulate"
         var id: String { rawValue }
     }
 
@@ -191,8 +190,8 @@ struct TeamEditor: View {
             Divider()
             switch tab {
             case .build:    buildTab
-            case .assist:
-                AdvisorView(team: team, onAdd: team.locked ? nil : { form in
+            case .analyse:
+                TeamReportView(team: team, onAdd: team.locked ? nil : { form in
                     appendSlot(form)
                 }, onReplace: team.locked ? nil : { refined in
                     var updated = refined
@@ -201,19 +200,8 @@ struct TeamEditor: View {
                     updated.notes = team.notes
                     store.save(updated)
                 })
-            case .analysis:
-                TeamAnalysisView(team: team,
-                                 onReplace: team.locked ? nil : { updated in
-                                     var out = updated
-                                     out.id = team.id
-                                     out.name = team.name
-                                     out.notes = team.notes
-                                     store.save(out)
-                                 })
-            case .threats:  ThreatMatrixView(team: team)
             case .versus:   MatchupView(team: team)
             case .simulate: SimulationView(team: team)
-            case .lines:    TreeView(team: team)
             }
         }
         .sheet(item: Binding(
