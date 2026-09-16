@@ -331,7 +331,7 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
                            report: oldest, slots: Array(wasSlots.dropLast())),
         ]
         render(SimulationView(team: playing, seeded: found), named: "team-simulate-dark",
-               size: CGSize(width: 900, height: 1400), dark: true)
+               size: CGSize(width: 900, height: 1700), dark: true)
     }
 
     render(SpeedTiersView(), named: "speed-dark",

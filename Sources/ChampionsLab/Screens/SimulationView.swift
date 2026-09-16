@@ -402,6 +402,13 @@ struct SimulationView: View {
         // not what a spread is built against, and a row reading "0 times" under
         // a heading about killing would be answering a question nobody asked.
         let worst = report.worstThreats().filter { $0.knockouts > 0 }
+        // Both sides run the same Pokémon often enough that "Basculegion falls
+        // to Basculegion's Last Respects" is a row you will actually see, and
+        // it reads like a Pokémon killing itself. Say whose it is, but only
+        // where it is genuinely ambiguous — putting "their" on every row to
+        // solve a problem eight rows in ten do not have is its own noise.
+        let ours = Set(team.slots.compactMap { $0.battleForm(in: store.rulebook) }
+                        .map(SelfPlay.recordLabel))
         if !worst.isEmpty {
             Card(padding: 12) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -415,7 +422,8 @@ struct SimulationView: View {
                                 .font(.system(size: 11, weight: .semibold))
                                 .frame(width: 104, alignment: .leading)
                             Text("falls to").font(.system(size: 10)).foregroundStyle(.tertiary)
-                            Text("\(threat.attacker)'s \(threat.move)")
+                            Text((ours.contains(threat.attacker) ? "their " : "")
+                                 + "\(threat.attacker)'s \(threat.move)")
                                 .font(.system(size: 11))
                                 .foregroundStyle(Palette.bad)
                                 .lineLimit(1)
