@@ -2734,9 +2734,34 @@ enum TurnModel {
                 }
             }
 
+            // Who this actually lands on, side by side.
+            //
+            // `aimed` is the far side alone, and everything around this loop —
+            // the redirection above it, the Liquid Ooze below — is written
+            // against that, so it stays exactly as it was. What is added here
+            // is the other half of a spread move nobody had modelled: Earthquake,
+            // Surf and Discharge say "All Adjacent Pokemon", and the adjacent
+            // Pokemon include your own partner.
+            //
+            // Leaving that out made Earthquake free. An engine that never pays
+            // for hitting its own side will click it beside a grounded partner
+            // all day, over-rate every Ground attacker on the team, and never
+            // discover why real teams pair one with a Flying type, a Levitate
+            // or an Air Balloon. The partner's own immunity is not special-cased
+            // here: a Flying partner takes nothing because the damage calculator
+            // says so, which is the right place for it to be said.
+            var aimedAt: [(hitMine: Bool, index: Int)] = aimed.map { (hitMine, $0) }
+            if move.isSpread, move.hitsAlly, !atAlly {
+                let own = byMine ? board.mine : board.theirs
+                if board.activeCount > 1, own.indices.contains(partner),
+                   partner < board.activeCount, !own[partner].fainted {
+                    aimedAt.append((byMine, partner))
+                }
+            }
+
             var totalDealt = 0
             var reached = 0
-            for index in aimed {
+            for (hitMine, index) in aimedAt {
                 let defending = hitMine ? board.mine : board.theirs
                 guard defending.indices.contains(index), !defending[index].fainted else { continue }
                 let hitName = defending[index].build.form.formLabel

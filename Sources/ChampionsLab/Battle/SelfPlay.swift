@@ -463,12 +463,17 @@ enum SelfPlay {
                     // A move never credits itself for what it cost its own
                     // user: recoil, a Life Orb, Belly Drum.
                     if !(action.byMine && slot == action.slot) {
-                        dealt += lost
-                        if step.myHP[slot] == 0 {
-                            note(true, hurt) { $0.faints += 1 }
-                            note(action.byMine, actor) { $0.knockouts += 1 }
-                        }
+                        if step.myHP[slot] == 0 { note(true, hurt) { $0.faints += 1 } }
+                        // Nor for what it cost its own partner. An Earthquake
+                        // that takes the ally down is a real event and it is
+                        // not a knockout for the Pokémon that threw it —
+                        // crediting it there would make the trade column say a
+                        // Pokémon is carrying the team by killing it.
                         if !action.byMine {
+                            dealt += lost
+                            if step.myHP[slot] == 0 {
+                                note(action.byMine, actor) { $0.knockouts += 1 }
+                            }
                             strike(onMine: true, victim: hurt, attacker: actorForm,
                                    move: action.move, lost: lost,
                                    fatal: step.myHP[slot] == 0)
@@ -481,12 +486,12 @@ enum SelfPlay {
                     let hurt = label(step.theirForms[slot])
                     note(false, hurt) { $0.damageTaken += lost }
                     if !(!action.byMine && slot == action.slot) {
-                        dealt += lost
-                        if step.theirHP[slot] == 0 {
-                            note(false, hurt) { $0.faints += 1 }
-                            note(action.byMine, actor) { $0.knockouts += 1 }
-                        }
+                        if step.theirHP[slot] == 0 { note(false, hurt) { $0.faints += 1 } }
                         if action.byMine {
+                            dealt += lost
+                            if step.theirHP[slot] == 0 {
+                                note(action.byMine, actor) { $0.knockouts += 1 }
+                            }
                             strike(onMine: false, victim: hurt, attacker: actorForm,
                                    move: action.move, lost: lost,
                                    fatal: step.theirHP[slot] == 0)

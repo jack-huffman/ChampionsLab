@@ -319,8 +319,13 @@ print("\n== the tech ==")
         print("== the terrain that refuses priority ==")
         let quickOnes = fighters([("Incineroar", "Sitrus Berry", ["Fake Out", "Flare Blitz", "Protect"]),
                                   ("Kingambit", "Chople Berry", ["Sucker Punch", "Iron Head", "Protect"])])
+        // Garchomp carries a single-target attack as well as the Earthquake.
+        // The grounded half of this case needs its partner attacking — Sucker
+        // Punch is only legal into something that attacks — without that attack
+        // also landing on the Pokémon whose health the check reads. An
+        // Earthquake hits its own side, so it would.
         let grounded = fighters([("Indeedee (Female)", "Psychic Seed", ["Trick Room", "Dazzling Gleam", "Protect"]),
-                                 ("Garchomp", "Life Orb", ["Earthquake", "Protect"])])
+                                 ("Garchomp", "Life Orb", ["Earthquake", "Dragon Claw", "Protect"])])
         var board = Board(mine: quickOnes, theirs: grounded, rules: store.rulebook,
                           field: Field(isDoubles: true), alreadyEvolved: false)
         board.field.terrain = .psychic
@@ -329,7 +334,7 @@ print("\n== the tech ==")
             mine: Play(left: .attack(move: at(board.mine[0], "Fake Out"), target: 0),
                        right: .attack(move: at(board.mine[1], "Sucker Punch"), target: 1)),
             theirs: Play(left: .attack(move: at(board.theirs[0], "Trick Room"), target: 0),
-                         right: .attack(move: at(board.theirs[1], "Earthquake"), target: 0)))
+                         right: .attack(move: at(board.theirs[1], "Dragon Claw"), target: 0)))
         for line in refused.story where line.contains("Psychic Terrain") { print("    \(line)") }
         check("a Fake Out does not reach something standing on it",
               refused.theirs[0].hp == refused.theirs[0].maxHP && !refused.theirs[0].flinched,
