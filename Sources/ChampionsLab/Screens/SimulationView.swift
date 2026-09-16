@@ -19,71 +19,14 @@
 
 import SwiftUI
 
-@MainActor
-final class SimulationModel: ObservableObject {
-    enum Phase { case idle, working, finished }
-
-    @Published private(set) var phase: Phase = .idle
-    @Published private(set) var progress: TeamLab.Progress?
-    @Published private(set) var report: TeamLab.Report?
-
-    /// Nonisolated so `deinit` can reach it. Only the main actor writes it.
-    nonisolated(unsafe) private var task: Task<Void, Never>?
-
-    var isWorking: Bool { phase == .working }
-
-    func run(team: Team, store: Store, games: Int, depth: Double) {
-        guard !isWorking else { return }
-        phase = .working
-        progress = nil
-        report = nil
-
-        let rules = store.rulebook
-        // The field is built the way the app would build it rather than with
-        // one crude spread for everybody, or the run measures your spreads
-        // against nobody's.
-        var planner = SpreadPlanner(store: store)
-        planner.field = Field(isDoubles: true)
-        let field = SelfPlay.teams(from: store.data, rules: rules, planner: planner)
-        // Where the last run left off, so this one plays new games rather than
-        // the same ones over again.
-        let already = store.measured(for: team)?.games ?? 0
-
-        task = Task.detached(priority: .utility) { [weak self] in
-            let found = TeamLab.run(
-                team: team, against: field, rules: rules,
-                games: games, budget: depth, resumeFrom: already,
-                progress: { step in Task { @MainActor in self?.progress = step } },
-                shouldStop: { Task.isCancelled })
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                self?.report = found
-                self?.phase = .finished
-                // Kept, so the picker can use it and so the minutes are not
-                // spent again for the same answer.
-                if found.games > 0 { store.remember(found, for: team) }
-            }
-        }
-    }
-
-    func cancel() {
-        task?.cancel()
-        task = nil
-        if phase == .working { phase = report == nil ? .idle : .finished }
-        progress = nil
-    }
-
-    /// Leaving the screen stops the games.
-    deinit { task?.cancel() }
-}
-
 struct SimulationView: View {
     let team: Team
     /// A finished run handed in, so a shot can show the findings without
     /// spending two minutes playing them first.
     var seeded: TeamLab.Report?
     @EnvironmentObject private var store: Store
-    @StateObject private var model = SimulationModel()
+    /// The run lives outside the screen, so leaving does not stop it.
+    @ObservedObject private var lab = SimulationService.shared
     @State private var games = 400
     @State private var depth = 0.03
     @Environment(\.snapshotMode) private var snapshotMode
@@ -94,7 +37,8 @@ struct SimulationView: View {
             Divider()
             if snapshotMode { content } else { ScrollView { content } }
         }
-        .onDisappear { model.cancel() }
+        // Deliberately nothing here. The run outlives the screen; the sidebar
+        // says it is going and can stop it from anywhere.
     }
 
     // MARK: - Setting it going
@@ -109,7 +53,7 @@ struct SimulationView: View {
                     Text("3,000 — the lot, about 40").tag(3000)
                 }
                 .frame(width: 250).labelsHidden().controlSize(.small)
-                .disabled(model.isWorking)
+                .disabled(lab.isRunning(team))
 
                 Picker("Depth", selection: $depth) {
                     Text("Quick — shallow play").tag(0.015)
@@ -117,20 +61,20 @@ struct SimulationView: View {
                     Text("Careful — slow, plays better").tag(0.08)
                 }
                 .frame(width: 230).labelsHidden().controlSize(.small)
-                .disabled(model.isWorking)
+                .disabled(lab.isRunning(team))
 
-                if model.isWorking {
-                    Button("Stop") { model.cancel() }.controlSize(.small)
+                if lab.isRunning(team) {
+                    Button("Stop") { lab.stop() }.controlSize(.small)
                 } else {
-                    Button(model.report == nil ? "Run" : "Run again") {
-                        model.run(team: team, store: store, games: games, depth: depth)
+                    Button(store.measured(for: team) == nil ? "Run" : "Run again") {
+                        lab.start(team: team, store: store, games: games, depth: depth)
                     }
                     .controlSize(.small)
-                    .disabled(team.slots.count < 4)
+                    .disabled(team.slots.count < 4 || lab.running != nil)
                 }
                 Spacer()
-                if let report = seeded ?? model.report ?? store.measured(for: team),
-                   !model.isWorking {
+                if let report = seeded ?? store.measured(for: team),
+                   !lab.isRunning(team) {
                     Text(report.runs > 1
                          ? "\(report.games) games over \(report.runs) runs"
                          : "\(report.games) games")
@@ -149,6 +93,11 @@ struct SimulationView: View {
                  + "Normal depth; Quick is about twice as fast and Careful about half.")
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
+            if let running = lab.running, running.teamID != team.id.uuidString {
+                Text("Simulating \(running.teamName) at the moment — one at a time, "
+                     + "because the games run on a single core.")
+                    .font(.system(size: 11)).foregroundStyle(Palette.warn)
+            }
             if team.slots.count < 4 {
                 Text("A team needs four Pokémon before it can be played.")
                     .font(.system(size: 11)).foregroundStyle(Palette.warn)
@@ -161,8 +110,8 @@ struct SimulationView: View {
 
     @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if model.isWorking { working }
-            if let report = seeded ?? model.report ?? store.measured(for: team),
+            if lab.isRunning(team) { working }
+            if let report = seeded ?? store.measured(for: team),
                report.games > 0 {
                 headline(report)
                 carrying(report)
@@ -170,7 +119,7 @@ struct SimulationView: View {
                 hardest(report)
                 unused(report)
                 acrossTeams()
-            } else if !model.isWorking {
+            } else if !lab.isRunning(team) {
                 Text("Nothing run yet.")
                     .font(.system(size: 12)).foregroundStyle(.tertiary)
                     .padding(.top, 8)
@@ -183,7 +132,7 @@ struct SimulationView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                if let step = model.progress {
+                if let step = lab.running?.progress {
                     Text("\(step.played) of \(step.of) — \(step.wins) won, "
                          + "against \(step.against)")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
@@ -192,7 +141,7 @@ struct SimulationView: View {
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
-            if let step = model.progress {
+            if let step = lab.running?.progress {
                 ProgressView(value: Double(step.played), total: Double(max(1, step.of)))
                     .progressViewStyle(.linear)
             }

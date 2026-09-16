@@ -94,6 +94,7 @@ enum Section: String, CaseIterable, Identifiable, Hashable {
 
 struct RootView: View {
     @EnvironmentObject private var store: Store
+    @ObservedObject private var lab = SimulationService.shared
     @State private var section: Section = .overview
 
     private var groups: [(String, [Section])] {
@@ -170,6 +171,31 @@ struct RootView: View {
     private var sidebarFooter: some View {
         VStack(alignment: .leading, spacing: 3) {
             Divider()
+            // A simulation keeps going when you leave its screen, so it has to
+            // say so from wherever you are — and be stoppable from there.
+            // Background work with no indicator is what made this app feel
+            // broken once before.
+            if let running = lab.running {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small).scaleEffect(0.7)
+                        Text("Simulating \(running.teamName)")
+                            .font(.system(size: 10, weight: .medium))
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        Button("Stop") { lab.stop() }
+                            .controlSize(.mini).buttonStyle(.plain)
+                            .foregroundStyle(Palette.accent)
+                    }
+                    if let step = running.progress {
+                        ProgressView(value: Double(step.played), total: Double(max(1, step.of)))
+                            .progressViewStyle(.linear)
+                        Text("\(step.played) of \(step.of) · \(step.wins) won")
+                            .font(.system(size: 9)).foregroundStyle(.tertiary)
+                    }
+                }
+                .padding(.bottom, 4)
+            }
             HStack(spacing: 6) {
                 Circle().fill(Palette.good).frame(width: 6, height: 6)
                 Text(store.data.regulation.name)
