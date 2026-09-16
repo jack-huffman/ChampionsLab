@@ -126,6 +126,11 @@ struct TeamAnalysisView: View {
             planner.field = ownField
             var made: [Int: SpreadPlanner.Plan] = [:]
             let advisor = TeamAdvisor(team: team, store: store)
+            // What the team's own games found beating each of these Pokémon.
+            // Nil until it has been simulated, and then the spread is built
+            // against the Pokémon that are actually taking it off the field
+            // rather than against the ladder average.
+            let record = store.measured(for: team)
             for index in team.slots.indices {
                 guard let form = team.slots[index].battleForm(in: store.rulebook) else { continue }
                 await breathe("spread")
@@ -134,6 +139,7 @@ struct TeamAnalysisView: View {
                 // an attacking stat, so it is not planned as though it were.
                 let support = roles.contains(.redirection) || roles.contains(.tailwind)
                     || roles.contains(.trickRoom)
+                planner.measured = record?.pressure(on: SelfPlay.recordLabel(form)) ?? [:]
                 made[index] = planner.plan(for: form,
                                            ability: team.slots[index].ability,
                                            item: team.slots[index].item,

@@ -207,6 +207,7 @@ struct SimulationView: View {
                 fours(report)
                 hardest(report)
                 unused(report)
+                killers(report)
                 versions()
                 acrossTeams()
             } else if !lab.isRunning(team) {
@@ -387,6 +388,48 @@ struct SimulationView: View {
                 .frame(width: 44, alignment: .trailing)
             Text("of \(row.games)").font(.system(size: 10)).foregroundStyle(.tertiary)
                 .frame(width: 52, alignment: .trailing)
+        }
+    }
+
+    /// What is actually taking your Pokémon off the field.
+    ///
+    /// The trade column says a Pokémon is losing; it cannot say to whom. This
+    /// can, and it is the card the spread planner reads: a Pokémon that keeps
+    /// falling to one attack from one Pokémon is a Pokémon to build against
+    /// that attack, which is how people who are good at this spend points.
+    @ViewBuilder private func killers(_ report: TeamLab.Report) -> some View {
+        // Only what actually finishes a Pokémon. Chip damage is real and it is
+        // not what a spread is built against, and a row reading "0 times" under
+        // a heading about killing would be answering a question nobody asked.
+        let worst = report.worstThreats().filter { $0.knockouts > 0 }
+        if !worst.isEmpty {
+            Card(padding: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionHeader(title: "What is killing you",
+                                  subtitle: "Every knockout against your side, by who dealt it "
+                                          + "and with what. The Analysis tab builds spreads "
+                                          + "against these rather than against the usage table.")
+                    ForEach(worst.prefix(8)) { threat in
+                        HStack(spacing: 8) {
+                            Text(threat.victim)
+                                .font(.system(size: 11, weight: .semibold))
+                                .frame(width: 104, alignment: .leading)
+                            Text("falls to").font(.system(size: 10)).foregroundStyle(.tertiary)
+                            Text("\(threat.attacker)'s \(threat.move)")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Palette.bad)
+                                .lineLimit(1)
+                            Spacer(minLength: 6)
+                            Text("\(threat.knockouts)")
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .frame(width: 30, alignment: .trailing)
+                            Text(threat.knockouts == 1 ? "time" : "times")
+                                .font(.system(size: 10)).foregroundStyle(.tertiary)
+                                .frame(width: 38, alignment: .leading)
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -40,6 +40,25 @@ enum SelfPlay {
         }
     }
 
+    /// How a Pokémon is named in a record.
+    ///
+    /// A Mega and the Pokémon it evolved from are one entry, because they are
+    /// one Pokémon across a game and splitting them put Garchomp on the table
+    /// with nothing beside it and Mega Garchomp Z with all of its work. By name
+    /// rather than by species: species would fold Alolan Ninetales into
+    /// Ninetales, and in this format those are two different Pokémon with
+    /// different types and different abilities.
+    ///
+    /// Anything reading a record back has to key it the same way, which is why
+    /// this is not a local function any more.
+    static func recordLabel(_ form: Form) -> String {
+        guard form.isMega else { return form.formLabel }
+        var base = form.formLabel
+        if base.hasPrefix("Mega ") { base.removeFirst(5) }
+        for tag in [" X", " Y", " Z"] where base.hasSuffix(tag) { base.removeLast(2) }
+        return base.isEmpty ? form.formLabel : base
+    }
+
     /// A whole game, written down.
     ///
     /// Attribution comes from the turn model's own steps: each one already
@@ -70,6 +89,33 @@ enum SelfPlay {
         var broughtTheirs: [String] = []
         var mine: [String: Tally] = [:]
         var theirs: [String: Tally] = [:]
+        /// Who hurt whom, with what, across the side line.
+        ///
+        /// The per-Pokémon tallies say a Pokémon took a lot of damage; they
+        /// cannot say where it came from, and "took a lot of damage" is not
+        /// something you can build a spread against. This can:
+        /// "Mega Salamence's Double-Edge is a third of everything Whimsicott
+        /// loses" is the sentence a stat spread is actually written from.
+        ///
+        /// Only blows that cross the side line are here. Recoil, a Life Orb and
+        /// an Earthquake that catches your own partner are all real damage and
+        /// none of them is a threat to build against.
+        var blows: [Blow: Hit] = [:]
+    }
+
+    /// One attacker, one move, one victim.
+    struct Blow: Hashable, Sendable {
+        /// Whether the victim was on the first player's side.
+        var onMine: Bool
+        var victim: String
+        var attacker: String
+        var move: String
+    }
+
+    struct Hit: Sendable {
+        var damage = 0
+        var knockouts = 0
+        var times = 0
     }
 
     /// The teams people actually registered, turned into something playable.
@@ -336,15 +382,28 @@ enum SelfPlay {
         // with different types and different abilities.
         func label(_ id: String) -> String {
             guard let form = rules.forms.first(where: { $0.id == id }) else { return id }
-            guard form.isMega else { return form.formLabel }
-            var base = form.formLabel
-            if base.hasPrefix("Mega ") { base.removeFirst(5) }
-            for tag in [" X", " Y", " Z"] where base.hasSuffix(tag) { base.removeLast(2) }
-            return base.isEmpty ? form.formLabel : base
+            return SelfPlay.recordLabel(form)
+        }
+        /// The same Pokémon, uncollapsed.
+        ///
+        /// A threat record is the one place the Mega must stay separate: the
+        /// whole point is to spend stat points against a particular attacker's
+        /// numbers, and Mega Salamence's numbers are not Salamence's.
+        func threatLabel(_ id: String) -> String {
+            rules.forms.first(where: { $0.id == id })?.formLabel ?? id
         }
         func note(_ mineSide: Bool, _ form: String, _ change: (inout Tally) -> Void) {
             if mineSide { change(&ledger.mine[form, default: Tally()]) }
             else { change(&ledger.theirs[form, default: Tally()]) }
+        }
+        /// One blow across the side line, for the threat record.
+        func strike(onMine: Bool, victim: String, attacker: String, move: String,
+                    lost: Int, fatal: Bool) {
+            guard logging, !move.isEmpty else { return }
+            let key = Blow(onMine: onMine, victim: victim, attacker: attacker, move: move)
+            ledger.blows[key, default: Hit()].damage += lost
+            ledger.blows[key, default: Hit()].times += 1
+            if fatal { ledger.blows[key, default: Hit()].knockouts += 1 }
         }
 
         /// Everything each side actually brought, in the order it appeared.
@@ -384,6 +443,11 @@ enum SelfPlay {
                     : (step.theirForms.indices.contains(action.slot)
                        ? label(step.theirForms[action.slot]) : "")
                 guard !actor.isEmpty else { continue }
+                let actorForm = action.byMine
+                    ? (step.myForms.indices.contains(action.slot)
+                       ? threatLabel(step.myForms[action.slot]) : actor)
+                    : (step.theirForms.indices.contains(action.slot)
+                       ? threatLabel(step.theirForms[action.slot]) : actor)
                 if !action.move.isEmpty {
                     note(actor.isEmpty ? false : action.byMine, actor) {
                         $0.moves[action.move, default: 0] += 1
@@ -404,6 +468,11 @@ enum SelfPlay {
                             note(true, hurt) { $0.faints += 1 }
                             note(action.byMine, actor) { $0.knockouts += 1 }
                         }
+                        if !action.byMine {
+                            strike(onMine: true, victim: hurt, attacker: actorForm,
+                                   move: action.move, lost: lost,
+                                   fatal: step.myHP[slot] == 0)
+                        }
                     }
                 }
                 for slot in step.theirHP.indices where before.theirHP.indices.contains(slot) {
@@ -416,6 +485,11 @@ enum SelfPlay {
                         if step.theirHP[slot] == 0 {
                             note(false, hurt) { $0.faints += 1 }
                             note(action.byMine, actor) { $0.knockouts += 1 }
+                        }
+                        if action.byMine {
+                            strike(onMine: false, victim: hurt, attacker: actorForm,
+                                   move: action.move, lost: lost,
+                                   fatal: step.theirHP[slot] == 0)
                         }
                     }
                 }

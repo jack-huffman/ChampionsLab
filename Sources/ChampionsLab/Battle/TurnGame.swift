@@ -111,8 +111,9 @@ struct TurnGame {
                 let result = DamageCalc.calculate(attacker: fighter.build,
                                                   defender: foes[target].build,
                                                   move: move, field: board.field)
-                let accuracy = move.neverMisses || move.accuracy == 0
-                    ? 1.0 : Double(move.accuracy) / 100
+                let accuracy = TurnModel.chanceToHit(move, attacker: fighter,
+                                                     defender: foes[target],
+                                                     board: board) / 100
                 let worth = Int(Double(result.maxDamage) * accuracy)
                 if best == nil || worth > best!.damage { best = (index, worth) }
             }
@@ -289,8 +290,8 @@ struct TurnGame {
                 let result = DamageCalc.calculate(attacker: team[slot].build,
                                                   defender: foe.build, move: move,
                                                   field: board.field)
-                let accuracy = move.neverMisses || move.accuracy == 0
-                    ? 1.0 : Double(move.accuracy) / 100
+                let accuracy = TurnModel.chanceToHit(move, attacker: team[slot],
+                                                     defender: foe, board: board) / 100
                 let share = Double(result.minDamage + result.maxDamage) / 2 * accuracy
                     / Double(max(1, foe.maxHP))
                 best = max(best, min(1, share))
@@ -498,16 +499,26 @@ struct TurnGame {
     /// The worst accuracy among the attacks it throws rather than the product:
     /// two 80% moves on the same turn is not a 64% turn, it is two separate
     /// bets, and the one that decides the position is the one that matters.
+    ///
+    /// Accuracy as the board actually resolves it, not as the move is printed.
+    /// This read the printed number, which meant the search would not click a
+    /// Zap Cannon on the No Guard Mega Raichu that exists to click it, priced
+    /// a Hurricane at 70 under the rain its team was built around, and let a
+    /// Sand Veil dodge for free.
     func reliability(of play: Play, forMine mine: Bool) -> Double {
         let team = mine ? board.mine : board.theirs
         var worst = 1.0
+        let foes = mine ? board.theirs : board.mine
         for (slot, choice) in [play.left, play.right].enumerated() {
-            guard case .attack(let index, _) = choice,
+            guard case .attack(let index, let target) = choice,
                   team.indices.contains(slot), !team[slot].fainted,
                   team[slot].moves.indices.contains(index) else { continue }
             let move = team[slot].moves[index]
             guard move.isDamaging, !move.neverMisses, move.accuracy > 0 else { continue }
-            worst = Swift.min(worst, Double(move.accuracy) / 100)
+            guard foes.indices.contains(target) else { continue }
+            worst = Swift.min(worst, TurnModel.chanceToHit(move, attacker: team[slot],
+                                                           defender: foes[target],
+                                                           board: board) / 100)
         }
         return worst
     }

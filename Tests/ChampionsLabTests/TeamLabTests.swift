@@ -28,6 +28,63 @@ final class TeamLabTests: HarnessCase {
                    ("Whimsicott", "Focus Sash", ["Moonblast", "Protect"])])]
     }
 
+    /// The record says who is killing whom, and with what
+    ///
+    /// A per-Pokémon tally can say a Pokémon took a lot of damage. It cannot
+    /// say where the damage came from, and "took a lot of damage" is not
+    /// something a stat spread can be built against. This is what makes the
+    /// record actionable rather than merely interesting.
+    @MainActor func testTheRecordNamesWhatIsKillingYou() throws {
+        print("\n== who is killing whom ==")
+        let team = fighters([("Basculegion", "Choice Scarf", ["Wave Crash", "Aqua Jet"]),
+                             ("Incineroar", "Sitrus Berry", ["Flare Blitz", "Protect"]),
+                             ("Archaludon", "Leftovers", ["Flash Cannon", "Protect"]),
+                             ("Sinistcha", "Leftovers", ["Matcha Gotcha", "Protect"])])
+        let report = TeamLab.run(team: team, against: smallField(), rules: store.rulebook,
+                                 games: 12, budget: 0.008)
+        check("games were played", report.games == 12, "\(report.games)")
+        check("something was recorded as hurting the team", !report.threats.isEmpty,
+              "\(report.threats.count) entries")
+
+        // Every key has to be readable back, or the record is write-only.
+        let parsed = report.worstThreats(least: 1)
+        check("every entry parses into victim, attacker and move",
+              parsed.count == report.threats.count,
+              "\(parsed.count) of \(report.threats.count)")
+        check("no entry names an attacker on your own side",
+              parsed.allSatisfy { threat in
+                  !team.slots.compactMap { $0.battleForm(in: store.rulebook) }
+                      .map(SelfPlay.recordLabel).contains(threat.attacker) })
+        if let worst = parsed.first {
+            print("  worst: \(worst.victim) falls to \(worst.attacker)'s \(worst.move)"
+                  + " — \(worst.knockouts) of \(worst.hits) hits")
+        }
+
+        // And the weighting the spread planner reads off it.
+        let victims = Set(parsed.map(\.victim))
+        for victim in victims {
+            let pressure = report.pressure(on: victim)
+            guard !pressure.isEmpty else { continue }
+            let total = pressure.values.reduce(0, +)
+            check("pressure on \(victim) is a share of one", abs(total - 1) < 0.001,
+                  String(format: "%.4f", total))
+            check("pressure on \(victim) names only opponents",
+                  pressure.keys.allSatisfy { store.form(named: $0) != nil })
+        }
+        check("an unknown victim has no pressure",
+              report.pressure(on: "Nobody In This Format").isEmpty)
+
+        // Pooling has to carry it, or a second run silently drops the evidence.
+        let pooled = report.merged(with: report)
+        for (key, triple) in report.threats {
+            check("pooling doubles \(key)", pooled.threats[key]?[1] == triple[1] * 2,
+                  "\(pooled.threats[key] ?? [])")
+            break
+        }
+        print(fails == 0 ? "  (all good)" : "  \(fails) FAILED")
+        XCTAssertEqual(fails, 0)
+    }
+
     /// A second run covers new ground, and pooling adds up
     ///
     /// The opponent cycle is driven off a game's position in the sequence, so a

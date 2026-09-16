@@ -51,6 +51,18 @@ enum TeamLab {
         var brings: [String: [Int]] = [:]
         /// Each opposing team, as [wins, games].
         var against: [String: [Int]] = [:]
+        /// What is actually hurting your team, keyed
+        /// "yourPokemon|theirPokemon|move" as [damage, knockouts, hits].
+        ///
+        /// Three numbers rather than one because they answer different
+        /// questions. Damage says where your health goes. Knockouts say what
+        /// ends your games — and a move that takes 88% four times and finishes
+        /// nothing is a different problem from one that takes 101% once. Hits
+        /// says whether either number is worth believing.
+        ///
+        /// A flat string key rather than a struct because this is written to
+        /// JSON, and a dictionary with a composite key is not.
+        var threats: [String: [Int]] = [:]
         var seconds: Double = 0
         /// How many separate runs went into this. Evidence accumulates: four
         /// hundred games on Monday and four hundred on Tuesday is eight
@@ -94,6 +106,11 @@ enum TeamLab {
                 mine[0] += pair[0]; mine[1] += pair[1]
                 out.against[foe] = mine
             }
+            for (key, triple) in other.threats {
+                var mine = out.threats[key] ?? [0, 0, 0]
+                for index in 0..<Swift.min(mine.count, triple.count) { mine[index] += triple[index] }
+                out.threats[key] = mine
+            }
             return out
         }
 
@@ -121,6 +138,58 @@ enum TeamLab {
                 .sorted { Double($0.value[0]) / Double($0.value[1])
                           < Double($1.value[0]) / Double($1.value[1]) }
                 .map { (foe: $0.key, wins: $0.value[0], games: $0.value[1]) }
+        }
+
+        /// One attacker, one move, and what it did to one of yours.
+        struct Threat: Sendable, Identifiable {
+            let victim: String
+            let attacker: String
+            let move: String
+            let damage: Int
+            let knockouts: Int
+            let hits: Int
+
+            var id: String { "\(victim)|\(attacker)|\(move)" }
+        }
+
+        /// What is killing you, worst first.
+        ///
+        /// Sorted by knockouts and then by damage, because ending a game is
+        /// worth more than chipping at one, and because the thing you build a
+        /// spread against is the thing that takes a Pokémon off the field.
+        ///
+        /// `least` keeps single incidents out. One Mega Salamence that rolled
+        /// high once is not a reason to rewrite a spread.
+        func worstThreats(against victim: String? = nil, least: Int = 3) -> [Threat] {
+            threats.compactMap { key, triple -> Threat? in
+                let parts = key.components(separatedBy: "|")
+                guard parts.count == 3, triple.count == 3, triple[2] >= least else { return nil }
+                guard victim == nil || parts[0] == victim else { return nil }
+                return Threat(victim: parts[0], attacker: parts[1], move: parts[2],
+                              damage: triple[0], knockouts: triple[1], hits: triple[2])
+            }
+            .sorted {
+                $0.knockouts != $1.knockouts ? $0.knockouts > $1.knockouts
+                                             : $0.damage > $1.damage
+            }
+        }
+
+        /// How much of one Pokémon's trouble each opposing Pokémon accounts
+        /// for, keyed by the attacker's name and summing to one.
+        ///
+        /// This is what turns a record into a spread. Knockouts are weighted
+        /// far above chip damage for the same reason they are in the sort: the
+        /// benchmark worth paying points for is the one that decides whether a
+        /// Pokémon is still on the field.
+        func pressure(on victim: String) -> [String: Double] {
+            var raw: [String: Double] = [:]
+            for threat in worstThreats(against: victim, least: 2) {
+                raw[threat.attacker, default: 0]
+                    += Double(threat.damage) + Double(threat.knockouts) * 400
+            }
+            let total = raw.values.reduce(0, +)
+            guard total > 0 else { return [:] }
+            return raw.mapValues { $0 / total }
         }
 
         /// Moves the team carries and the engine never reaches for.
@@ -209,6 +278,14 @@ enum TeamLab {
                 var seen = report.brings[four] ?? [0, 0]
                 seen[0] += won ? 1 : 0; seen[1] += 1
                 report.brings[four] = seen
+            }
+            for (blow, hit) in ledger.blows where blow.onMine == mineFirst {
+                let key = "\(blow.victim)|\(blow.attacker)|\(blow.move)"
+                var triple = report.threats[key] ?? [0, 0, 0]
+                triple[0] += hit.damage
+                triple[1] += hit.knockouts
+                triple[2] += hit.times
+                report.threats[key] = triple
             }
             for (form, tally) in mineTallies {
                 var record = report.members[form] ?? Record()

@@ -18,6 +18,10 @@
 //  Everything needed was already here — the Champions stat formula, the damage
 //  calculator, measured usage saying which threats are real and what they hold.
 //
+//  Given a team's measured record it also weighs what has actually been
+//  beating that Pokemon, not only what the format brings. Those are different
+//  questions and the second one is the one a spread is answering.
+//
 //  What it does not do, said plainly. It assumes the threatening version of
 //  each attacker, because that is what you build to survive; a Pokemon that
 //  usually runs bulk will sometimes run offence and this plans for the second.
@@ -56,16 +60,51 @@ struct SpreadPlanner {
         var id: String { "\(kind.rawValue)-\(threat.id)-\(move?.id ?? "")" }
     }
 
+    /// What the team's own games found hurting the Pokémon being planned for,
+    /// by attacker name, summing to one.
+    ///
+    /// The usage table says what the field brings. It cannot say what beats
+    /// *you*. A Pokémon whose job is to stand in front of the opposing Mega
+    /// Salamence needs to be built against Mega Salamence whatever the ladder
+    /// average says, and a threat the team never actually loses to is not worth
+    /// bending a spread around however popular it is. Set this and the search
+    /// weighs both.
+    var measured: [String: Double] = [:]
+    /// How far to trust the measured record over the usage table when both
+    /// have an opinion. Well short of one on purpose: a few hundred games is
+    /// real evidence and it is not the whole format, and a spread built only
+    /// against what you have already played loses to the next thing.
+    var trust = 0.6
+
     /// The threats worth planning against: what people actually bring, in the
-    /// order they bring it.
+    /// order they bring it — plus anything the team's own record says is
+    /// hurting it, however far down the table that sits.
     private var threats: [(form: Form, entry: UsageEntry)] {
-        store.data.usage
+        let table = store.data.usage
             .filter { $0.formats.contains(format) && !$0.isProjected && $0.usage > 0 }
             .sorted { $0.usage > $1.usage }
-            .prefix(depth)
-            .compactMap { entry in
-                store.form(named: entry.name).map { (form: $0, entry: entry) }
-            }
+        var out = table.prefix(depth).compactMap { entry in
+            store.form(named: entry.name).map { (form: $0, entry: entry) }
+        }
+        // A measured killer outside the top twelve is exactly the one a usage
+        // table would have talked you out of building against.
+        let already = Set(out.map(\.form.id))
+        for name in measured.keys {
+            guard let form = store.form(named: name), !already.contains(form.id) else { continue }
+            guard let entry = table.first(where: { $0.name == name })
+                    ?? table.first(where: { store.form(named: $0.name)?.id == form.id })
+            else { continue }
+            out.append((form: form, entry: entry))
+        }
+        return out
+    }
+
+    /// How much a threat is worth planning against, once the record has had a
+    /// say. Usage alone when there is nothing measured for this Pokémon.
+    private func weight(of form: Form, usage: Double) -> Double {
+        guard !measured.isEmpty else { return usage }
+        let seen = measured[form.formLabel] ?? measured[form.name] ?? 0
+        return usage * (1 - trust) + seen * trust
     }
 
     /// The build a threat is dangerous in.
@@ -103,7 +142,7 @@ struct SpreadPlanner {
             maxed.alignment = Alignment.named(form.attack >= form.spAttack ? "Jolly" : "Timid")
             let plain = maxed.speed(in: field)
             out.append(Benchmark(kind: .outspeed, threat: form, move: nil, number: plain,
-                                 share: entry.usage / 100,
+                                 share: weight(of: form, usage: entry.usage / 100),
                                  label: "Outspeed \(form.formLabel)",
                                  detail: "\(plain) Speed, fully invested"))
             // The Scarf version, when the ladder says people run one.
@@ -115,7 +154,7 @@ struct SpreadPlanner {
                 scarfed.item = "Choice Scarf"
                 let quick = scarfed.speed(in: field)
                 out.append(Benchmark(kind: .outspeed, threat: form, move: nil, number: quick,
-                                     share: entry.usage / 100 * 0.5,
+                                     share: weight(of: form, usage: entry.usage / 100) * 0.5,
                                      label: "Outspeed Choice Scarf \(form.formLabel)",
                                      detail: "\(quick) Speed"))
             }
@@ -148,7 +187,8 @@ struct SpreadPlanner {
             }
             guard let worst, worst.damage > 0 else { continue }
             out.append(Benchmark(kind: .survive, threat: threat, move: worst.move,
-                                 number: worst.damage, share: entry.usage / 100,
+                                 number: worst.damage,
+                                 share: weight(of: threat, usage: entry.usage / 100),
                                  label: "Survive \(worst.move.name) from \(threat.formLabel)",
                                  detail: entry.itemUsage?.first.map { "\($0.name) set" } ?? ""))
         }
