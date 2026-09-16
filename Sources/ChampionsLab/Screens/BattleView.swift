@@ -123,6 +123,14 @@ struct BattleView: View {
     @State private var flourish: Flourish?
     @State private var flourishFrom = Date()
     /// The Pokémon leaning into a physical move, and how far.
+    /// A slow rise and fall on every sprite. One repeating animation on a
+    /// single value, so the render server owns it and nothing is rebuilt per
+    /// frame — this screen has had enough trouble with things that redraw.
+    /// What each Pokémon just lost, floating off it as the blow lands. The
+    /// number is the thing a player actually wants at that moment and the log
+    /// is the last place to look for it.
+    @State private var damage: [Seat: Int] = [:]
+    @State private var bob: CGFloat = 0
     @State private var lunging: Seat?
     @State private var lungeBy: CGSize = .zero
     /// The walk through a turn's steps. Held so that leaving the screen, or
@@ -1202,6 +1210,12 @@ struct BattleView: View {
         // taught this one: a detached task that outlived the view it belonged
         // to is what made the app stutter, and it was invisible because the
         // work was correct — it was just still going.
+        .onAppear {
+            guard bob == 0 else { return }
+            withAnimation(.easeInOut(duration: 1.9).repeatForever(autoreverses: true)) {
+                bob = -3.5
+            }
+        }
         .onDisappear {
             playback?.cancel(); playback = nil
             flourish = nil; lunging = nil; lungeBy = .zero
@@ -1542,6 +1556,19 @@ struct BattleView: View {
     /// which quietly meant the dome never appeared at all, since the board the
     /// screen draws between turns always had it false. So while the turn is
     /// still playing out, whoever protected on it is shown protected.
+    /// Which of your two the command panel is currently asking about.
+    ///
+    /// The panel says the name; the field did not, so on a turn where both are
+    /// alive there was nothing connecting "What will Charizard do?" to the
+    /// Charizard on the board. A ring is enough.
+    private func awaitingOrders(_ board: Board) -> Int? {
+        guard finished == nil, sending.isEmpty, !playing, playback == nil else { return nil }
+        let living = (0..<board.activeCount).filter {
+            board.mine.indices.contains($0) && !board.mine[$0].fainted
+        }
+        return living.first { pick(for: $0) == nil }
+    }
+
     private func guarding(_ fighter: Fighter) -> Bool {
         guard !fighter.fainted else { return false }
         return fighter.isProtected || (playback != nil && fighter.protectedLast)
@@ -1756,14 +1783,39 @@ struct BattleView: View {
                         .frame(width: 52)
                         .help("They brought something here, but it has not come out yet. The engine plays against the likeliest versions rather than peeking.")
                     } else {
+                        // A bench slot said only what it was. Whether it is
+                        // healthy, hurt or already gone is the thing you need
+                        // when deciding what to send, and it was in the party
+                        // screen two clicks away.
                         VStack(spacing: 2) {
-                            SpriteImage(form: fighter.build.form, side: 30)
-                                .opacity(fighter.fainted ? 0.25 : 1)
-                                .saturation(fighter.fainted ? 0 : 1)
+                            ZStack {
+                                SpriteImage(form: fighter.build.form, side: 30)
+                                    .opacity(fighter.fainted ? 0.25 : 1)
+                                    .saturation(fighter.fainted ? 0 : 1)
+                                if fighter.fainted {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 13, weight: .heavy))
+                                        .foregroundStyle(Palette.bad.opacity(0.85))
+                                }
+                            }
+                            if !fighter.fainted {
+                                Capsule()
+                                    .fill(Palette.hairline)
+                                    .frame(width: 30, height: 3)
+                                    .overlay(alignment: .leading) {
+                                        Capsule()
+                                            .fill(fighter.share > 0.5 ? Palette.good
+                                                  : fighter.share > 0.2 ? Palette.warn : Palette.bad)
+                                            .frame(width: Swift.max(2, 30 * fighter.share), height: 3)
+                                    }
+                            }
                             Text(fighter.build.form.formLabel)
                                 .font(.system(size: 8)).lineLimit(1).minimumScaleFactor(0.7)
+                                .foregroundStyle(fighter.fainted ? .tertiary : .secondary)
                         }
                         .frame(width: 52)
+                        .help(fighter.fainted ? "\(fighter.build.form.formLabel) has fainted."
+                              : "\(fighter.build.form.formLabel), \(fighter.hp) of \(fighter.maxHP).")
                     }
                 }
             }
@@ -2010,7 +2062,23 @@ struct BattleView: View {
                                       style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
                         .frame(width: 88, height: 88)
                 }
+                // The ground it is standing on. A Pokémon floating on a flat
+                // panel reads as a list entry; one with a platform and a
+                // shadow under it reads as being somewhere. The cheapest
+                // single thing that makes this a field rather than a table.
+                if !fighter.fainted {
+                    Ellipse()
+                        .fill(
+                            RadialGradient(
+                                colors: [Palette.canvas.opacity(0.55), Palette.canvas.opacity(0)],
+                                center: .center, startRadius: 2, endRadius: 30)
+                        )
+                        .frame(width: 66, height: 17)
+                        .offset(y: 32)
+                        .allowsHitTesting(false)
+                }
                 SpriteImage(form: fighter.build.form, side: 78)
+                    .offset(y: fighter.fainted ? 0 : bob)
                     .opacity(fighter.fainted ? 0.22 : 1)
                     .saturation(fighter.fainted ? 0 : 1)
                     .scaleEffect(fighter.fainted ? 0.86 : (hit ? 1.1 : 1))
@@ -2050,15 +2118,36 @@ struct BattleView: View {
                         .lineLimit(1).fixedSize()
                 }
             }
+            // What it is, which the card never said. Two small bars of the
+            // type colours read faster than any word, and typing is the thing
+            // a player checks first.
+            HStack(spacing: 3) {
+                ForEach(fighter.types, id: \.rawValue) { type in
+                    Text(type.rawValue.uppercased())
+                        .font(.system(size: 7, weight: .heavy)).kerning(0.3)
+                        .foregroundStyle(type.onColor)
+                        .padding(.horizontal, 4).padding(.vertical, 1.5)
+                        .background(type.color, in: Capsule())
+                }
+            }
+            .opacity(fighter.fainted ? 0.4 : 1)
             ZStack(alignment: .leading) {
                 Capsule().fill(Palette.hairline).frame(height: 7)
                 GeometryReader { geo in
-                    Capsule().fill(bar).frame(width: geo.size.width * health)
+                    Capsule()
+                        .fill(LinearGradient(colors: [bar.opacity(0.75), bar],
+                                             startPoint: .leading, endPoint: .trailing))
+                        .frame(width: geo.size.width * health)
+                        // Nearly empty still reads as a sliver rather than
+                        // vanishing: one point of health is the whole
+                        // difference between standing and not.
+                        .frame(minWidth: fighter.fainted ? 0 : 3, alignment: .leading)
                 }
                 .frame(height: 7)
             }
             .frame(height: 7)
-            .animation(.easeOut(duration: 0.45), value: fighter.hp)
+            .overlay(Capsule().strokeBorder(.white.opacity(0.10), lineWidth: 0.5))
+            .animation(.easeOut(duration: 0.55), value: fighter.hp)
             HStack(spacing: 4) {
                 Text("\(fighter.hp)/\(fighter.maxHP)")
                     .font(.system(size: 9, design: .rounded)).monospacedDigit()
@@ -2116,6 +2205,30 @@ struct BattleView: View {
             }
         }
         .shadow(color: .black.opacity(fighter.fainted ? 0 : 0.35), radius: 8, y: 3)
+        .overlay {
+            // The one being asked about, so the question and the Pokémon are
+            // visibly the same thing.
+            if mine, let board, awaitingOrders(board) == slot, !fighter.fainted {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Palette.accent, lineWidth: 2)
+                    .shadow(color: Palette.accent.opacity(0.7), radius: 7)
+            }
+        }
+        .overlay(alignment: .top) {
+            if let lost = damage[Seat(mine: mine, slot: slot)], lost > 0 {
+                Text("-\(lost)")
+                    .font(.system(size: 19, weight: .heavy, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .shadow(color: Palette.bad, radius: 6)
+                    .shadow(color: .black.opacity(0.8), radius: 2, y: 1)
+                    .offset(y: -18)
+                    .transition(.asymmetric(
+                        insertion: .offset(y: 14).combined(with: .opacity),
+                        removal: .offset(y: -12).combined(with: .opacity)))
+                    .allowsHitTesting(false)
+            }
+        }
         // In the tile's own corner rather than the sprite's, and on a backdrop:
         // a sprite is not a reliable background — Charizard's wing reaches into
         // exactly this space — and a stat change is something you check at a
@@ -3827,12 +3940,29 @@ struct BattleView: View {
                 try? await Task.sleep(nanoseconds: UInt64(whole * BattleView.impactAt * 1_000_000_000))
                 guard !Task.isCancelled else { return }
                 at = index
+                // The blow lands: show what it took, from the same health diff
+                // the targets were worked out from.
+                var took: [Seat: Int] = [:]
+                if let earlier {
+                    for seat in reached {
+                        let before = seat.mine ? earlier.myHP : earlier.theirHP
+                        let after = seat.mine ? step.myHP : step.theirHP
+                        guard before.indices.contains(seat.slot),
+                              after.indices.contains(seat.slot) else { continue }
+                        let lost = before[seat.slot] - after[seat.slot]
+                        if lost > 0 { took[seat] = lost }
+                    }
+                }
+                withAnimation(.easeOut(duration: 0.18)) { damage = took }
                 try? await Task.sleep(
                     nanoseconds: UInt64(whole * (1 - BattleView.impactAt) * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeIn(duration: 0.2)) { damage = [:] }
             }
             guard !Task.isCancelled else { return }
             flourish = nil
             lunging = nil
+            damage = [:]
             // Rest on the last step rather than past it: the field shows the end
             // of the turn, and the Back and Forward buttons still work from
             // there, which is how a turn was reviewed before it was played out.
@@ -3909,7 +4039,7 @@ struct BattleView: View {
     private func restore(_ board: Board, log: [String], turn: Int) {
         // Whatever was being played belongs to a turn that no longer happened.
         playback?.cancel(); playback = nil
-        flourish = nil; lunging = nil; lungeBy = .zero
+        flourish = nil; lunging = nil; lungeBy = .zero; damage = [:]
         self.board = board
         self.log = log
         self.turn = turn
