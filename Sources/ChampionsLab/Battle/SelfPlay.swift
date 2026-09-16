@@ -234,6 +234,9 @@ enum SelfPlay {
             let grid = Matchup(mine: team, theirs: foe, rules: rules, field: field)
             var picker = BringFour(matchup: grid, rules: rules, bring: 4)
             picker.measured = measured
+            // Only where a caller has deliberately handed one in, which is the
+            // held-out harness and nothing else.
+            picker.leanOnMeasured = !measured.isEmpty
             let plans = picker.plans
             guard !plans.isEmpty else { return whole }
             // A spread of zero or less means every four is in play, which is

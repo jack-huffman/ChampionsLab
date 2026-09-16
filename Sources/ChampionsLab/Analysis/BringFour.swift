@@ -45,6 +45,29 @@ struct BringFour {
     /// with " + ". Keeping the two in step matters more than the format does.
     var measured: [String: (wins: Int, games: Int)] = [:]
 
+    /// Whether that record is allowed to move the ranking. Off, and it should
+    /// stay off until somebody has evidence it should not be.
+    ///
+    /// It was on. The idea is a good one — a few hundred games of *this* team
+    /// ought to beat a scoring function — and it does not survive contact with
+    /// games it was not fitted to:
+    ///
+    ///     make lab ARGS="--ab-learned --games 2400 --workers 4"
+    ///     the engine that has it won 50.8%, give or take 2.0
+    ///
+    /// Learned on one block of games, judged on a second block it had never
+    /// met, one side given its own history and the other not. Half a point on
+    /// a two-point error bar is nothing. Not harmful either — it simply does
+    /// not carry, which is exactly what fitting and judging on the same games
+    /// would have hidden.
+    ///
+    /// The measurement still shows on the Simulate tab, because a human
+    /// reading "this four won 75% and that one 14%" is a different and
+    /// genuinely useful thing. What does not work is letting it quietly move a
+    /// ranking. `--ab-learned` turns this on so the experiment can be run
+    /// again against a better idea of how to use it.
+    var leanOnMeasured = false
+
     let matchup: Matchup
     let rules: Rulebook
     /// How many are brought. Four in doubles, three in singles.
@@ -253,6 +276,7 @@ struct BringFour {
     /// most of the weight. `half` is the number of games at which the two are
     /// trusted equally, which is the one honest knob here.
     private func measuredShift(_ four: [Form]) -> Int {
+        guard leanOnMeasured else { return 0 }
         let key = four.map(\.formLabel).sorted().joined(separator: " + ")
         guard let record = measured[key], record.games > 0 else { return 0 }
         let half = 60.0

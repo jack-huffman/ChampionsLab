@@ -245,6 +245,34 @@ ever exists.
 
 ---
 
+## Learning from your own record
+
+**A team's own measured results ought to beat a scoring function.**
+
+**Tried, measured, disconnected.** The Simulate tab plays a team a few hundred
+times and writes down which four won. Letting that move the bring-four ranking
+is the obvious next step, and it does not survive contact with games it was not
+fitted to:
+
+    make lab ARGS="--ab-learned --games 2400 --workers 4"
+    the engine that has it won 50.8%, give or take 2.0
+
+Learned on one block of games and judged on a second block it had never met,
+with only one side given its own history. Half a point on a two-point error bar
+is nothing. It is not harmful either — it simply does not carry.
+
+The split is the whole point. Fitting and judging on the same games would have
+shown a confident gain, exactly as the bring-rate prior did earlier before a
+held-out set took it away again.
+
+What stays: the measurement itself, the accumulation across runs, and the
+display. A human reading "this four won 75% and that one 14%" is a different
+and genuinely useful thing. What does not work is letting it quietly move a
+ranking, and `BringFour.leanOnMeasured` is off with the number written beside
+it.
+
+---
+
 ## Sources
 
 Concepts: [less luck than you think](https://www.vgcguide.com/competitive-pokemon-is-less-luck-than-you-think) ·
