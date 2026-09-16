@@ -334,6 +334,19 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
                size: CGSize(width: 900, height: 1700), dark: true)
     }
 
+    // The Lines tab, with a real walk behind it. Shallow and few playouts,
+    // because the shot is about whether the findings read.
+    if let playing = store.teams.first(where: { $0.slots.count >= 4 }),
+       let against = store.data.metaTeams.first(where: { $0.name == "Big Six" }) {
+        var mine = playing; mine.slots = Array(playing.slots.prefix(4))
+        var theirs = store.opponentTeam(against)
+        theirs.slots = Array(theirs.slots.prefix(4))
+        let walked = MatchupTree.explore(mine: mine, theirs: theirs, rules: store.rulebook,
+                                         depth: 2, playouts: 6, playoutBudget: 0.008, replay: 5)
+        render(TreeView(team: playing, seeded: walked), named: "team-lines-dark",
+               size: CGSize(width: 1000, height: 2000), dark: true)
+    }
+
     render(SpeedTiersView(), named: "speed-dark",
            size: CGSize(width: 1000, height: 900), dark: true)
     let dexSample = Array(store.data.forms.sorted { $0.dex < $1.dex }.prefix(24))
