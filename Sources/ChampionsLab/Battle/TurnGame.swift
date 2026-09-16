@@ -662,6 +662,20 @@ struct TurnGame {
         if play.megaSlot == 0, let mega = team[0].pendingMega {
             first = "Mega Evolve into \(mega.formLabel), then \(first)"
         }
+        // An empty slot describes to nothing, and the right-hand one was
+        // already handled. The left-hand one was not, which read as a line
+        // beginning "  and switch to Gardevoir" — a turn whose first half had
+        // gone missing rather than a Pokémon that was not there to act.
+        if play.left.isPass || first.isEmpty {
+            guard board.activeCount > 1, team.count > 1, !play.right.isPass else {
+                return first.isEmpty ? "nothing to do" : first
+            }
+            var only = describe(play.right, fighter: team[1], foes: front, team: team)
+            if play.megaSlot == 1, let mega = team[1].pendingMega {
+                only = "Mega Evolve into \(mega.formLabel), then \(only)"
+            }
+            return only.isEmpty ? "nothing to do" : only
+        }
         guard board.activeCount > 1, team.count > 1, !play.right.isPass else { return first }
         var second = describe(play.right, fighter: team[1], foes: front, team: team)
         if play.megaSlot == 1, let mega = team[1].pendingMega {
