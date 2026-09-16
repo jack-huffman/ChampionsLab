@@ -38,6 +38,13 @@
 import Foundation
 
 struct BringFour {
+    /// What this exact team was measured to do with each four, from the
+    /// Simulate tab. Empty when it has never been run.
+    ///
+    /// Keyed the way the report keys it: the four's labels, sorted, joined
+    /// with " + ". Keeping the two in step matters more than the format does.
+    var measured: [String: (wins: Int, games: Int)] = [:]
+
     let matchup: Matchup
     let rules: Rulebook
     /// How many are brought. Four in doubles, three in singles.
@@ -233,6 +240,29 @@ struct BringFour {
         Int((turn.value * 15).rounded().clamped(to: -25...25))
     }
 
+    /// How far a four's measured record should move its rank.
+    ///
+    /// Not "replace the score with the win rate", which is the obvious thing
+    /// and the wrong one. A few hundred games spread over fifteen fours is a
+    /// few dozen each, and a few dozen games is a noisy number — the same trap
+    /// as the bring-rate prior that looked like a clear win in-sample and was
+    /// mostly overfitting once it met games it had not been fitted to.
+    ///
+    /// So the measurement is shrunk towards the scoring function by how much of
+    /// it there is: at eight games it barely registers, at a hundred it carries
+    /// most of the weight. `half` is the number of games at which the two are
+    /// trusted equally, which is the one honest knob here.
+    private func measuredShift(_ four: [Form]) -> Int {
+        let key = four.map(\.formLabel).sorted().joined(separator: " + ")
+        guard let record = measured[key], record.games > 0 else { return 0 }
+        let half = 60.0
+        let confidence = Double(record.games) / (Double(record.games) + half)
+        // A win rate as a number on the same −100…100 scale the grid uses.
+        let rate = Double(record.wins) / Double(record.games)
+        let asScore = (rate - 0.5) * 200
+        return Int((asScore * confidence * 0.5).rounded())
+    }
+
     /// What a four gives up by leaving a job at home.
     ///
     /// Leaving your only Tailwind setter, your only redirection or your only
@@ -323,7 +353,8 @@ struct BringFour {
                             edge: rated.score,
                             turnOne: turn,
                             score: (rated.score + tempoBonus(turn) + openingBonus(opening)
-                                    - abandoned(four)).clamped(to: -100...100),
+                                    - abandoned(four) + measuredShift(four))
+                                .clamped(to: -100...100),
                             reasons: reasons(four: ordered, benched: benched, turn: turn,
                                              likely: likely, focusKOs: rated.focusKOs),
                             warnings: warnings(four: ordered, benched: benched,

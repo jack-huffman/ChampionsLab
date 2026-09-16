@@ -538,7 +538,7 @@ struct MatchupView: View {
             // The leads the bring-four search settled on, so the two screens
             // agree about which turn is being solved.
             let size = store.data.rules.formats.first { $0.id == team.format }?.bring ?? 4
-            let picker = BringFour(matchup: matchup, rules: store.rulebook, bring: size)
+            let picker = bringPicker(matchup, size: size)
             let plan = picker.plans.first
             await breathe("turn leads")
             let board = Board(mine: team, theirs: opponent, rules: store.rulebook,
@@ -564,13 +564,23 @@ struct MatchupView: View {
 
     // MARK: Bring four
 
+    /// The picker, told what this team has actually been measured to do.
+    ///
+    /// One place, so the measured record cannot be wired into one call site and
+    /// quietly forgotten in the other.
+    private func bringPicker(_ matchup: Matchup, size: Int) -> BringFour {
+        var picker = BringFour(matchup: matchup, rules: store.rulebook, bring: size)
+        picker.measured = store.measuredFours(for: team)
+        return picker
+    }
+
     /// Six are registered and four are brought, so this is the decision the
     /// screen exists to help with. Everything here is read off the same grid
     /// the verdict above is read off.
     @ViewBuilder
     private func bringFourCard(_ matchup: Matchup) -> some View {
         let size = store.data.rules.formats.first { $0.id == team.format }?.bring ?? 4
-        let picker = BringFour(matchup: matchup, rules: store.rulebook, bring: size)
+        let picker = bringPicker(matchup, size: size)
         let plans = picker.plans
         let chosen = plans.first { $0.id == selectedPlan } ?? plans.first
 

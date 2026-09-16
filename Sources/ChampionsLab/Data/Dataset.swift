@@ -10,6 +10,10 @@ final class Store: ObservableObject {
 
     @Published private(set) var data: Dataset
     @Published var teams: [Team] = []
+    /// What each team was measured to do, from the Simulate tab, keyed by team
+    /// id. Loaded once and kept, so the picker can lean on a few hundred real
+    /// games of *this* team rather than only on a scoring function.
+    @Published var simulations: [String: LabStore.Entry] = [:]
     @Published var loadError: String?
     /// Set when saved teams could not be read — surfaced rather than swallowed.
     @Published var teamWarning: String?
@@ -46,6 +50,7 @@ final class Store: ObservableObject {
         }
         bundledUsage = data.usage
         teams = TeamStore.load()
+        simulations = LabStore.load()
         teamWarning = TeamStore.loadWarning
         if let saved = UsageFeed.load() { apply(saved) }
     }
@@ -316,6 +321,27 @@ final class Store: ObservableObject {
     }
 
     // MARK: - Teams
+
+    /// What this team was measured to do, if it has been simulated and has not
+    /// been edited since. A stale report is not offered: measured numbers for a
+    /// team that no longer exists look authoritative and are not.
+    func measured(for team: Team) -> TeamLab.Report? {
+        guard let entry = simulations[team.id.uuidString],
+              entry.stamp == LabStore.stamp(of: team) else { return nil }
+        return entry.report
+    }
+
+    /// The fours this team has actually won with, ready for the picker.
+    func measuredFours(for team: Team) -> [String: (wins: Int, games: Int)] {
+        measured(for: team)?.measuredFours() ?? [:]
+    }
+
+    func remember(_ report: TeamLab.Report, for team: Team) {
+        simulations[team.id.uuidString] = LabStore.Entry(
+            teamID: team.id.uuidString, stamp: LabStore.stamp(of: team),
+            ran: Date(), report: report)
+        LabStore.save(simulations)
+    }
 
     func save(_ team: Team) {
         if let index = teams.firstIndex(where: { $0.id == team.id }) {

@@ -56,6 +56,9 @@ final class SimulationModel: ObservableObject {
             await MainActor.run {
                 self?.report = found
                 self?.phase = .finished
+                // Kept, so the picker can use it and so the minutes are not
+                // spent again for the same answer.
+                if found.games > 0 { store.remember(found, for: team) }
             }
         }
     }
