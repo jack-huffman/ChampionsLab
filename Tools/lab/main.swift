@@ -186,15 +186,36 @@ struct Report: Codable {
 func runShard(index: Int, of shards: Int, games: Int, budget: Double,
               focus: String?, versus: [String], spread: Int, abTest: Bool,
               stageTest: Bool, winTest: Bool, mineOnly: Bool, floorTest: Bool,
-              seed: UInt64) -> Report {
+              crude: Bool, level: Bool, seed: UInt64) -> Report {
     let store = Store.shared
     if let error = store.loadError { FileHandle.standardError.write(Data("dataset: \(error)\n".utf8)); exit(1) }
     let rules = store.rulebook
-    let field = SelfPlay.teams(from: store.data, rules: rules)
+    // The published lists are built the way the app would build them, rather
+    // than with one crude spread for everybody — otherwise a run against your
+    // own registered teams is measuring your spreads against nobody's.
+    var planner = SpreadPlanner(store: store)
+    planner.field = Field(isDoubles: true)
+    let field = SelfPlay.teams(from: store.data, rules: rules,
+                               planner: crude ? nil : planner)
     // `--mine` puts the teams actually registered in the app on one side and
     // the published field on the other, which is the question an owner of a
     // team has: how does *this* do against what is out there.
-    let registered = mineOnly ? store.teams.filter { $0.slots.count >= 4 } : []
+    // `--level` throws your own spreads away too and rebuilds them the same
+    // way, which answers the other question: how do the *teams* compare when
+    // nobody has the advantage of a tuned build.
+    var registered = mineOnly ? store.teams.filter { $0.slots.count >= 4 } : []
+    if level {
+        for index in registered.indices {
+            for slot in registered[index].slots.indices {
+                guard let form = registered[index].slots[slot].battleForm(in: rules) else { continue }
+                let built = planner.plan(for: form,
+                                         ability: registered[index].slots[slot].ability,
+                                         item: registered[index].slots[slot].item)
+                registered[index].slots[slot].sp = built.sp
+                registered[index].slots[slot].alignmentName = built.alignment.name
+            }
+        }
+    }
     let teams = mineOnly ? registered + field : field
     guard teams.count >= 2, !(mineOnly && registered.isEmpty) else {
         if mineOnly { FileHandle.standardError.write(Data("no registered teams\n".utf8)) }
@@ -676,6 +697,10 @@ func main() {
     // was never tuned; the argument is that a Pokémon on 1 HP still attacks
     // for full, so it should be higher.
     let floorTest = has("--ab-floor")
+    // Keep the old crude spread, for comparing against earlier runs.
+    let crude = has("--crude-spreads")
+    // Level your own teams down to the same planned build as the field.
+    let level = has("--level")
     let started = Date()
 
     // A child doing its slice: run it, print the JSON, done.
@@ -686,7 +711,7 @@ func main() {
                               focus: focus, versus: versus, spread: spread,
                               abTest: abTest, stageTest: stageTest,
                               winTest: winTest, mineOnly: mineOnly,
-                              floorTest: floorTest, seed: seed)
+                              floorTest: floorTest, crude: crude, level: level, seed: seed)
         let blob = try! JSONEncoder().encode(report)
         FileHandle.standardOutput.write(blob)
         return
@@ -694,6 +719,8 @@ func main() {
 
     print("==> lab: \(games) games, budget \(budget)s, \(workers) worker\(workers == 1 ? "" : "s")"
           + (mineOnly ? ", your teams against the field" : "")
+          + (level ? ", everyone on planned spreads" : "")
+          + (crude ? ", field on the old crude spread" : "")
           + (versus.count == 2 ? ", \(versus[0]) vs \(versus[1])" : "")
           + (focus.map { ", focused on \($0)" } ?? "")
           + (spread > 1 ? ", drawing from the top \(spread) fours" : ""))
@@ -703,7 +730,8 @@ func main() {
         report = runShard(index: 0, of: 1, games: games, budget: budget, focus: focus,
                           versus: versus, spread: spread, abTest: abTest,
                           stageTest: stageTest, winTest: winTest,
-                          mineOnly: mineOnly, floorTest: floorTest, seed: seed)
+                          mineOnly: mineOnly, floorTest: floorTest,
+                          crude: crude, level: level, seed: seed)
     } else {
         // Each child plays its own slice and hands back a ledger. Sharding by
         // process rather than by thread because the turn model's dice are
@@ -725,6 +753,8 @@ func main() {
             if winTest { argv.append("--ab-win") }
             if mineOnly { argv.append("--mine") }
             if floorTest { argv.append("--ab-floor") }
+            if crude { argv.append("--crude-spreads") }
+            if level { argv.append("--level") }
             task.arguments = argv
             let pipe = Pipe()
             task.standardOutput = pipe

@@ -86,10 +86,35 @@ enum SelfPlay {
     /// rather than an exchange. Those are the games worth learning from.
     ///
     /// Stat spreads are the one thing a registered list never publishes, so
-    /// they are still worked out here — towards whichever side the Pokémon
-    /// actually attacks from.
-    static func teams(from dataset: Dataset, rules: Rulebook) -> [Team] {
-        dataset.metaTeams.compactMap { entry -> Team? in
+    /// they have to be worked out here.
+    ///
+    /// `planner` is how. Without one every Pokémon on every published list got
+    /// the same crude three lines — twenty into health, twenty-three into
+    /// whichever attack was higher, twenty-three into Speed — which is not a
+    /// spread anybody would register. Measuring a real team against a field
+    /// built like that measures the *builds* rather than the teams, and
+    /// flatters the side whose spreads are real.
+    ///
+    /// Given one, each Pokémon is built the way the app's own spread planner
+    /// would build it: against the speed tiers and the attacks the field
+    /// actually throws. It costs a second or two per shard at startup and it
+    /// is the difference between a fair comparison and a rigged one.
+    @MainActor
+    static func teams(from dataset: Dataset, rules: Rulebook,
+                      planner: SpreadPlanner? = nil) -> [Team] {
+        // The same Pokémon turns up on a great many of these lists, and a plan
+        // depends only on the form, the ability and the item — so planning
+        // Incineroar forty times over is forty times the work for one answer.
+        var planned: [String: SpreadPlanner.Plan] = [:]
+        func spread(_ form: Form, _ ability: String, _ item: String) -> SpreadPlanner.Plan? {
+            guard let planner else { return nil }
+            let key = "\(form.id)|\(ability)|\(item)"
+            if let known = planned[key] { return known }
+            let built = planner.plan(for: form, ability: ability, item: item)
+            planned[key] = built
+            return built
+        }
+        return dataset.metaTeams.compactMap { entry -> Team? in
             var out = Team()
             out.format = entry.format.isEmpty ? "doubles" : entry.format
             out.name = entry.name
@@ -106,12 +131,17 @@ enum SelfPlay {
                 }
                 if slot.moves.isEmpty { return nil }
                 let physical = form.attack >= form.spAttack
-                var sp = Array(repeating: 0, count: 6)
-                sp[Stat.hp.rawValue] = 20
-                sp[(physical ? Stat.attack : Stat.spAttack).rawValue] = 23
-                sp[Stat.speed.rawValue] = 23
-                slot.sp = sp
-                slot.alignmentName = member.nature ?? (physical ? "Adamant" : "Modest")
+                if let built = spread(form, slot.ability, slot.item) {
+                    slot.sp = built.sp
+                    slot.alignmentName = member.nature ?? built.alignment.name
+                } else {
+                    var sp = Array(repeating: 0, count: 6)
+                    sp[Stat.hp.rawValue] = 20
+                    sp[(physical ? Stat.attack : Stat.spAttack).rawValue] = 23
+                    sp[Stat.speed.rawValue] = 23
+                    slot.sp = sp
+                    slot.alignmentName = member.nature ?? (physical ? "Adamant" : "Modest")
+                }
                 return slot
             }
             // A list that lost most of itself to a form or move this dataset
