@@ -29,11 +29,17 @@ struct SimulationView: View {
     @ObservedObject private var lab = SimulationService.shared
     @State private var games = 400
     @State private var depth = 0.03
+    /// Empty means the whole field. A name pins it to one opponent, which is
+    /// the difference between "how good is this team" and "how does it do into
+    /// that".
+    @State private var opponent = ""
     @Environment(\.snapshotMode) private var snapshotMode
 
     var body: some View {
         VStack(spacing: 0) {
             controls
+            Divider()
+            sides
             Divider()
             if snapshotMode { content } else { ScrollView { content } }
         }
@@ -63,11 +69,21 @@ struct SimulationView: View {
                 .frame(width: 230).labelsHidden().controlSize(.small)
                 .disabled(lab.isRunning(team))
 
+                Picker("Against", selection: $opponent) {
+                    Text("The whole field").tag("")
+                    ForEach(store.data.metaTeams.map(\.name).sorted(), id: \.self) { name in
+                        Text(name).tag(name)
+                    }
+                }
+                .frame(width: 210).labelsHidden().controlSize(.small)
+                .disabled(lab.running != nil)
+
                 if lab.isRunning(team) {
                     Button("Stop") { lab.stop() }.controlSize(.small)
                 } else {
                     Button(store.measured(for: team) == nil ? "Run" : "Run again") {
-                        lab.start(team: team, store: store, games: games, depth: depth)
+                        lab.start(team: team, store: store, games: games, depth: depth,
+                                  only: opponent.isEmpty ? nil : opponent)
                     }
                     .controlSize(.small)
                     .disabled(team.slots.count < 4 || lab.running != nil)
@@ -83,8 +99,9 @@ struct SimulationView: View {
             }
             Text("Runs add to each other: play four hundred now and four hundred later and "
                  + "the team has eight hundred games behind it, continuing round the field "
-                 + "rather than repeating. Editing the team starts the record again, because "
-                 + "the old games were about a different team.\n\n"
+                 + "rather than repeating. Editing the team starts a new version rather than "
+                 + "wiping the record: the old games were about a different team, so they are "
+                 + "kept separately and shown below as history.\n\n"
                  + "Real games against every published list, both sides played by the engine. "
                  + "A few hundred is enough to see which Pokémon are carrying the team; a "
                  + "thousand before believing a matchup. It runs on one core — the turn "
@@ -106,6 +123,78 @@ struct SimulationView: View {
         .padding(12)
     }
 
+    // MARK: - The two teams
+
+    /// Yours on the left, theirs on the right.
+    ///
+    /// While a run is going the right-hand six is whoever is being played at
+    /// that moment, cycling through the field as the games go by — which makes
+    /// a long run something to watch rather than a progress bar to wait on,
+    /// and makes it obvious at a glance that the field is being covered evenly
+    /// rather than the same opponent over and over.
+    private var sides: some View {
+        HStack(alignment: .center, spacing: 14) {
+            six(team.slots.compactMap { $0.battleForm(in: store.rulebook) },
+                title: team.name, mine: true)
+            VStack(spacing: 2) {
+                Text("VS").font(.system(size: 11, weight: .heavy)).kerning(1)
+                    .foregroundStyle(Palette.accent)
+                if let step = lab.running?.progress, lab.isRunning(team) {
+                    Text("\(step.played)/\(step.of)")
+                        .font(.system(size: 9, design: .rounded)).monospacedDigit()
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            six(facing, title: facingName, mine: false)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+    }
+
+    /// The six currently opposite: whoever is being played, or the chosen
+    /// opponent, or nobody in particular when it is the whole field.
+    private var facing: [Form] {
+        if lab.isRunning(team), let step = lab.running?.progress {
+            return step.againstForms.compactMap { store.formsByID[$0] }
+        }
+        if !opponent.isEmpty,
+           let chosen = store.data.metaTeams.first(where: { $0.name == opponent }) {
+            return chosen.members.compactMap { member in
+                store.data.forms.first { $0.formLabel == member.form || $0.name == member.form }
+            }
+        }
+        return []
+    }
+
+    private var facingName: String {
+        if lab.isRunning(team), let step = lab.running?.progress { return step.against }
+        return opponent.isEmpty ? "the whole field" : opponent
+    }
+
+    private func six(_ forms: [Form], title: String, mine: Bool) -> some View {
+        VStack(alignment: mine ? .leading : .trailing, spacing: 5) {
+            Text(title.uppercased())
+                .font(.system(size: 9, weight: .bold)).kerning(0.5)
+                .foregroundStyle(mine ? Palette.accent : .secondary)
+                .lineLimit(1).truncationMode(.tail)
+            HStack(spacing: 5) {
+                if forms.isEmpty {
+                    ForEach(0..<6, id: \.self) { _ in
+                        Circle().strokeBorder(Palette.hairline,
+                                              style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+                            .frame(width: 34, height: 34)
+                    }
+                } else {
+                    ForEach(Array(forms.prefix(6).enumerated()), id: \.offset) { _, form in
+                        SpriteImage(form: form, side: 34)
+                            .help(form.formLabel)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: mine ? .leading : .trailing)
+    }
+
     // MARK: - What it found
 
     @ViewBuilder private var content: some View {
@@ -118,6 +207,7 @@ struct SimulationView: View {
                 fours(report)
                 hardest(report)
                 unused(report)
+                versions()
                 acrossTeams()
             } else if !lab.isRunning(team) {
                 Text("Nothing run yet.")
@@ -297,6 +387,71 @@ struct SimulationView: View {
                 .frame(width: 44, alignment: .trailing)
             Text("of \(row.games)").font(.system(size: 10)).foregroundStyle(.tertiary)
                 .frame(width: 52, alignment: .trailing)
+        }
+    }
+
+    /// Earlier versions of this team, and whether changing it helped.
+    ///
+    /// The whole point of simulating a team is to change it and simulate again.
+    /// Records used to be dropped the moment the team was edited, which threw
+    /// away the one comparison that makes the exercise worth doing.
+    @ViewBuilder private func versions() -> some View {
+        let past = store.history(for: team)
+        if !past.isEmpty {
+            let now = store.measured(for: team)
+            Card(padding: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionHeader(title: "What changing it did",
+                                  subtitle: "Earlier versions of this team, newest first, "
+                                          + "with what changed after each one. The comparison "
+                                          + "is the reason to keep them.")
+                    if let now {
+                        versionRow(label: "now", rate: now.winRate, games: now.games,
+                                   against: nil, changed: [])
+                    }
+                    ForEach(Array(past.enumerated()), id: \.offset) { _, older in
+                        versionRow(label: shortDate(older.entry.ran),
+                                   rate: older.entry.report.winRate,
+                                   games: older.entry.report.games,
+                                   against: now?.winRate,
+                                   changed: older.changed)
+                    }
+                }
+            }
+        }
+    }
+
+    private func shortDate(_ date: Date) -> String {
+        let out = DateFormatter()
+        out.dateFormat = "d MMM"
+        return out.string(from: date)
+    }
+
+    private func versionRow(label: String, rate: Double, games: Int,
+                            against: Double?, changed: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 10) {
+                Text(label).font(.system(size: 11, weight: .semibold))
+                    .frame(width: 54, alignment: .leading)
+                Text(String(format: "%.1f%%", rate * 100))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .frame(width: 52, alignment: .trailing)
+                Text("of \(games)").font(.system(size: 10)).foregroundStyle(.tertiary)
+                    .frame(width: 58, alignment: .trailing)
+                if let against {
+                    let delta = (against - rate) * 100
+                    Text(String(format: "%+.1f since", delta))
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(delta >= 0 ? Palette.good : Palette.bad)
+                }
+                Spacer(minLength: 0)
+            }
+            if !changed.isEmpty {
+                Text("then you " + changed.prefix(3).joined(separator: ", ")
+                     + (changed.count > 3 ? " and \(changed.count - 3) more" : ""))
+                    .font(.system(size: 10)).foregroundStyle(.tertiary)
+                    .padding(.leading, 54)
+            }
         }
     }
 

@@ -44,14 +44,19 @@ final class SimulationService: ObservableObject {
 
     func isRunning(_ team: Team) -> Bool { running?.teamID == team.id.uuidString }
 
-    func start(team: Team, store: Store, games: Int, depth: Double) {
+    /// `only` narrows the run to a single opponent, which turns a survey of
+    /// the field into a head-to-head.
+    func start(team: Team, store: Store, games: Int, depth: Double, only: String? = nil) {
         guard running == nil else { return }
         running = Running(teamID: team.id.uuidString, teamName: team.name, wanted: games)
 
         let rules = store.rulebook
         var planner = SpreadPlanner(store: store)
         planner.field = Field(isDoubles: true)
-        let field = SelfPlay.teams(from: store.data, rules: rules, planner: planner)
+        let whole = SelfPlay.teams(from: store.data, rules: rules, planner: planner)
+        let field = only.flatMap { name in
+            whole.first { $0.name == name }.map { [$0] }
+        } ?? whole
         let already = store.measured(for: team)?.games ?? 0
 
         task = Task.detached(priority: .utility) { [weak self] in

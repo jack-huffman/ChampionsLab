@@ -13,7 +13,7 @@ final class Store: ObservableObject {
     /// What each team was measured to do, from the Simulate tab, keyed by team
     /// id. Loaded once and kept, so the picker can lean on a few hundred real
     /// games of *this* team rather than only on a scoring function.
-    @Published var simulations: [String: LabStore.Entry] = [:]
+    @Published var simulations: [String: [LabStore.Entry]] = [:]
     @Published var loadError: String?
     /// Set when saved teams could not be read — surfaced rather than swallowed.
     @Published var teamWarning: String?
@@ -326,9 +326,33 @@ final class Store: ObservableObject {
     /// been edited since. A stale report is not offered: measured numbers for a
     /// team that no longer exists look authoritative and are not.
     func measured(for team: Team) -> TeamLab.Report? {
-        guard let entry = simulations[team.id.uuidString],
-              entry.stamp == LabStore.stamp(of: team) else { return nil }
-        return entry.report
+        current(for: team)?.report
+    }
+
+    /// The record for the team exactly as it stands now.
+    func current(for team: Team) -> LabStore.Entry? {
+        let stamp = LabStore.stamp(of: team)
+        return simulations[team.id.uuidString]?.first { $0.stamp == stamp }
+    }
+
+    /// Earlier versions of this team, newest first, each with what changed
+    /// between it and the version after it.
+    ///
+    /// This is the reason the records are kept rather than dropped on an edit.
+    /// You simulate a team to find out what is wrong with it, change the thing
+    /// and simulate again — and deleting the first answer at the moment you act
+    /// on it means never being able to tell whether acting helped.
+    func history(for team: Team) -> [(entry: LabStore.Entry, changed: [String])] {
+        let stamp = LabStore.stamp(of: team)
+        let all = simulations[team.id.uuidString] ?? []
+        let ordered = all.sorted { $0.ran > $1.ran }
+        var out: [(LabStore.Entry, [String])] = []
+        for (index, entry) in ordered.enumerated() where entry.stamp != stamp {
+            let newer = index == 0 ? LabStore.slotLines(of: team) : ordered[index - 1].slots
+            out.append((entry, LabStore.changes(from: entry.slots, to: newer,
+                                                naming: { self.formsByID[$0]?.formLabel ?? $0 })))
+        }
+        return out
     }
 
     /// The fours this team has actually won with, ready for the picker.
@@ -371,12 +395,21 @@ final class Store: ObservableObject {
 
     func remember(_ report: TeamLab.Report, for team: Team) {
         let stamp = LabStore.stamp(of: team)
-        let existing = simulations[team.id.uuidString]
-        let pooled = existing?.stamp == stamp
-            ? (existing?.report.merged(with: report) ?? report)
-            : report
-        simulations[team.id.uuidString] = LabStore.Entry(
-            teamID: team.id.uuidString, stamp: stamp, ran: Date(), report: pooled)
+        var versions = simulations[team.id.uuidString] ?? []
+        // Pooled into this version if it is this version, and a new version
+        // otherwise. Earlier versions stay: they are the record of what the
+        // team used to do, which is the only way to tell whether a change was
+        // an improvement.
+        if let at = versions.firstIndex(where: { $0.stamp == stamp }) {
+            versions[at].report = versions[at].report.merged(with: report)
+            versions[at].ran = Date()
+        } else {
+            versions.insert(LabStore.Entry(teamID: team.id.uuidString, stamp: stamp,
+                                           ran: Date(), report: report,
+                                           slots: LabStore.slotLines(of: team)),
+                            at: 0)
+        }
+        simulations[team.id.uuidString] = versions.sorted { $0.ran > $1.ran }
         LabStore.save(simulations)
     }
 

@@ -8,9 +8,19 @@
 //  evidence than any scoring function.
 //
 //  Reports are keyed by team id and stamped with what the team looked like
-//  when they were made. Change a move, an item, a Pokémon, and the stamp stops
-//  matching and the report is no longer offered — measured numbers for a team
-//  that no longer exists are worse than none, because they look authoritative.
+//  when they were made, and every version is kept.
+//
+//  The first version of this threw the record away when the team changed, on
+//  the reasoning that measured numbers for a team that no longer exists look
+//  authoritative and are not. True as far as it goes, and it destroyed the only
+//  reason to simulate in the first place: you run a team to find out what is
+//  wrong with it, change the thing, and run it again. Deleting the first answer
+//  at the moment you act on it means never being able to tell whether acting
+//  helped.
+//
+//  So versions accumulate. The current one is the only one offered *as* the
+//  team's record — nothing else would be honest — and the rest are history, with
+//  what changed between them, which is what turns a number into a decision.
 
 import Foundation
 
@@ -23,13 +33,54 @@ enum LabStore {
 
     private static var file: URL { directory.appendingPathComponent("simulations.json") }
 
-    /// One team's measured record, and the team it was measured on.
+    /// One version of one team, and what it was measured to do.
     struct Entry: Codable, Sendable {
         var teamID: String
-        /// What the team was when this was run. A mismatch retires the entry.
+        /// What the team was when this was run.
         var stamp: String
         var ran: Date
         var report: TeamLab.Report
+        /// The slot descriptions the stamp was built from, kept so a later
+        /// version can say what changed rather than only that something did.
+        var slots: [String] = []
+    }
+
+    /// What changed between two versions, in the words somebody would use.
+    ///
+    /// Comparing the stamps says only that they differ. Comparing the slots
+    /// says "changed Sneasler's item" — which is the difference between a
+    /// history you can read and a list of dates.
+    ///
+    /// Each clause is written to follow "then you", so a caller can join them
+    /// into a sentence without knowing which kind of change it has. `naming`
+    /// turns a form id into something a person recognises; without it the
+    /// history reads "changed 006's item", which is true and no use.
+    static func changes(from older: [String], to newer: [String],
+                        naming: (String) -> String = { $0 }) -> [String] {
+        guard !older.isEmpty, !newer.isEmpty else { return [] }
+        func parts(_ line: String) -> [String] { line.components(separatedBy: "|") }
+        var out: [String] = []
+        let wasByForm = Dictionary(older.map { (parts($0).first ?? "", parts($0)) },
+                                   uniquingKeysWith: { a, _ in a })
+        for line in newer {
+            let now = parts(line)
+            guard let form = now.first else { continue }
+            guard let was = wasByForm[form] else {
+                out.append("added \(naming(form))")
+                continue
+            }
+            let fields = ["item", "ability", "nature", "spread", "moves"]
+            for (index, name) in fields.enumerated() where index + 1 < min(was.count, now.count) {
+                if was[index + 1] != now[index + 1] {
+                    out.append("changed \(naming(form))'s \(name)")
+                }
+            }
+        }
+        let nowForms = Set(newer.compactMap { parts($0).first })
+        for form in wasByForm.keys where !nowForms.contains(form) {
+            out.append("dropped \(naming(form))")
+        }
+        return out
     }
 
     /// Everything about a team that would change how it plays, in one string.
@@ -38,16 +89,23 @@ enum LabStore {
     /// change a game, and retiring a two-thousand-game report over a nickname
     /// would be its own kind of wrong.
     static func stamp(of team: Team) -> String {
+        slotLines(of: team).joined(separator: "//")
+    }
+
+    /// One line per Pokémon, which is both the stamp and, split up again, how a
+    /// later version says what changed.
+    static func slotLines(of team: Team) -> [String] {
         team.slots.map { slot in
             "\(slot.formID)|\(slot.item)|\(slot.ability)|\(slot.alignmentName)"
                 + "|\(slot.sp.map(String.init).joined(separator: ","))"
                 + "|\(slot.moves.sorted().joined(separator: ","))"
-        }.joined(separator: "//")
+        }
     }
 
     @MainActor private(set) static var loadWarning: String?
 
-    @MainActor static func load() -> [String: Entry] {
+    /// Every version of every team, newest first within each team.
+    @MainActor static func load() -> [String: [Entry]] {
         loadWarning = nil
         guard FileManager.default.fileExists(atPath: file.path),
               let raw = try? Data(contentsOf: file) else { return [:] }
@@ -55,14 +113,19 @@ enum LabStore {
             loadWarning = "simulations.json could not be read; it has been left untouched."
             return [:]
         }
-        return Dictionary(entries.map { ($0.teamID, $0) }, uniquingKeysWith: { $1 })
+        return Dictionary(grouping: entries, by: \.teamID)
+            .mapValues { $0.sorted { $0.ran > $1.ran } }
     }
 
-    @MainActor static func save(_ entries: [String: Entry]) {
+    @MainActor static func save(_ entries: [String: [Entry]]) {
         do {
             try FileManager.default.createDirectory(at: directory,
                                                     withIntermediateDirectories: true)
-            let blob = try JSONEncoder().encode(Array(entries.values))
+            // Newest first within a team, and only so many versions kept: a
+            // team edited fifty times does not need fifty records, and the ones
+            // worth comparing against are the recent ones.
+            let flat = entries.values.flatMap { $0.sorted { $0.ran > $1.ran }.prefix(8) }
+            let blob = try JSONEncoder().encode(Array(flat))
             try blob.write(to: file, options: .atomic)
         } catch {
             loadWarning = "Could not save simulations: \(error.localizedDescription)"

@@ -139,6 +139,9 @@ enum TeamLab {
         let of: Int
         let wins: Int
         let against: String
+        /// The six standing opposite right now, by form id, so a screen can
+        /// show who is being played rather than only name them.
+        let againstForms: [String]
     }
 
     /// Play `games` of one team against a field, and write down all of it.
@@ -223,7 +226,10 @@ enum TeamLab {
             played += 1
             if played % 10 == 0 || played == games {
                 progress?(Progress(played: played, of: games,
-                                   wins: report.wins, against: foe.name))
+                                   wins: report.wins, against: foe.name,
+                                   againstForms: foe.slots.compactMap {
+                                       $0.battleForm(in: rules)?.id
+                                   }))
             }
         }
         report.seconds = Date().timeIntervalSince(started)

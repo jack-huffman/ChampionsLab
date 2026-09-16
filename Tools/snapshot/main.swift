@@ -307,8 +307,31 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         let field = SelfPlay.teams(from: store.data, rules: store.rulebook, planner: planner)
         let found = TeamLab.run(team: playing, against: field, rules: store.rulebook,
                                 games: 60, budget: 0.012)
+        // Two earlier versions, invented, so the history card has something to
+        // draw. In memory only — nothing here writes to simulations.json.
+        var older = found
+        older.wins = Int(Double(found.games) * 0.41)
+        var oldest = found
+        oldest.wins = Int(Double(found.games) * 0.37)
+        var wasSlots = LabStore.slotLines(of: playing)
+        if var first = wasSlots.first {
+            first = first.replacingOccurrences(of: "|", with: "|X", options: [],
+                                               range: first.range(of: "|"))
+            wasSlots[0] = first
+        }
+        store.simulations[playing.id.uuidString] = [
+            LabStore.Entry(teamID: playing.id.uuidString,
+                           stamp: LabStore.stamp(of: playing), ran: Date(),
+                           report: found, slots: LabStore.slotLines(of: playing)),
+            LabStore.Entry(teamID: playing.id.uuidString, stamp: "was-1",
+                           ran: Date().addingTimeInterval(-86_400),
+                           report: older, slots: wasSlots),
+            LabStore.Entry(teamID: playing.id.uuidString, stamp: "was-2",
+                           ran: Date().addingTimeInterval(-3 * 86_400),
+                           report: oldest, slots: Array(wasSlots.dropLast())),
+        ]
         render(SimulationView(team: playing, seeded: found), named: "team-simulate-dark",
-               size: CGSize(width: 900, height: 1180), dark: true)
+               size: CGSize(width: 900, height: 1400), dark: true)
     }
 
     render(SpeedTiersView(), named: "speed-dark",
