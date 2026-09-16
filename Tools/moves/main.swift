@@ -135,16 +135,38 @@ enum Decision: Equatable {
         return out
     }
 
-    /// A team built plainly, the same way for both sides. Spreads and items are
-    /// not published, so neither side gets an advantage from the guessing.
+    /// What people actually run on each Pokémon, where the usage table says.
+    ///
+    /// `abilities.first` is the dex's first entry, which for an Incineroar is
+    /// Blaze rather than Intimidate and for a Rillaboom is Overgrow rather than
+    /// Grassy Surge. Handing the engine the wrong ability makes it a different
+    /// Pokémon with a different matchup, and every disagreement measured after
+    /// that is partly a disagreement about which Pokémon is standing there.
+    let common: [String: (ability: String, item: String)] = {
+        var out: [String: (ability: String, item: String)] = [:]
+        for entry in store.data.usage {
+            guard let form = form(named: entry.name) else { continue }
+            let ability = entry.abilityUsage?.max { $0.percent < $1.percent }?.name
+            let item = entry.itemUsage?.max { $0.percent < $1.percent }?.name
+            out[form.id] = (ability ?? form.abilities.first?.name ?? "",
+                            item ?? form.stone ?? "Leftovers")
+        }
+        return out
+    }()
+
+    /// A team built plainly, the same way for both sides. Spreads are not
+    /// published, so neither side gets an advantage from the guessing.
     func team(_ names: [String], seen: [String: [String]]) -> Team? {
         var out = Team()
         out.format = "doubles"
         out.slots = names.compactMap { name -> TeamSlot? in
             guard let form = form(named: name) else { return nil }
             var slot = TeamSlot(formID: form.id)
-            slot.ability = form.abilities.first?.name ?? ""
-            slot.item = form.stone ?? "Leftovers"
+            let known = common[form.id]
+            slot.ability = known?.ability ?? form.abilities.first?.name ?? ""
+            // A stone always wins: a Pokémon on a published list holding one is
+            // there to Mega Evolve.
+            slot.item = form.stone ?? known?.item ?? "Leftovers"
             // What it was seen to use first, filled out from the dex only if
             // the game did not reveal four.
             let revealed = (seen[name] ?? []).compactMap { shown in
@@ -373,11 +395,11 @@ enum Decision: Equatable {
         print("  says it is playing the same game they are.")
     }
 
-    let common = swaps.sorted { $0.value > $1.value }.prefix(12)
-    if !common.isEmpty {
+    let frequent = swaps.sorted { $0.value > $1.value }.prefix(12)
+    if !frequent.isEmpty {
         print("\n  most common disagreements — what was played, then what the engine wanted")
         print("  " + String(repeating: "-", count: 58))
-        for (swap, count) in common {
+        for (swap, count) in frequent {
             print(String(format: "    %-46@ %4d", swap as NSString, count))
         }
     }

@@ -355,11 +355,28 @@ struct TurnGame {
                         myMix: myMix, theirMix: theirMix, value: value)
     }
 
-    /// What a Protect costs its side, in the units the board is scored in.
+    /// What refusing the turn costs, in the units the board is scored in.
+    ///
+    /// Protecting and switching both give up the slot's attack, and only
+    /// Protect was ever charged for it. The search sees the damage that did not
+    /// happen either way, but the charge above that — the part the comment on
+    /// `tempoCost` explains, a cost the horizon is too short to reach — applied
+    /// to one and not the other. So the engine had a standing reason to prefer
+    /// a switch to a Protect that had nothing to do with the position.
+    ///
+    /// It showed up the moment anybody counted. Against 1,128 real turn-one
+    /// decisions the engine Protected half as often as people and switched
+    /// nearly twice as often, which is one bias wearing two faces.
+    ///
+    /// A switch is charged a little less than a Protect: what comes in is
+    /// standing there afterwards and may be better placed, where a Protect
+    /// leaves the same Pokémon in the same spot.
     private func forgone(_ play: Play, _ offence: [Double]) -> Double {
         var total = 0.0
         if play.left.isProtect { total += offence[0] }
+        else if play.left.isSwap { total += offence[0] * 0.7 }
         if play.right.isProtect { total += offence[1] }
+        else if play.right.isSwap { total += offence[1] * 0.7 }
         return total * 0.65 * tempoCost
     }
 
