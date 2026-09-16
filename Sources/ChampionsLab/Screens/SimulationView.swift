@@ -169,6 +169,7 @@ struct SimulationView: View {
                 fours(report)
                 hardest(report)
                 unused(report)
+                acrossTeams()
             } else if !model.isWorking {
                 Text("Nothing run yet.")
                     .font(.system(size: 12)).foregroundStyle(.tertiary)
@@ -347,6 +348,53 @@ struct SimulationView: View {
                 .frame(width: 44, alignment: .trailing)
             Text("of \(row.games)").font(.system(size: 10)).foregroundStyle(.tertiary)
                 .frame(width: 52, alignment: .trailing)
+        }
+    }
+
+    /// The same Pokémon, pooled over every team of yours that has been run.
+    ///
+    /// A per-team report cannot see this. A Pokémon can look like an unlucky
+    /// passenger on one team and be a genuine problem on four — and the second
+    /// is a fact about the Pokémon rather than about any of the teams, which
+    /// calls for something different to be done about it.
+    @ViewBuilder private func acrossTeams() -> some View {
+        let roster = store.roster.filter { $0.teams.count > 1 }
+        if !roster.isEmpty {
+            Card(padding: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionHeader(
+                        title: "Across your teams",
+                        subtitle: "Pokémon on more than one team you have simulated, pooled. "
+                                + "Worst trade first — this is where a Pokémon that is quietly "
+                                + "costing you games on several teams at once shows up.")
+                    ForEach(roster) { entry in
+                        HStack(spacing: 10) {
+                            Text(entry.form).font(.system(size: 12))
+                                .frame(width: 150, alignment: .leading).lineLimit(1)
+                            Text("\(entry.teams.count) teams")
+                                .font(.system(size: 10)).foregroundStyle(.tertiary)
+                                .frame(width: 58, alignment: .trailing)
+                            Text("\(entry.record.knockouts) : \(entry.record.faints)")
+                                .font(.system(size: 11, design: .rounded)).monospacedDigit()
+                                .frame(width: 84, alignment: .trailing)
+                            Text(String(format: "%.2f", entry.trade))
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .foregroundStyle(entry.trade >= 1 ? Palette.good
+                                                 : entry.trade >= 0.7 ? Palette.warn : Palette.bad)
+                                .frame(width: 44, alignment: .trailing)
+                            Text(entry.netDamage >= 0
+                                 ? "+\(entry.netDamage)" : "\(entry.netDamage)")
+                                .font(.system(size: 10, design: .rounded)).monospacedDigit()
+                                .foregroundStyle(entry.netDamage >= 0 ? .secondary : Palette.bad)
+                                .frame(width: 76, alignment: .trailing)
+                            Spacer(minLength: 0)
+                        }
+                        .help("\(entry.form) on: \(entry.teams.joined(separator: ", "))")
+                    }
+                    Text("Damage dealt less damage taken, across every game.")
+                        .font(.system(size: 9)).foregroundStyle(.tertiary)
+                }
+            }
         }
     }
 

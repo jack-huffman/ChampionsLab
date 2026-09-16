@@ -342,6 +342,33 @@ final class Store: ObservableObject {
     /// team is eight hundred games of evidence, and the whole point of keeping
     /// these is that they compound. An edited team starts again, because the
     /// stamp no longer matches and the old games were about something else.
+    /// Every Pokémon across every team of yours that has been simulated,
+    /// pooled — worst trade first.
+    ///
+    /// Only reports that still match their team, so an entry cannot be built
+    /// half out of games played by a version of the team that no longer
+    /// exists.
+    var roster: [RosterEntry] {
+        var out: [String: RosterEntry] = [:]
+        for team in teams {
+            guard let report = measured(for: team) else { continue }
+            for (form, record) in report.members where record.games > 0 {
+                var entry = out[form] ?? RosterEntry(form: form)
+                if !entry.teams.contains(team.name) { entry.teams.append(team.name) }
+                entry.record.games += record.games
+                entry.record.brought += record.brought
+                entry.record.survived += record.survived
+                entry.record.faints += record.faints
+                entry.record.knockouts += record.knockouts
+                entry.record.damageDealt += record.damageDealt
+                entry.record.damageTaken += record.damageTaken
+                for (move, count) in record.moves { entry.record.moves[move, default: 0] += count }
+                out[form] = entry
+            }
+        }
+        return out.values.sorted { $0.trade < $1.trade }
+    }
+
     func remember(_ report: TeamLab.Report, for team: Team) {
         let stamp = LabStore.stamp(of: team)
         let existing = simulations[team.id.uuidString]

@@ -70,6 +70,22 @@ enum LabStore {
     }
 }
 
+/// One Pokémon's record pooled over every team of yours it appears on.
+///
+/// The thing a per-team report cannot show. A Pokémon can look like an
+/// unlucky passenger on one team and be a genuine problem on four — and the
+/// second is a fact about the Pokémon rather than about any of the teams,
+/// which is a different thing to do about it.
+struct RosterEntry: Identifiable, Sendable {
+    let form: String
+    var teams: [String] = []
+    var record = TeamLab.Record()
+
+    var id: String { form }
+    var trade: Double { record.trade }
+    var netDamage: Int { record.damageDealt - record.damageTaken }
+}
+
 extension TeamLab.Report {
     /// The fours this team actually won with, as the picker wants them: keyed
     /// the same way it keys a plan, with the wins and the games behind each.
