@@ -336,10 +336,20 @@ final class Store: ObservableObject {
         measured(for: team)?.measuredFours() ?? [:]
     }
 
+    /// Add a run to what is already known about this team.
+    ///
+    /// Added rather than replaced: a second four hundred games of an unchanged
+    /// team is eight hundred games of evidence, and the whole point of keeping
+    /// these is that they compound. An edited team starts again, because the
+    /// stamp no longer matches and the old games were about something else.
     func remember(_ report: TeamLab.Report, for team: Team) {
+        let stamp = LabStore.stamp(of: team)
+        let existing = simulations[team.id.uuidString]
+        let pooled = existing?.stamp == stamp
+            ? (existing?.report.merged(with: report) ?? report)
+            : report
         simulations[team.id.uuidString] = LabStore.Entry(
-            teamID: team.id.uuidString, stamp: LabStore.stamp(of: team),
-            ran: Date(), report: report)
+            teamID: team.id.uuidString, stamp: stamp, ran: Date(), report: pooled)
         LabStore.save(simulations)
     }
 

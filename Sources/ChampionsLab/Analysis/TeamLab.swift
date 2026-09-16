@@ -52,6 +52,50 @@ enum TeamLab {
         /// Each opposing team, as [wins, games].
         var against: [String: [Int]] = [:]
         var seconds: Double = 0
+        /// How many separate runs went into this. Evidence accumulates: four
+        /// hundred games on Monday and four hundred on Tuesday is eight
+        /// hundred games of the same team, and throwing the first away because
+        /// the second finished would be a strange way to learn anything.
+        var runs = 1
+
+        /// Add another run of the same team to this one.
+        ///
+        /// Only ever called where the team is known to be unchanged — the
+        /// stamp on the stored entry is what establishes that — because
+        /// pooling games from two different teams would produce a number that
+        /// describes neither.
+        func merged(with other: Report) -> Report {
+            var out = self
+            out.games += other.games
+            out.wins += other.wins
+            out.draws += other.draws
+            out.turns += other.turns
+            out.seconds += other.seconds
+            out.runs += other.runs
+            for (form, record) in other.members {
+                var mine = out.members[form] ?? Record()
+                mine.games += record.games
+                mine.brought += record.brought
+                mine.survived += record.survived
+                mine.faints += record.faints
+                mine.knockouts += record.knockouts
+                mine.damageDealt += record.damageDealt
+                mine.damageTaken += record.damageTaken
+                for (move, count) in record.moves { mine.moves[move, default: 0] += count }
+                out.members[form] = mine
+            }
+            for (four, pair) in other.brings {
+                var mine = out.brings[four] ?? [0, 0]
+                mine[0] += pair[0]; mine[1] += pair[1]
+                out.brings[four] = mine
+            }
+            for (foe, pair) in other.against {
+                var mine = out.against[foe] ?? [0, 0]
+                mine[0] += pair[0]; mine[1] += pair[1]
+                out.against[foe] = mine
+            }
+            return out
+        }
 
         var winRate: Double { Double(wins) / Double(Swift.max(1, games)) }
         var turnsPerGame: Double { Double(turns) / Double(Swift.max(1, games)) }
@@ -107,8 +151,18 @@ enum TeamLab {
     ///
     /// `shouldStop` is checked between games. The caller owns the cancelling;
     /// this only promises to notice.
+    ///
+    /// `resumeFrom` is how many games of this team are already on record, and
+    /// it matters more than it looks. Both the dice and the opponent cycle are
+    /// driven off the game's position in the sequence, so starting every run at
+    /// zero would replay the identical games — and pooling a run with a copy of
+    /// itself is not eight hundred games of evidence, it is four hundred games
+    /// counted twice. Carrying the count forward makes a second run genuinely
+    /// new games, and continues around the field rather than restarting at the
+    /// same opponent.
     static func run(team: Team, against field: [Team], rules: Rulebook,
                     games: Int, budget: Double, seed: UInt64 = 20_260_915,
+                    resumeFrom: Int = 0,
                     progress: ((Progress) -> Void)? = nil,
                     shouldStop: () -> Bool = { false }) -> Report {
         var report = Report()
@@ -119,7 +173,7 @@ enum TeamLab {
         let seat = SelfPlay.Seat(engine: engine, branchedRolls: 1)
 
         var played = 0
-        var order = 0
+        var order = resumeFrom
         while played < games {
             if shouldStop() { break }
             let foe = field[(order / 2) % field.count]

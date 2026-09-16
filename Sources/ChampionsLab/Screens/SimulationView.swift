@@ -45,11 +45,14 @@ final class SimulationModel: ObservableObject {
         var planner = SpreadPlanner(store: store)
         planner.field = Field(isDoubles: true)
         let field = SelfPlay.teams(from: store.data, rules: rules, planner: planner)
+        // Where the last run left off, so this one plays new games rather than
+        // the same ones over again.
+        let already = store.measured(for: team)?.games ?? 0
 
         task = Task.detached(priority: .utility) { [weak self] in
             let found = TeamLab.run(
                 team: team, against: field, rules: rules,
-                games: games, budget: depth,
+                games: games, budget: depth, resumeFrom: already,
                 progress: { step in Task { @MainActor in self?.progress = step } },
                 shouldStop: { Task.isCancelled })
             guard !Task.isCancelled else { return }
@@ -126,12 +129,19 @@ struct SimulationView: View {
                     .disabled(team.slots.count < 4)
                 }
                 Spacer()
-                if let report = seeded ?? model.report, !model.isWorking {
-                    Text(String(format: "%d games in %.0fs", report.games, report.seconds))
+                if let report = seeded ?? model.report ?? store.measured(for: team),
+                   !model.isWorking {
+                    Text(report.runs > 1
+                         ? "\(report.games) games over \(report.runs) runs"
+                         : "\(report.games) games")
                         .font(.system(size: 10)).foregroundStyle(.tertiary)
                 }
             }
-            Text("Real games against every published list, both sides played by the engine. "
+            Text("Runs add to each other: play four hundred now and four hundred later and "
+                 + "the team has eight hundred games behind it, continuing round the field "
+                 + "rather than repeating. Editing the team starts the record again, because "
+                 + "the old games were about a different team.\n\n"
+                 + "Real games against every published list, both sides played by the engine. "
                  + "A few hundred is enough to see which Pokémon are carrying the team; a "
                  + "thousand before believing a matchup. It runs on one core — the turn "
                  + "model keeps its dice in one place, so games cannot share threads — and "
@@ -152,7 +162,8 @@ struct SimulationView: View {
     @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: 14) {
             if model.isWorking { working }
-            if let report = seeded ?? model.report, report.games > 0 {
+            if let report = seeded ?? model.report ?? store.measured(for: team),
+               report.games > 0 {
                 headline(report)
                 carrying(report)
                 fours(report)
@@ -205,6 +216,15 @@ struct SimulationView: View {
                      + " of \(workable.count)")
                 if report.draws > 0 { stat("went the distance", "\(report.draws)") }
                 Spacer()
+                if report.runs > 1 {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("\(report.runs) runs pooled")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Palette.accent)
+                        Text("running again adds to this")
+                            .font(.system(size: 9)).foregroundStyle(.tertiary)
+                    }
+                }
             }
         }
     }
