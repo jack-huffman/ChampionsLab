@@ -74,6 +74,8 @@ duel:
 #   make lab ARGS="--games 800 --workers 6 --json build/lab.json"
 #   make lab ARGS="--team 'Sun / Dual Mega'"
 #   make lab ARGS="--vs 'Big Six' 'Dual Mega Rain' --games 600 --workers 6"
+#   make lab ARGS="--mine --team 'Mega Bax' --line 'Mega Baxcalibur,Incineroar,Gholdengo,Whimsicott'"
+#   make lab ARGS="--mine --team 'Mega Bax' --compare 'A,B,C,D' 'A,B,E,F' --games 600"
 lab:
 	$(NICE) ./Tools/lab.sh --games 120 $(ARGS)
 

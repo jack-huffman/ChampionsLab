@@ -196,7 +196,17 @@ enum SelfPlay {
         /// picker to lean on. Per side, so one can be given the benefit of its
         /// own history while the other picks on theory alone.
         measuredMine: [String: (wins: Int, games: Int)] = [:],
-        measuredTheirs: [String: (wins: Int, games: Int)] = [:]) -> Ledger {
+        measuredTheirs: [String: (wins: Int, games: Int)] = [:],
+        /// A line to play rather than one to pick: the Pokémon to bring, by
+        /// label, lead pair first. Nil leaves it to the picker.
+        ///
+        /// This is what makes a line testable. A team usually has a main way of
+        /// being played and an alternate, and the question "which is better
+        /// into this field" cannot be asked of a picker that keeps choosing for
+        /// itself — pinning the line is the only way to hold everything else
+        /// still and vary the one thing.
+        pinnedMine: [String]? = nil,
+        pinnedTheirs: [String]? = nil) -> Ledger {
 
         // The battle's own dice, not just the engine's play sampling. Handing
         // both halves of a mirrored pair the same stream is what lets the
@@ -226,6 +236,26 @@ enum SelfPlay {
             var score = 0
             var choices = 0
         }
+        /// The line as asked for, in the order asked for. Nil if the team
+        /// cannot field it — a label that is not on the team, or fewer than two
+        /// that are, in which case the caller is told by getting the picker.
+        func pinned(_ team: Team, to line: [String]) -> Chosen? {
+            var slots: [TeamSlot] = []
+            for label in line {
+                guard let slot = team.slots.first(where: {
+                    $0.battleForm(in: rules)?.formLabel == label
+                        || $0.form(in: rules)?.formLabel == label
+                }), !slots.contains(where: { $0.formID == slot.formID }) else { continue }
+                slots.append(slot)
+            }
+            guard slots.count >= 2 else { return nil }
+            var out = team
+            out.slots = slots
+            return Chosen(team: out, picked: slots.compactMap {
+                $0.battleForm(in: rules)?.formLabel
+            })
+        }
+
         func fourOf(_ team: Team, against foe: Team,
                     measured: [String: (wins: Int, games: Int)]) -> Chosen {
             let whole = Chosen(team: team,
@@ -254,8 +284,10 @@ enum SelfPlay {
             return Chosen(team: out, picked: plan.bring.map(\.formLabel),
                           rank: at + 1, score: plan.score, choices: plans.count)
         }
-        let myFour = fourOf(mine, against: theirs, measured: measuredMine)
-        let theirFour = fourOf(theirs, against: mine, measured: measuredTheirs)
+        let myFour = pinnedMine.flatMap { pinned(mine, to: $0) }
+            ?? fourOf(mine, against: theirs, measured: measuredMine)
+        let theirFour = pinnedTheirs.flatMap { pinned(theirs, to: $0) }
+            ?? fourOf(theirs, against: mine, measured: measuredTheirs)
         var board = Board(mine: myFour.team, theirs: theirFour.team, rules: rules,
                           field: field, alreadyEvolved: false)
         board.activeCount = 2

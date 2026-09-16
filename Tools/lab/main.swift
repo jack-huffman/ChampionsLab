@@ -6,6 +6,9 @@
 //      ./Tools/lab.sh --team "Sun / Dual Mega"   one team against the field
 //      ./Tools/lab.sh --budget 0.02         faster and shallower
 //      ./Tools/lab.sh --vs "Big Six" "Dual Mega Rain"   two teams, head to head
+//      ./Tools/lab.sh --team "Mega Bax" --line "A,B,C,D"     one line, pinned
+//      ./Tools/lab.sh --team "Mega Bax" --compare "A,B,C,D" "A,B,E,F"
+//                                            the main line against the other one
 //      ./Tools/lab.sh --json out.json       the numbers, for something else
 //
 //  Why this exists.
@@ -186,7 +189,8 @@ struct Report: Codable {
 func runShard(index: Int, of shards: Int, games: Int, budget: Double,
               focus: String?, versus: [String], spread: Int, abTest: Bool,
               stageTest: Bool, winTest: Bool, mineOnly: Bool, floorTest: Bool,
-              crude: Bool, level: Bool, learnTest: Bool, seed: UInt64) -> Report {
+              crude: Bool, level: Bool, learnTest: Bool,
+              lines: [[String]], seed: UInt64) -> Report {
     let store = Store.shared
     if let error = store.loadError { FileHandle.standardError.write(Data("dataset: \(error)\n".utf8)); exit(1) }
     let rules = store.rulebook
@@ -240,8 +244,10 @@ func runShard(index: Int, of shards: Int, games: Int, budget: Double,
         pairings = [(a, b), (b, a)]
     } else if mineOnly {
         // Every registered team against every published one, both ways round,
-        // so each spends equal time in each chair.
-        for a in 0..<registered.count {
+        // so each spends equal time in each chair. `--team` narrows it to one
+        // of yours, which is what makes a focused or line-pinned run land all
+        // its games on the team being asked about rather than the first one.
+        for a in 0..<registered.count where focus == nil || registered[a].name == focus {
             for b in registered.count..<teams.count {
                 pairings.append((a, b))
                 pairings.append((b, a))
@@ -297,6 +303,14 @@ func runShard(index: Int, of shards: Int, games: Int, budget: Double,
         }
     }
 
+    // With two lines given, the run alternates between them so both meet the
+    // same opponents in the same conditions — otherwise the comparison is
+    // partly a comparison of which half of the field each happened to draw.
+    func lineFor(_ name: String, _ index: Int) -> [String]? {
+        guard !lines.isEmpty, name == focus else { return nil }
+        return lines[index % lines.count]
+    }
+
     var report = Report()
     var played = 0
     // Start past the training block, so the judging games are ones the learning
@@ -323,7 +337,11 @@ func runShard(index: Int, of shards: Int, games: Int, budget: Double,
             floorTheirs: Board.aliveFloor,
             // Only the side in the "mine" chair gets its own history.
             measuredMine: learnTest ? (learned[teams[a].name] ?? [:]) : [:],
-            measuredTheirs: [:])
+            measuredTheirs: [:],
+            // A pinned line applies to whichever chair the focused team is in,
+            // so both halves of the comparison get played from both sides.
+            pinnedMine: lineFor(teams[a].name, played),
+            pinnedTheirs: lineFor(teams[b].name, played))
 
         record(ledger, mine: teams[a].name, theirs: teams[b].name, into: &report)
         played += 1
@@ -512,6 +530,57 @@ func describeAB(_ report: Report, seconds: Double, what: String) {
     } else {
         print("\n  It plays *worse* weighted, which means the weights are wrong")
         print("  rather than merely useless. Do not ship them.")
+    }
+}
+
+/// Two lines from the same six, weighed against each other.
+///
+/// A team usually has a main way of being played and an alternate, and which
+/// is better into a given field is a question a picker cannot answer for you —
+/// it keeps choosing for itself. Pinning both and alternating them across the
+/// same opponents holds everything else still.
+@MainActor
+func describeLines(_ team: TeamRecord, lines: [[String]], seconds: Double) {
+    print("\n== two lines, \(team.games) games, "
+          + "\(String(format: "%.0f", seconds))s ==\n")
+    print("  \(team.name)\n")
+
+    var rows: [(line: [String], wins: Int, games: Int)] = []
+    for line in lines {
+        let key = line.sorted().joined(separator: " + ")
+        let pair = team.brings[key] ?? [0, 0]
+        rows.append((line, pair[0], pair[1]))
+    }
+    for row in rows where row.games == 0 {
+        print("  Could not field: \(row.line.joined(separator: ", "))")
+        print("  Check the names against the cards — they have to match exactly,")
+        print("  Megas included.\n")
+    }
+    let playable = rows.filter { $0.games > 0 }
+    guard playable.count == 2 else { return }
+
+    for row in playable {
+        let rate = Double(row.wins) / Double(row.games)
+        let error = (rate * (1 - rate) / Double(row.games)).squareRoot() * 1.96
+        print("    \(pad(row.line.joined(separator: ", "), 52))"
+              + String(format: " %5.1f%% ± %.1f  of %d", rate * 100, error * 100, row.games))
+        print("      leading \(row.line.prefix(2).joined(separator: " and "))")
+    }
+
+    let first = playable[0], second = playable[1]
+    let a = Double(first.wins) / Double(first.games)
+    let b = Double(second.wins) / Double(second.games)
+    let error = ((a * (1 - a) / Double(first.games))
+                 + (b * (1 - b) / Double(second.games))).squareRoot() * 1.96
+    print(String(format: "\n  The gap is %.1f points, give or take %.1f.",
+                 abs(a - b) * 100, error * 100))
+    if abs(a - b) < error {
+        print("  Inside the noise: on this evidence there is nothing to choose")
+        print("  between them, which is itself worth knowing — it means the line")
+        print("  can be picked on the matchup rather than on principle.")
+    } else {
+        let better = a > b ? first : second
+        print("  \(better.line.joined(separator: ", ")) is the better line into this field.")
     }
 }
 
@@ -746,6 +815,18 @@ func main() {
     let crude = has("--crude-spreads")
     // Level your own teams down to the same planned build as the field.
     let level = has("--level")
+    // A line to pin, lead pair first, and optionally a second to weigh it
+    // against. Names as they appear on the card: "Mega Charizard Y, Garchomp".
+    func line(_ text: String) -> [String] {
+        text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+    var lines: [[String]] = []
+    if let one = flag("--line") { lines = [line(one)] }
+    if let at = CommandLine.arguments.firstIndex(of: "--compare"),
+       at + 2 < CommandLine.arguments.count {
+        lines = [line(CommandLine.arguments[at + 1]), line(CommandLine.arguments[at + 2])]
+    }
     // Does a team's own measured record improve its bring, on games the record
     // has never seen?
     let learnTest = has("--ab-learned")
@@ -760,7 +841,7 @@ func main() {
                               abTest: abTest, stageTest: stageTest,
                               winTest: winTest, mineOnly: mineOnly,
                               floorTest: floorTest, crude: crude, level: level,
-                              learnTest: learnTest, seed: seed)
+                              learnTest: learnTest, lines: lines, seed: seed)
         let blob = try! JSONEncoder().encode(report)
         FileHandle.standardOutput.write(blob)
         return
@@ -772,7 +853,9 @@ func main() {
           + (crude ? ", field on the old crude spread" : "")
           + (versus.count == 2 ? ", \(versus[0]) vs \(versus[1])" : "")
           + (focus.map { ", focused on \($0)" } ?? "")
-          + (spread > 1 ? ", drawing from the top \(spread) fours" : ""))
+          + (spread > 1 && lines.isEmpty ? ", drawing from the top \(spread) fours" : "")
+          + (lines.count == 1 ? ", playing one pinned line" : "")
+          + (lines.count == 2 ? ", two lines against each other" : ""))
 
     var report = Report()
     if workers == 1 {
@@ -780,7 +863,8 @@ func main() {
                           versus: versus, spread: spread, abTest: abTest,
                           stageTest: stageTest, winTest: winTest,
                           mineOnly: mineOnly, floorTest: floorTest,
-                          crude: crude, level: level, learnTest: learnTest, seed: seed)
+                          crude: crude, level: level, learnTest: learnTest,
+                          lines: lines, seed: seed)
     } else {
         // Each child plays its own slice and hands back a ledger. Sharding by
         // process rather than by thread because the turn model's dice are
@@ -805,6 +889,11 @@ func main() {
             if crude { argv.append("--crude-spreads") }
             if level { argv.append("--level") }
             if learnTest { argv.append("--ab-learned") }
+            if lines.count == 1 { argv += ["--line", lines[0].joined(separator: ",")] }
+            if lines.count == 2 {
+                argv += ["--compare", lines[0].joined(separator: ","),
+                         lines[1].joined(separator: ",")]
+            }
             task.arguments = argv
             let pipe = Pipe()
             task.standardOutput = pipe
@@ -824,7 +913,9 @@ func main() {
 
     let seconds = Date().timeIntervalSince(started)
     report.seconds = seconds
-    if abTest || stageTest || winTest || floorTest || learnTest {
+    if lines.count == 2, let name = focus, let team = report.teams[name] {
+        describeLines(team, lines: lines, seconds: seconds)
+    } else if abTest || stageTest || winTest || floorTest || learnTest {
         describeAB(report, seconds: seconds,
                    what: learnTest ? "leaning on the team's own measured record"
                         : floorTest ? "valuing a Pokémon on 1 HP nearer to a healthy one"
