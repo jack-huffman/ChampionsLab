@@ -180,7 +180,7 @@ struct TeamEditor: View {
 
     enum Tab: String, CaseIterable, Identifiable {
         case build = "Build", assist = "Assist", analysis = "Analysis"
-        case threats = "Threats", versus = "Versus"
+        case threats = "Threats", versus = "Versus", simulate = "Simulate"
         var id: String { rawValue }
     }
 
@@ -211,6 +211,7 @@ struct TeamEditor: View {
                                  })
             case .threats:  ThreatMatrixView(team: team)
             case .versus:   MatchupView(team: team)
+            case .simulate: SimulationView(team: team)
             }
         }
         .sheet(item: Binding(

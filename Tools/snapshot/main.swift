@@ -299,6 +299,18 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
     render(WeatherSheet(), named: "battle-weather-dark", size: CGSize(width: 1100, height: 700), dark: true)
 
 
+    // The Simulate tab, with a real run behind it. Small, because the shot is
+    // about whether the findings read clearly, not about the numbers.
+    if let playing = store.teams.first(where: { $0.slots.count >= 4 }) {
+        var planner = SpreadPlanner(store: store)
+        planner.field = Field(isDoubles: true)
+        let field = SelfPlay.teams(from: store.data, rules: store.rulebook, planner: planner)
+        let found = TeamLab.run(team: playing, against: field, rules: store.rulebook,
+                                games: 60, budget: 0.012)
+        render(SimulationView(team: playing, seeded: found), named: "team-simulate-dark",
+               size: CGSize(width: 900, height: 1180), dark: true)
+    }
+
     render(SpeedTiersView(), named: "speed-dark",
            size: CGSize(width: 1000, height: 900), dark: true)
     let dexSample = Array(store.data.forms.sorted { $0.dex < $1.dex }.prefix(24))
