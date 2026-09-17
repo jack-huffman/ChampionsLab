@@ -153,7 +153,10 @@ final class BattleSession: ObservableObject {
         thinking = true
         thinkTicket += 1
         let ticket = thinkTicket
-        let engine = BattleEngine(rules: rules, budget: 0.5)
+        // Budgeted in positions, so the same board gets the same answer every
+        // time it is opened. The patience is for a machine much slower than
+        // the one the budget was measured on, and should not fire here.
+        let engine = BattleEngine(rules: rules, patience: 1.5)
         Task { @MainActor in
             let searched = await Self.search(engine, board)
             // The board moved on while this was thinking; the answer is to a

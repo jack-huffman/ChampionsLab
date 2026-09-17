@@ -215,9 +215,22 @@ way while trying to decide how many dice rolls the search should branch on.
 ```
 make duel                          both sides on current settings
 ./Tools/duel.sh --rolls 1,0        branch one coin flip against none
-./Tools/duel.sh --budget 0.5,0.15  half a second against a seventh
+./Tools/duel.sh --nodes 50,1       two turns ahead against this turn only
 ./Tools/duel.sh --games 400        more games, tighter answer
 ```
+
+**Budgets are positions, not seconds.** `BattleEngine.nodes` is how many
+positions the search may solve, and the same board with the same budget gives
+the same answer on any machine -- which is what lets `EngineBudgetTests` say
+what the engine chooses, and lets a duel or a Simulate run replay from its
+seed. The clock survives as `patience`, a cap the battle screen sets so a slow
+machine still answers; everything measured leaves it off. A position costs
+about twenty milliseconds optimised, the root nearer ninety, so the old time
+budgets translate roughly: half a second was thirty positions, a third of a
+second sixteen, and anything under a tenth of a second was one. That last
+number is why Simulate's Quick, Normal and Careful all bought the same
+single position, and why the depths are now named for what they do. The
+0.35s-against-0.05s result below is about `--nodes 16,1`.
 
 Fairness is the whole design. Teams are drawn from the real usage table, every
 matchup is played twice with the sides swapped, and one seeded generator drives

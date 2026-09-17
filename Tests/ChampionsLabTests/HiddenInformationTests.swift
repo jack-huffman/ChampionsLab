@@ -37,7 +37,7 @@ print("\n== the hidden back two ==")
     check("every pair they could be carrying is on the list", odds.count == 6, "\(odds.count)")
     check("including the one holding a stone",
           odds.contains { $0.fighters.contains { $0.build.form.formLabel == "Charizard" } })
-    let searcher = BattleEngine(rules: store.rulebook, budget: 0.1)
+    let searcher = BattleEngine(rules: store.rulebook, nodes: BattleEngine.Nodes.oneAhead)
     let worlds = searcher.imagine(game, belief: BattleEngine.Belief())
     let truth = game.theirs.dropFirst(2).map(\.build.form.id)
     let benches = worlds.map { $0.board.theirs.dropFirst(2).map(\.build.form.id) }

@@ -259,7 +259,7 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
                size: CGSize(width: 1280, height: 860), dark: true)
         // And the Fight grid, which is what most turns are spent looking at.
         // With the engine's answer already in, so its badges show on the tiles.
-        let engine = BattleEngine(rules: store.rulebook, budget: 0.4)
+        let engine = BattleEngine(rules: store.rulebook, nodes: BattleEngine.Nodes.screen)
         let thought = engine.think(board)
         var game = TurnGame(board: board)
         game.width = engine.beam + 2
@@ -335,7 +335,7 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         planner.field = Field(isDoubles: true)
         let field = SelfPlay.teams(from: store.data, rules: store.rulebook, planner: planner)
         let found = TeamLab.run(team: playing, against: field, rules: store.rulebook,
-                                games: 60, budget: 0.012)
+                                games: 60, nodes: BattleEngine.Nodes.turn)
         // Two earlier versions, invented, so the history card has something to
         // draw. In memory only — nothing here writes to simulations.json.
         var older = found
@@ -377,7 +377,7 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         var theirs = store.opponentTeam(against)
         theirs.slots = Array(theirs.slots.prefix(4))
         let walked = MatchupTree.explore(mine: mine, theirs: theirs, rules: store.rulebook,
-                                         depth: 2, playouts: 6, playoutBudget: 0.008, replay: 5)
+                                         depth: 2, playouts: 6, playoutNodes: BattleEngine.Nodes.turn, replay: 5)
         render(TreeView(team: playing, seeded: walked), named: "team-lines-dark",
                size: CGSize(width: 1000, height: 2000), dark: true)
     }

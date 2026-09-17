@@ -46,7 +46,7 @@ final class SimulationService: ObservableObject {
 
     /// `only` narrows the run to a single opponent, which turns a survey of
     /// the field into a head-to-head.
-    func start(team: Team, store: Store, games: Int, depth: Double, only: String? = nil) {
+    func start(team: Team, store: Store, games: Int, depth: Int, only: String? = nil) {
         guard running == nil else { return }
         running = Running(teamID: team.id.uuidString, teamName: team.name, wanted: games)
 
@@ -62,7 +62,7 @@ final class SimulationService: ObservableObject {
         task = Task.detached(priority: .utility) { [weak self] in
             let found = TeamLab.run(
                 team: team, against: field, rules: rules,
-                games: games, budget: depth, resumeFrom: already,
+                games: games, nodes: depth, resumeFrom: already,
                 progress: { step in
                     Task { @MainActor in self?.running?.progress = step }
                 },

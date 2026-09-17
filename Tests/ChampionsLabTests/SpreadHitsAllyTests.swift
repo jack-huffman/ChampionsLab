@@ -90,9 +90,9 @@ print("\n== and it is not scored as a knockout ==")
         frail.mine[1].hp = 1
         let ledger = SelfPlay.playLogged(
             mine: mine, theirs: theirs, rules: store.rulebook,
-            forMine: SelfPlay.Seat(engine: BattleEngine(rules: store.rulebook, budget: 0.01),
+            forMine: SelfPlay.Seat(engine: BattleEngine(rules: store.rulebook, nodes: BattleEngine.Nodes.turn),
                                    branchedRolls: 1),
-            forTheirs: SelfPlay.Seat(engine: BattleEngine(rules: store.rulebook, budget: 0.01),
+            forTheirs: SelfPlay.Seat(engine: BattleEngine(rules: store.rulebook, nodes: BattleEngine.Nodes.turn),
                                      branchedRolls: 1),
             limit: 12, dice: TeamLab.SplitMix(seed: 7), bringSpread: 1)
         let ownKnockouts = ledger.blows.filter { blow, _ in
@@ -129,7 +129,7 @@ print("\n== the engine declines it ==")
         // priced but not felt.
         let mine = fighters([("Garchomp", "Life Orb", ["Earthquake", "Dragon Claw", "Protect"]),
                              ("Incineroar", "Sitrus Berry", ["Flare Blitz", "Protect"])])
-        let engine = BattleEngine(rules: store.rulebook, budget: 0.35)
+        let engine = BattleEngine(rules: store.rulebook, nodes: BattleEngine.Nodes.oneAhead)
 
         func quakeShare(grounded: Bool) -> Double {
             var board = Board(mine: mine, theirs: theirs, rules: store.rulebook,

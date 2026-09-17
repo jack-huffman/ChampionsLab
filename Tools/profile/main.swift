@@ -89,7 +89,7 @@ import SwiftUI
         print(String(format: "  %9.4f ms  %@  (x%d)", each, label, runs))
     }
 
-    let engine = BattleEngine(rules: rules, budget: 0.5)
+    let engine = BattleEngine(rules: rules, nodes: BattleEngine.Nodes.screen)
     let start = Date()
     let result = engine.think(board)
     print(String(format: "\n  search: %.2fs -> depth %d, %d positions",

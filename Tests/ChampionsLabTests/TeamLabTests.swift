@@ -41,7 +41,7 @@ final class TeamLabTests: HarnessCase {
                              ("Archaludon", "Leftovers", ["Flash Cannon", "Protect"]),
                              ("Sinistcha", "Leftovers", ["Matcha Gotcha", "Protect"])])
         let report = TeamLab.run(team: team, against: smallField(), rules: store.rulebook,
-                                 games: 12, budget: 0.008)
+                                 games: 12, nodes: BattleEngine.Nodes.turn)
         check("games were played", report.games == 12, "\(report.games)")
         check("something was recorded as hurting the team", !report.threats.isEmpty,
               "\(report.threats.count) entries")
@@ -108,17 +108,17 @@ final class TeamLabTests: HarnessCase {
         let field = smallField()
 
         let first = TeamLab.run(team: team, against: field, rules: store.rulebook,
-                                games: 6, budget: 0.008)
+                                games: 6, nodes: BattleEngine.Nodes.turn)
         let continued = TeamLab.run(team: team, against: field, rules: store.rulebook,
-                                    games: 6, budget: 0.008, resumeFrom: first.games)
+                                    games: 6, nodes: BattleEngine.Nodes.turn, resumeFrom: first.games)
         print("  first \(first.wins)/\(first.games), carried on \(continued.wins)/\(continued.games)")
 
         // Two opponents and six games: a run that starts over meets them in the
         // same order, and one that carries on starts with the other.
         let fresh = TeamLab.run(team: team, against: field, rules: store.rulebook,
-                                games: 2, budget: 0.008)
+                                games: 2, nodes: BattleEngine.Nodes.turn)
         let next = TeamLab.run(team: team, against: field, rules: store.rulebook,
-                               games: 2, budget: 0.008, resumeFrom: 2)
+                               games: 2, nodes: BattleEngine.Nodes.turn, resumeFrom: 2)
         print("  a fresh run opens against \(fresh.against.keys.sorted())")
         print("  carrying on opens against \(next.against.keys.sorted())")
         check("carrying on meets a different part of the field",

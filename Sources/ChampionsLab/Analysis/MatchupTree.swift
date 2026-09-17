@@ -224,7 +224,8 @@ enum MatchupTree {
     /// change somebody's mind.
     static func explore(mine: Team, theirs: Team, rules: Rulebook,
                         field: Field = Field(isDoubles: true),
-                        depth: Int = 3, playouts: Int = 0, playoutBudget: Double = 0.02,
+                        depth: Int = 3, playouts: Int = 0,
+                        playoutNodes: Int = BattleEngine.Nodes.turn,
                         replay: Int = 8,
                         progress: ((Progress) -> Void)? = nil,
                         shouldStop: () -> Bool = { false }) -> Report {
@@ -323,7 +324,7 @@ enum MatchupTree {
         // which is a guess made by the same function the search trusts at its
         // horizon. For turn one that guess can be checked, so check it.
         if playouts > 0 {
-            let engine = BattleEngine(rules: rules, budget: playoutBudget)
+            let engine = BattleEngine(rules: rules, nodes: playoutNodes)
             // Best first, and only as many as asked: measuring all twenty-four
             // openings at a useful number of games is a long wait for detail
             // nobody reads past the top of.

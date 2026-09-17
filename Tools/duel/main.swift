@@ -79,16 +79,16 @@ func pair(_ flag: String, _ fallback: (Double, Double)) -> (Double, Double) {
     let rules = store.rulebook
 
     let games = Int(argument("--games") ?? "") ?? 100
-    let budgets = pair("--budget", (0.3, 0.3))
+    let budgets = pair("--nodes", (Double(BattleEngine.Nodes.duel), Double(BattleEngine.Nodes.duel)))
     let rolls = pair("--rolls", (Double(Dice.branchedRolls), Double(Dice.branchedRolls)))
     let seed = UInt64(argument("--seed") ?? "") ?? 20260915
 
-    var a = Side(name: "A", engine: BattleEngine(rules: rules, budget: budgets.0),
+    var a = Side(name: "A", engine: BattleEngine(rules: rules, nodes: Int(budgets.0)),
                  branchedRolls: Int(rolls.0))
-    var b = Side(name: "B", engine: BattleEngine(rules: rules, budget: budgets.1),
+    var b = Side(name: "B", engine: BattleEngine(rules: rules, nodes: Int(budgets.1)),
                  branchedRolls: Int(rolls.1))
-    a.name = "A  budget \(budgets.0)s, rolls \(Int(rolls.0))"
-    b.name = "B  budget \(budgets.1)s, rolls \(Int(rolls.1))"
+    a.name = "A  \(Int(budgets.0)) positions a turn, rolls \(Int(rolls.0))"
+    b.name = "B  \(Int(budgets.1)) positions a turn, rolls \(Int(rolls.1))"
 
     print("== two engines, \(games) games ==\n")
     print("  \(a.name)")

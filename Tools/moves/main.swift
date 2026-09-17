@@ -210,8 +210,8 @@ enum Decision: Equatable {
 
     let limit = Int(argument("--games") ?? "") ?? Int.max
     let floor = Int(argument("--rated") ?? "") ?? 0
-    let budget = Double(argument("--budget") ?? "") ?? 0.25
-    let engine = BattleEngine(rules: rules, budget: budget)
+    let nodes = Int(argument("--nodes") ?? "") ?? BattleEngine.Nodes.oneAhead
+    let engine = BattleEngine(rules: rules, nodes: nodes)
 
     var asked = 0, unresolved = 0
     var slotsAsked = 0, slotsAgreed = 0, kindAgreed = 0

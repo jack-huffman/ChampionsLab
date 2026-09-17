@@ -233,7 +233,7 @@ enum TeamLab {
     /// new games, and continues around the field rather than restarting at the
     /// same opponent.
     static func run(team: Team, against field: [Team], rules: Rulebook,
-                    games: Int, budget: Double, seed: UInt64 = 20_260_915,
+                    games: Int, nodes: Int, seed: UInt64 = 20_260_915,
                     resumeFrom: Int = 0,
                     progress: ((Progress) -> Void)? = nil,
                     shouldStop: () -> Bool = { false }) -> Report {
@@ -241,7 +241,7 @@ enum TeamLab {
         report.team = team.name
         guard !field.isEmpty, team.slots.count >= 4 else { return report }
         let started = Date()
-        let engine = BattleEngine(rules: rules, budget: budget)
+        let engine = BattleEngine(rules: rules, nodes: nodes)
         let seat = SelfPlay.Seat(engine: engine, branchedRolls: 1)
 
         var played = 0

@@ -7,10 +7,19 @@
 //
 //  Depth. Each node is still a simultaneous-move matrix, so there is no
 //  alternation to run alpha-beta against; what a chess engine does that *does*
-//  apply is iterative deepening against a clock, ordering the moves it already
+//  apply is iterative deepening against a budget, ordering the moves it already
 //  believes in first, and keeping a table of positions it has already valued.
 //  Each cell of a node's matrix is scored by solving the position it leads to,
-//  one ply shallower, until the clock runs out or the depth does.
+//  one ply shallower, until the budget runs out or the depth does.
+//
+//  The budget is counted in positions solved, not in seconds. A clock made the
+//  answer depend on the machine and on what else it was doing: the same board
+//  gave a different line on a busy afternoon, no test could say what the
+//  engine chooses, and a duel measured the laptop's load along with the two
+//  engines. Counted in positions, the same board with the same budget gives
+//  the same answer everywhere, and a Simulate run replays from its seed. The
+//  clock survives only as patience -- a cap for the screen, so a slow machine
+//  still answers -- and is off for anything that is measured.
 //
 //  Ignorance. The harder half, and the one that makes this a different game
 //  from chess. Neither side can see:
@@ -36,15 +45,41 @@ import Foundation
 struct BattleEngine: Sendable {
     /// What it knows about the world beyond the board: the usage table.
     let rules: Rulebook
-    /// How long to think. Iterative deepening returns the best answer it
-    /// reached rather than the one it was aiming for.
-    var budget: TimeInterval = 0.6
+    /// How much to think, in positions solved. Iterative deepening returns the
+    /// best answer it reached rather than the one it was aiming for.
+    var nodes = Nodes.screen
+    /// A wall-clock cap, for the screen: a slow machine still answers, a little
+    /// shallower. Off by default, and left off by anything that is measured,
+    /// because a cap that fires makes the answer depend on the machine again.
+    var patience: TimeInterval = .infinity
     /// How many lines each side keeps at a node. Every extra one multiplies the
     /// work by itself at every level below.
     var beam = 4
     /// How many worlds to average over. Each is a guess at what they are hiding.
     var worlds = 3
     var maxDepth = 4
+
+    /// The budgets the app and its tools use, so each number is set once and
+    /// means one thing. A position costs about twenty milliseconds on the
+    /// machine this was measured on, optimised, and the root nearer ninety:
+    /// one turn of lookahead is sixteen positions, two turns fifty, and the
+    /// screen's thirty answer in about half a second there. See
+    /// ARCHITECTURE.md, "Measuring whether a change made it play better".
+    enum Nodes {
+        /// This turn's own equilibrium and nothing after it. What Simulate,
+        /// the lab and the tree's playouts spend unless asked otherwise: a run
+        /// is a thousand games, and both sides play the same engine.
+        static let turn = 1
+        /// One turn of lookahead: the root's matrix, every cell scored a ply
+        /// down.
+        static let oneAhead = 16
+        /// Two turns of lookahead.
+        static let twoAhead = 50
+        /// The battle screen: about half a second.
+        static let screen = 30
+        /// What a duel plays at unless told otherwise.
+        static let duel = oneAhead
+    }
 
     // MARK: - What we do not know
 
@@ -152,6 +187,7 @@ struct BattleEngine: Sendable {
         let plays: [Play]
         let value: Double
         let depth: Int
+        /// Positions solved: the budget's unit, and how much of it was spent.
         let nodes: Int
         /// The line it expects, this turn and the turns it looked at after.
         let principal: [String]
@@ -168,13 +204,26 @@ struct BattleEngine: Sendable {
         /// The one-turn solution of each position seen, kept because the
         /// deeper passes use it to decide which lines are worth following.
         var shallow: [String: TurnGame.Solution] = [:]
+        /// Positions solved so far: the budget's unit.
         var nodes = 0
+        let limit: Int
+        let deadline: Date?
+
+        init(limit: Int, patience: TimeInterval) {
+            self.limit = limit
+            deadline = patience.isFinite ? Date().addingTimeInterval(patience) : nil
+        }
+
+        /// Whether the budget is gone. Asked before every position, so the
+        /// overrun is at most the children of the node already being expanded.
+        var spent: Bool {
+            nodes >= limit || (deadline.map { Date() >= $0 } ?? false)
+        }
     }
 
     /// Think about the position for as long as the budget allows.
     func think(_ board: Board, belief: Belief = Belief()) -> Result {
-        let deadline = Date().addingTimeInterval(budget)
-        let table = Table()
+        let table = Table(limit: nodes, patience: patience)
         let versions = imagine(board, belief: belief)
 
         var best: Result?
@@ -188,17 +237,16 @@ struct BattleEngine: Sendable {
             var ranOut = false
 
             for (world, chance) in versions {
-                guard Date() < deadline else { ranOut = true; break }
+                guard !table.spent else { ranOut = true; break }
                 var game = TurnGame(board: world, believingTheirs: true)
                 game.width = beam + 2
-                let solved = solve(world, game: game, depth: depth,
-                                   deadline: deadline, table: table)
+                let solved = solve(world, game: game, depth: depth, table: table)
                 mixes.append(solved.mix)
                 plays = solved.plays
                 values.append(solved.value * chance)
             }
-            // Out of time with nothing finished at this depth: stop, and return
-            // whatever the last depth gave. Out of time with *some* worlds
+            // Out of budget with nothing finished at this depth: stop, and return
+            // whatever the last depth gave. Out of budget with *some* worlds
             // finished: the first world is always the likeliest, so a partial
             // average over the worlds that did finish is a real answer and is
             // kept. This used to discard every finished world and hand back an
@@ -228,8 +276,7 @@ struct BattleEngine: Sendable {
             best = Result(mix: blended, plays: plays, value: value, depth: depth,
                           nodes: table.nodes,
                           principal: variation(board, plays: plays, mix: blended,
-                                               depth: depth, table: table,
-                                               deadline: deadline),
+                                               depth: depth, table: table),
                           drift: value - (shallowValue ?? value),
                           uncertainty: spread)
             if !finishedAll { break }
@@ -243,6 +290,7 @@ struct BattleEngine: Sendable {
     private func shallow(_ board: Board, game: TurnGame, table: Table) -> TurnGame.Solution {
         let key = signature(board) + "#\(game.width)\(game.assumeMega)"
         if let known = table.shallow[key] { return known }
+        table.nodes += 1
         let solved = game.solve(iterations: 900)
         table.shallow[key] = solved
         return solved
@@ -260,8 +308,7 @@ struct BattleEngine: Sendable {
     /// One node: build the matrix, score each cell by looking deeper, solve.
     /// The mix comes back over every play the position offers, with zero on
     /// the ones the beam left out, so mixes from different worlds line up.
-    private func solve(_ board: Board, game: TurnGame, depth: Int,
-                       deadline: Date, table: Table)
+    private func solve(_ board: Board, game: TurnGame, depth: Int, table: Table)
         -> (mix: [Double], plays: [Play], value: Double) {
         // At the leaf, the turn's own equilibrium is the evaluation. Scoring a
         // position by counting health says a board where every line loses is
@@ -270,7 +317,7 @@ struct BattleEngine: Sendable {
         let mine = leaf.myPlays
         let theirs = leaf.theirPlays
         guard !mine.isEmpty, !theirs.isEmpty else { return ([1], [Play(left: .pass, right: .pass)], 0) }
-        if depth <= 1 || Date() >= deadline {
+        if depth <= 1 || table.spent {
             return (leaf.myMix, mine, leaf.value)
         }
 
@@ -295,7 +342,6 @@ struct BattleEngine: Sendable {
                 for way in ways where way.chance >= 0.15 {
                     var after = way.board
                     after.fillGaps()
-                    table.nodes += 1
                     weighed += way.chance
                     // A side with nothing left has lost; no need to look further.
                     if after.isOut(mine: false) { value += way.chance * 3; continue }
@@ -312,8 +358,7 @@ struct BattleEngine: Sendable {
                     var next = TurnGame(board: after)
                     next.width = beam
                     next.assumeMega = true
-                    let deeper = solve(after, game: next, depth: depth - 1,
-                                       deadline: deadline, table: table)
+                    let deeper = solve(after, game: next, depth: depth - 1, table: table)
                     table.values[key] = deeper.value
                     value += way.chance * 0.75 * deeper.value
                 }
@@ -354,7 +399,7 @@ struct BattleEngine: Sendable {
 
     /// The line it is actually expecting, written out.
     private func variation(_ board: Board, plays: [Play], mix: [Double], depth: Int,
-                           table: Table, deadline: Date) -> [String] {
+                           table: Table) -> [String] {
         guard let first = mix.indices.max(by: { mix[$0] < mix[$1] }),
               plays.indices.contains(first) else { return [] }
         var out: [String] = []

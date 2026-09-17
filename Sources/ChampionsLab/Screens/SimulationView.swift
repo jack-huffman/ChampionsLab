@@ -28,7 +28,7 @@ struct SimulationView: View {
     /// The run lives outside the screen, so leaving does not stop it.
     @ObservedObject private var lab = SimulationService.shared
     @State private var games = 400
-    @State private var depth = 0.03
+    @State private var depth = BattleEngine.Nodes.turn
     /// Empty means the whole field. A name pins it to one opponent, which is
     /// the difference between "how good is this team" and "how does it do into
     /// that".
@@ -75,9 +75,9 @@ struct SimulationView: View {
                 .disabled(lab.isRunning(team))
 
                 Picker("Depth", selection: $depth) {
-                    Text("Quick — shallow play").tag(0.015)
-                    Text("Normal").tag(0.03)
-                    Text("Careful — slow, plays better").tag(0.08)
+                    Text("This turn only").tag(BattleEngine.Nodes.turn)
+                    Text("One turn ahead").tag(BattleEngine.Nodes.oneAhead)
+                    Text("Two turns ahead").tag(BattleEngine.Nodes.twoAhead)
                 }
                 .frame(width: 230).labelsHidden().controlSize(.small)
                 .disabled(lab.isRunning(team))
@@ -120,7 +120,8 @@ struct SimulationView: View {
                  + "thousand before believing a matchup. It runs on one core — the turn "
                  + "model keeps its dice in one place, so games cannot share threads — and "
                  + "it keeps going while you work elsewhere in the app. The timings are at "
-                 + "Normal depth; Quick is about twice as fast and Careful about half.")
+                 + "this turn only; one turn ahead is about four times slower, and two "
+                 + "turns about ten.")
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
             if let running = lab.running, running.teamID != team.id.uuidString {

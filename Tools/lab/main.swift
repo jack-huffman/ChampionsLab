@@ -186,7 +186,7 @@ struct Report: Codable {
 // MARK: - Running games
 
 @MainActor
-func runShard(index: Int, of shards: Int, games: Int, budget: Double,
+func runShard(index: Int, of shards: Int, games: Int, nodes: Int,
               focus: String?, versus: [String], spread: Int, abTest: Bool,
               stageTest: Bool, winTest: Bool, mineOnly: Bool, floorTest: Bool,
               crude: Bool, level: Bool, learnTest: Bool,
@@ -226,7 +226,7 @@ func runShard(index: Int, of shards: Int, games: Int, budget: Double,
         return Report()
     }
 
-    let engine = BattleEngine(rules: rules, budget: budget)
+    let engine = BattleEngine(rules: rules, nodes: nodes)
     let seat = SelfPlay.Seat(engine: engine, branchedRolls: 1)
 
     // Every ordered pair, so both sides of a matchup get played. A pairing is
@@ -784,7 +784,7 @@ func describeTeam(_ team: TeamRecord) {
 @MainActor
 func main() {
     let games = Int(flag("--games") ?? "") ?? 120
-    let budget = Double(flag("--budget") ?? "") ?? 0.03
+    let nodes = Int(flag("--nodes") ?? "") ?? BattleEngine.Nodes.turn
     let focus = flag("--team")
     let seed = UInt64(flag("--seed") ?? "") ?? 20_260_915
     let workers = Swift.max(1, Int(flag("--workers") ?? "") ?? 4)
@@ -836,7 +836,7 @@ func main() {
     if let shard = flag("--shard") {
         let parts = shard.split(separator: "/").compactMap { Int($0) }
         guard parts.count == 2 else { exit(2) }
-        let report = runShard(index: parts[0], of: parts[1], games: games, budget: budget,
+        let report = runShard(index: parts[0], of: parts[1], games: games, nodes: nodes,
                               focus: focus, versus: versus, spread: spread,
                               abTest: abTest, stageTest: stageTest,
                               winTest: winTest, mineOnly: mineOnly,
@@ -847,7 +847,7 @@ func main() {
         return
     }
 
-    print("==> lab: \(games) games, budget \(budget)s, \(workers) worker\(workers == 1 ? "" : "s")"
+    print("==> lab: \(games) games, \(nodes) positions a turn, \(workers) worker\(workers == 1 ? "" : "s")"
           + (mineOnly ? ", your teams against the field" : "")
           + (level ? ", everyone on planned spreads" : "")
           + (crude ? ", field on the old crude spread" : "")
@@ -859,7 +859,7 @@ func main() {
 
     var report = Report()
     if workers == 1 {
-        report = runShard(index: 0, of: 1, games: games, budget: budget, focus: focus,
+        report = runShard(index: 0, of: 1, games: games, nodes: nodes, focus: focus,
                           versus: versus, spread: spread, abTest: abTest,
                           stageTest: stageTest, winTest: winTest,
                           mineOnly: mineOnly, floorTest: floorTest,
@@ -876,7 +876,7 @@ func main() {
             task.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
             // A different seed per worker, or every shard plays the same games.
             var argv = ["--shard", "\(index)/\(workers)", "--games", "\(each)",
-                        "--budget", "\(budget)", "--spread", "\(spread)",
+                        "--nodes", "\(nodes)", "--spread", "\(spread)",
                         "--seed", "\(seed &+ UInt64(index) &* 1_000_003)"]
             if let focus { argv += ["--team", focus] }
             if versus.count == 2 { argv += ["--vs", versus[0], versus[1]] }
