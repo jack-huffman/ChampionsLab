@@ -29,8 +29,8 @@ final class BattleModelShapeTests: XCTestCase {
         "Board": 1400,          // the state; large because Fighter carries a lot
         "TurnModel": 400,       // the orchestrator, and nothing else
         "TurnOrder": 400,
-        "Strikes": 1400,        // the action pipeline
-        "SupportMoves": 1400,   // eighty-odd rules, one each
+        "Strikes": 1500,        // the action pipeline, in its phases
+        "SupportMoves": 1500,   // eighty-odd rules in fifteen sections, one each
         "Ailments": 300,
         "StatChanges": 300,
         "Switching": 500,        // owns the Board's arrival methods as well
@@ -45,9 +45,6 @@ final class BattleModelShapeTests: XCTestCase {
     /// Functions allowed past the ordinary limit, with why.
     static let longFunctions: [String: String] = [
         "Residuals.endOfTurn": "every end-of-turn effect, in the order the game applies them",
-        "SupportMoves.laterAdditions": "280 lines of status moves in one group; the next thing to split",
-        "SupportMoves.sweeping": "395 lines of status moves in one group; the next thing to split",
-        "Strikes.strike": "one target, from reach to aftermath; being split into its phases next",
         "Board.flipped": "every field of the state, mirrored -- long because the state is",
         "SelfPlay.playLogged": "the game loop with its ledger readers nested inside it, "
                              + "so they can write to the ledger they are reading for",
