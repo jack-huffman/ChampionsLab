@@ -45,13 +45,10 @@ final class PixelSprites: ObservableObject {
         let key = (back ? "back/" : "front/") + slug
         if let image = images[key] { return image }
         guard !missing.contains(key), !fetching.contains(key) else { return nil }
-        if let image = Self.kept(key) {
-            images[key] = image
-            return image
-        }
         fetching.insert(key)
         Task { [weak self] in
-            let data = await Self.fetch(slug: slug, back: back, key: key)
+            var data = Self.kept(key)
+            if data == nil { data = await Self.fetch(slug: slug, back: back, key: key) }
             guard let self else { return }
             self.fetching.remove(key)
             if let data, let image = NSImage(data: data) { self.images[key] = image } else { self.missing.insert(key) }
@@ -65,9 +62,11 @@ final class PixelSprites: ObservableObject {
             .appendingPathComponent("ChampionsLab/sprites")
     }
 
-    private static func kept(_ key: String) -> NSImage? {
+    /// Already on disk from an earlier fetch. Read off the main thread, like
+    /// the fetch; only the decode into an image happens on it.
+    private nonisolated static func kept(_ key: String) -> Data? {
         for ext in ["gif", "png"] {
-            if let image = NSImage(contentsOf: folder.appendingPathComponent(key + "." + ext)) { return image }
+            if let data = try? Data(contentsOf: folder.appendingPathComponent(key + "." + ext)), !data.isEmpty { return data }
         }
         return nil
     }

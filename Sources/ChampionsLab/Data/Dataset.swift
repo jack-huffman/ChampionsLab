@@ -53,6 +53,10 @@ final class Store: ObservableObject {
         simulations = LabStore.load()
         teamWarning = TeamStore.loadWarning
         if let saved = UsageFeed.load() { apply(saved) }
+        // The moves' choreography is three quarters of a megabyte of JSON.
+        // Decoded now, in the background, rather than on the main thread the
+        // first time a move is played.
+        Task.detached(priority: .utility) { _ = Choreography.shared }
     }
 
     // MARK: - Live usage

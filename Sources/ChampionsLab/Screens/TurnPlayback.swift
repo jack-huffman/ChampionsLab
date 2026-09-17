@@ -73,21 +73,23 @@ final class TurnPlayback: ObservableObject {
         /// The Pokemon a recipe flies as its own sprite, by seat.
         let ghosts: [Seat: NSImage]
     }
-    /// Where a card is and how it looks while a recipe moves it.
-    struct CardPose: Equatable {
-        var offset = CGSize.zero
-        var scale: CGFloat = 1
-        var opacity = 1.0
+    /// The card leans and the ground shakes of the move being played, and a
+    /// clock that runs 0 to 1 over its length. One state change starts the
+    /// clock; LeanEffect and QuakeEffect read it every frame from the render
+    /// server, so the field's body is evaluated once when a move starts and
+    /// once when it ends rather than once per lean.
+    struct Tracks {
+        let leans: [MoveTimeline.Lean]
+        let shakes: [MoveTimeline.Shake]
+        let duration: TimeInterval
     }
     @Published var scene: Scene?
-    @Published var cardPoses: [Seat: CardPose] = [:]
-    /// The whole field, jolted, while the ground shakes.
-    @Published var quake: CGSize = .zero
+    @Published var tracks: Tracks?
+    @Published var moveClock: Double = 0
     /// The arena as laid out, told to the playback by the field so a recipe
     /// can be placed on it. Zero until the arena has appeared, and then the
     /// old beam and burst play instead.
     private(set) var arena = CGSize.zero
-    private var scheduled: [Task<Void, Never>] = []
     /// The longest a move is allowed to take. A recipe past this is played
     /// faster rather than cut short.
     static let longestMove: TimeInterval = 2.2
@@ -105,9 +107,8 @@ final class TurnPlayback: ObservableObject {
     /// turn taken back, or a new game, wants.
     func reset() {
         task?.cancel(); task = nil
-        for job in scheduled { job.cancel() }
-        scheduled = []
-        scene = nil; cardPoses = [:]; quake = .zero
+        scene = nil
+        stopTracks()
         flourish = nil; lunging = nil; lungeBy = .zero; damage = [:]
         struck = []; struckTheirs = []
         replay = []; at = 0; replayBoard = nil
@@ -194,6 +195,7 @@ final class TurnPlayback: ObservableObject {
                 // snap the card back instead of letting it settle.
                 flourish = nil
                 scene = nil
+                stopTracks()
                 try? await Task.sleep(
                     nanoseconds: UInt64(Self.dwellSeconds * 1_000_000_000))
                 guard !Task.isCancelled else { return }
@@ -206,9 +208,8 @@ final class TurnPlayback: ObservableObject {
             guard !Task.isCancelled else { return }
             flourish = nil
             scene = nil
+            stopTracks()
             lunging = nil
-            withAnimation(.easeOut(duration: 0.25)) { cardPoses = [:] }
-            quake = .zero
             damage = [:]
             // Rest on the last step rather than past it: the field shows the end
             // of the turn, and the Back and Forward buttons still work from
@@ -274,11 +275,11 @@ final class TurnPlayback: ObservableObject {
                     guard let form = fighter(at: seat)?.build.form, let image = Store.shared.sprite(form) else { continue }
                     ghosts[seat] = image
                 }
+                let total = max(0.25, timeline.duration)
                 scene = Scene(timeline: timeline, startedAt: Date(), ghosts: ghosts)
-                schedule(timeline.leans)
-                schedule(timeline.shakes)
-                return (timeline.impact(near: targets.map(geometry.home), attacker: user),
-                        max(0.25, timeline.duration))
+                tracks = Tracks(leans: timeline.leans, shakes: timeline.shakes, duration: total)
+                withAnimation(.linear(duration: total)) { moveClock = 1 }
+                return (timeline.impact(near: targets.map(geometry.home), attacker: user), total)
             }
         }
         if action.stopped != nil {
@@ -305,45 +306,14 @@ final class TurnPlayback: ObservableObject {
         return side.indices.contains(seat.slot) ? side[seat.slot] : nil
     }
 
-    /// Each lean as one animated change of the card's pose, at its moment on
-    /// the clock, with the curve the recipe asked for.
-    private func schedule(_ leans: [MoveTimeline.Lean]) {
-        for lean in leans {
-            scheduled.append(Task { @MainActor in
-                try? await Task.sleep(nanoseconds: UInt64(max(0, lean.start) * 1_000_000_000))
-                guard !Task.isCancelled else { return }
-                withAnimation(Self.curve(lean.easing, over: max(0.02, lean.end - lean.start))) {
-                    cardPoses[lean.seat] = CardPose(offset: lean.offset, scale: lean.scale, opacity: lean.opacity)
-                }
-            })
-        }
-    }
-
-    /// The ground shaking: the field jolted a few points side to side.
-    private func schedule(_ shakes: [MoveTimeline.Shake]) {
-        for shake in shakes {
-            scheduled.append(Task { @MainActor in
-                try? await Task.sleep(nanoseconds: UInt64(max(0, shake.start) * 1_000_000_000))
-                var elapsed: TimeInterval = 0
-                var sign: CGFloat = 1
-                while elapsed < shake.end - shake.start, !Task.isCancelled {
-                    withAnimation(.linear(duration: 0.05)) { quake = CGSize(width: 4 * sign, height: 2 * sign) }
-                    sign = -sign
-                    try? await Task.sleep(nanoseconds: 50_000_000)
-                    elapsed += 0.05
-                }
-                withAnimation(.easeOut(duration: 0.1)) { quake = .zero }
-            })
-        }
-    }
-
-    static func curve(_ easing: Choreography.Easing, over duration: TimeInterval) -> Animation {
-        switch easing {
-        case .linear: return .linear(duration: duration)
-        case .swing: return .easeInOut(duration: duration)
-        case .accel: return .easeIn(duration: duration)
-        case .decel: return .easeOut(duration: duration)
-        default: return .easeInOut(duration: duration)
+    /// The clock back to nought and the tracks gone, without animating either:
+    /// a recipe's last lean is home, so there is nothing to ease back from.
+    private func stopTracks() {
+        var still = Transaction()
+        still.disablesAnimations = true
+        withTransaction(still) {
+            moveClock = 0
+            tracks = nil
         }
     }
 

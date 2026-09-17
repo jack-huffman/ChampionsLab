@@ -57,9 +57,9 @@ struct BattleFieldView: View {
     private var damage: [Seat: Int] { get { playback.damage } nonmutating set { playback.damage = newValue } }
     private var lunging: Seat? { get { playback.lunging } nonmutating set { playback.lunging = newValue } }
     private var lungeBy: CGSize { get { playback.lungeBy } nonmutating set { playback.lungeBy = newValue } }
-    private var cardPoses: [Seat: TurnPlayback.CardPose] { playback.cardPoses }
     private var scene: TurnPlayback.Scene? { playback.scene }
-    private var quake: CGSize { playback.quake }
+    private var tracks: TurnPlayback.Tracks? { playback.tracks }
+    private var moveClock: Double { playback.moveClock }
     private var struck: Set<Int> { get { playback.struck } nonmutating set { playback.struck = newValue } }
     private var struckTheirs: Set<Int> { get { playback.struckTheirs } nonmutating set { playback.struckTheirs = newValue } }
 
@@ -492,11 +492,10 @@ struct BattleFieldView: View {
     private func lunge(_ seat: Seat) -> CGSize {
         lunging == seat ? lungeBy : .zero
     }
-    /// Where a recipe has put the card, on top of any lunge.
-    private func pose(_ seat: Seat) -> TurnPlayback.CardPose { cardPoses[seat] ?? TurnPlayback.CardPose() }
-    private func shift(_ seat: Seat) -> CGSize {
-        let lunge = lunge(seat), moved = pose(seat).offset
-        return CGSize(width: lunge.width + moved.width, height: lunge.height + moved.height)
+    /// The card carried through its leans by the move's clock.
+    private func carried(_ seat: Seat) -> LeanEffect {
+        LeanEffect(progress: moveClock, leans: tracks?.leans.filter { $0.seat == seat } ?? [],
+                   duration: tracks?.duration ?? 1)
     }
     /// Weather thinning out as its clock runs down, so the last turn of a rain
     /// looks like the last turn of a rain. Zero turns left means it was handed
@@ -559,9 +558,10 @@ struct BattleFieldView: View {
                     let out = !opening || shown.contains("m\(slot)")
                     fighterCard(board.mine[slot], mine: true, slot: slot, field: board.field,
                                 tailwind: board.myTailwind > 0, trickRoom: board.trickRoom > 0)
-                        .opacity((out ? 1 : 0) * pose(Seat(mine: true, slot: slot)).opacity)
-                        .scaleEffect((out ? 1 : 0.4) * pose(Seat(mine: true, slot: slot)).scale)
-                        .offset(shift(Seat(mine: true, slot: slot)))
+                        .opacity(out ? 1 : 0)
+                        .scaleEffect(out ? 1 : 0.4)
+                        .offset(lunge(Seat(mine: true, slot: slot)))
+                        .modifier(carried(Seat(mine: true, slot: slot)))
                         .position(x: w * Seat.fraction(Seat(mine: true, slot: slot),
                                                                  singles: singlesGame).x,
                                   y: h * Seat.fraction(Seat(mine: true, slot: slot),
@@ -572,9 +572,10 @@ struct BattleFieldView: View {
                     let out = !opening || shown.contains("t\(slot)")
                     fighterCard(board.theirs[slot], mine: false, slot: slot, field: board.field,
                                 tailwind: board.theirTailwind > 0, trickRoom: board.trickRoom > 0)
-                        .opacity((out ? 1 : 0) * pose(Seat(mine: false, slot: slot)).opacity)
-                        .scaleEffect((out ? 1 : 0.4) * pose(Seat(mine: false, slot: slot)).scale)
-                        .offset(shift(Seat(mine: false, slot: slot)))
+                        .opacity(out ? 1 : 0)
+                        .scaleEffect(out ? 1 : 0.4)
+                        .offset(lunge(Seat(mine: false, slot: slot)))
+                        .modifier(carried(Seat(mine: false, slot: slot)))
                         .position(x: w * Seat.fraction(Seat(mine: false, slot: slot),
                                                                  singles: singlesGame).x,
                                   y: h * Seat.fraction(Seat(mine: false, slot: slot),
@@ -621,7 +622,7 @@ struct BattleFieldView: View {
                         .position(x: w / 2, y: h / 2)
                 }
             }
-            .offset(quake)
+            .modifier(QuakeEffect(progress: moveClock, shakes: tracks?.shakes ?? [], duration: tracks?.duration ?? 1))
             // The playback places a recipe on the arena, so it has to know
             // how big the arena is.
             .onAppear { playback.stage(geo.size) }

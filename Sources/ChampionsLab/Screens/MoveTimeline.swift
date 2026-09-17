@@ -74,12 +74,30 @@ struct MoveTimeline: Sendable {
     /// When the last thing finishes.
     var duration: TimeInterval = 0
 
-    /// How the arena is laid out: its size, and where each seat's Pokemon is.
+    /// How the arena is laid out: its size, where each seat's Pokemon is, and
+    /// how big a Pokemon is drawn.
     struct Stage: Sendable {
         let arena: CGSize
         let home: @Sendable (Seat) -> CGPoint
-        /// One client scene unit in points. Their scene is 640 wide.
-        var unit: CGFloat { arena.width / 640 }
+        /// The height a Pokemon's sprite is drawn at, in points.
+        var sprite: CGFloat = 78
+
+        init(arena: CGSize, sprite: CGFloat = 78, home: @escaping @Sendable (Seat) -> CGPoint) {
+            self.arena = arena; self.sprite = sprite; self.home = home
+        }
+
+        /// One client scene unit in points, for positions. In their scene the
+        /// two sides stand about three hundred units apart on screen; the
+        /// same offset here is the same share of the distance between the
+        /// seats, so behind(30) is a step whatever the window's width.
+        var unit: CGFloat {
+            let near = home(Seat(mine: true, slot: 0)), far = home(Seat(mine: false, slot: 0))
+            return max(0.5, hypot(far.x - near.x, far.y - near.y) / 300)
+        }
+        /// One client scene unit in points, for sizes. Their sprites are 96
+        /// units tall; ours are `sprite` points, and a fireball should be
+        /// the same size beside one as it is beside the other.
+        var sizeUnit: CGFloat { sprite / 96 }
         var centre: CGPoint { CGPoint(x: arena.width / 2, y: arena.height / 2) }
     }
 
@@ -145,7 +163,7 @@ struct MoveTimeline: Sendable {
                 let end = seconds(to.time ?? (from.time! + 500)) + offset
                 let ghost = name == "attacker" || name == "defender"
                 let drawn = ghost ? [96.0, 96.0] : (sizes[name] ?? [100, 100])
-                let size = CGSize(width: drawn[0] * stage.unit, height: drawn[1] * stage.unit)
+                let size = CGSize(width: drawn[0] * stage.sizeUnit, height: drawn[1] * stage.sizeUnit)
                 timeline.sprites.append(Sprite(
                     id: next, name: name, size: size,
                     from: place(from), to: place(to),
@@ -314,8 +332,13 @@ struct MoveTimeline: Sendable {
     /// blended from the leans that reach this instant. A lean that has ended
     /// holds until the next begins, which is what a queue does.
     static func lean(for seat: Seat, in leans: [Lean], at time: TimeInterval) -> (offset: CGSize, scale: CGFloat, opacity: Double) {
+        lean(in: leans.filter { $0.seat == seat }, at: time)
+    }
+
+    /// The same, over leans already known to be one card's.
+    static func lean(in leans: [Lean], at time: TimeInterval) -> (offset: CGSize, scale: CGFloat, opacity: Double) {
         var offset = CGSize.zero, scale: CGFloat = 1, opacity = 1.0
-        for lean in leans where lean.seat == seat && lean.start <= time {
+        for lean in leans where lean.start <= time {
             let length = max(0.001, lean.end - lean.start)
             let t = min(1, (time - lean.start) / length)
             let along = along(lean.easing, t)
