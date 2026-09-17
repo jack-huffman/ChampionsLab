@@ -88,384 +88,12 @@ enum Strikes {
             var totalDealt = 0
             var reached = 0
             for (hitMine, index) in aim.aimedAt {
-                let defending = hitMine ? board.mine : board.theirs
-                guard defending.indices.contains(index), !defending[index].fainted else { continue }
-                let hitName = defending[index].build.form.formLabel
-                if defending[index].hidden {
-                    board.note("\(hitName) is out of reach.")
-                    continue
-                }
-                if defending[index].isProtected, move.isProtectable {
-                    board.detail("\(hitName) protected itself.")
-                    continue
-                }
-                // Feint: through the Protect, and the Protect is gone — so the
-                // partner's move, coming after, lands on an open target.
-                if defending[index].isProtected, move.breaksProtect {
-                    if hitMine { board.mine[index].isProtected = false }
-                    else { board.theirs[index].isProtected = false }
-                    board.note("\(move.name) broke through \(hitName)'s protection.")
-                }
-                // Unseen Fist reaches through a Protect with anything that makes
-                // contact; Piercing Drill does the same for a quarter damage.
-                if defending[index].isProtected, move.isProtectable, move.makesContact,
-                   ["Unseen Fist", "Piercing Drill"].contains(actor.build.ability) {
-                    if hitMine { board.mine[index].isProtected = false }
-                    else { board.theirs[index].isProtected = false }
-                    board.note("\(actor.build.ability) reached through \(hitName)'s protection.")
-                }
-
-                // Protean and Libero make the user the move's type as it uses
-                // it, which is a free same-type bonus on everything it throws.
-                if ["Protean", "Libero"].contains(actor.build.ability),
-                   let became = PokeType(loose: move.type),
-                   (byMine ? board.mine : board.theirs)[slot].types != [became] {
-                    if byMine { board.mine[slot].build.typeOverride = [became] }
-                    else { board.theirs[slot].build.typeOverride = [became] }
-                    board.note("\(name) became a \(became.rawValue) type.")
-                }
-
-                // Abilities that refuse a whole kind of move outright. Mold
-                // Breaker walks through all of them, which is what it is for.
-                let breaker = ["Mold Breaker", "Turboblaze", "Teravolt"]
-                    .contains(actor.build.ability)
-                if !breaker {
-                    let refuses: String?
-                    switch defending[index].build.ability {
-                    case "Soundproof"   where move.isSound:   refuses = "Soundproof"
-                    case "Bulletproof"  where move.isBullet:  refuses = "Bulletproof"
-                    case "Overcoat"     where move.isPowder:  refuses = "Overcoat"
-                    case "Wind Rider"   where move.isWind:    refuses = "Wind Rider"
-                    case "Dazzling", "Queenly Majesty", "Armor Tail":
-                        refuses = move.priority > 0 ? defending[index].build.ability : nil
-                    default: refuses = nil
-                    }
-                    if let refuses {
-                        board.note("\(hitName)'s \(refuses) turned it away.")
-                        continue
-                    }
-                }
-                // A powder move does nothing to a Grass type, or to anything
-                // wearing goggles.
-                if move.isPowder, defending[index].types.contains(.grass)
-                    || defending[index].build.item == "Safety Goggles" {
-                    board.detail("It does not affect \(hitName).")
-                    continue
-                }
-
-                // Accuracy is rolled for each one it reaches for: Muddy Water at
-                // 85% can hit one of them and miss the other. The search's
-                // averages were always per target; only the dice were not.
-                if rolling, !move.neverMisses, move.accuracy > 0,
-                   Double.random(in: 0...100, using: &Dice.source) > Accuracy.chanceToHit(move, attacker: actor,
-                                                            defender: defending[index],
-                                                            board: board) {
-                    board.detail(aim.aimed.count > 1 ? "\(hitName) avoided it." : "It missed.")
-                    continue
-                }
-                reached += 1
-                var defender = defending[index].build
-                defender.atFullHP = defending[index].hp == defending[index].maxHP
-                defender.status = defending[index].status
-                var field = board.calcField
-                field.helpingHand = actor.helped
-                field.targetJustArrived = defending[index].justArrived
-                // A Fairy Aura anywhere on the field powers up Fairy moves for
-                // everybody, which is what makes it an aura.
-                field.fairyAura = (board.mine + board.theirs)
-                    .prefix(board.activeCount * 2)
-                    .contains { !$0.fainted && $0.build.ability == "Fairy Aura" }
-                // Analytic is paid for going after the target has already had
-                // its turn, which is exactly what `acted` records.
-                field.movingLast = board.acted.contains((hitMine ? "m" : "t") + "\(index)")
-                // Friend Guard covers whoever is standing next to the holder.
-                let ally = index == 0 ? 1 : 0
-                let sameSide = hitMine ? board.mine : board.theirs
-                field.friendGuarded = sameSide.indices.contains(ally) && ally < board.activeCount
-                    && !sameSide[ally].fainted && sameSide[ally].build.ability == "Friend Guard"
-                // An Infiltrator is not stopped by what is hanging in the air
-                // on the other side.
-                field.screen = actor.build.ability == "Infiltrator" ? false : farScreens.blunt(move)
-                // A critical hit, rolled at the move's own rate. The calculator
-                // already knows what one does — half again, and it goes through
-                // screens and the target's defensive boosts — it only needed
-                // telling when one happened.
-                // A move's own rate, raised by anything the user is carrying:
-                // one stage is an eighth, two is a half, three is certain.
-                // A Leek is two stages of crit ratio, for the one Pokémon that
-                // can hold it usefully.
-                var stage = actor.critStage
-                if actor.build.item == "Leek",
-                   actor.build.form.species.contains("farfetch") { stage += 2 }
-                if actor.build.item == "Razor Claw" || actor.build.item == "Scope Lens" { stage += 1 }
-                if actor.build.ability == "Super Luck" { stage += 1 }
-                // Merciless always crits a poisoned target, which is the
-                // entire reason a Toxapex threatens anything.
-                if actor.build.ability == "Merciless",
-                   [.poison, .badPoison].contains(defending[index].status) { stage = 3 }
-                let rate = stage <= 0 ? move.critRate
-                    : (stage == 1 ? Swift.max(move.critRate, 12.5)
-                       : stage == 2 ? Swift.max(move.critRate, 50) : 100)
-                // Shell Armor and Battle Armor cannot be hit critically, which
-                // is the whole of both of them. A Mold Breaker ignores that.
-                let armoured = ["Shell Armor", "Battle Armor"]
-                    .contains(defending[index].build.ability) && !breaker
-                if rolling, rate > 0, !armoured,
-                   Double.random(in: 0..<100, using: &Dice.source) < rate {
-                    field.critical = true
-                }
-                board.lastWasCritical = field.critical
-                // A Fire move thaws whatever it hits.
-                if defending[index].status == .freeze,
-                   DamageCalc.fieldForm(of: move, in: field).type == .fire {
-                    if hitMine { board.mine[index].status = .none }
-                    else { board.theirs[index].status = .none }
-                    board.detail("\(hitName) was thawed out.")
-                }
-                var attacker = actor.build
-                attacker.ignoresAbility = ["Mold Breaker", "Turboblaze", "Teravolt"]
-                    .contains(actor.build.ability)
-                attacker.lowHP = actor.hp * 3 <= actor.maxHP
-                attacker.status = actor.status
-                // Electromorphosis stored a charge the last time it was hit;
-                // the next Electric move it throws spends it.
-                if actor.charged, DamageCalc.fieldForm(of: move, in: field).type == .electric {
-                    field.charged = true
-                    if byMine { board.mine[slot].charged = false }
-                    else { board.theirs[slot].charged = false }
-                }
-                // Steely Spirit pays for its partner's Steel moves too.
-                let ourAlly = slot == 0 ? 1 : 0
-                let ourSide = byMine ? board.mine : board.theirs
-                field.alliedSteelySpirit = ourSide.indices.contains(ourAlly)
-                    && ourAlly < board.activeCount && !ourSide[ourAlly].fainted
-                    && ourSide[ourAlly].build.ability == "Steely Spirit"
-                // Plus and Minus pay each other, and only each other.
-                let pairing: Set<String> = ["Plus", "Minus"]
-                field.paired = pairing.contains(actor.build.ability)
-                    && ourSide.indices.contains(ourAlly) && ourAlly < board.activeCount
-                    && !ourSide[ourAlly].fainted
-                    && pairing.contains(ourSide[ourAlly].build.ability)
-                attacker.lastMoveFailed = actor.lastMoveFailed
-                // Supreme Overlord and Last Respects count the fallen. Never
-                // filled in before, so neither ever went off in a battle.
-                attacker.fallenAllies = (byMine ? board.mine : board.theirs).filter(\.fainted).count
-                let result = DamageCalc.calculate(attacker: attacker, defender: defender,
-                                                  move: move, field: field)
-
-                // An absorbed hit is not merely a hit that did nothing. The
-                // calculator already zeroes the damage; what it cannot do is
-                // pay the ability out, because it has no board to pay into.
-                if result.effectiveness == 0, !breaker,
-                   result.notes.contains(where: { $0.contains("absorbed") }) {
-                    let who = defending[index].build.ability
-                    let heals = ["Water Absorb", "Volt Absorb", "Dry Skin", "Earth Eater"]
-                    if heals.contains(who) {
-                        let back = Swift.max(1, defending[index].maxHP / 4)
-                        let gained = Swift.min(defending[index].maxHP - defending[index].hp, back)
-                        if gained > 0 {
-                            if hitMine { board.mine[index].hp += gained }
-                            else { board.theirs[index].hp += gained }
-                            board.note("\(hitName)'s \(who) drank it in for \(gained).")
-                        } else {
-                            board.note("\(hitName)'s \(who) absorbed it.")
-                        }
-                    } else {
-                        let paid: [Stat: Int]
-                        switch who {
-                        case "Sap Sipper":    paid = [.attack: 1]
-                        case "Motor Drive":   paid = [.speed: 1]
-                        case "Storm Drain", "Lightning Rod": paid = [.spAttack: 1]
-                        case "Flash Fire":    paid = [.spAttack: 1]
-                        default:              paid = [:]
-                        }
-                        if paid.isEmpty { board.note("\(hitName)'s \(who) absorbed it.") }
-                        else {
-                            StatChanges.change(paid, onMine: hitMine, slot: index, board: &board, because: who)
-                        }
-                    }
-                    continue
-                }
-                if field.critical { board.detail("A critical hit!") }
-
-                // 3. What the far side brings to it. These are the calculator's
-                // own notes, so the commentary cannot drift from the maths.
-                for line in result.notes where worthSaying(line) {
-                    board.detail(line)
-                }
-                if actor.status.halvesPhysical, move.category == "Physical" {
-                    board.detail("\(name) is burned, so it hits softer.")
-                }
-                if result.effectiveness == 0 {
-                    board.detail("It does not affect \(hitName).")
-                    continue
-                }
-
-                // 4. The roll.
-                let accuracy = move.neverMisses || move.accuracy == 0
-                    ? 1.0 : Accuracy.chanceToHit(move, attacker: actor, defender: defending[index],
-                                        board: board) / 100
-                // One blow, not the flurry. `calculate` already multiplies a
-                // multi-hit move up by the strikes it assumes, because that is
-                // what the calculator screen should show — so taking its total
-                // as a single blow and multiplying by the blows again squared
-                // the move. Bullet Seed was doing three times three.
-                let whole: Int = rolling
-                    ? Int.random(in: Swift.min(result.minDamage, result.maxDamage)
-                                 ... Swift.max(result.minDamage, result.maxDamage),
-                                 using: &Dice.source)
-                    : Int((Double(result.minDamage + result.maxDamage) / 2 * accuracy).rounded())
-                let oneBlow: Int = result.strikes > 1
-                    ? Swift.max(1, Int((Double(whole) / result.strikes).rounded()))
-                    : whole
-
-                // How many times it lands. Parental Bond adds a second blow at
-                // a quarter, which is the ability rather than the move, so the
-                // two are counted together and the log says which is which.
-                // A split dart is one blow each; both darts on one target is
-                // the move's own two.
-                var blows = move.blows(for: actor.build.ability, accuracy: accuracy,
-                                       rolling: rolling, using: &Dice.source)
-                if move.smartTarget == true, board.activeCount > 1 {
-                    blows = aim.dartedTwice ? 2 : 1
-                }
-                // Parental Bond adds its own second blow, but not to a move
-                // that already throws several and not to Dragon Darts, which
-                // the reference marks as refusing it outright.
-                let bonded = actor.build.ability == "Parental Bond"
-                    && move.isDamaging && !move.isSpread && blows == 1
-                    && move.smartTarget != true
-                let dealt = Int((Double(oneBlow) * blows).rounded())
-                        + (bonded ? Swift.max(1, oneBlow / 4) : 0)
-                if blows > 1 {
-                    board.detail(move.escalates
-                                 ? String(format: "%d blows, each harder than the last.",
-                                          move.hits?.last ?? 0)
-                                 : "\(Int(blows.rounded())) hits, \(oneBlow) each.")
-                }
-                if bonded { board.detail("Parental Bond: a second blow at a quarter.") }
-
-                // A one-hit knockout does exactly that, three times in ten,
-                // and nothing at all the rest of the time. It is worked out
-                // here rather than from power, because its listed power is 1.
-                if move.isOHKO {
-                    let lands = rolling ? Double.random(in: 0..<1, using: &Dice.source) < 0.3 : false
-                    if defending[index].types.contains(.ice), move.id == "sheercold" {
-                        board.detail("It does not affect \(hitName).")
-                        continue
-                    }
-                    if lands {
-                        if hitMine { board.mine[index].hp = 0 } else { board.theirs[index].hp = 0 }
-                        totalDealt += defending[index].hp
-                        board.note("It is a one-hit knockout. \(hitName) fainted.")
-                    } else {
-                        board.note(rolling ? "But it missed."
-                                           : "\(hitName) is looking at a one-hit knockout, three times in ten.")
-                    }
-                    continue
-                }
-
-                // A Substitute takes the hit instead, and the Pokémon behind
-                // it takes nothing at all — not the damage, not the stat drop,
-                // not the status. Sound moves and an Infiltrator go through it.
-                if defending[index].substitute > 0, !move.isSound,
-                   actor.build.ability != "Infiltrator" {
-                    let shell = defending[index].substitute
-                    let absorbed = Swift.min(shell, dealt)
-                    if hitMine { board.mine[index].substitute = shell - absorbed }
-                    else { board.theirs[index].substitute = shell - absorbed }
-                    board.note(absorbed >= shell
-                               ? "\(hitName)'s substitute broke."
-                               : "\(hitName)'s substitute took \(absorbed).")
-                    continue
-                }
-
-                var landed = dealt
-                var sashed = false
-                if defending[index].enduring, dealt >= defending[index].hp {
-                    landed = defending[index].hp - 1
-                    board.detail("\(hitName) endured it.")
-                }
-                if defending[index].build.item == "Focus Sash",
-                   !defending[index].build.itemSpent,
-                   defending[index].hp == defending[index].maxHP,
-                   dealt >= defending[index].hp {
-                    landed = defending[index].hp - 1
-                    sashed = true
-                }
-                totalDealt += landed
-                // A berry that halved the hit is a berry that has been eaten.
-                let ateBerry = result.notes.contains { $0.contains("then is consumed") }
-                if hitMine {
-                    board.mine[index].hp = Swift.max(0, board.mine[index].hp - landed)
-                    if sashed { board.mine[index].build.itemSpent = true }
-                    if ateBerry { board.mine[index].build.itemSpent = true }
-                } else {
-                    board.theirs[index].hp = Swift.max(0, board.theirs[index].hp - landed)
-                    if sashed { board.theirs[index].build.itemSpent = true }
-                    if ateBerry { board.theirs[index].build.itemSpent = true }
-                }
-                let share = Int((Double(landed) / Double(Swift.max(1, defending[index].maxHP))
-                                 * 100).rounded())
-                if result.effectiveness > 1 {
-                    board.detail("It is super effective. \(hitName) took \(landed) (\(share)%).")
-                } else if result.effectiveness < 1 {
-                    board.detail("\(hitName) resists it — \(landed) (\(share)%).")
-                } else {
-                    board.detail("\(hitName) took \(landed) (\(share)%).")
-                }
-                if sashed { board.detail("\(hitName) hung on with its Focus Sash.") }
-
-                // 5. Afterwards: what the move does beyond the damage, and what
-                // the target's own ability does back.
-                contact(move, byMine: byMine, hitMine: hitMine, slot: slot, hit: index,
-                        wasAt: defending[index].hp, rolling: rolling, board: &board)
-                Switching.flee(ifNeeded: index, ofMine: hitMine, wasAt: defending[index].hp,
-                     board: &board)
-                // Fake Out used to flinch from here as well as through its
-                // own secondary, which is how it carries the flinch in the
-                // data: a hundred per cent, `kind: flinch`. Two paths for one
-                // effect said "flinched" twice in the log, and — the part that
-                // mattered — this one ran before the check that lets a Shield
-                // Dust or a Covert Cloak refuse a secondary. So the item worn
-                // specifically to stand in front of a Fake Out did not, which
-                // is most of the reason anybody wears it.
-                if result.notes.contains(where: { $0.contains("Weakness Policy") }) {
-                    StatChanges.applySelf([.attack: 2, .spAttack: 2], toMine: hitMine, slot: index,
-                              board: &board)
-                    if hitMine { board.mine[index].build.itemSpent = true }
-                    else { board.theirs[index].build.itemSpent = true }
-                }
-                StatChanges.applyDrops(move.targetDrops, toMine: hitMine, slot: index, board: &board)
-                secondary(of: move, byMine: byMine, hitMine: hitMine, slot: slot, hit: index,
-                          rolling: rolling, board: &board)
-                let after = hitMine ? board.mine[index] : board.theirs[index]
-                if after.hp == 0 {
-                    board.detail("\(hitName) fainted.")
-                    // Destiny Bond: it takes whatever did it with it. Checked
-                    // before the knockout abilities below, because a Moxie
-                    // that is about to faint does not get its stage.
-                    if after.destinyBound, !(byMine ? board.mine : board.theirs)[slot].fainted {
-                        if byMine { board.mine[slot].hp = 0 } else { board.theirs[slot].hp = 0 }
-                        board.note("\(hitName)'s Destiny Bond took \(name) with it.")
-                    }
-                    // Moxie and its kin take something from the knockout.
-                    switch actor.build.ability {
-                    case "Moxie", "Chilling Neigh":
-                        StatChanges.change([.attack: 1], onMine: byMine, slot: slot, board: &board,
-                               because: actor.build.ability)
-                    case "Grim Neigh", "Soul-Heart":
-                        StatChanges.change([.spAttack: 1], onMine: byMine, slot: slot, board: &board,
-                               because: actor.build.ability)
-                    case "Beast Boost":
-                        // Whichever of its stats is highest, which is the whole
-                        // trick of it.
-                        let build = actor.build
-                        let best = [Stat.attack, .defense, .spAttack, .spDefense, .speed]
-                            .max { build.stat($0) < build.stat($1) } ?? .attack
-                        StatChanges.change([best: 1], onMine: byMine, slot: slot, board: &board, because: "Beast Boost")
-                    default: break
-                    }
+                if let dealt = strike(move, at: index, hitMine: hitMine, aim: aim,
+                                      farScreens: farScreens, actor: actor, name: name,
+                                      byMine: byMine, slot: slot, board: &board,
+                                      rolling: rolling) {
+                    reached += 1
+                    totalDealt += dealt
                 }
             }
             settle(move, actor: actor, name: name, aim: aim, totalDealt: totalDealt,
@@ -834,6 +462,400 @@ enum Strikes {
         }
         return Aim(atAlly: atAlly, hitMine: hitMine, partner: partner,
                    aimed: aimed, aimedAt: aimedAt, dartedTwice: dartedTwice)
+    }
+
+
+    /// One target, from the moment the move reaches for it to the last thing
+    /// it did to it.
+    ///
+    /// Nil when the move never reached: a Protect, a Substitute-free miss, an
+    /// ability that turns the whole kind of move away, a Pokemon out of reach.
+    /// Otherwise the damage it landed -- which can be nought, for a hit that
+    /// was absorbed, broke on a Substitute, or was a one-hit knockout that did
+    /// not come up. The distinction is what Stomping Tantrum and a crashing
+    /// High Jump Kick read: reached and did nothing is not the same as failed.
+    private static func strike(_ move: Move, at index: Int, hitMine: Bool, aim: Aim,
+                               farScreens: Screens, actor: Fighter, name: String,
+                               byMine: Bool, slot: Int, board: inout Board,
+                               rolling: Bool) -> Int? {
+        let defending = hitMine ? board.mine : board.theirs
+        guard defending.indices.contains(index), !defending[index].fainted else { return nil }
+        let hitName = defending[index].build.form.formLabel
+        if defending[index].hidden {
+            board.note("\(hitName) is out of reach.")
+            return nil
+        }
+        if defending[index].isProtected, move.isProtectable {
+            board.detail("\(hitName) protected itself.")
+            return nil
+        }
+        // Feint: through the Protect, and the Protect is gone — so the
+        // partner's move, coming after, lands on an open target.
+        if defending[index].isProtected, move.breaksProtect {
+            if hitMine { board.mine[index].isProtected = false }
+            else { board.theirs[index].isProtected = false }
+            board.note("\(move.name) broke through \(hitName)'s protection.")
+        }
+        // Unseen Fist reaches through a Protect with anything that makes
+        // contact; Piercing Drill does the same for a quarter damage.
+        if defending[index].isProtected, move.isProtectable, move.makesContact,
+           ["Unseen Fist", "Piercing Drill"].contains(actor.build.ability) {
+            if hitMine { board.mine[index].isProtected = false }
+            else { board.theirs[index].isProtected = false }
+            board.note("\(actor.build.ability) reached through \(hitName)'s protection.")
+        }
+
+        // Protean and Libero make the user the move's type as it uses
+        // it, which is a free same-type bonus on everything it throws.
+        if ["Protean", "Libero"].contains(actor.build.ability),
+           let became = PokeType(loose: move.type),
+           (byMine ? board.mine : board.theirs)[slot].types != [became] {
+            if byMine { board.mine[slot].build.typeOverride = [became] }
+            else { board.theirs[slot].build.typeOverride = [became] }
+            board.note("\(name) became a \(became.rawValue) type.")
+        }
+
+        // Abilities that refuse a whole kind of move outright. Mold
+        // Breaker walks through all of them, which is what it is for.
+        let breaker = ["Mold Breaker", "Turboblaze", "Teravolt"]
+            .contains(actor.build.ability)
+        if !breaker {
+            let refuses: String?
+            switch defending[index].build.ability {
+            case "Soundproof"   where move.isSound:   refuses = "Soundproof"
+            case "Bulletproof"  where move.isBullet:  refuses = "Bulletproof"
+            case "Overcoat"     where move.isPowder:  refuses = "Overcoat"
+            case "Wind Rider"   where move.isWind:    refuses = "Wind Rider"
+            case "Dazzling", "Queenly Majesty", "Armor Tail":
+                refuses = move.priority > 0 ? defending[index].build.ability : nil
+            default: refuses = nil
+            }
+            if let refuses {
+                board.note("\(hitName)'s \(refuses) turned it away.")
+                return nil
+            }
+        }
+        // A powder move does nothing to a Grass type, or to anything
+        // wearing goggles.
+        if move.isPowder, defending[index].types.contains(.grass)
+            || defending[index].build.item == "Safety Goggles" {
+            board.detail("It does not affect \(hitName).")
+            return nil
+        }
+
+        // Accuracy is rolled for each one it reaches for: Muddy Water at
+        // 85% can hit one of them and miss the other. The search's
+        // averages were always per target; only the dice were not.
+        if rolling, !move.neverMisses, move.accuracy > 0,
+           Double.random(in: 0...100, using: &Dice.source) > Accuracy.chanceToHit(move, attacker: actor,
+                                                    defender: defending[index],
+                                                    board: board) {
+            board.detail(aim.aimed.count > 1 ? "\(hitName) avoided it." : "It missed.")
+            return nil
+        }
+        var defender = defending[index].build
+        defender.atFullHP = defending[index].hp == defending[index].maxHP
+        defender.status = defending[index].status
+        var field = board.calcField
+        field.helpingHand = actor.helped
+        field.targetJustArrived = defending[index].justArrived
+        // A Fairy Aura anywhere on the field powers up Fairy moves for
+        // everybody, which is what makes it an aura.
+        field.fairyAura = (board.mine + board.theirs)
+            .prefix(board.activeCount * 2)
+            .contains { !$0.fainted && $0.build.ability == "Fairy Aura" }
+        // Analytic is paid for going after the target has already had
+        // its turn, which is exactly what `acted` records.
+        field.movingLast = board.acted.contains((hitMine ? "m" : "t") + "\(index)")
+        // Friend Guard covers whoever is standing next to the holder.
+        let ally = index == 0 ? 1 : 0
+        let sameSide = hitMine ? board.mine : board.theirs
+        field.friendGuarded = sameSide.indices.contains(ally) && ally < board.activeCount
+            && !sameSide[ally].fainted && sameSide[ally].build.ability == "Friend Guard"
+        // An Infiltrator is not stopped by what is hanging in the air
+        // on the other side.
+        field.screen = actor.build.ability == "Infiltrator" ? false : farScreens.blunt(move)
+        // A critical hit, rolled at the move's own rate. The calculator
+        // already knows what one does — half again, and it goes through
+        // screens and the target's defensive boosts — it only needed
+        // telling when one happened.
+        // A move's own rate, raised by anything the user is carrying:
+        // one stage is an eighth, two is a half, three is certain.
+        // A Leek is two stages of crit ratio, for the one Pokémon that
+        // can hold it usefully.
+        var stage = actor.critStage
+        if actor.build.item == "Leek",
+           actor.build.form.species.contains("farfetch") { stage += 2 }
+        if actor.build.item == "Razor Claw" || actor.build.item == "Scope Lens" { stage += 1 }
+        if actor.build.ability == "Super Luck" { stage += 1 }
+        // Merciless always crits a poisoned target, which is the
+        // entire reason a Toxapex threatens anything.
+        if actor.build.ability == "Merciless",
+           [.poison, .badPoison].contains(defending[index].status) { stage = 3 }
+        let rate = stage <= 0 ? move.critRate
+            : (stage == 1 ? Swift.max(move.critRate, 12.5)
+               : stage == 2 ? Swift.max(move.critRate, 50) : 100)
+        // Shell Armor and Battle Armor cannot be hit critically, which
+        // is the whole of both of them. A Mold Breaker ignores that.
+        let armoured = ["Shell Armor", "Battle Armor"]
+            .contains(defending[index].build.ability) && !breaker
+        if rolling, rate > 0, !armoured,
+           Double.random(in: 0..<100, using: &Dice.source) < rate {
+            field.critical = true
+        }
+        board.lastWasCritical = field.critical
+        // A Fire move thaws whatever it hits.
+        if defending[index].status == .freeze,
+           DamageCalc.fieldForm(of: move, in: field).type == .fire {
+            if hitMine { board.mine[index].status = .none }
+            else { board.theirs[index].status = .none }
+            board.detail("\(hitName) was thawed out.")
+        }
+        var attacker = actor.build
+        attacker.ignoresAbility = ["Mold Breaker", "Turboblaze", "Teravolt"]
+            .contains(actor.build.ability)
+        attacker.lowHP = actor.hp * 3 <= actor.maxHP
+        attacker.status = actor.status
+        // Electromorphosis stored a charge the last time it was hit;
+        // the next Electric move it throws spends it.
+        if actor.charged, DamageCalc.fieldForm(of: move, in: field).type == .electric {
+            field.charged = true
+            if byMine { board.mine[slot].charged = false }
+            else { board.theirs[slot].charged = false }
+        }
+        // Steely Spirit pays for its partner's Steel moves too.
+        let ourAlly = slot == 0 ? 1 : 0
+        let ourSide = byMine ? board.mine : board.theirs
+        field.alliedSteelySpirit = ourSide.indices.contains(ourAlly)
+            && ourAlly < board.activeCount && !ourSide[ourAlly].fainted
+            && ourSide[ourAlly].build.ability == "Steely Spirit"
+        // Plus and Minus pay each other, and only each other.
+        let pairing: Set<String> = ["Plus", "Minus"]
+        field.paired = pairing.contains(actor.build.ability)
+            && ourSide.indices.contains(ourAlly) && ourAlly < board.activeCount
+            && !ourSide[ourAlly].fainted
+            && pairing.contains(ourSide[ourAlly].build.ability)
+        attacker.lastMoveFailed = actor.lastMoveFailed
+        // Supreme Overlord and Last Respects count the fallen. Never
+        // filled in before, so neither ever went off in a battle.
+        attacker.fallenAllies = (byMine ? board.mine : board.theirs).filter(\.fainted).count
+        let result = DamageCalc.calculate(attacker: attacker, defender: defender,
+                                          move: move, field: field)
+
+        // An absorbed hit is not merely a hit that did nothing. The
+        // calculator already zeroes the damage; what it cannot do is
+        // pay the ability out, because it has no board to pay into.
+        if result.effectiveness == 0, !breaker,
+           result.notes.contains(where: { $0.contains("absorbed") }) {
+            let who = defending[index].build.ability
+            let heals = ["Water Absorb", "Volt Absorb", "Dry Skin", "Earth Eater"]
+            if heals.contains(who) {
+                let back = Swift.max(1, defending[index].maxHP / 4)
+                let gained = Swift.min(defending[index].maxHP - defending[index].hp, back)
+                if gained > 0 {
+                    if hitMine { board.mine[index].hp += gained }
+                    else { board.theirs[index].hp += gained }
+                    board.note("\(hitName)'s \(who) drank it in for \(gained).")
+                } else {
+                    board.note("\(hitName)'s \(who) absorbed it.")
+                }
+            } else {
+                let paid: [Stat: Int]
+                switch who {
+                case "Sap Sipper":    paid = [.attack: 1]
+                case "Motor Drive":   paid = [.speed: 1]
+                case "Storm Drain", "Lightning Rod": paid = [.spAttack: 1]
+                case "Flash Fire":    paid = [.spAttack: 1]
+                default:              paid = [:]
+                }
+                if paid.isEmpty { board.note("\(hitName)'s \(who) absorbed it.") }
+                else {
+                    StatChanges.change(paid, onMine: hitMine, slot: index, board: &board, because: who)
+                }
+            }
+            return 0
+        }
+        if field.critical { board.detail("A critical hit!") }
+
+        // 3. What the far side brings to it. These are the calculator's
+        // own notes, so the commentary cannot drift from the maths.
+        for line in result.notes where worthSaying(line) {
+            board.detail(line)
+        }
+        if actor.status.halvesPhysical, move.category == "Physical" {
+            board.detail("\(name) is burned, so it hits softer.")
+        }
+        if result.effectiveness == 0 {
+            board.detail("It does not affect \(hitName).")
+            return 0
+        }
+
+        // 4. The roll.
+        let accuracy = move.neverMisses || move.accuracy == 0
+            ? 1.0 : Accuracy.chanceToHit(move, attacker: actor, defender: defending[index],
+                                board: board) / 100
+        // One blow, not the flurry. `calculate` already multiplies a
+        // multi-hit move up by the strikes it assumes, because that is
+        // what the calculator screen should show — so taking its total
+        // as a single blow and multiplying by the blows again squared
+        // the move. Bullet Seed was doing three times three.
+        let whole: Int = rolling
+            ? Int.random(in: Swift.min(result.minDamage, result.maxDamage)
+                         ... Swift.max(result.minDamage, result.maxDamage),
+                         using: &Dice.source)
+            : Int((Double(result.minDamage + result.maxDamage) / 2 * accuracy).rounded())
+        let oneBlow: Int = result.strikes > 1
+            ? Swift.max(1, Int((Double(whole) / result.strikes).rounded()))
+            : whole
+
+        // How many times it lands. Parental Bond adds a second blow at
+        // a quarter, which is the ability rather than the move, so the
+        // two are counted together and the log says which is which.
+        // A split dart is one blow each; both darts on one target is
+        // the move's own two.
+        var blows = move.blows(for: actor.build.ability, accuracy: accuracy,
+                               rolling: rolling, using: &Dice.source)
+        if move.smartTarget == true, board.activeCount > 1 {
+            blows = aim.dartedTwice ? 2 : 1
+        }
+        // Parental Bond adds its own second blow, but not to a move
+        // that already throws several and not to Dragon Darts, which
+        // the reference marks as refusing it outright.
+        let bonded = actor.build.ability == "Parental Bond"
+            && move.isDamaging && !move.isSpread && blows == 1
+            && move.smartTarget != true
+        let dealt = Int((Double(oneBlow) * blows).rounded())
+                + (bonded ? Swift.max(1, oneBlow / 4) : 0)
+        if blows > 1 {
+            board.detail(move.escalates
+                         ? String(format: "%d blows, each harder than the last.",
+                                  move.hits?.last ?? 0)
+                         : "\(Int(blows.rounded())) hits, \(oneBlow) each.")
+        }
+        if bonded { board.detail("Parental Bond: a second blow at a quarter.") }
+
+        // A one-hit knockout does exactly that, three times in ten,
+        // and nothing at all the rest of the time. It is worked out
+        // here rather than from power, because its listed power is 1.
+        if move.isOHKO {
+            let lands = rolling ? Double.random(in: 0..<1, using: &Dice.source) < 0.3 : false
+            if defending[index].types.contains(.ice), move.id == "sheercold" {
+                board.detail("It does not affect \(hitName).")
+                return 0
+            }
+            if lands {
+                if hitMine { board.mine[index].hp = 0 } else { board.theirs[index].hp = 0 }
+                board.note("It is a one-hit knockout. \(hitName) fainted.")
+                return defending[index].hp
+            } else {
+                board.note(rolling ? "But it missed."
+                                   : "\(hitName) is looking at a one-hit knockout, three times in ten.")
+            }
+            return 0
+        }
+
+        // A Substitute takes the hit instead, and the Pokémon behind
+        // it takes nothing at all — not the damage, not the stat drop,
+        // not the status. Sound moves and an Infiltrator go through it.
+        if defending[index].substitute > 0, !move.isSound,
+           actor.build.ability != "Infiltrator" {
+            let shell = defending[index].substitute
+            let absorbed = Swift.min(shell, dealt)
+            if hitMine { board.mine[index].substitute = shell - absorbed }
+            else { board.theirs[index].substitute = shell - absorbed }
+            board.note(absorbed >= shell
+                       ? "\(hitName)'s substitute broke."
+                       : "\(hitName)'s substitute took \(absorbed).")
+            return 0
+        }
+
+        var landed = dealt
+        var sashed = false
+        if defending[index].enduring, dealt >= defending[index].hp {
+            landed = defending[index].hp - 1
+            board.detail("\(hitName) endured it.")
+        }
+        if defending[index].build.item == "Focus Sash",
+           !defending[index].build.itemSpent,
+           defending[index].hp == defending[index].maxHP,
+           dealt >= defending[index].hp {
+            landed = defending[index].hp - 1
+            sashed = true
+        }
+        // A berry that halved the hit is a berry that has been eaten.
+        let ateBerry = result.notes.contains { $0.contains("then is consumed") }
+        if hitMine {
+            board.mine[index].hp = Swift.max(0, board.mine[index].hp - landed)
+            if sashed { board.mine[index].build.itemSpent = true }
+            if ateBerry { board.mine[index].build.itemSpent = true }
+        } else {
+            board.theirs[index].hp = Swift.max(0, board.theirs[index].hp - landed)
+            if sashed { board.theirs[index].build.itemSpent = true }
+            if ateBerry { board.theirs[index].build.itemSpent = true }
+        }
+        let share = Int((Double(landed) / Double(Swift.max(1, defending[index].maxHP))
+                         * 100).rounded())
+        if result.effectiveness > 1 {
+            board.detail("It is super effective. \(hitName) took \(landed) (\(share)%).")
+        } else if result.effectiveness < 1 {
+            board.detail("\(hitName) resists it — \(landed) (\(share)%).")
+        } else {
+            board.detail("\(hitName) took \(landed) (\(share)%).")
+        }
+        if sashed { board.detail("\(hitName) hung on with its Focus Sash.") }
+
+        // 5. Afterwards: what the move does beyond the damage, and what
+        // the target's own ability does back.
+        contact(move, byMine: byMine, hitMine: hitMine, slot: slot, hit: index,
+                wasAt: defending[index].hp, rolling: rolling, board: &board)
+        Switching.flee(ifNeeded: index, ofMine: hitMine, wasAt: defending[index].hp,
+             board: &board)
+        // Fake Out used to flinch from here as well as through its
+        // own secondary, which is how it carries the flinch in the
+        // data: a hundred per cent, `kind: flinch`. Two paths for one
+        // effect said "flinched" twice in the log, and — the part that
+        // mattered — this one ran before the check that lets a Shield
+        // Dust or a Covert Cloak refuse a secondary. So the item worn
+        // specifically to stand in front of a Fake Out did not, which
+        // is most of the reason anybody wears it.
+        if result.notes.contains(where: { $0.contains("Weakness Policy") }) {
+            StatChanges.applySelf([.attack: 2, .spAttack: 2], toMine: hitMine, slot: index,
+                      board: &board)
+            if hitMine { board.mine[index].build.itemSpent = true }
+            else { board.theirs[index].build.itemSpent = true }
+        }
+        StatChanges.applyDrops(move.targetDrops, toMine: hitMine, slot: index, board: &board)
+        secondary(of: move, byMine: byMine, hitMine: hitMine, slot: slot, hit: index,
+                  rolling: rolling, board: &board)
+        let after = hitMine ? board.mine[index] : board.theirs[index]
+        if after.hp == 0 {
+            board.detail("\(hitName) fainted.")
+            // Destiny Bond: it takes whatever did it with it. Checked
+            // before the knockout abilities below, because a Moxie
+            // that is about to faint does not get its stage.
+            if after.destinyBound, !(byMine ? board.mine : board.theirs)[slot].fainted {
+                if byMine { board.mine[slot].hp = 0 } else { board.theirs[slot].hp = 0 }
+                board.note("\(hitName)'s Destiny Bond took \(name) with it.")
+            }
+            // Moxie and its kin take something from the knockout.
+            switch actor.build.ability {
+            case "Moxie", "Chilling Neigh":
+                StatChanges.change([.attack: 1], onMine: byMine, slot: slot, board: &board,
+                       because: actor.build.ability)
+            case "Grim Neigh", "Soul-Heart":
+                StatChanges.change([.spAttack: 1], onMine: byMine, slot: slot, board: &board,
+                       because: actor.build.ability)
+            case "Beast Boost":
+                // Whichever of its stats is highest, which is the whole
+                // trick of it.
+                let build = actor.build
+                let best = [Stat.attack, .defense, .spAttack, .spDefense, .speed]
+                    .max { build.stat($0) < build.stat($1) } ?? .attack
+                StatChanges.change([best: 1], onMine: byMine, slot: slot, board: &board, because: "Beast Boost")
+            default: break
+            }
+        }
+        return landed
     }
 
     /// 5. Afterwards: what the action cost and gave back, once every target has
