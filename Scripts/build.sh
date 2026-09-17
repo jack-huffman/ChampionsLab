@@ -93,6 +93,11 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 	<key>LSApplicationCategoryType</key>     <string>public.app-category.games</string>
 	<key>NSPrincipalClass</key>              <string>NSApplication</string>
 	<key>NSHighResolutionCapable</key>       <true/>
+	<key>NSLocalNetworkUsageDescription</key> <string>ChampionsLab finds other copies of the app on your network so you can battle the people running them.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_championslab._tcp</string>
+	</array>
 </dict>
 </plist>
 PLIST

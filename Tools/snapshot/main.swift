@@ -203,6 +203,8 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
                           previewing: chosen),
                named: "battle-preview-dark",
                size: CGSize(width: 1280, height: 860), dark: true)
+        // LAN Battles, before anyone else has appeared.
+        render(LANView(), named: "lan-dark", size: CGSize(width: 1180, height: 640), dark: true)
         // The lobby, with yours chosen and theirs still open.
         render(BattleView(openTeams: (mine: playing.id.uuidString, theirs: ""), arriving: .versus),
                named: "battle-setup-dark",

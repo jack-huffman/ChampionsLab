@@ -50,6 +50,7 @@ enum Section: String, CaseIterable, Identifiable, Hashable {
     case dex = "Pokédex"
     case speed = "Speed Tiers"
     case battle = "Battle Sim"
+    case lan = "LAN Battles"
     case moves = "Moves"
     case items = "Items"
     case abilities = "Abilities"
@@ -68,6 +69,7 @@ enum Section: String, CaseIterable, Identifiable, Hashable {
         case .dex:        return "book.closed.fill"
         case .speed:      return "speedometer"
         case .battle:     return "gamecontroller.fill"
+        case .lan:        return "antenna.radiowaves.left.and.right"
         case .moves:      return "bolt.fill"
         case .items:      return "bag.fill"
         case .abilities:  return "wand.and.stars"
@@ -82,7 +84,7 @@ enum Section: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .overview, .meta, .forecast:       return "Regulation"
         case .teams, .builder, .calculator,
-             .battle:                           return "Build"
+             .battle, .lan:                     return "Build"
         case .dex, .moves, .items, .abilities,
              .speed:                            return "Database"
         case .parity:                           return "Database"
@@ -95,6 +97,7 @@ enum Section: String, CaseIterable, Identifiable, Hashable {
 struct RootView: View {
     @EnvironmentObject private var store: Store
     @ObservedObject private var lab = SimulationService.shared
+    @ObservedObject private var lan = LANService.shared
     @State private var section: Section = .overview
 
     private var groups: [(String, [Section])] {
@@ -131,6 +134,7 @@ struct RootView: View {
                 case .dex:        DexView()
                 case .speed:      SpeedTiersView()
                 case .battle:     BattleView()
+                case .lan:        LANView()
                 case .moves:      MoveDexView()
                 case .items:      ItemDexView()
                 case .abilities:  AbilityDexView()
@@ -155,6 +159,15 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openCalculator)) { _ in
             section = .calculator
         }
+        // A battle request finds you wherever you are.
+        .overlay(alignment: .topTrailing) {
+            if case .invited(let name) = lan.stage, section != .lan {
+                InviteBanner(from: name,
+                             accept: { lan.accept(); section = .lan },
+                             decline: { lan.decline() })
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: lan.stage)
         .overlay(alignment: .top) {
             if let error = store.loadError {
                 Text("Dataset failed to load: \(error)")
