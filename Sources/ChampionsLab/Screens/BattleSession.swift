@@ -253,6 +253,32 @@ final class BattleSession: ObservableObject {
         }
     }
 
+    /// Which of my slots is still waiting for an order, if any: the ring the
+    /// field draws, and the deck's cue for whose turn it is to be told.
+    /// The field itself, laid out the way the game shows it: your first
+    /// Pokémon up and to the left, the second diagonally down from it, and
+    /// theirs the same way across the line. Tinted by whatever weather is up,
+    /// because that is the single most useful thing to see without reading.
+    /// Whether to draw the shield on a Pokémon.
+    ///
+    /// `isProtected` is true only *during* the turn, because the shield now
+    /// comes down at the end of the turn it covered — which is right, and
+    /// which quietly meant the dome never appeared at all, since the board the
+    /// screen draws between turns always had it false. So while the turn is
+    /// still playing out, whoever protected on it is shown protected.
+    /// Which of your two the command panel is currently asking about.
+    ///
+    /// The panel says the name; the field did not, so on a turn where both are
+    /// alive there was nothing connecting "What will Charizard do?" to the
+    /// Charizard on the board. A ring is enough.
+    func awaitingOrders(_ board: Board) -> Int? {
+        guard finished == nil, sending.isEmpty, !playing, playback.task == nil else { return nil }
+        let living = (0..<board.activeCount).filter {
+            board.mine.indices.contains($0) && !board.mine[$0].fainted
+        }
+        return living.first { pick(for: $0) == nil }
+    }
+
     // MARK: - Playing a turn
 
     /// The two orders as a play, with an empty or fainted slot passing. Orders
@@ -415,6 +441,98 @@ final class BattleSession: ObservableObject {
 
     func set(_ choice: Choice?, slot: Int) {
         if slot == 0 { leftPick = choice } else { rightPick = choice }
+    }
+
+    // MARK: - What the field and the deck both ask
+
+    /// What a move would actually do, on the button that would do it.
+    ///
+    /// This is a simulator, so there is no reason to make somebody guess at
+    /// arithmetic the app can already do: the range, as a share of the target,
+    /// and how many of them it takes. Against their side it is worked out with
+    /// the item nobody has seen left off, for the same reason their Speed is.
+    /// What a Pokémon will be when the move goes off, not what it is now.
+    ///
+    /// Toggling Mega Evolve changes the stats, the typing and the ability, and
+    /// evolution happens before any move — so a preview worked out on the base
+    /// form is a preview of a turn that is not going to happen. Charizard into
+    /// Mega Charizard Y is fifty points of Special Attack and a Drought that
+    /// puts the sun up before the move lands, which is most of the damage.
+    func evolving(_ fighter: Fighter, slot: Int,
+                          board: Board) -> (build: Combatant, field: Field) {
+        guard megaSlot == slot, let mega = fighter.pendingMega else {
+            return (fighter.build, board.field)
+        }
+        var build = Combatant(form: mega,
+                              ability: mega.abilities.first?.name ?? fighter.build.ability,
+                              item: fighter.build.item, sp: fighter.build.sp,
+                              alignment: fighter.build.alignment)
+        build.boosts = fighter.build.boosts
+        build.itemSpent = fighter.build.itemSpent
+        // And whatever arriving as that puts on the field, since it lands first.
+        var field = board.field
+        switch build.ability {
+        case "Drought":        field.weather = .sun
+        case "Drizzle":        field.weather = .rain
+        case "Sand Stream":    field.weather = .sand
+        case "Snow Warning":   field.weather = .snow
+        case "Electric Surge": field.terrain = .electric
+        case "Grassy Surge":   field.terrain = .grassy
+        case "Misty Surge":    field.terrain = .misty
+        case "Psychic Surge":  field.terrain = .psychic
+        default: break
+        }
+        return (build, field)
+    }
+
+    /// Their Speed as far as anybody could know it: the stat, without the item
+    /// nobody has seen yet.
+    static func visibleSpeed(_ fighter: Fighter, mine: Bool, field: Field) -> Int {
+        guard !mine else { return fighter.build.speed(in: field) }
+        var blind = fighter.build
+        blind.item = ""
+        return blind.speed(in: field)
+    }
+
+    /// How a benched Pokémon would do coming in, and why.
+    static func sendInReading(_ board: Board, bench: Int) -> (score: Double, why: String) {
+        let candidate = board.mine[bench]
+        var worstIn = 0.0, bestOut = 0.0
+        var worstFrom = "", bestInto = ""
+        for foe in 0..<min(board.activeCount, board.theirs.count)
+        where !board.theirs[foe].fainted {
+            let them = board.theirs[foe]
+            // Their item is unknown, so it is left off, as everywhere else here.
+            var attacker = them.build
+            attacker.item = ""
+            for move in them.moves where move.isDamaging {
+                let result = DamageCalc.calculate(attacker: attacker, defender: candidate.build,
+                                                  move: move, field: board.field)
+                let share = Double(result.maxDamage) / Double(max(1, candidate.maxHP))
+                if share > worstIn { worstIn = share; worstFrom = them.build.form.formLabel }
+            }
+            var defender = them.build
+            defender.item = ""
+            for move in candidate.moves where move.isDamaging {
+                let result = DamageCalc.calculate(attacker: candidate.build, defender: defender,
+                                                  move: move, field: board.field)
+                let share = Double(result.maxDamage) / Double(max(1, them.maxHP))
+                if share > bestOut { bestOut = share; bestInto = them.build.form.formLabel }
+            }
+        }
+        // Surviving the way in counts for more than hitting hard, because it
+        // does not get to act on the turn it arrives.
+        let score = min(1, bestOut) - 1.4 * min(1, worstIn)
+        var why: String
+        if worstIn >= 1 { why = "\(worstFrom) knocks it out as it lands" }
+        else if worstIn > 0 {
+            why = "takes \(Int((worstIn * 100).rounded()))% from \(worstFrom) coming in"
+        } else { why = "nothing out there hurts it" }
+        if bestOut >= 1 { why += ", and removes \(bestInto) in one." }
+        else if bestOut > 0 {
+            why += ", and hits \(bestInto) for \(Int((bestOut * 100).rounded()))%."
+        } else { why += ", and cannot hurt either of them." }
+        return (score, why)
     }
 
     // MARK: - Taking one back

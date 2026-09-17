@@ -173,6 +173,19 @@ struct Fold<Content: View>: View {
     }
 }
 
+/// A vertical scroller everywhere but in a snapshot.
+///
+/// ImageRenderer cannot materialise a ScrollView's content, so every screen
+/// that wants a shot swaps its scroller for a plain stack when `snapshotMode`
+/// is on. That swap was written three times over; this is the one place.
+struct MaybeScroll<Content: View>: View {
+    @Environment(\.snapshotMode) private var snapshotMode
+    @ViewBuilder let content: Content
+    var body: some View {
+        if snapshotMode { content } else { ScrollView { content } }
+    }
+}
+
 struct SectionHeader: View {
     let title: String
     var subtitle: String? = nil
