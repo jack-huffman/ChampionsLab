@@ -44,9 +44,10 @@ final class BattleModelShapeTests: XCTestCase {
 
     /// Functions allowed past the ordinary limit, with why.
     static let longFunctions: [String: String] = [
-        "Strikes.strike": "one target, from reach to aftermath; being split into its phases next",
-        "SupportMoves.support": "eighty-odd status moves, each its own rule; a switch, not logic",
         "Residuals.endOfTurn": "every end-of-turn effect, in the order the game applies them",
+        "SupportMoves.laterAdditions": "280 lines of status moves in one group; the next thing to split",
+        "SupportMoves.sweeping": "395 lines of status moves in one group; the next thing to split",
+        "Strikes.strike": "one target, from reach to aftermath; being split into its phases next",
         "Board.flipped": "every field of the state, mirrored -- long because the state is",
         "SelfPlay.playLogged": "the game loop with its ledger readers nested inside it, "
                              + "so they can write to the ledger they are reading for",
