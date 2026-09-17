@@ -295,8 +295,11 @@ enum Switching {
             return
         }
         board.leftThisStep = true
-        if byMine, board.asksBeforePivot, board.pendingPivot == nil {
-            board.pendingPivot = Board.Pivot(mine: true, slot: slot, carrying: carrying)
+        // A side that is asked -- yours in a played turn, either in a game
+        // between two people -- stops the turn here for the choice.
+        let asked = byMine ? board.asksBeforePivot : board.asksTheirsBeforePivot
+        if asked, board.pendingPivot == nil {
+            board.pendingPivot = Board.Pivot(mine: byMine, slot: slot, carrying: carrying)
             board.note("\(name) went out.")
             return
         }
@@ -434,19 +437,28 @@ extension Board {
     /// The end of a turn with something down on either side: both players
     /// send in at once, and the arrivals happen in Speed order — so the faster
     /// one's Intimidate never touches the slower one, and the slower one's
-    /// weather is the weather. Yours are what you chose; theirs choose for
+    /// weather is the weather. Yours are what you chose; theirs are what the
+    /// other player chose, when there is one, and otherwise they choose for
     /// themselves.
-    mutating func replaceFallen(mine picks: [(slot: Int, bench: Int)]) {
+    mutating func replaceFallen(mine picks: [(slot: Int, bench: Int)],
+                                theirs theirPicks: [(slot: Int, bench: Int)]? = nil) {
         var arrivals: [(mine: Bool, slot: Int, bench: Int, speed: Int)] = []
         for pick in picks where mine.indices.contains(pick.bench) && !mine[pick.bench].fainted {
             arrivals.append((true, pick.slot, pick.bench, mine[pick.bench].build.speed(in: field)))
         }
-        var taken: Set<Int> = []
-        for slot in 0..<min(activeCount, theirs.count) where theirs[slot].fainted {
-            guard let pick = theirBestReplacement(for: slot, excluding: taken)
-            else { continue }
-            taken.insert(pick)
-            arrivals.append((false, slot, pick, theirs[pick].build.speed(in: field)))
+        if let theirPicks {
+            for pick in theirPicks where theirs.indices.contains(pick.bench) && !theirs[pick.bench].fainted
+                && theirs.indices.contains(pick.slot) && theirs[pick.slot].fainted {
+                arrivals.append((false, pick.slot, pick.bench, theirs[pick.bench].build.speed(in: field)))
+            }
+        } else {
+            var taken: Set<Int> = []
+            for slot in 0..<min(activeCount, theirs.count) where theirs[slot].fainted {
+                guard let pick = theirBestReplacement(for: slot, excluding: taken)
+                else { continue }
+                taken.insert(pick)
+                arrivals.append((false, slot, pick, theirs[pick].build.speed(in: field)))
+            }
         }
         arrivals.sort { $0.speed > $1.speed || ($0.speed == $1.speed && $0.mine && !$1.mine) }
         for arrival in arrivals {

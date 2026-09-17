@@ -265,6 +265,8 @@ enum Strikes {
         // 1. Declare — and check it can be used at all. First Impression
         // and Fake Out work on the turn the Pokémon arrives and never
         // again, which is the whole cost of a 90 base power priority move.
+        // Declared is shown: the other side now knows it has this move.
+        board.reveal(move: move.id, mine: byMine, slot: slot)
         if move.drawbacks.firstTurnOnly, !actor.justArrived {
             board.note("\(name) used \(move.name), but it only works on the turn it comes in.")
             return false

@@ -143,7 +143,10 @@ enum SmogonFeed {
     /// dex does not know is dropped with a reason, as the Pikalytics feed
     /// drops what cannot be true.
     static func convert(_ table: [Species], index: UsageFeed.Index) -> ([UsageEntry], [String]) {
-        let movesByID = Dictionary(index.moveIDsByName.map { ($0.value, $0.key) },
+        // Smogon's ids are the name with everything but letters and digits
+        // gone -- "uturn", "willowisp" -- where the dex's keep their hyphens,
+        // so the match is made on the name, not the dex's id.
+        let movesByID = Dictionary(index.moveIDsByName.map { (toID($0.key), $0.key) },
                                    uniquingKeysWith: { a, _ in a })
         let itemsByID = Dictionary(index.itemNames.map { (toID($0), $0) },
                                    uniquingKeysWith: { a, _ in a })

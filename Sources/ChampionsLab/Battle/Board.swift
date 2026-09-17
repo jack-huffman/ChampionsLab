@@ -65,6 +65,13 @@ struct Fighter {
     /// a benched Pokémon is one of the two they might have brought, and the
     /// game is played against that, not against the answer.
     var seen = false
+    /// What the other side has been shown of what this one carries: the
+    /// moves it has used, by id, and whether its item and its ability have
+    /// done something in the open. A game between two people sends the
+    /// other player only this much of a Pokemon.
+    var revealedMoves: Set<String> = []
+    var itemRevealed = false
+    var abilityRevealed = false
     /// A two-turn move it began last turn — the index into its moves — and
     /// where it was aimed. Its next action is that move, whatever else is
     /// asked of it.
@@ -466,6 +473,9 @@ struct Board {
     /// screen asks. Off for the search, which sends in the best answer at
     /// once, the way it replaces a fallen Pokemon.
     var asksBeforePivot = false
+    /// The same for their side: a game between two people stops for either
+    /// player's pivot, and the host asks whoever has the decision.
+    var asksTheirsBeforePivot = false
     var pendingPivot: Pivot?
     /// The actions still to come when a pivot stopped the turn, for
     /// `TurnModel.resume`.
@@ -646,6 +656,8 @@ struct Board {
         out.rulings = relabel(rulings)
         out.declared = [:]
         out.acted = []
+        out.asksBeforePivot = asksTheirsBeforePivot
+        out.asksTheirsBeforePivot = asksBeforePivot
         if let pivot = pendingPivot {
             out.pendingPivot = Pivot(mine: !pivot.mine, slot: pivot.slot, carrying: pivot.carrying)
         }
@@ -738,7 +750,15 @@ struct Board {
     mutating func note(_ text: String) {
         guard narrating else { return }
         story.append(text)
-        firing.append(contentsOf: abilitiesNamed(in: text).filter { !firing.contains($0) })
+        let fired = abilitiesNamed(in: text)
+        firing.append(contentsOf: fired.filter { !firing.contains($0) })
+        // Said in the open is shown to the other side.
+        for hit in fired {
+            if hit.mine { mine[hit.slot].abilityRevealed = true } else { theirs[hit.slot].abilityRevealed = true }
+        }
+        for hit in itemsNamed(in: text) {
+            if hit.mine { mine[hit.slot].itemRevealed = true } else { theirs[hit.slot].itemRevealed = true }
+        }
         if gathering != nil {
             gathering?.append(text)
         } else {
@@ -751,22 +771,38 @@ struct Board {
     /// Intimidate" names Incineroar, and a bare "Supreme Overlord" the one
     /// acting, or the only one standing that has it.
     func abilitiesNamed(in text: String) -> [Step.Firing] {
+        owners(of: { $0.build.ability }, in: text)
+    }
+
+    /// Which active Pokemon's held items a line names -- a Sitrus Berry
+    /// eaten, a Focus Sash that held -- by the same reading.
+    func itemsNamed(in text: String) -> [Step.Firing] {
+        owners(of: { $0.build.item }, in: text)
+    }
+
+    private func owners(of what: (Fighter) -> String, in text: String) -> [Step.Firing] {
         var out: [Step.Firing] = []
         for mineSide in [true, false] {
             let team = mineSide ? mine : theirs
             for slot in 0..<Swift.min(activeCount, team.count) {
-                let ability = team[slot].build.ability
-                guard !ability.isEmpty, text.contains(ability) else { continue }
-                let owned = text.contains("\(team[slot].build.form.formLabel)'s \(ability)")
-                let others = (0..<Swift.min(activeCount, mine.count)).filter { mine[$0].build.ability == ability }.count
-                    + (0..<Swift.min(activeCount, theirs.count)).filter { theirs[$0].build.ability == ability }.count
+                let name = what(team[slot])
+                guard !name.isEmpty, text.contains(name) else { continue }
+                let owned = text.contains("\(team[slot].build.form.formLabel)'s \(name)")
+                let others = (0..<Swift.min(activeCount, mine.count)).filter { what(mine[$0]) == name }.count
+                    + (0..<Swift.min(activeCount, theirs.count)).filter { what(theirs[$0]) == name }.count
                 let isActing = acting.map { $0.byMine == mineSide && $0.slot == slot } ?? false
                 if owned || others == 1 || isActing {
-                    out.append(Step.Firing(mine: mineSide, slot: slot, name: ability))
+                    out.append(Step.Firing(mine: mineSide, slot: slot, name: name))
                 }
             }
         }
         return out
+    }
+
+    /// A move declared is a move the other side has seen.
+    mutating func reveal(move id: String, mine side: Bool, slot: Int) {
+        if side, mine.indices.contains(slot) { mine[slot].revealedMoves.insert(id) }
+        else if !side, theirs.indices.contains(slot) { theirs[slot].revealedMoves.insert(id) }
     }
 
     var myActive: ArraySlice<Fighter> { mine.prefix(activeCount) }
@@ -996,7 +1032,10 @@ extension Board {
     /// search plays against until one of them walks on.
     /// `sendOut` false leaves the leads' abilities for the caller to fire, one
     /// at a time, which is how the battle screen shows them happening.
+    /// `theirBringing` is their four as another player chose them, in order;
+    /// left out, they are chosen for them the way a good player would.
     static func opening(mine myTeam: Team, bringing: [String], theirs theirTeam: Team,
+                        theirBringing: [String]? = nil,
                         rules: Rulebook, singles: Bool, sendOut: Bool = true) -> Board {
         let bring = singles ? 3 : 4
         let leadCount = singles ? 1 : 2
@@ -1006,13 +1045,17 @@ extension Board {
         brought.slots = bringing.compactMap { id in myTeam.slots.first { $0.formID == id } }
         if brought.slots.count < leadCount { brought = myTeam }
 
-        // They choose their own four the same way, against your six.
-        let theirGrid = Matchup(mine: theirTeam, theirs: myTeam, rules: rules, field: field)
-        let picker = BringFour(matchup: theirGrid, rules: rules, bring: bring)
         var theirBrought = theirTeam
-        if let plan = picker.plans.first {
-            theirBrought.slots = plan.bring.compactMap { form in
-                theirTeam.slots.first { $0.battleForm(in: rules)?.id == form.id }
+        if let theirBringing {
+            theirBrought.slots = theirBringing.compactMap { id in theirTeam.slots.first { $0.formID == id } }
+        } else {
+            // They choose their own four the same way, against your six.
+            let theirGrid = Matchup(mine: theirTeam, theirs: myTeam, rules: rules, field: field)
+            let picker = BringFour(matchup: theirGrid, rules: rules, bring: bring)
+            if let plan = picker.plans.first {
+                theirBrought.slots = plan.bring.compactMap { form in
+                    theirTeam.slots.first { $0.battleForm(in: rules)?.id == form.id }
+                }
             }
         }
         if theirBrought.slots.count < leadCount { theirBrought = theirTeam }

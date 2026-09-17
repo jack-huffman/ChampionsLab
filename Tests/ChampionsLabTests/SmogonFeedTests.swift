@@ -44,6 +44,19 @@ final class SmogonFeedTests: HarnessCase {
         check("over the total is refused", MetaModel.spread("Jolly 32/32/32/0/0/0") == nil)
     }
 
+    @MainActor func testAHyphenatedMoveIsFoundByItsSmogonID() {
+        // Charizard learns both in Champions; the dex writes them "will-o-wisp"
+        // and "double-edge", Smogon "willowisp" and "doubleedge".
+        let species = SmogonFeed.Species(name: "Charizard", usage: 0.3, appearances: 10,
+                                         moves: [("willowisp", 8), ("doubleedge", 6), ("heatwave", 9)],
+                                         items: [("charizarditey", 6)], abilities: [("blaze", 10)],
+                                         spreads: [], teammates: [])
+        let (entries, dropped) = SmogonFeed.convert([species], index: store.usageIndex())
+        let names = entries.first?.moveUsage?.map(\.name) ?? []
+        check("Will-O-Wisp survived its hyphens", names.contains("Will-O-Wisp"), "\(names) dropped \(dropped)")
+        check("Double-Edge too", names.contains("Double-Edge"), "\(names)")
+    }
+
     func testAnIDIsAName() {
         check("focussash", SmogonFeed.toID("Focus Sash") == "focussash")
         check("kingsrock", SmogonFeed.toID("King's Rock") == "kingsrock")
