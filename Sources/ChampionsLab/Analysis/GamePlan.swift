@@ -66,17 +66,8 @@ struct GamePlanner {
             let ability = slot.megaEvolution(in: store.rulebook)?.abilities.first?.name
                 ?? (slot.ability.isEmpty
                     ? slot.battleForm(in: store.rulebook)?.abilities.first?.name ?? "" : slot.ability)
-            switch ability {
-            case "Drought":       out.weather = .sun
-            case "Drizzle":       out.weather = .rain
-            case "Sand Stream":   out.weather = .sand
-            case "Snow Warning":  out.weather = .snow
-            case "Electric Surge": out.terrain = .electric
-            case "Grassy Surge":   out.terrain = .grassy
-            case "Misty Surge":    out.terrain = .misty
-            case "Psychic Surge":  out.terrain = .psychic
-            default: break
-            }
+            if let weather = FieldSetters.weather(onArrivalWith: ability) { out.weather = weather }
+            if let terrain = FieldSetters.terrain(onArrivalWith: ability) { out.terrain = terrain }
         }
         return out
     }
@@ -283,10 +274,7 @@ struct GamePlanner {
         let control = meta.fieldControl(of: team)
 
         let removal = who(["Steel Roller", "Defog"], in: members)
-        let setters = members.filter { member in
-            ["Grassy Surge", "Psychic Surge", "Electric Surge", "Misty Surge",
-             "Drought", "Drizzle", "Sand Stream", "Snow Warning"].contains(member.ability)
-        }
+        let setters = members.filter { FieldSetters.arrivalAbilities.contains($0.ability) }
 
         var steps: [String] = []
         for entry in control.prefix(4) {

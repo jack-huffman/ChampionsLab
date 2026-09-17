@@ -49,7 +49,7 @@ struct Opening {
         /// answer to a Fake Out lead rather than merely a body.
         var blocksPriority: Bool {
             abilities.contains { ["Armor Tail", "Queenly Majesty", "Dazzling"].contains($0) }
-                || abilities.contains("Psychic Surge")
+                || abilities.contains { FieldSetters.terrain(onArrivalWith: $0) == .psychic }
         }
 
         /// Whether a Fake Out aimed at this side can be relied on to land on

@@ -474,17 +474,8 @@ final class BattleSession: ObservableObject {
         build.itemSpent = fighter.build.itemSpent
         // And whatever arriving as that puts on the field, since it lands first.
         var field = board.field
-        switch build.ability {
-        case "Drought":        field.weather = .sun
-        case "Drizzle":        field.weather = .rain
-        case "Sand Stream":    field.weather = .sand
-        case "Snow Warning":   field.weather = .snow
-        case "Electric Surge": field.terrain = .electric
-        case "Grassy Surge":   field.terrain = .grassy
-        case "Misty Surge":    field.terrain = .misty
-        case "Psychic Surge":  field.terrain = .psychic
-        default: break
-        }
+        if let weather = FieldSetters.weather(onArrivalWith: build.ability) { field.weather = weather }
+        if let terrain = FieldSetters.terrain(onArrivalWith: build.ability) { field.terrain = terrain }
         return (build, field)
     }
 

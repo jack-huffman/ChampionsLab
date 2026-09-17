@@ -413,11 +413,10 @@ enum UsageFeed {
         if !moves.isDisjoint(with: ["Follow Me", "Rage Powder"]) { return "Redirection / support" }
         if moves.contains("Trick Room") { return "Trick Room setter" }
         if moves.contains("Tailwind") { return "Speed control" }
-        if !abilities.isDisjoint(with: ["Grassy Surge", "Psychic Surge",
-                                        "Electric Surge", "Misty Surge"]) {
+        if !abilities.isDisjoint(with: FieldSetters.terrainArrivalAbilities) {
             return "Terrain setter"
         }
-        if !abilities.isDisjoint(with: ["Drizzle", "Drought", "Sand Stream", "Snow Warning"]) {
+        if !abilities.isDisjoint(with: FieldSetters.weatherArrivalAbilities) {
             return "Weather setter"
         }
         if abilities.contains("Intimidate")

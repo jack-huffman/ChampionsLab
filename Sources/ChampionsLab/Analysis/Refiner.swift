@@ -117,17 +117,20 @@ struct TeamRefiner {
     /// Charizard Y always brings, Weather Ball is 100 and Fire. So the ranker
     /// puts them at the bottom of the slot and this would offer to trade them
     /// for a Snarl, which is advice that gives away the game.
-    private static let fieldMoves: [String: Set<String>] = [
-        "Grassy Glide": ["Grassy Surge"],
-        "Expanding Force": ["Psychic Surge"],
-        "Rising Voltage": ["Electric Surge"],
-        "Psyblade": ["Electric Surge"],
-        "Misty Explosion": ["Misty Surge"],
-        "Terrain Pulse": ["Grassy Surge", "Psychic Surge", "Electric Surge", "Misty Surge"],
-        "Weather Ball": ["Drought", "Drizzle", "Sand Stream", "Snow Warning"],
-        "Solar Beam": ["Drought"], "Solar Blade": ["Drought"],
-        "Thunder": ["Drizzle"], "Hurricane": ["Drizzle"],
-        "Aurora Veil": ["Snow Warning"],
+    ///
+    /// Each move names the field it wants; who sets that field is
+    /// FieldSetters' business.
+    private static let fieldMoves: [String: (weathers: [Weather], terrains: [Terrain])] = [
+        "Grassy Glide": ([], [.grassy]),
+        "Expanding Force": ([], [.psychic]),
+        "Rising Voltage": ([], [.electric]),
+        "Psyblade": ([], [.electric]),
+        "Misty Explosion": ([], [.misty]),
+        "Terrain Pulse": ([], [.grassy, .psychic, .electric, .misty]),
+        "Weather Ball": ([.sun, .rain, .sand, .snow], []),
+        "Solar Beam": ([.sun], []), "Solar Blade": ([.sun], []),
+        "Thunder": ([.rain], []), "Hurricane": ([.rain], []),
+        "Aurora Veil": ([.snow], []),
     ]
 
     /// Every ability on the six, resolved through Mega Evolution.
@@ -143,7 +146,8 @@ struct TeamRefiner {
 
     private func poweredByOwnField(_ move: Move, abilities: Set<String>) -> Bool {
         guard let needs = TeamRefiner.fieldMoves[move.name] else { return false }
-        return !needs.isDisjoint(with: abilities)
+        return !FieldSetters.arrivalAbilities(setting: needs.weathers, or: needs.terrains)
+            .isDisjoint(with: abilities)
     }
 
     /// The utility moves coaching keeps reaching for.

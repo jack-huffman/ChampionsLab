@@ -332,13 +332,11 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     ]
 
     /// Aimed at the user's own side or the whole field.
-    static let sideMoves: Set<String> = [
+    static let sideMoves: Set<String> = Set([
         "Tailwind", "Trick Room", "Reflect", "Light Screen", "Aurora Veil",
-        "Wide Guard", "Quick Guard", "Safeguard", "Mist", "Lucky Chant",
-        "Sunny Day", "Rain Dance", "Sandstorm", "Snowscape", "Hail",
-        "Grassy Terrain", "Electric Terrain", "Misty Terrain", "Psychic Terrain",
+        "Wide Guard", "Quick Guard", "Safeguard", "Mist", "Lucky Chant", "Hail",
         "Gravity", "Magic Room", "Wonder Room", "Perish Song", "Haze",
-    ]
+    ]).union(FieldSetters.weatherMoves.keys).union(FieldSetters.terrainMoves.keys)
 
     /// Aimed at the partner.
     static let allyMoves: Set<String> = [

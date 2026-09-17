@@ -1378,8 +1378,7 @@ enum SupportMoves {
         let rolling = cast.rolling
 
         // Weather and terrain, which any of several moves set.
-        if let weather: Weather = ["Sunny Day": .sun, "Rain Dance": .rain,
-                                   "Sandstorm": .sand, "Snowscape": .snow][move.name] {
+        if let weather = FieldSetters.weather(setBy: move.name) {
             let before = board.field
             board.field.weather = weather
             board.fieldSettled(from: before)
@@ -1389,9 +1388,7 @@ enum SupportMoves {
             else { board.note("The weather turned to \(weather.rawValue.lowercased()) for five turns.") }
             return .handled(nil)
         }
-        if let terrain: Terrain = ["Grassy Terrain": .grassy, "Electric Terrain": .electric,
-                                   "Misty Terrain": .misty,
-                                   "Psychic Terrain": .psychic][move.name] {
+        if let terrain = FieldSetters.terrain(setBy: move.name) {
             let before = board.field
             board.field.terrain = terrain
             board.fieldSettled(from: before)

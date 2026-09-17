@@ -107,13 +107,7 @@ struct MetaModel {
     var fieldPressures: [FieldPressure] {
         var out: [FieldPressure] = []
 
-        let terrains: [(Terrain, String, String)] = [
-            (.grassy, "Grassy Surge", "Grassy Terrain"),
-            (.psychic, "Psychic Surge", "Psychic Terrain"),
-            (.electric, "Electric Surge", "Electric Terrain"),
-            (.misty, "Misty Surge", "Misty Terrain"),
-        ]
-        for (terrain, ability, move) in terrains {
+        for (terrain, ability, move) in FieldSetters.terrains {
             let (probability, setters) = fieldShare { member in
                 max(abilityShare(member, ability) * MetaModel.broughtRate,
                     moveShare(member, move) * MetaModel.broughtRate)
@@ -124,13 +118,7 @@ struct MetaModel {
                                      consequences: consequences(of: terrain)))
         }
 
-        let weathers: [(Weather, [String], String)] = [
-            (.sun, ["Drought", "Orichalcum Pulse"], "Sunny Day"),
-            (.rain, ["Drizzle"], "Rain Dance"),
-            (.sand, ["Sand Stream", "Sand Spit"], "Sandstorm"),
-            (.snow, ["Snow Warning"], "Snowscape"),
-        ]
-        for (weather, abilities, move) in weathers {
+        for (weather, abilities, move) in FieldSetters.weathers {
             let (probability, setters) = fieldShare { member in
                 let fromAbility = abilities.map { abilityShare(member, $0) }.max() ?? 0
                 return max(fromAbility, moveShare(member, move)) * MetaModel.broughtRate
@@ -306,8 +294,8 @@ struct MetaModel {
             effect: "Sucker Punch, Grassy Glide, Aqua Jet and Extreme Speed close games before Speed matters.",
             answers: ["Psychic Terrain blocks all of it against your grounded side.",
                       "Armor Tail and Queenly Majesty block it outright."],
-            tools: Tools(moves: ["Psychic Terrain"],
-                         abilities: ["Psychic Surge", "Armor Tail", "Queenly Majesty"])) { member in
+            tools: Tools(moves: Set([FieldSetters.move(setting: Terrain.psychic) ?? ""]),
+                         abilities: Set(["Armor Tail", "Queenly Majesty"]).union(FieldSetters.arrivalAbilities(setting: [], or: [.psychic])))) { member in
             ["Sucker Punch", "Grassy Glide", "Aqua Jet", "Extreme Speed", "Ice Shard",
              "Bullet Punch", "Shadow Sneak", "Quick Attack", "Mach Punch", "Fake Out"]
                 .map { self.moveShare(member, $0) }.reduce(0, +)
@@ -479,16 +467,12 @@ struct MetaModel {
         RoleGroup("Hitting both", anySpread: true),
         RoleGroup("Closing the game", anyPriority: true, anySetup: true),
         RoleGroup("Owning the field",
-                  moves: ["Grassy Terrain", "Psychic Terrain", "Electric Terrain",
-                          "Misty Terrain", "Sunny Day", "Rain Dance", "Sandstorm",
-                          "Snowscape", "Steel Roller", "Defog"],
+                  moves: Set(FieldSetters.terrainMoveNames + FieldSetters.weatherMoveNames
+                             + ["Steel Roller", "Defog"]),
                   // Half the roster learns Sunny Day; that is not what makes a
                   // weather team. An ability is what makes one.
-                  core: ["Grassy Terrain", "Psychic Terrain", "Electric Terrain",
-                         "Misty Terrain", "Steel Roller"],
-                  abilities: ["Grassy Surge", "Psychic Surge", "Electric Surge",
-                              "Misty Surge", "Drizzle", "Drought", "Sand Stream",
-                              "Snow Warning"]),
+                  core: Set(FieldSetters.terrainMoveNames + ["Steel Roller"]),
+                  abilities: FieldSetters.arrivalAbilities),
         RoleGroup("Staying alive",
                   moves: ["Recover", "Life Dew", "Strength Sap", "Roost", "Wish",
                           "Rest", "Leech Life", "Drain Punch", "Giga Drain",
@@ -686,10 +670,7 @@ struct MetaModel {
             for (form, running, learnset, chosen) in members {
                 let abilities = Set(form.abilities.map(\.name))
                 // Any other terrain displaces theirs; any other weather does too.
-                for (terrain, ability, move) in [(Terrain.grassy, "Grassy Surge", "Grassy Terrain"),
-                                                 (.psychic, "Psychic Surge", "Psychic Terrain"),
-                                                 (.electric, "Electric Surge", "Electric Terrain"),
-                                                 (.misty, "Misty Surge", "Misty Terrain")]
+                for (terrain, ability, move) in FieldSetters.terrains
                 where pressure.terrain != .none && terrain != pressure.terrain {
                     // An override that halves your own attacks is not a fix —
                     // but only worth mentioning when this team could set it.
@@ -711,10 +692,7 @@ struct MetaModel {
                         possible.append("\(form.formLabel) could run \(move)")
                     }
                 }
-                for (weather, ability, move) in [(Weather.sun, "Drought", "Sunny Day"),
-                                                 (.rain, "Drizzle", "Rain Dance"),
-                                                 (.sand, "Sand Stream", "Sandstorm"),
-                                                 (.snow, "Snow Warning", "Snowscape")]
+                for (weather, ability, move) in FieldSetters.weatherArrivals
                 where pressure.weather != .none && weather != pressure.weather {
                     if abilities.contains(ability) {
                         let line = "\(form.formLabel) overrides it with \(ability)"

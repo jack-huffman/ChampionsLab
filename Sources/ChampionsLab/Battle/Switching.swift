@@ -121,22 +121,6 @@ enum Switching {
             guard !parts.isEmpty else { return nil }
             return "\(name)'s Intimidate " + parts.joined(separator: "; ") + "."
                 + (herbs.isEmpty ? "" : " " + herbs.joined(separator: " "))
-        case "Drought":
-            let same = field.weather == .sun
-            field.weather = .sun
-            return "\(name)'s Drought " + (same ? "kept the sunlight harsh." : "made the sunlight harsh.")
-        case "Drizzle":
-            let same = field.weather == .rain
-            field.weather = .rain
-            return "\(name)'s Drizzle " + (same ? "kept the rain falling." : "made it rain.")
-        case "Sand Stream":
-            let same = field.weather == .sand
-            field.weather = .sand
-            return "\(name)'s Sand Stream " + (same ? "kept the sandstorm up." : "whipped up a sandstorm.")
-        case "Snow Warning":
-            let same = field.weather == .snow
-            field.weather = .snow
-            return "\(name)'s Snow Warning " + (same ? "kept the snow falling." : "made it snow.")
         case "Hospitality":
             // A quarter of the partner's health, the moment it walks in.
             let partner = slot == 0 ? 1 : 0
@@ -145,11 +129,41 @@ enum Switching {
             guard healed > 0 else { return nil }
             team[partner].hp += healed
             return "\(name) brought \(team[partner].build.form.formLabel) \(healed) health."
-        case "Electric Surge": field.terrain = .electric; return "\(name)'s Electric Surge charged the field."
-        case "Grassy Surge":   field.terrain = .grassy;   return "\(name)'s Grassy Surge grew grass across the field."
-        case "Misty Surge":    field.terrain = .misty;    return "\(name)'s Misty Surge covered the field in mist."
-        case "Psychic Surge":  field.terrain = .psychic;  return "\(name)'s Psychic Surge made the field feel strange."
-        default: return nil
+        default:
+            // Weather and terrain on arrival, from the one table that says who
+            // sets what. The words are the sim's own.
+            if let weather = FieldSetters.weather(onArrivalWith: ability) {
+                let same = field.weather == weather
+                field.weather = weather
+                return "\(name)'s \(ability) " + announced(weather, kept: same)
+            }
+            if let terrain = FieldSetters.terrain(onArrivalWith: ability) {
+                field.terrain = terrain
+                return "\(name)'s \(ability) \(announced(terrain))"
+            }
+            return nil
+        }
+    }
+
+    /// What a weather arriving says, and what one already up says.
+    private static func announced(_ weather: Weather, kept: Bool) -> String {
+        switch weather {
+        case .sun:  return kept ? "kept the sunlight harsh." : "made the sunlight harsh."
+        case .rain: return kept ? "kept the rain falling." : "made it rain."
+        case .sand: return kept ? "kept the sandstorm up." : "whipped up a sandstorm."
+        case .snow: return kept ? "kept the snow falling." : "made it snow."
+        case .none: return ""
+        }
+    }
+
+    /// What a terrain arriving says.
+    private static func announced(_ terrain: Terrain) -> String {
+        switch terrain {
+        case .electric: return "charged the field."
+        case .grassy:   return "grew grass across the field."
+        case .misty:    return "covered the field in mist."
+        case .psychic:  return "made the field feel strange."
+        case .none:     return ""
         }
     }
 

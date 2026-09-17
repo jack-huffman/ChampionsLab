@@ -88,6 +88,13 @@ every read is on a hot path.
   Weather Ball. Closed families that read alike (Protect, the party moves)
   are named.
 
+**Who sets the weather and the terrain is written once.** `FieldSetters` is
+the table -- which abilities put a field up on arrival, which bring one later,
+which moves set one -- and the switch-in, the builder's matchup field, the game
+plan, the advisor, the refiner and the meta model all read it.
+`FieldOwnershipTests` fails the build when a setter's name is written by string
+anywhere else.
+
 ## Practising
 
 The point of the battle screen is not to watch a game, it is to be told where

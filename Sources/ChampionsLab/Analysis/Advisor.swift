@@ -71,13 +71,13 @@ enum Archetype: String, CaseIterable, Identifiable {
     /// The ability that defines the archetype, where one does.
     var enabler: String? {
         switch self {
-        case .sun:            return "Drought"
-        case .rain:           return "Drizzle"
-        case .sand:           return "Sand Stream"
-        case .snow:           return "Snow Warning"
-        case .grassy:         return "Grassy Surge"
-        case .psychicTerrain: return "Psychic Surge"
-        case .electric:       return "Electric Surge"
+        case .sun:            return FieldSetters.ability(setting: Weather.sun)
+        case .rain:           return FieldSetters.ability(setting: Weather.rain)
+        case .sand:           return FieldSetters.ability(setting: Weather.sand)
+        case .snow:           return FieldSetters.ability(setting: Weather.snow)
+        case .grassy:         return FieldSetters.ability(setting: Terrain.grassy)
+        case .psychicTerrain: return FieldSetters.ability(setting: Terrain.psychic)
+        case .electric:       return FieldSetters.ability(setting: Terrain.electric)
         default:              return nil
         }
     }
@@ -151,10 +151,11 @@ struct TeamAdvisor {
         if !names.isDisjoint(with: ["U-turn", "Volt Switch", "Flip Turn", "Parting Shot"]) {
             found.insert(.pivot)
         }
-        if ability.hasSuffix("Surge") || names.contains(where: { $0.hasSuffix("Terrain") }) {
+        if FieldSetters.terrain(onArrivalWith: ability) != nil
+            || !names.isDisjoint(with: FieldSetters.terrainMoves.keys) {
             found.insert(.terrain)
         }
-        if ["Drought", "Drizzle", "Sand Stream", "Snow Warning"].contains(ability) {
+        if FieldSetters.weather(onArrivalWith: ability) != nil {
             found.insert(.weather)
         }
         if all.contains(where: { $0.isSpread && $0.isDamaging }) { found.insert(.spread) }

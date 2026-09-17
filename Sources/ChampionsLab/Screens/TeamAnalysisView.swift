@@ -31,17 +31,8 @@ struct TeamAnalysisView: View {
             let ability = slot.megaEvolution(in: store.rulebook)?.abilities.first?.name
                 ?? (slot.ability.isEmpty
                     ? slot.battleForm(in: store.rulebook)?.abilities.first?.name ?? "" : slot.ability)
-            switch ability {
-            case "Drought":        out.weather = .sun
-            case "Drizzle":        out.weather = .rain
-            case "Sand Stream":    out.weather = .sand
-            case "Snow Warning":   out.weather = .snow
-            case "Electric Surge": out.terrain = .electric
-            case "Grassy Surge":   out.terrain = .grassy
-            case "Misty Surge":    out.terrain = .misty
-            case "Psychic Surge":  out.terrain = .psychic
-            default: break
-            }
+            if let weather = FieldSetters.weather(onArrivalWith: ability) { out.weather = weather }
+            if let terrain = FieldSetters.terrain(onArrivalWith: ability) { out.terrain = terrain }
         }
         return out
     }

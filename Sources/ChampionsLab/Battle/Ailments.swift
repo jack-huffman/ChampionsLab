@@ -116,7 +116,7 @@ enum Ailments {
             if ["Vital Spirit", "Insomnia"].contains(side[slot].build.ability) {
                 return side[slot].build.ability
             }
-            if board.field.terrain == .electric, side[slot].build.grounded { return "Electric Terrain" }
+            if board.field.terrain == .electric, side[slot].build.grounded { return "\(Terrain.electric.rawValue) Terrain" }
         }
         return nil
     }

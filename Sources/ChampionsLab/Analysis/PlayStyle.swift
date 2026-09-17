@@ -139,9 +139,7 @@ extension Store {
             fit: max(role.physicalBulkRank, role.specialBulkRank))
 
         // -- what the ability alone qualifies it for --------------------------
-        let fieldAbilities: Set<String> = ["Grassy Surge", "Psychic Surge", "Electric Surge",
-                                           "Misty Surge", "Drizzle", "Drought",
-                                           "Sand Stream", "Snow Warning"]
+        let fieldAbilities = FieldSetters.arrivalAbilities
         if let owned = fieldAbilities.intersection(abilities).sorted().first {
             out.append(PlayStyle(name: "Field setter", how: [owned], measured: nil, fit: 0.9))
         }
