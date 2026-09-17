@@ -28,6 +28,9 @@ final class BattleModelShapeTests: XCTestCase {
     /// The calculator is not an aspect of a turn, but its one function was the
     /// longest in the project, and the same ratchet keeps it in phases.
     private var damage: URL { sources.appendingPathComponent("Damage") }
+    /// The builder was one file of 1,630 lines; it is six now, and the same
+    /// ratchet keeps every function in Analysis under the ordinary limit.
+    private var analysis: URL { sources.appendingPathComponent("Analysis") }
 
     /// Every aspect, and the most lines it may run to.
     static let aspects: [String: Int] = [
@@ -113,7 +116,7 @@ final class BattleModelShapeTests: XCTestCase {
 
     func testNoFunctionGrowsPastTheLimitUnannounced() throws {
         var offenders: [String] = []
-        for folder in [battle, damage] {
+        for folder in [battle, damage, analysis] {
         let files = try FileManager.default.contentsOfDirectory(atPath: folder.path)
             .filter { $0.hasSuffix(".swift") }
         for file in files {
