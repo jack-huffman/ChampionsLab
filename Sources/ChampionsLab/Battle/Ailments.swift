@@ -120,4 +120,93 @@ enum Ailments {
         }
         return nil
     }
+
+    /// Put a status condition on a Pokemon, or say why it did not take.
+    ///
+    /// The one door. A Thunder Wave and a Nuzzle's hundred per cent both come
+    /// through here, which is the point: they used to be two tables in two
+    /// files, and the tables had drifted. The status-move one had no Misty
+    /// Terrain check at all, so a Will-O-Wisp went straight through the one
+    /// terrain that exists to stop it, while a Scald's burn was refused. The
+    /// secondary one had Ice types immune to Freeze; the status-move one did
+    /// not. Neither was wrong about everything, and a Pokemon on the receiving
+    /// end could not have said which one it was facing.
+    ///
+    /// Order, which is the game's: what the Pokemon *is* refuses first -- its
+    /// types, its ability -- then what is on its side of the field, then what is
+    /// under its feet. Returns whether it landed.
+    ///
+    /// `announceImmunity` is off for a secondary: a Scald into a Fire type
+    /// happens all game and does not need a line each time. A status move that
+    /// does nothing does, because the player clicked it for that.
+    @discardableResult
+    static func inflict(_ ailment: Ailment, onMine: Bool, slot: Int,
+                        byMine: Bool, bySlot: Int,
+                        board: inout Board, rolling: Bool,
+                        because: String? = nil, announceImmunity: Bool = true) -> Bool {
+        let side = onMine ? board.mine : board.theirs
+        let attackers = byMine ? board.mine : board.theirs
+        guard side.indices.contains(slot), !side[slot].fainted, ailment != .none else { return false }
+        let victim = side[slot]
+        let name = victim.build.form.formLabel
+        guard victim.status == .none else {
+            if announceImmunity { board.note("It had no effect on \(name).") }
+            return false
+        }
+        // The types the battle gave it, not the ones the dex printed: a Soaked
+        // Garchomp really can be burned like a Water type.
+        let types = victim.types
+        let ability = victim.build.ability
+        let corrodes = attackers.indices.contains(bySlot)
+            && attackers[bySlot].build.ability == "Corrosion"
+        let immune: Bool
+        switch ailment {
+        case .burn:
+            immune = types.contains(.fire)
+                || ["Water Veil", "Water Bubble", "Thermal Exchange"].contains(ability)
+        case .paralysis:
+            immune = types.contains(.electric) || ability == "Limber"
+        case .poison, .badPoison:
+            // Corrosion poisons the two types that cannot normally be.
+            immune = (!corrodes && types.contains(where: { [.poison, .steel].contains($0) }))
+                || ability == "Immunity"
+        case .freeze:
+            immune = types.contains(.ice) || ability == "Magma Armor"
+        case .sleep:
+            immune = ["Insomnia", "Vital Spirit"].contains(ability)
+                || (board.field.terrain == .electric && victim.isGrounded)
+        case .none:
+            immune = true
+        }
+        if immune {
+            if announceImmunity { board.note("\(name) is not affected.") }
+            return false
+        }
+        if (onMine ? board.myScreens : board.theirScreens).safeguard > 0 {
+            board.note("The veil kept \(name) from being \(ailment.rawValue).")
+            return false
+        }
+        if let refused = refusesStatus(ailment, onMine: onMine, slot: slot, board: board) {
+            board.note("\(name)'s \(refused) kept it from being \(ailment.rawValue).")
+            return false
+        }
+        if board.field.terrain == .misty, victim.isGrounded {
+            board.note("The mist kept \(name) from being \(ailment.rawValue).")
+            return false
+        }
+        // It takes. Sleep lasts one to three turns in a played game; the search
+        // takes two, the middle, so it never counts on the long one.
+        let nap = ailment == .sleep ? (rolling ? Int.random(in: 1...3, using: &TurnModel.dice) : 2) : 0
+        if onMine {
+            board.mine[slot].status = ailment
+            if ailment == .sleep { board.mine[slot].asleepFor = nap }
+        } else {
+            board.theirs[slot].status = ailment
+            if ailment == .sleep { board.theirs[slot].asleepFor = nap }
+        }
+        board.note("\(name) was \(ailment.rawValue)" + (because.map { " — \($0)." } ?? "."))
+        // Synchronize hands the condition straight back, whoever caused it.
+        synchronize(ailment, from: onMine, slot: slot, onto: byMine, slot: bySlot, board: &board)
+        return true
+    }
 }

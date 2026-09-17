@@ -1166,44 +1166,12 @@ enum Strikes {
         let defenderTeam = hitMine ? board.mine : board.theirs
         let attackerTeam = byMine ? board.mine : board.theirs
         guard defenderTeam.indices.contains(hit), attackerTeam.indices.contains(slot) else { return }
-        let defender = defenderTeam[hit]
-        let attacker = attackerTeam[slot]
         switch effect.kind {
         case .status(let ailment):
-            guard defender.status == .none else { return }
-            // The types the battle gave it, not the ones the dex printed: a
-            // Soaked Garchomp really can be burned like a Water type.
-            let types = defender.types
-            let immune: Bool
-            switch ailment {
-            case .burn: immune = types.contains(.fire) || defender.build.ability == "Thermal Exchange"
-                || defender.build.ability == "Water Veil" || defender.build.ability == "Water Bubble"
-            case .paralysis: immune = types.contains(.electric) || defender.build.ability == "Limber"
-            case .poison, .badPoison:
-                // Corrosion poisons the two types that cannot normally be.
-                immune = (attacker.build.ability != "Corrosion"
-                          && types.contains(where: { [.poison, .steel].contains($0) }))
-                    || defender.build.ability == "Immunity"
-            case .freeze: immune = types.contains(.ice)
-                || defender.build.ability == "Magma Armor"
-            case .sleep, .none: immune = true
-            }
-            if immune { return }
-            if (hitMine ? board.myScreens : board.theirScreens).safeguard > 0 {
-                board.note("The veil kept \(name) from being \(ailment.rawValue).")
-                return
-            }
-            if let refused = Ailments.refusesStatus(ailment, onMine: hitMine, slot: hit, board: board) {
-                board.note("\(name)'s \(refused) kept it from being \(ailment.rawValue).")
-                return
-            }
-            if board.field.terrain == .misty, defender.isGrounded {
-                board.note("The mist kept \(name) from being \(ailment.rawValue).")
-                return
-            }
-            if hitMine { board.mine[hit].status = ailment } else { board.theirs[hit].status = ailment }
-            board.note("\(name) was \(ailment.rawValue)" + (chance < 100 ? " — the \(chance)% came up." : "."))
-            Ailments.synchronize(ailment, from: hitMine, slot: hit, onto: byMine, slot: slot, board: &board)
+            Ailments.inflict(ailment, onMine: hitMine, slot: hit, byMine: byMine, bySlot: slot,
+                             board: &board, rolling: rolling,
+                             because: chance < 100 ? "the \(chance)% came up" : nil,
+                             announceImmunity: false)
         case .flinch:
             // Only matters if it has yet to move this turn; the flag clears at
             // the turn's start either way. Inner Focus is handled inside.

@@ -1203,47 +1203,12 @@ enum SupportMoves {
                 board.note("It had no effect.")
                 return
             }
-            let victim = defending[target]
-            let immune: Bool
-            switch ailment {
-            case .burn: immune = victim.types.contains(.fire)
-                || ["Water Veil", "Water Bubble", "Thermal Exchange"].contains(victim.build.ability)
-            case .paralysis: immune = victim.types.contains(.electric)
-                || ["Limber"].contains(victim.build.ability)
-            case .poison, .badPoison:
-                let corrodes = team[slot].build.ability == "Corrosion"
-                immune = (!corrodes && victim.types.contains(where: { [.poison, .steel].contains($0) }))
-                    || ["Immunity"].contains(victim.build.ability)
-            case .sleep: immune = ["Insomnia", "Vital Spirit"].contains(victim.build.ability)
-                || (board.field.terrain == .electric && victim.isGrounded)
-            default: immune = false
-            }
-            if immune {
-                board.note("\(victim.build.form.formLabel) is not affected.")
-                return
-            }
-            if (byMine ? board.theirScreens : board.myScreens).safeguard > 0 {
-                board.note("The veil kept \(victim.build.form.formLabel) safe.")
-                return
-            }
-            if let refused = Ailments.refusesStatus(ailment, onMine: !byMine, slot: target, board: board) {
-                board.note("\(victim.build.form.formLabel)'s \(refused) refused it.")
-                return
-            }
-            if byMine {
-                board.theirs[target].status = ailment
-                if ailment == .sleep { board.theirs[target].asleepFor = rolling
-                    ? Int.random(in: 1...3, using: &TurnModel.dice) : 2 }
-            } else {
-                board.mine[target].status = ailment
-                if ailment == .sleep { board.mine[target].asleepFor = rolling
-                    ? Int.random(in: 1...3, using: &TurnModel.dice) : 2 }
-            }
-            board.note("\(victim.build.form.formLabel) is \(ailment.rawValue).")
-            // Synchronize hands the condition straight back. It was wired to
-            // the secondary effects of attacks only, so a Will-O-Wisp — the
-            // most common way anything gets burned — went one way.
-            Ailments.synchronize(ailment, from: !byMine, slot: target, onto: byMine, slot: slot, board: &board)
+            // One door for every status condition, whatever caused it. This
+            // used to carry its own copy of the immunity table -- without the
+            // Misty Terrain check, so a Will-O-Wisp went through the terrain
+            // that exists to stop it.
+            Ailments.inflict(ailment, onMine: !byMine, slot: target, byMine: byMine, bySlot: slot,
+                             board: &board, rolling: rolling)
             return
         }
         board.note("Nothing came of it.")
