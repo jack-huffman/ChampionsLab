@@ -28,7 +28,25 @@ const root = process.argv[2] ||
   join(process.env.HOME, 'Documents/VSCode/Personal Projects/pokemon-showdown-master');
 
 // A file URL, not a path: node reads a bare "data/moves.ts" as a package name.
-const { Moves } = await import(pathToFileURL(join(root, 'data/moves.ts')).href);
+const { Moves: Mainline } = await import(pathToFileURL(join(root, 'data/moves.ts')).href);
+
+// Champions is a mod over the main-series table. Showdown's own [Gen 9
+// Champions] formats load data/mods/champions/moves.ts on top of data/moves.ts,
+// and so does this: an entry marked `inherit: true` is the main-series move
+// with the listed fields replaced -- whole objects, so a `flags` here is the
+// complete set, and a `secondary: undefined` takes the effect away. The claws
+// are why it matters. Champions made Dragon Claw, Shadow Claw, Crush Claw,
+// Dire Claw and Metal Claw slicing moves, which is what Mega Absol Z's
+// Sharpness boosts, and the main-series table says they are not.
+const { Moves: Champions } =
+  await import(pathToFileURL(join(root, 'data/mods/champions/moves.ts')).href);
+const Moves = {};
+let overridden = 0;
+for (const [id, base] of Object.entries(Mainline)) {
+  const mod = Champions[id];
+  if (mod?.inherit) { Moves[id] = { ...base, ...mod }; overridden++; }
+  else Moves[id] = base;
+}
 
 /// Showdown's stat keys to ours.
 const STAT = {
@@ -143,11 +161,11 @@ for (const [id, p] of Object.entries(Pokedex)) {
 }
 
 const json = JSON.stringify({
-  source: 'pokemon-showdown data/moves.ts and data/pokedex.ts',
+  source: 'pokemon-showdown data/moves.ts with data/mods/champions/moves.ts over it, and data/pokedex.ts',
   generated: new Date().toISOString().slice(0, 10),
   moves: table,
   forms,
 }, null, 1);
 if (process.argv[3]) writeFileSync(process.argv[3], json + '\n');
 else process.stdout.write(json + '\n');
-process.stderr.write(`showdown: ${Object.keys(table).length} moves, ${Object.keys(forms).length} forms\n`);
+process.stderr.write(`showdown: ${Object.keys(table).length} moves (${overridden} changed by the champions mod), ${Object.keys(forms).length} forms\n`);

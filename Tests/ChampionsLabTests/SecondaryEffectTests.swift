@@ -101,14 +101,19 @@ final class SecondaryEffectTests: HarnessCase {
         check("one of those ways is a flinch", flinched)
     }
 
-    /// Flags decide which ability answers a move, and Serebii had some wrong.
-    @MainActor func testClawMovesAreNotSlicing() throws {
+    /// Flags decide which ability answers a move. Champions made the claws
+    /// slicing moves; the main-series table says they are not, and for a while
+    /// the dataset believed the main series over Serebii's Champions pages --
+    /// this test said so, and was wrong with it. The generator reads Showdown's
+    /// champions mod now, and the three agree.
+    @MainActor func testClawMovesAreSlicingInChampions() throws {
         print("\n== the flags the abilities read ==")
-        for name in ["Dragon Claw", "Metal Claw", "Shadow Claw", "Crush Claw", "Dual Chop"] {
+        for name in ["Dragon Claw", "Metal Claw", "Shadow Claw", "Crush Claw"] {
             let slicing = move(name).isSlicing
             print("  \(name.padding(toLength: 14, withPad: " ", startingAt: 0))slicing: \(slicing)")
-            check("\(name) is not a slicing move, so Sharpness does not boost it", !slicing)
+            check("\(name) is a slicing move in Champions, so Sharpness boosts it", slicing)
         }
+        check("Dual Chop is not", !move("Dual Chop").isSlicing)
         check("Sacred Sword still is", move("Sacred Sword").isSlicing)
     }
 }

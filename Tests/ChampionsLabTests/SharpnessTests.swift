@@ -23,6 +23,13 @@ print("\n== the parts ==")
         check("Night Slash is flagged slicing", night?.isSlicing == true)
         let sucker = store.data.moves.values.first { $0.name == "Sucker Punch" }
         check("Sucker Punch is not", sucker?.isSlicing == false)
+        // Champions made the claws slicing moves, which the main-series table
+        // does not know; the dataset reads Showdown's champions mod for it.
+        for name in ["Shadow Claw", "Dragon Claw", "Crush Claw", "Dire Claw"] {
+            let claw = store.data.moves.values.first { $0.name == name }
+            check("\(name) is a slicing move in Champions", claw?.isSlicing == true,
+                  claw == nil ? "not in the dataset" : "")
+        }
 
 print("\n== and what it does to the number ==")
         guard let night, let sucker else { XCTFail("missing moves"); return }
