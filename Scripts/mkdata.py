@@ -999,6 +999,9 @@ def split_regional_forms(roster):
                 break
         if ref is None:
             continue
+        # The name Showdown files it under, which is also how its sprites are
+        # named: the battle screen's pixel style fetches them by it.
+        form["showdown"] = ref["name"]
         ours = [a["name"] for a in form.get("abilities", [])]
         theirs = [a for a in ref["abilities"] if a in ours]
         # Only when it actually splits something, and never down to nothing:

@@ -28,6 +28,11 @@ struct BattleFieldView: View {
     let callout: String?
     let singles: Bool
     let onBackToPreview: () -> Void
+    /// How the Pokemon are drawn on their cards: the app's illustrations, or
+    /// Showdown's pixel sprites. A setting, because it is a matter of taste
+    /// and the pixel sprites are fetched the first time they are wanted.
+    @AppStorage("battleSpriteStyle") private var spriteStyle = "illustrated"
+    @ObservedObject private var pixels = PixelSprites.shared
 
     typealias TurnReview = BattleSession.TurnReview
     typealias Panel = BattleSession.Panel
@@ -205,6 +210,15 @@ struct BattleFieldView: View {
                     if !searchNote.isEmpty, panel == .engine {
                         Text(searchNote).font(.system(size: 9)).foregroundStyle(.quaternary)
                             .lineLimit(1)
+                    }
+                    if !snapshotMode {
+                        Picker("Sprites", selection: $spriteStyle) {
+                            Text("Art").tag("illustrated")
+                            Text("Pixel").tag("pixel")
+                        }
+                        .pickerStyle(.segmented).controlSize(.mini).labelsHidden()
+                        .frame(width: 88)
+                        .help("How the Pokemon are drawn: the app's illustrations, or Pokemon Showdown's pixel sprites, fetched the first time they are needed.")
                     }
                 }
                 .padding(.horizontal, 10).padding(.vertical, 8)
@@ -462,6 +476,16 @@ struct BattleFieldView: View {
                          duringPlayback: Bool) -> Bool {
         guard !fainted else { return false }
         return isProtected || (duringPlayback && protectedLast)
+    }
+    /// The Pokemon on its card. Showdown's pixel sprite -- its back for your
+    /// side, its front for theirs -- when that style is on and the sprite has
+    /// arrived; the illustration otherwise, and always while one is fetched.
+    @ViewBuilder private func fighterSprite(_ form: Form, mine: Bool) -> some View {
+        if spriteStyle == "pixel", let image = pixels.image(for: form, back: mine) {
+            PixelSpriteView(image: image).frame(width: 86, height: 86)
+        } else {
+            SpriteImage(form: form, side: 78)
+        }
     }
     /// How far a card leans when it is throwing a physical move: a short step
     /// toward whoever it is hitting, and back.
@@ -950,7 +974,7 @@ struct BattleFieldView: View {
                         .offset(y: 32)
                         .allowsHitTesting(false)
                 }
-                SpriteImage(form: fighter.build.form, side: 78)
+                fighterSprite(fighter.build.form, mine: mine)
                     .offset(y: fighter.fainted ? 0 : bob)
                     .opacity(fighter.fainted ? 0.22 : 1)
                     .saturation(fighter.fainted ? 0 : 1)

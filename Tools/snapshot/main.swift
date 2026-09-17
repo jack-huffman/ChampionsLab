@@ -407,9 +407,12 @@ MainActor.assumeIsolated { renderAll() }
 private func choreography(_ move: String, size: CGSize) -> TurnPlayback.Scene? {
     let table = Choreography.shared
     guard let recipe = table.recipe(forMove: move) else { return nil }
-    let stage = MoveTimeline.Stage(arena: size) { seat in
-        Seat.point(seat, w: size.width, h: size.height, singles: true)
-    }
+    // The same four points the cell draws its circles at, read once so the
+    // stage's closure carries only points.
+    let place = demoPlace(size)
+    let seats = [Seat(mine: true, slot: 0), Seat(mine: true, slot: 1), Seat(mine: false, slot: 0), Seat(mine: false, slot: 1)]
+    let anchors = Dictionary(uniqueKeysWithValues: seats.map { ($0, place($0)) })
+    let stage = MoveTimeline.Stage(arena: size) { seat in anchors[seat] ?? CGPoint(x: size.width / 2, y: size.height / 2) }
     let timeline = MoveTimeline.build(recipe, attacker: Seat(mine: true, slot: 0),
                                       targets: [Seat(mine: false, slot: 0)],
                                       sizes: table.sprites, stage: stage)
@@ -489,7 +492,7 @@ private struct EffectSheet: View {
                     }
                     .frame(height: 210)
                 }
-                ForEach([("Flamethrower", 0.35), ("Tackle", 0.45), ("Follow Me", 0.5)], id: \.0) { name, at in
+                ForEach([("Flamethrower", 0.35), ("Dragon Claw", 0.55), ("Follow Me", 0.5)], id: \.0) { name, at in
                     EffectCell("Choreography — \(name), \(String(format: "%.2fs", at))") {
                         GeometryReader { geo in
                             if let scene = choreography(name, size: geo.size) {

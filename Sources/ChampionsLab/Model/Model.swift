@@ -31,6 +31,9 @@ struct Form: Codable, Identifiable, Hashable, Sendable {
     /// from that is a preference a matchup grid cannot work out on its own.
     let brought: Double?
     let led: Double?
+    /// The name Showdown files this form under -- "Charizard-Mega-Y" -- which
+    /// is also how its sprites are named. Nil for a form it has never heard of.
+    let showdown: String?
 
     /// `types` as the enum, worked out once when the dex is read.
     ///
@@ -45,7 +48,7 @@ struct Form: Codable, Identifiable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case dex, species, name, icon, suffix, types, stats, abilities, moves, stone, weight
-        case brought, led
+        case brought, led, showdown
         case formLabel = "form_label"
     }
 
@@ -65,6 +68,7 @@ struct Form: Codable, Identifiable, Hashable, Sendable {
         weight = try box.decodeIfPresent(Double.self, forKey: .weight)
         brought = try box.decodeIfPresent(Double.self, forKey: .brought)
         led = try box.decodeIfPresent(Double.self, forKey: .led)
+        showdown = try box.decodeIfPresent(String.self, forKey: .showdown)
         pokeTypes = types.compactMap { PokeType(loose: $0) }
     }
 
