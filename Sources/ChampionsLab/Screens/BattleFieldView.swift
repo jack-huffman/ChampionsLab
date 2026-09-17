@@ -534,10 +534,10 @@ struct BattleFieldView: View {
                         .position(x: w / 2, y: h / 2)
                 }
             }
-            .overlay(alignment: .topLeading) {
-                // In the corner: the far row's statbars stand near the top of
-                // the scene, where a pill in the middle covered one of them.
-                VStack(alignment: .leading, spacing: 8) {
+            .overlay(alignment: .top) {
+                // Top centre, between their readouts in one corner and the
+                // sides' conditions.
+                VStack(spacing: 8) {
                     fieldState(board)
                     if let callout {
                         Text(callout)
@@ -550,7 +550,7 @@ struct BattleFieldView: View {
                             .id(callout)
                     }
                 }
-                .padding(.top, 10).padding(.leading, 14)
+                .padding(.top, 10)
             }
         }
     }

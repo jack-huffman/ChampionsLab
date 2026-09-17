@@ -14,9 +14,49 @@
 //  still for each, and the still is what comes back for those.
 
 import AppKit
+import ImageIO
 
 @MainActor
 final class PixelSprites: ObservableObject {
+    /// A sprite's frames and how long each shows. CGImages are immutable and
+    /// safe to read from anywhere, which is what the unchecked promise says.
+    struct Frames: @unchecked Sendable {
+        let images: [CGImage]
+        let delays: [TimeInterval]
+        let total: TimeInterval
+
+        /// The frame showing at this instant of a clock that loops.
+        func frame(at time: TimeInterval) -> CGImage {
+            guard images.count > 1, total > 0 else { return images[0] }
+            var into = time.truncatingRemainder(dividingBy: total)
+            for (image, delay) in zip(images, delays) {
+                into -= delay
+                if into < 0 { return image }
+            }
+            return images[images.count - 1]
+        }
+
+        /// Every frame of a GIF, or the one frame of a PNG.
+        nonisolated static func decode(_ data: Data) -> Frames? {
+            guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+            let count = CGImageSourceGetCount(source)
+            var images: [CGImage] = [], delays: [TimeInterval] = []
+            for index in 0..<count {
+                guard let image = CGImageSourceCreateImageAtIndex(source, index, nil) else { continue }
+                var delay = 0.1
+                if let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any],
+                   let gif = properties[kCGImagePropertyGIFDictionary] as? [CFString: Any] {
+                    let unclamped = gif[kCGImagePropertyGIFUnclampedDelayTime] as? Double
+                    let clamped = gif[kCGImagePropertyGIFDelayTime] as? Double
+                    delay = max(0.02, unclamped ?? clamped ?? 0.1)
+                }
+                images.append(image); delays.append(delay)
+            }
+            guard !images.isEmpty else { return nil }
+            return Frames(images: images, delays: delays, total: delays.reduce(0, +))
+        }
+    }
+
     static let shared = PixelSprites()
     static let credit = "Pixel sprites on the battle screen, when that style is chosen, are Pokémon Showdown's, fetched the first time they are needed."
 
@@ -34,25 +74,29 @@ final class PixelSprites: ObservableObject {
 
     nonisolated static func slug(_ form: Form) -> String? { form.showdown.flatMap(slug(showdownName:)) }
 
-    private var images: [String: NSImage] = [:]
+    private var frames: [String: Frames] = [:]
     private var fetching: Set<String> = []
     private var missing: Set<String> = []
 
-    /// The sprite, or nil while it is on its way or when there is none. Asking
-    /// starts the fetch; the object announces itself when it lands.
-    func image(for form: Form, back: Bool) -> NSImage? {
+    /// The sprite's frames, or nil while it is on its way or when there is
+    /// none. Asking starts the fetch and the decode, both off the main
+    /// thread; the object announces itself when they land.
+    func frames(for form: Form, back: Bool) -> Frames? {
         guard let slug = Self.slug(form) else { return nil }
         let key = (back ? "back/" : "front/") + slug
-        if let image = images[key] { return image }
+        if let ready = frames[key] { return ready }
         guard !missing.contains(key), !fetching.contains(key) else { return nil }
         fetching.insert(key)
-        Task { [weak self] in
+        Task.detached(priority: .userInitiated) { [weak self] in
             var data = Self.kept(key)
             if data == nil { data = await Self.fetch(slug: slug, back: back, key: key) }
-            guard let self else { return }
-            self.fetching.remove(key)
-            if let data, let image = NSImage(data: data) { self.images[key] = image } else { self.missing.insert(key) }
-            self.objectWillChange.send()
+            let decoded = data.flatMap(Frames.decode)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.fetching.remove(key)
+                if let decoded { self.frames[key] = decoded } else { self.missing.insert(key) }
+                self.objectWillChange.send()
+            }
         }
         return nil
     }

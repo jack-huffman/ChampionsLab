@@ -109,16 +109,20 @@ struct MoveTimeline: Sendable {
             CGPoint(x: (size.width - Self.scene.width * kx) / 2, y: (size.height - Self.scene.height * k) / 2)
         }
 
-        /// Where a seat's Pokemon stands, in scene units: the client's own
+        /// Where a seat's Pokemon stands, in scene units. The client's own
         /// numbers for a double battle -- the first slot a little toward the
         /// middle, the second out to the side, their back row a touch higher
-        /// and your front row a touch lower.
+        /// -- then your row moved left and a little up and theirs right, so
+        /// the two teams stand apart rather than one in front of the other,
+        /// which is what a battle read as here. Recipes are written from
+        /// these, so the moves follow.
         func home(_ seat: Seat) -> SIMD3<Double> {
             let z: Double = seat.mine ? 0 : 200
-            if singles { return SIMD3(0, 0, z) }
-            let spread = pixel ? -100.0 : -75.0
-            let x = (Double(seat.slot) * spread + 18) * (seat.mine ? -1 : 1)
-            let y = seat.mine ? Double(seat.slot) * -10 : Double(seat.slot) * 7
+            let apart: Double = seat.mine ? -30 : 80
+            let lift: Double = seat.mine ? 12 : 0
+            if singles { return SIMD3(apart, lift, z) }
+            let x = (Double(seat.slot) * -75 + 18) * (seat.mine ? -1 : 1) + apart
+            let y = (seat.mine ? Double(seat.slot) * -10 : Double(seat.slot) * 7) + lift
             return SIMD3(x, y, z)
         }
 
@@ -207,9 +211,19 @@ struct MoveTimeline: Sendable {
                 let ghost = name == "attacker" || name == "defender"
                 let drawn = ghost ? [96.0, 96.0] : (sizes[name] ?? [100, 100])
                 let size = CGSize(width: drawn[0], height: drawn[1])
+                var fromPlaced = place(from), toPlaced = place(to)
+                if ghost, stage.pixel {
+                    // A Pokemon's own sprite flies at the size the Pokemon is
+                    // drawn, which for a pixel sprite is bigger than an effect.
+                    let fromZ = point(from).z, toZ = point(to).z
+                    let growFrom = stage.depthScale(fromZ, pixelSprite: true) / stage.depthScale(fromZ)
+                    let growTo = stage.depthScale(toZ, pixelSprite: true) / stage.depthScale(toZ)
+                    fromPlaced.xscale *= growFrom; fromPlaced.yscale *= growFrom
+                    toPlaced.xscale *= growTo; toPlaced.yscale *= growTo
+                }
                 timeline.sprites.append(Sprite(
                     id: next, name: name, size: size,
-                    from: place(from), to: place(to),
+                    from: fromPlaced, to: toPlaced,
                     start: start, end: max(end, start), easing: step.easing ?? .linear, ending: step.ending,
                     mirrored: !seat(name == "defender" ? .defender : .attacker).mine
                         && (name.hasPrefix("left") || name.hasPrefix("right")),

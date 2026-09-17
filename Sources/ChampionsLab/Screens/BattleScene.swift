@@ -56,11 +56,7 @@ extension BattleFieldView {
             if let scene {
                 ChoreographyLayer(scene: scene)
             }
-            ForEach(seatsInDrawOrder(board), id: \.self) { seat in
-                if let fighter = fighter(at: seat, in: board) {
-                    statbar(fighter, seat: seat, stage: stage, board: board)
-                }
-            }
+            readouts(board, stage: stage)
         }
         .modifier(QuakeEffect(progress: moveClock, shakes: tracks?.shakes ?? [], duration: tracks?.duration ?? 1))
         // The playback places a recipe on the scene, so it has to know how
@@ -91,15 +87,15 @@ extension BattleFieldView {
             let sprite = 96 * stage.scale(at: mine ? 0 : 200, pixelSprite: usesPixelSprites)
             let left = points.map(\.x).min()!, right = points.map(\.x).max()!
             let low = points.map(\.y).max()!
-            return (CGPoint(x: (left + right) / 2, y: low + sprite * 0.33), right - left + sprite * 1.15)
+            return (CGPoint(x: (left + right) / 2, y: low + sprite * 0.3), right - left + sprite * 1.15)
         }
         let far = under(false), near = under(true)
         return ZStack {
             // The horizon, faint, where the far platform sits.
             LinearGradient(colors: [tint.opacity(0.10), .clear, tint.opacity(0.05)],
                            startPoint: .top, endPoint: .bottom)
-            platform(centre: far.centre, width: far.width, height: far.width * 0.2, strength: 0.8)
-            platform(centre: near.centre, width: near.width, height: near.width * 0.2, strength: 1)
+            platform(centre: far.centre, width: far.width, height: far.width * 0.18, strength: 0.8)
+            platform(centre: near.centre, width: near.width, height: near.width * 0.16, strength: 1)
         }
         .allowsHitTesting(false)
     }
@@ -179,40 +175,55 @@ extension BattleFieldView {
     /// arrived; the illustration otherwise, turned to face across the field
     /// on your side, and always in a still.
     @ViewBuilder func fighterSprite(_ form: Form, mine: Bool, side: CGFloat) -> some View {
-        if usesPixelSprites, let image = pixels.image(for: form, back: mine) {
-            PixelSpriteView(image: image).frame(width: side, height: side)
+        if usesPixelSprites, let frames = pixels.frames(for: form, back: mine) {
+            PixelSpriteView(frames: frames).frame(width: side, height: side)
         } else {
             SpriteImage(form: form, side: side)
                 .scaleEffect(x: mine ? -1 : 1, y: 1)
         }
     }
 
-    // MARK: - The statbar
+    // MARK: - The readouts
 
-    /// Name, condition, stages and health over each Pokemon, where the client
-    /// puts it: eighty units left of the sprite and seventy-odd above, the
-    /// far row's a little higher. A click opens the field's card, with the
+    /// The four Pokemon's readouts, kept out of the scene the way the games
+    /// keep them: theirs stacked in the top-left corner, yours in the
+    /// bottom-right, each with the Pokemon's own icon so the panel and the
+    /// sprite read as one. Name, condition, health, and every stat change as
+    /// a chip that says the number. A click opens the field's card, with the
     /// Speed reading, the likely item and everything else it used to show.
+    func readouts(_ board: Board, stage: MoveTimeline.Stage) -> some View {
+        func stack(_ mine: Bool) -> some View {
+            VStack(alignment: mine ? .trailing : .leading, spacing: 8) {
+                ForEach(0..<min(board.activeCount, (mine ? board.mine : board.theirs).count), id: \.self) { slot in
+                    let seat = Seat(mine: mine, slot: slot)
+                    if let fighter = fighter(at: seat, in: board) {
+                        statbar(fighter, seat: seat, stage: stage, board: board)
+                    }
+                }
+            }
+        }
+        return ZStack {
+            stack(false)
+                .padding(14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            stack(true)
+                .padding(14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        }
+    }
+
     func statbar(_ fighter: Fighter, seat: Seat, stage: MoveTimeline.Stage, board: Board) -> some View {
-        let k = stage.k
-        let at = stage.project(stage.home(seat))
-        // The client's placement -- the far row's higher, the second slot a
-        // little more so -- and the second slot's bar pushed outward, because
-        // in a double battle two sprites stand closer than a bar is wide.
-        let above = 73.0 + (seat.mine ? 20.0 - 7.0 * Double(seat.slot) : 30.0 + 17.0 * Double(seat.slot))
-        let outward: CGFloat = seat.slot == 1 ? (seat.mine ? 1 : -1) * 44 * k : 0
-        let width: CGFloat = 150, height: CGFloat = 42
-        let grow = min(1.15, max(0.85, k))
-        // Never off the top of the scene: the client clamps its bars the same way.
-        let top = max(stage.origin.y + 4 * k, at.y - above * k)
+        let width: CGFloat = 200
         let health = fighter.share
         let bar: Color = health > 0.5 ? Palette.good : (health > 0.2 ? Palette.warn : Palette.bad)
         let out = !opening || shown.contains("\(seat.mine ? "m" : "t")\(seat.slot)")
         let asked = seat.mine && session.awaitingOrders(board) == seat.slot && !fighter.fainted
         let changed = changedStats(fighter)
         let showing = Binding(get: { detail?.seat == seat }, set: { if !$0, detail?.seat == seat { detail = nil } })
-        return VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 4) {
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                SpriteImage(form: fighter.build.form, side: 22)
+                    .saturation(fighter.fainted ? 0 : 1)
                 Text(fighter.build.form.formLabel)
                     .font(.system(size: 11, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
                 if fighter.pendingMega != nil {
@@ -230,46 +241,64 @@ extension BattleFieldView {
                         .background(statusTint(fighter.status), in: RoundedRectangle(cornerRadius: 3))
                 }
             }
-            ZStack(alignment: .leading) {
-                Capsule().fill(Palette.hairline).frame(height: 6)
-                GeometryReader { geo in
-                    Capsule()
-                        .fill(LinearGradient(colors: [bar.opacity(0.75), bar], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: max(fighter.fainted ? 0 : 3, geo.size.width * health))
+            HStack(spacing: 6) {
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Palette.hairline).frame(height: 7)
+                    GeometryReader { geo in
+                        Capsule()
+                            .fill(LinearGradient(colors: [bar.opacity(0.75), bar], startPoint: .leading, endPoint: .trailing))
+                            .frame(width: max(fighter.fainted ? 0 : 3, geo.size.width * health))
+                    }
+                    .frame(height: 7)
                 }
-                .frame(height: 6)
-            }
-            .frame(height: 6)
-            .animation(.easeOut(duration: 0.55), value: fighter.hp)
-            HStack(spacing: 4) {
+                .frame(height: 7)
+                .animation(.easeOut(duration: 0.55), value: fighter.hp)
                 Text("\(fighter.hp)/\(fighter.maxHP)")
-                    .font(.system(size: 9, design: .rounded)).monospacedDigit().foregroundStyle(.secondary)
-                Spacer(minLength: 0)
-                if !changed.isEmpty || fighter.isConfused {
-                    stages(fighter, changed: changed)
-                }
+                    .font(.system(size: 10, design: .rounded)).monospacedDigit().foregroundStyle(.secondary)
+                    .frame(width: 60, alignment: .trailing)
+            }
+            if !changed.isEmpty || fighter.isConfused {
+                HStack(spacing: 4) { stageChips(fighter, changed: changed) }
             }
         }
-        .padding(.horizontal, 7).padding(.vertical, 5)
-        .frame(width: width, height: height)
-        .background(Palette.cardOnField.opacity(fighter.fainted ? 0.55 : 0.94))
-        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .strokeBorder(asked ? Palette.accent : .white.opacity(0.14), lineWidth: asked ? 1.5 : 1))
-        .shadow(color: asked ? Palette.accent.opacity(0.6) : .black.opacity(0.3), radius: asked ? 7 : 5, y: 2)
-        .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .padding(.horizontal, 9).padding(.vertical, 7)
+        .frame(width: width, alignment: .leading)
+        .background(Palette.cardOnField.opacity(fighter.fainted ? 0.5 : 0.92))
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .strokeBorder(asked ? Palette.accent : .white.opacity(0.12), lineWidth: asked ? 1.5 : 1))
+        .shadow(color: asked ? Palette.accent.opacity(0.55) : .black.opacity(0.3), radius: asked ? 8 : 5, y: 2)
+        .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         .onTapGesture { detail = DetailSeat(seat: seat) }
-        .popover(isPresented: showing, arrowEdge: seat.mine ? .top : .bottom) {
+        .popover(isPresented: showing, arrowEdge: seat.mine ? .trailing : .leading) {
             fighterCard(fighter, mine: seat.mine, slot: seat.slot, field: board.field,
                         tailwind: seat.mine ? board.myTailwind > 0 : board.theirTailwind > 0,
                         trickRoom: board.trickRoom > 0)
                 .padding(10)
         }
         .help("Click for the card: Speed on the field, the likely item, stages.")
-        .scaleEffect(grow, anchor: .center)
         .opacity(out ? 1 : 0)
-        .position(x: at.x - 80 * k + outward + width * grow / 2,
-                  y: top + height * grow / 2)
+    }
+
+    /// A stat change as a chip that says the number: Atk -1, SpA +2. Green up,
+    /// red down; confusion beside them, since it is the other thing a
+    /// Pokemon carries that changes what its next move does.
+    @ViewBuilder func stageChips(_ fighter: Fighter, changed: [Stat]) -> some View {
+        ForEach(changed, id: \.self) { stat in
+            let stage = fighter.build.boosts[stat.rawValue]
+            Text("\(stat.short) \(stage > 0 ? "+" : "")\(stage)")
+                .font(.system(size: 9, weight: .bold, design: .rounded)).monospacedDigit()
+                .foregroundStyle(.white)
+                .padding(.horizontal, 5).padding(.vertical, 1.5)
+                .background((stage > 0 ? Palette.good : Palette.bad).opacity(0.85), in: Capsule())
+        }
+        if fighter.isConfused {
+            Text("Confused")
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 5).padding(.vertical, 1.5)
+                .background(Palette.warn.opacity(0.85), in: Capsule())
+        }
     }
 
     static func shortStatus(_ status: Ailment) -> String {
