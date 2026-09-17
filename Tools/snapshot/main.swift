@@ -275,12 +275,18 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
                                   theirs: marked.describe(solvedTurn.theirPlays[0], mine: false),
                                   played: -0.18, best: -0.02,
                                   bestLine: wanted.map { marked.describe($0.play, mine: true) } ?? "—",
-                                  before: board),
+                                  before: board, minePlay: played,
+                                  theirPlay: solvedTurn.theirPlays[0],
+                                  told: TurnModel.resolve(board, mine: played,
+                                                          theirs: solvedTurn.theirPlays[0]).story),
             BattleView.TurnReview(turn: 2, yours: marked.describe(solvedTurn.myPlays[0], mine: true),
                                   theirs: marked.describe(solvedTurn.theirPlays[0], mine: false),
                                   played: 0.31, best: 0.31,
                                   bestLine: marked.describe(solvedTurn.myPlays[0], mine: true),
-                                  before: board),
+                                  before: board, minePlay: solvedTurn.myPlays[0],
+                                  theirPlay: solvedTurn.theirPlays[0],
+                                  told: TurnModel.resolve(board, mine: solvedTurn.myPlays[0],
+                                                          theirs: solvedTurn.theirPlays[0]).story),
         ], thinking: (thought, solvedTurn)),
                named: "battle-review-dark",
                size: CGSize(width: 1280, height: 860), dark: true)
@@ -292,6 +298,29 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
                named: "battle-aim-dark",
                size: CGSize(width: 1280, height: 860), dark: true)
     }
+    // The turn explainer, on a turn that was actually resolved.
+    if let board = store.teams.first(where: { $0.slots.count >= 4 }).flatMap({ mine -> Board? in
+        guard let meta = store.data.metaTeams.first(where: { $0.name == "Big Six" }) else { return nil }
+        return Board(mine: mine, theirs: store.opponentTeam(meta), rules: store.rulebook,
+                     field: Field(isDoubles: true), alreadyEvolved: false)
+    }) {
+        var solver = TurnGame(board: board, believingTheirs: true)
+        solver.width = 8
+        let solution = solver.solve()
+        let ours = solution.myPlays.indices.contains(3) ? solution.myPlays[3] : solution.myPlays[0]
+        let theirs = solution.theirPlays[0]
+        let explained = BattleView.TurnReview(
+            turn: 1, yours: solver.describe(ours, mine: true),
+            theirs: solver.describe(theirs, mine: false),
+            played: -0.18, best: -0.02,
+            bestLine: solution.lines.first.map { solver.describe($0.play, mine: true) } ?? "—",
+            before: board, minePlay: ours, theirPlay: theirs,
+            told: TurnModel.resolve(board, mine: ours, theirs: theirs).story)
+        render(TurnExplainer(review: explained, rules: store.rulebook) {},
+               named: "battle-explain-dark",
+               size: CGSize(width: 620, height: 1500), dark: true)
+    }
+
     // The move effects, laid out side by side at the moment each reads best.
     // The real ones happen over four tenths of a second inside a battle, which
     // is not a thing a still can catch, so this puts them on a grid instead.

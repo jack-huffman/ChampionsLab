@@ -68,6 +68,11 @@ struct BattleView: View {
         let bestLine: String
         /// The board as it stood before the turn, so it can be played again.
         let before: Board
+        /// Both plays and what the turn said, so the whole thing can be
+        /// explained afterwards rather than only scored.
+        let minePlay: Play
+        let theirPlay: Play
+        let told: [String]
         var lost: Double { max(0, best - played) }
     }
     @State private var panel: Panel = .engine
@@ -157,6 +162,13 @@ struct BattleView: View {
     @State private var history: [(board: Board, log: [String], turn: Int)] = []
     /// What the engine wanted, against what was actually played.
     @State private var grade: String?
+    /// The turn being explained, if the sheet is open.
+    @State private var explaining: TurnReview?
+    /// A review waiting on the turn's own story, which is not known until the
+    /// turn has actually been resolved.
+    @State private var pendingReview: (turn: Int, yours: String, theirs: String,
+                                       played: Double, best: Double, bestLine: String,
+                                       before: Board, minePlay: Play, theirPlay: Play)?
     /// The turn being walked through, and how far into it we are.
     @State private var replay: [Board.Step] = []
     @State private var at = 0
@@ -251,6 +263,10 @@ struct BattleView: View {
                     else { openingCard.padding(14) }
                 }
             }
+        }
+        .sheet(item: $explaining) { entry in
+            TurnExplainer(review: entry, rules: store.rulebook) { explaining = nil }
+                .environmentObject(store)
         }
     }
 
@@ -1382,9 +1398,23 @@ struct BattleView: View {
                 }
                 .help("The sum of what each turn cost against the line the engine wanted. Nought is perfect play by its own lights.")
                 ForEach(ordered) { entry in
-                    Button { rewind(to: entry.turn) } label: { reviewRow(entry) }
-                        .buttonStyle(.plain)
-                        .help("Take the game back to turn \(entry.turn) and play it differently")
+                    VStack(alignment: .leading, spacing: 4) {
+                        Button { rewind(to: entry.turn) } label: { reviewRow(entry) }
+                            .buttonStyle(.plain)
+                            .help("Take the game back to turn \(entry.turn) and play it differently")
+                        HStack(spacing: 6) {
+                            Button {
+                                explaining = entry
+                            } label: {
+                                Label("Explain this turn", systemImage: "text.magnifyingglass")
+                                    .font(.system(size: 10))
+                            }
+                            .controlSize(.small)
+                            .help("Why everything happened in the order and the size it did")
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.bottom, 2)
+                    }
                 }
             }
         }
@@ -3841,12 +3871,12 @@ struct BattleView: View {
                 grade = String(format: "The engine preferred %@ — %.2f better.",
                                game.describe(best.play, mine: true), -gap)
             }
-            review.append(TurnReview(turn: turn,
-                                     yours: game.describe(mine, mine: true),
-                                     theirs: game.describe(theirPlay, mine: false),
-                                     played: played, best: best.expected,
-                                     bestLine: game.describe(best.play, mine: true),
-                                     before: current))
+            pendingReview = (turn: turn,
+                             yours: game.describe(mine, mine: true),
+                             theirs: game.describe(theirPlay, mine: false),
+                             played: played, best: best.expected,
+                             bestLine: game.describe(best.play, mine: true),
+                             before: current, minePlay: mine, theirPlay: theirPlay)
         } else {
             grade = nil
         }
@@ -3858,6 +3888,15 @@ struct BattleView: View {
         // the average and a player wants the dice.
         var next = TurnModel.resolve(current, mine: mine, theirs: theirPlay, rolling: true)
         let told = next.story
+        // The review needed the turn's own story, which only exists now.
+        if let waiting = pendingReview {
+            review.append(TurnReview(turn: waiting.turn, yours: waiting.yours,
+                                     theirs: waiting.theirs, played: waiting.played,
+                                     best: waiting.best, bestLine: waiting.bestLine,
+                                     before: waiting.before, minePlay: waiting.minePlay,
+                                     theirPlay: waiting.theirPlay, told: told))
+            pendingReview = nil
+        }
         let recorded = next
         // Replacements are sent in together at the end of the turn, faster
         // first. Yours is a decision, and one of the sharper ones in the game,

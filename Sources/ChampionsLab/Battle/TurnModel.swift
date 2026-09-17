@@ -1336,17 +1336,38 @@ enum TurnModel {
 
     private static func priority(of choice: Choice, for fighter: Fighter,
                                  field: Field = Field()) -> Int {
+        var ignored: [String] = []
+        return priority(of: choice, for: fighter, field: field, reasons: &ignored)
+    }
+
+    /// The same, saying why.
+    ///
+    /// The reasons live next to the rules rather than in whatever screen wants
+    /// to explain a turn, because an explanation derived separately from the
+    /// thing it explains is an explanation that can be wrong — and a wrong one
+    /// is worse than none, since it is believed.
+    static func priority(of choice: Choice, for fighter: Fighter,
+                         field: Field = Field(), reasons: inout [String]) -> Int {
         switch choice {
         case .pass: return -99
-        case .swap: return 6
+        case .swap:
+            reasons.append("switching, which happens before anything is thrown")
+            return 6
         case .protectSelf(let index), .attack(let index, _):
             guard fighter.moves.indices.contains(index) else { return 0 }
             let move = fighter.moves[index]
             var priority = move.priority
+            if move.priority != 0 {
+                reasons.append("\(move.name) is priority \(move.priority > 0 ? "+" : "")"
+                               + "\(move.priority)")
+            }
             // Prankster: a stage on every status move, which is what puts a
             // Whimsicott's Tailwind or Encore ahead of anything without
             // priority of its own — though not ahead of a Fake Out at +3.
-            if fighter.build.ability == "Prankster", !move.isDamaging { priority += 1 }
+            if fighter.build.ability == "Prankster", !move.isDamaging {
+                priority += 1
+                reasons.append("Prankster adds +1 to a status move")
+            }
             // Grassy Glide, which is most of the reason a Rillaboom is worth a
             // slot: under its own terrain it is a priority move, and without
             // that it is a 60 power Grass attack nobody would run.
@@ -1357,12 +1378,19 @@ enum TurnModel {
             // it, so in an actual battle the Glide has never once gone first.
             if move.id == "grassyglide", field.terrain == .grassy, fighter.isGrounded {
                 priority += 1
+                reasons.append("Grassy Glide is +1 under its own terrain")
             }
             // Stall always acts last, whatever it is doing.
-            if fighter.build.ability == "Stall" { priority -= 7 }
+            if fighter.build.ability == "Stall" {
+                priority -= 7
+                reasons.append("Stall always acts last")
+            }
             // Gale Wings: Flying moves first, while the bar is full.
             if fighter.build.ability == "Gale Wings", move.type == "Flying",
-               fighter.hp == fighter.maxHP { priority += 1 }
+               fighter.hp == fighter.maxHP {
+                priority += 1
+                reasons.append("Gale Wings adds +1 to a Flying move at full health")
+            }
             return priority
         }
     }
@@ -2367,6 +2395,69 @@ enum TurnModel {
     private static func speed(of fighter: Fighter, tailwind: Bool, board: Board) -> Int {
         let base = fighter.build.speed(in: board.field)
         return tailwind ? base * 2 : base
+    }
+
+    /// Who acts when, and why — from the same bracket and Speed the turn uses.
+    ///
+    /// Reconstructed rather than recorded: the turn itself re-checks Speed
+    /// before every action, because a Tailwind that goes up mid-turn changes
+    /// the order of what is left. This reads the position as it stood at the
+    /// start, which is the question somebody asking "why did that go first" is
+    /// actually asking.
+    struct Billing: Sendable, Identifiable {
+        let mine: Bool
+        let slot: Int
+        let who: String
+        let what: String
+        let bracket: Int
+        let speed: Int
+        /// What moved the bracket off the move's own number.
+        let becauseOfPriority: [String]
+        /// What moved the Speed off the Pokémon's own number.
+        let becauseOfSpeed: [String]
+        var id: String { "\(mine)-\(slot)" }
+    }
+
+    static func billing(_ board: Board, mine: Play, theirs: Play) -> [Billing] {
+        var out: [Billing] = []
+        let game = TurnGame(board: board)
+        for (side, play) in [(true, mine), (false, theirs)] {
+            let team = side ? board.mine : board.theirs
+            let tailwind = (side ? board.myTailwind : board.theirTailwind) > 0
+            for (slot, choice) in [play.left, play.right].enumerated() {
+                guard team.indices.contains(slot), !team[slot].fainted,
+                      slot < board.activeCount, !choice.isPass else { continue }
+                var why: [String] = []
+                let bracket = priority(of: choice, for: team[slot], field: board.field,
+                                       reasons: &why)
+                var speedWhy: [String] = []
+                let bare = team[slot].build.speed(in: Field(isDoubles: board.field.isDoubles))
+                let real = speed(of: team[slot], tailwind: tailwind, board: board)
+                if tailwind { speedWhy.append("Tailwind doubles it") }
+                if board.trickRoom > 0 { speedWhy.append("Trick Room, so slower acts first") }
+                if team[slot].build.item == "Choice Scarf" { speedWhy.append("Choice Scarf, +50%") }
+                if team[slot].status == .paralysis { speedWhy.append("paralysed, halved") }
+                if real != bare, speedWhy.isEmpty {
+                    speedWhy.append("the field is moving it from \(bare)")
+                }
+                out.append(Billing(
+                    mine: side, slot: slot,
+                    who: team[slot].build.form.formLabel,
+                    what: game.describe(choice, fighter: team[slot],
+                                        foes: Array((side ? board.theirs : board.mine)
+                                            .prefix(board.activeCount)),
+                                        team: team),
+                    bracket: bracket, speed: real,
+                    becauseOfPriority: why, becauseOfSpeed: speedWhy))
+            }
+        }
+        // The order the turn would take them in: bracket first, then Speed,
+        // inverted by a Trick Room.
+        let inverted = board.trickRoom > 0
+        return out.sorted {
+            $0.bracket != $1.bracket ? $0.bracket > $1.bracket
+                : (inverted ? $0.speed < $1.speed : $0.speed > $1.speed)
+        }
     }
 
     /// Bring a benched Pokémon in, with whatever its entry does.
