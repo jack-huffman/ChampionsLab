@@ -464,7 +464,7 @@ private struct Bench {
                 out += "/\(f.toxicTurns)"
                 out += "/\(f.build.typeOverride ?? [])"
                 out += "/\((f.build.statOverride ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" })"
-                out += "/\(f.asleepFor)/\(f.protectStreak)/\(f.lastMoveFailed)/\(f.seen)"
+                out += "/\(f.asleepFor)/\(f.frozenFor)/\(f.protectStreak)/\(f.lastMoveFailed)/\(f.seen)"
                 out += "/\(f.build.status.rawValue)"
                 out += "/\(f.perishIn)/\(f.drowsyFor)/\(f.disabled ?? -1)/\(f.disabledFor)"
                 out += "/\(f.destinyBound)/\(f.octolocked)/\(f.justArrived)|"

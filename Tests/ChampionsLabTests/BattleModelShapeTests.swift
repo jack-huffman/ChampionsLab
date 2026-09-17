@@ -48,6 +48,7 @@ final class BattleModelShapeTests: XCTestCase {
         "Protection": 150,
         "MoveHistory": 150,
         "Dice": 60,
+        "ChampionsRules": 80,           // the numbers Champions changed, the mod's line beside each
     ]
 
     /// Functions allowed past the ordinary limit, with why.

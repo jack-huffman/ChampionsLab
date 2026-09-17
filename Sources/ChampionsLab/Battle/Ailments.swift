@@ -17,6 +17,15 @@
 import Foundation
 
 enum Ailments {
+    /// How long a sleep lasts. Champions draws two turns a third of the time
+    /// and three the rest; the search takes two, so it never counts on the
+    /// long one. The one place the number is drawn, so Spore, Yawn and Effect
+    /// Spore agree.
+    static func sleepTurns(rolling: Bool) -> Int {
+        rolling ? (ChampionsRules.sleepTurns.randomElement(using: &Dice.source) ?? ChampionsRules.sleepSearch)
+                : ChampionsRules.sleepSearch
+    }
+
     /// Whether something cannot be put to sleep — the same rules Spore is held
     /// to, which is what Yawn has to ask before it comes due.
     static func sleepRefused(_ who: Fighter, board: Board) -> Bool {
@@ -194,15 +203,18 @@ enum Ailments {
             board.note("The mist kept \(name) from being \(ailment.rawValue).")
             return false
         }
-        // It takes. Sleep lasts one to three turns in a played game; the search
-        // takes two, the middle, so it never counts on the long one.
-        let nap = ailment == .sleep ? (rolling ? Int.random(in: 1...3, using: &Dice.source) : 2) : 0
+        // It takes. Sleep and freeze carry their clocks from here, so every
+        // way of inflicting them agrees on how long they last.
+        let nap = ailment == .sleep ? sleepTurns(rolling: rolling) : 0
+        let frozen = ailment == .freeze ? ChampionsRules.frozenFor : 0
         if onMine {
             board.mine[slot].status = ailment
-            if ailment == .sleep { board.mine[slot].asleepFor = nap }
+            board.mine[slot].asleepFor = nap
+            board.mine[slot].frozenFor = frozen
         } else {
             board.theirs[slot].status = ailment
-            if ailment == .sleep { board.theirs[slot].asleepFor = nap }
+            board.theirs[slot].asleepFor = nap
+            board.theirs[slot].frozenFor = frozen
         }
         board.note("\(name) was \(ailment.rawValue)" + (because.map { " — \($0)." } ?? "."))
         // Synchronize hands the condition straight back, whoever caused it.

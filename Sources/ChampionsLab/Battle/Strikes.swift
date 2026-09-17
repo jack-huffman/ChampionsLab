@@ -156,18 +156,26 @@ enum Strikes {
             MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return false
         }
-        // Frozen solid. One turn in five it thaws on its own, and a Fire move
-        // or a move that defrosts its user thaws it outright. Blizzard has
-        // frozen things since the reference table landed and nothing happened
-        // when it did: the condition was inflictable and inert.
+        // Frozen solid. One turn in four it thaws on its own, on the third
+        // turn it thaws regardless -- so the search, which does not roll,
+        // still sees the end of it coming -- and a Fire move or a move that
+        // defrosts its user thaws it outright. A freeze set on a board by hand
+        // carries no clock and thaws only by the roll. Blizzard has frozen
+        // things since the reference table landed and nothing happened when
+        // it did: the condition was inflictable and inert.
         if actor.status == .freeze {
             let thawsItself = actor.moves.indices.contains(pickedMove(choice))
                 && (actor.moves[pickedMove(choice)].type == "Fire"
                     || actor.moves[pickedMove(choice)].flags["defrosts"] == true)
-            let thaws = thawsItself
-                || (rolling && Double.random(in: 0..<1, using: &Dice.source) < 0.2)
+            let left = actor.frozenFor > 0 ? actor.frozenFor - 1 : -1
+            if left >= 0 {
+                if byMine { board.mine[slot].frozenFor = left } else { board.theirs[slot].frozenFor = left }
+            }
+            let thaws = thawsItself || left == 0
+                || (rolling && Double.random(in: 0..<1, using: &Dice.source) < ChampionsRules.thaw)
             if thaws {
-                if byMine { board.mine[slot].status = .none } else { board.theirs[slot].status = .none }
+                if byMine { board.mine[slot].status = .none; board.mine[slot].frozenFor = 0 }
+                else { board.theirs[slot].status = .none; board.theirs[slot].frozenFor = 0 }
                 board.note("\(name) thawed out.")
             } else {
                 board.note("\(name) is frozen solid.")
@@ -177,7 +185,8 @@ enum Strikes {
                 return false
             }
         }
-        if actor.status == .paralysis, rolling, Double.random(in: 0...1, using: &Dice.source) < 0.25 {
+        if actor.status == .paralysis, rolling,
+           Double.random(in: 0...1, using: &Dice.source) < ChampionsRules.fullParalysis {
             board.note("\(name) is paralysed and cannot move.")
             board.stopAction("paralysed")
             MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
@@ -1238,14 +1247,17 @@ enum Strikes {
             else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - lost) }
             board.note("\(attackerName) is hurt by \(defenderName)'s \(defender.build.ability).")
         case "Effect Spore":
-            // One in ten, and one of three things.
+            // Three in ten, and one of three things. A Grass type is immune to
+            // the spores; everything else that refuses a condition -- Safeguard,
+            // the mist, its own ability -- is behind the one door, and so is
+            // how long the sleep lasts.
             guard rolling, Double.random(in: 0..<1, using: &Dice.source) < 0.3,
                   attacker.status == .none, !attacker.types.contains(.grass) else { break }
             let roll = Double.random(in: 0..<1, using: &Dice.source)
             let ailment: Ailment = roll < 0.34 ? .paralysis : roll < 0.67 ? .poison : .sleep
-            if byMine { board.mine[slot].status = ailment; board.mine[slot].asleepFor = ailment == .sleep ? 2 : 0 }
-            else { board.theirs[slot].status = ailment; board.theirs[slot].asleepFor = ailment == .sleep ? 2 : 0 }
-            board.note("\(attackerName) was \(ailment.rawValue) by \(defenderName)'s Effect Spore.")
+            _ = Ailments.inflict(ailment, onMine: byMine, slot: slot, byMine: hitMine, bySlot: hit,
+                                 board: &board, rolling: rolling,
+                                 because: "\(defenderName)'s Effect Spore")
         case "Flame Body", "Static", "Poison Point":
             // Three in ten. A search averages, so it does not apply these at
             // all rather than applying them to everybody.

@@ -56,6 +56,9 @@ struct Fighter {
     var status: Ailment = .none
     /// Turns of sleep left.
     var asleepFor = 0
+    /// Turns of freeze left before it thaws regardless. Zero when the freeze
+    /// was set on the board by hand, and then only the roll thaws it.
+    var frozenFor = 0
     /// Follow Me or Rage Powder this turn: single-target moves come here.
     var drawingFire = false
     /// It has stood on the field, so the other side knows it came. Until then

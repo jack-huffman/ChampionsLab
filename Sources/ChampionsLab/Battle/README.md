@@ -37,6 +37,7 @@ depend on nothing. **Nothing depends on TurnModel.** There are no cycles.
 | `Switching.swift` | entering and leaving | Entry abilities, Mega Evolution, Regenerator, Emergency Exit; and the Board's arrival methods, as an extension. |
 | `Residuals.swift` | end of turn | Weather, terrain healing, poison, Leech Seed, berries, every field clock. |
 | `Ailments.swift` | status conditions | `inflict` is the one door; Misty, Safeguard, immunities and Synchronize live behind it. |
+| `ChampionsRules.swift` | the numbers Champions changed | Paralysis, sleep, freeze, Healer -- each with the line of Showdown's champions mod beside it. |
 | `StatChanges.swift` | stat stages | `change` is the one door; the clamp, Contrary, Defiant, White Herb live behind it. |
 | `Protection.swift` | Protect | The streak and the odds. |
 | `MoveHistory.swift` | what a Pokemon just did | For Encore, Stomping Tantrum, two-turn moves. |

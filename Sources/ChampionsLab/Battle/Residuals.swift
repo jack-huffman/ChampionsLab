@@ -35,7 +35,7 @@ enum Residuals {
         symbiosis(&board)
         weatherHealing(&board)
         leechSeeds(&board)
-        clocks(&board)
+        clocks(&board, rolling: rolling)
         turnOver(onMine: true, board: &board)
         turnOver(onMine: false, board: &board)
     }
@@ -116,7 +116,7 @@ enum Residuals {
     /// Moody is a coin flip with six faces, which a search cannot price, so it
     /// takes nothing. Mimicry takes the terrain's type while it stands on it.
     /// Harvest brings the berry it ate back in the sun. Healer clears up
-    /// whatever its partner is carrying three times in ten; Hydration does the
+    /// whatever its partner is carrying one time in two; Hydration does the
     /// same for itself, only in the rain, and always.
     private static func ability(_ hp: Int, who: Fighter, onMine mine: Bool, slot index: Int,
                                 board: inout Board, rolling: Bool) {
@@ -168,7 +168,7 @@ enum Residuals {
             board.note("\(name) harvested another \(who.build.item).")
         }
         if who.build.ability == "Healer", hp > 0, rolling,
-           Double.random(in: 0..<1, using: &Dice.source) < 0.3 {
+           Double.random(in: 0..<1, using: &Dice.source) < ChampionsRules.healer {
             let ally = index == 0 ? 1 : 0
             let side = mine ? board.mine : board.theirs
             if side.indices.contains(ally), ally < board.activeCount,
@@ -449,7 +449,7 @@ enum Residuals {
     /// Order is the order the game takes them in, and it matters: Octolock
     /// grinds first, then Yawn takes hold, and the song is last because a
     /// Pokémon the song takes is not around to be made drowsy.
-    private static func clocks(_ board: inout Board) {
+    private static func clocks(_ board: inout Board, rolling: Bool) {
         for side in [true, false] {
             let count = Swift.min(board.activeCount, (side ? board.mine : board.theirs).count)
             for index in 0..<count {
@@ -477,8 +477,9 @@ enum Residuals {
                     if (side ? board.mine : board.theirs)[index].drowsyFor == 0 {
                         let who = side ? board.mine[index] : board.theirs[index]
                         if who.status == .none, !Ailments.sleepRefused(who, board: board) {
-                            if side { board.mine[index].status = .sleep; board.mine[index].asleepFor = 2 }
-                            else { board.theirs[index].status = .sleep; board.theirs[index].asleepFor = 2 }
+                            let nap = Ailments.sleepTurns(rolling: rolling)
+                            if side { board.mine[index].status = .sleep; board.mine[index].asleepFor = nap }
+                            else { board.theirs[index].status = .sleep; board.theirs[index].asleepFor = nap }
                             board.note("\(name) fell asleep.")
                         }
                     }
