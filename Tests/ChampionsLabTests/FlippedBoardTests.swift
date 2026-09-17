@@ -55,8 +55,8 @@ final class FlippedBoardTests: HarnessCase {
         // Give one side a real advantage so the number is not zero.
         board.theirs[0].hp = board.theirs[0].maxHP / 5
         board.mine[0].build.boosts[Stat.attack.rawValue] = 2
-        let mine = TurnModel.value(board)
-        let theirs = TurnModel.value(board.flipped)
+        let mine = Evaluation.value(board)
+        let theirs = Evaluation.value(board.flipped)
         print(String(format: "  worth %+.3f to me, %+.3f to them", mine, theirs))
         check("the two are opposite", abs(mine + theirs) < 0.001)
         check("and it is not simply zero", abs(mine) > 0.01)

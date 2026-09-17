@@ -340,7 +340,7 @@ final class ReplayMoveTests: HarnessCase {
             let board = Board(mine: team, theirs: theirs, rules: store.rulebook,
                               field: Field(weather: sky, isDoubles: true), alreadyEvolved: false)
             let move = store.data.moves.values.first { $0.name == moveName }!
-            return TurnModel.chanceToHit(move, attacker: board.mine[0],
+            return Accuracy.chanceToHit(move, attacker: board.mine[0],
                                          defender: board.theirs[0], board: board)
         }
         let clear = chance("Hurricane", .none, on: mine)

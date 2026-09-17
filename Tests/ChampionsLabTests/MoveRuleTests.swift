@@ -167,9 +167,9 @@ print("\n== Protect wearing thin ==")
     check("a repeat Protect is two branches, a third and two thirds",
           branches.count == 2 && abs(branches[0].chance - 2.0 / 3.0) < 0.01 && abs(branches[1].chance - 1.0 / 3.0) < 0.01)
     let blend = repeatGame.settle(guardPlay, hammerPlay).expected
-    let before = TurnModel.value(once)
-    let byHand = branches.reduce(0) { $0 + $1.chance * (TurnModel.value($1.board) - before) }
-    let missOnly = TurnModel.value(branches[0].board) - before
+    let before = Evaluation.value(once)
+    let byHand = branches.reduce(0) { $0 + $1.chance * (Evaluation.value($1.board) - before) }
+    let missOnly = Evaluation.value(branches[0].board) - before
     print(String(format: "  the cell is worth %+.3f blended, %+.3f if the Protect were a certain miss", blend, missOnly))
     check("and the matrix scores it as the blend", abs(blend - byHand) < 0.0001 && blend > missOnly)
     check("the engine says how likely it is to hold",

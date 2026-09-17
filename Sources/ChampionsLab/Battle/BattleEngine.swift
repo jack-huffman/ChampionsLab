@@ -288,8 +288,8 @@ struct BattleEngine: Sendable {
                 // likelier one was the last place the search still bet on a
                 // coin flip rather than pricing it.
                 let ways = game.outcomes(my, their)
-                let before = TurnModel.value(game.board)
-                let immediate = ways.reduce(0) { $0 + $1.chance * (TurnModel.value($1.board) - before) }
+                let before = Evaluation.value(game.board)
+                let immediate = ways.reduce(0) { $0 + $1.chance * (Evaluation.value($1.board) - before) }
                 var value = immediate
                 var weighed = 0.0
                 for way in ways where way.chance >= 0.15 {

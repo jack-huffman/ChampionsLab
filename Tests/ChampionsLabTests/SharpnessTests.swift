@@ -74,7 +74,7 @@ print("\n== and it is there in a real battle ==")
             theirs.slots[index].sp = bulky
             theirs.slots[index].alignmentName = "Bold"
         }
-        var board = Board(mine: team, theirs: theirs, rules: store.rulebook,
+        let board = Board(mine: team, theirs: theirs, rules: store.rulebook,
                           field: Field(isDoubles: true), alreadyEvolved: false)
         check("it is on the field as the Mega",
               board.mine[0].build.form.formLabel == "Mega Absol Z",

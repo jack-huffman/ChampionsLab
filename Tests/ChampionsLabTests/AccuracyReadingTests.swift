@@ -29,7 +29,7 @@ print("\n== No Guard ==")
 
         let zap = board.mine[0].moves[at(board.mine[0], "Zap Cannon")]
         check("Zap Cannon is printed at 50", zap.accuracy == 50, "\(zap.accuracy)")
-        let real = TurnModel.chanceToHit(zap, attacker: board.mine[0],
+        let real = Accuracy.chanceToHit(zap, attacker: board.mine[0],
                                          defender: board.theirs[0], board: board)
         check("No Guard resolves Zap Cannon at 100", real == 100, "\(real)")
 
@@ -49,10 +49,10 @@ print("\n== the sky ==")
                         theirs: theirs, rules: store.rulebook)
         let gale = wet.mine[0].moves[at(wet.mine[0], "Hurricane")]
         wet.field.weather = .none
-        let dry = TurnModel.chanceToHit(gale, attacker: wet.mine[0],
+        let dry = Accuracy.chanceToHit(gale, attacker: wet.mine[0],
                                         defender: wet.theirs[0], board: wet)
         wet.field.weather = .rain
-        let rained = TurnModel.chanceToHit(gale, attacker: wet.mine[0],
+        let rained = Accuracy.chanceToHit(gale, attacker: wet.mine[0],
                                            defender: wet.theirs[0], board: wet)
         check("Hurricane is 70 in the open and 100 in rain",
               dry == 70 && rained == 100, "\(dry) then \(rained)")

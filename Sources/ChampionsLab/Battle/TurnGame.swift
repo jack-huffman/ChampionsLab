@@ -111,7 +111,7 @@ struct TurnGame {
                 let result = DamageCalc.calculate(attacker: fighter.build,
                                                   defender: foes[target].build,
                                                   move: move, field: board.field)
-                let accuracy = TurnModel.chanceToHit(move, attacker: fighter,
+                let accuracy = Accuracy.chanceToHit(move, attacker: fighter,
                                                      defender: foes[target],
                                                      board: board) / 100
                 let worth = Int(Double(result.maxDamage) * accuracy)
@@ -290,7 +290,7 @@ struct TurnGame {
                 let result = DamageCalc.calculate(attacker: team[slot].build,
                                                   defender: foe.build, move: move,
                                                   field: board.field)
-                let accuracy = TurnModel.chanceToHit(move, attacker: team[slot],
+                let accuracy = Accuracy.chanceToHit(move, attacker: team[slot],
                                                      defender: foe, board: board) / 100
                 let share = Double(result.minDamage + result.maxDamage) / 2 * accuracy
                     / Double(max(1, foe.maxHP))
@@ -454,8 +454,8 @@ struct TurnGame {
     /// from a single position.
     func settle(_ mine: Play, _ theirs: Play) -> (expected: Double, likeliest: Board) {
         let outcomes = TurnModel.outcomes(board, mine: mine, theirs: theirs)
-        let before = TurnModel.value(board)
-        let expected = outcomes.reduce(0) { $0 + $1.chance * (TurnModel.value($1.board) - before) }
+        let before = Evaluation.value(board)
+        let expected = outcomes.reduce(0) { $0 + $1.chance * (Evaluation.value($1.board) - before) }
         return (expected, outcomes[0].board)
     }
 
@@ -482,15 +482,15 @@ struct TurnGame {
     /// is when a real player takes the swing.
     func asWinChance(_ gain: Double, reliability: Double = 1) -> Double {
         guard board.myPlaysForWin else { return gain }
-        let before = TurnModel.value(board)
-        let now = TurnModel.winChance(before)
+        let before = Evaluation.value(board)
+        let now = Evaluation.winChance(before)
         guard reliability < 0.999, reliability > 0.05 else {
-            return TurnModel.winChance(before + gain) - now
+            return Evaluation.winChance(before + gain) - now
         }
         // `gain` is already thinned by accuracy, so dividing by it recovers
         // what landing would actually be worth.
-        let landed = TurnModel.winChance(before + gain / reliability) - now
-        let missed = TurnModel.winChance(before) - now
+        let landed = Evaluation.winChance(before + gain / reliability) - now
+        let missed = Evaluation.winChance(before) - now
         return reliability * landed + (1 - reliability) * missed
     }
 
@@ -516,7 +516,7 @@ struct TurnGame {
             let move = team[slot].moves[index]
             guard move.isDamaging, !move.neverMisses, move.accuracy > 0 else { continue }
             guard foes.indices.contains(target) else { continue }
-            worst = Swift.min(worst, TurnModel.chanceToHit(move, attacker: team[slot],
+            worst = Swift.min(worst, Accuracy.chanceToHit(move, attacker: team[slot],
                                                            defender: foes[target],
                                                            board: board) / 100)
         }

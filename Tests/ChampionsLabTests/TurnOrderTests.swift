@@ -374,10 +374,10 @@ extension TurnOrderTests {
             b.trickRoom = room
             return b
         }
-        let none = TurnModel.value(board(tailwind: 0, room: 0))
-        let clear = TurnModel.value(board(tailwind: 4, room: 0))
-        let buried = TurnModel.value(board(tailwind: 4, room: 5))
-        let expiring = TurnModel.value(board(tailwind: 4, room: 1))
+        let none = Evaluation.value(board(tailwind: 0, room: 0))
+        let clear = Evaluation.value(board(tailwind: 4, room: 0))
+        let buried = Evaluation.value(board(tailwind: 4, room: 5))
+        let expiring = Evaluation.value(board(tailwind: 4, room: 1))
         print(String(format: "  no tailwind %+.2f | in the clear %+.2f | under a fresh room %+.2f"
                      + " | under a room with one turn left %+.2f",
                      none, clear, buried, expiring))

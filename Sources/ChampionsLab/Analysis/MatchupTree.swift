@@ -256,7 +256,7 @@ enum MatchupTree {
         report.matrix.myMix = solved.myMix
         report.matrix.theirMix = solved.theirMix
         report.matrix.winChance = solved.payoff.map { row in
-            row.map { TurnModel.winChance($0) }
+            row.map { Evaluation.winChance($0) }
         }
 
         // -- the tree ----------------------------------------------------
@@ -268,8 +268,8 @@ enum MatchupTree {
             // A finished game is a leaf whatever the depth says, and it is the
             // most informative kind: the line actually resolved.
             if board.isOut(mine: false) || board.isOut(mine: true) || left == 0 {
-                let value = TurnModel.value(board)
-                paths.append(Path(steps: steps, estimate: TurnModel.winChance(value),
+                let value = Evaluation.value(board)
+                paths.append(Path(steps: steps, estimate: Evaluation.winChance(value),
                                   decided: board.isOut(mine: false) || board.isOut(mine: true)))
                 return
             }
@@ -281,7 +281,7 @@ enum MatchupTree {
             }
             guard !here.myPlays.isEmpty, !here.theirPlays.isEmpty else {
                 paths.append(Path(steps: steps,
-                                  estimate: TurnModel.winChance(TurnModel.value(board))))
+                                  estimate: Evaluation.winChance(Evaluation.value(board))))
                 return
             }
             // Their answer: the play their own equilibrium leans on hardest.
@@ -298,15 +298,15 @@ enum MatchupTree {
                 after: steps.map(\.mine),
                 options: here.lines.map { line in
                     Decision.Option(play: game.describe(line.play, mine: true),
-                                    winChance: TurnModel.winChance(line.expected),
-                                    ifRead: TurnModel.winChance(line.worst))
+                                    winChance: Evaluation.winChance(line.expected),
+                                    ifRead: Evaluation.winChance(line.worst))
                 }.sorted { $0.winChance > $1.winChance }))
 
             for play in here.myPlays {
                 if shouldStop() { return }
                 let next = TurnModel.resolve(board, mine: play, theirs: theirPlay)
                 let step = Step(mine: game.describe(play, mine: true), theirs: theirText,
-                                winChance: TurnModel.winChance(TurnModel.value(next)),
+                                winChance: Evaluation.winChance(Evaluation.value(next)),
                                 play: play)
                 walk(next, steps + [step], left - 1)
             }
@@ -411,7 +411,7 @@ enum MatchupTree {
             board = TurnModel.resolve(board, mine: mine, theirs: theirs, rolling: true)
             board.fillGaps()
         }
-        let standing = TurnModel.value(board)
+        let standing = Evaluation.value(board)
         if standing > 0.25 { return true }
         if standing < -0.25 { return false }
         return nil

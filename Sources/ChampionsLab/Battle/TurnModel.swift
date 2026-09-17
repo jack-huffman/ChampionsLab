@@ -1170,234 +1170,6 @@ enum TurnModel {
     /// Abilities that stop priority moves reaching their side at all.
     static let priorityBlockers: Set<String> = ["Armor Tail", "Queenly Majesty", "Dazzling"]
 
-    /// What a board is worth to the side that owns `mine`.
-    ///
-    /// Deliberately simple, and zero-sum by construction so the matrix has an
-    /// equilibrium. Staying alive is worth a lot more than the last third of a
-    /// health bar: a Pokémon on one point still gets to act, still threatens,
-    /// still has to be answered, and a model that values only health throws
-    /// bodies away for chip damage.
-    static func value(_ board: Board) -> Double {
-        func side(_ team: [Fighter], _ worth: [String: Double], _ countStages: Bool,
-                  _ floor: Double) -> Double {
-            team.reduce(0) { total, fighter in
-                guard !fighter.fainted else { return total }
-                // Only a Pokémon that has stood on the field carries a weight.
-                // One still on the bench is worth exactly one, whoever it is.
-                //
-                // This is the hidden-information rule. Weights are looked up by
-                // form, so weighting a Pokémon the other side has never seen
-                // would let its *identity* move the value of the board — and
-                // there are solve paths that fall back to the true board, so it
-                // is not enough to strip the weights from their view alone.
-                //
-                // Worth is around one, so a side with no weights scores exactly
-                // as it did before there were any.
-                let weight = fighter.seen ? (worth[fighter.build.form.id] ?? 1) : 1
-                return total + weight * (floor + (1 - floor) * fighter.share)
-                    + (countStages ? stages(fighter) : 0)
-            }
-        }
-        // Both sides weighed, which is what lets the engine prefer to knock out
-        // the Pokémon that actually threatens it. Only what has been seen
-        // carries a weight, which is where the hidden-information rule is kept.
-        var out = side(board.mine, board.myWorth, board.myCountsStages, board.myAliveFloor)
-            - side(board.theirs, board.theirWorth, board.theirCountsStages, board.theirAliveFloor)
-        out += speedControl(board.myTailwind, under: board.trickRoom)
-            - speedControl(board.theirTailwind, under: board.trickRoom)
-        out += trickRoomEdge(board)
-        return out
-    }
-
-    /// What the stat stages on a Pokémon are worth.
-    ///
-    /// They were worth nothing at all, which made every disruption move look
-    /// like a wasted turn. An Intimidate, a Snarl, an Icy Wind, a Parting Shot
-    /// — the whole way a support Pokémon earns its slot — showed up only as
-    /// whatever damage the search happened to see inside its horizon, and at a
-    /// short budget that horizon is a turn or two. So the engine would not pay
-    /// a turn to take an attacker's Attack away, and could not see why anybody
-    /// would cycle an Intimidate in and out to keep doing it.
-    ///
-    /// Priced off the damage multiplier a stage actually produces rather than
-    /// counted flat, because the two are not the same shape: +1 is half again,
-    /// while −1 is a third off. A stage on the attacking stat a Pokémon does
-    /// not use is worth almost nothing, which is why the two are told apart.
-    private static func stages(_ fighter: Fighter) -> Double {
-        let boosts = fighter.build.boosts
-        guard boosts.count >= 6, boosts.contains(where: { $0 != 0 }) else { return 0 }
-        func multiplier(_ stage: Int) -> Double {
-            stage >= 0 ? Double(2 + stage) / 2 : 2 / Double(2 - stage)
-        }
-        func worth(_ stat: Stat, _ scale: Double) -> Double {
-            let stage = boosts[stat.rawValue]
-            guard stage != 0 else { return 0 }
-            return (multiplier(stage) - 1) * scale
-        }
-        // Whichever side it actually attacks from. The other is nearly idle:
-        // a Special Attack drop on a Rillaboom costs it almost nothing.
-        let physical = fighter.build.form.attack >= fighter.build.form.spAttack
-        var out = worth(physical ? .attack : .spAttack, 0.16)
-        out += worth(physical ? .spAttack : .attack, 0.03)
-        // Taking a hit is worth about what landing one is.
-        out += worth(.defense, 0.11)
-        out += worth(.spDefense, 0.11)
-        // Speed only pays when it changes who goes first, which this cannot
-        // see from here, so it is priced low and honestly.
-        out += worth(.speed, 0.07)
-        return Swift.max(-0.9, Swift.min(0.9, out))
-    }
-
-    /// A position's material margin, turned into a chance of winning from it.
-    ///
-    /// Material is linear and winning is not, and the difference is the whole
-    /// of how a good player handles risk. Strong players say it plainly:
-    ///
-    ///     "When you're ahead, only predict if being right wins the game
-    ///      outright and being wrong doesn't throw your lead. When you're
-    ///      behind, predict when no safe play covers all their options and
-    ///      losing without a read is otherwise inevitable."
-    ///
-    /// An engine maximising material cannot do either, because material is
-    /// risk-neutral: it plays a position it is winning by three exactly as it
-    /// plays one it is losing by three, and a coin flip worth ±1 looks the same
-    /// from both. Scoring a turn by how far it moves this curve instead makes
-    /// the engine cautious when it is ahead and willing when it is behind —
-    /// not as a rule bolted on, but because that is what the curve does. It is
-    /// flat out at the ends, so at +3 another point of material buys almost no
-    /// extra chance of winning while a slip costs a great deal, and at −3 the
-    /// reverse.
-    ///
-    /// The slope is set so a one-Pokémon lead reads as roughly two chances in
-    /// three, which is about where a real game with a Pokémon in hand sits.
-    static func winChance(_ value: Double) -> Double {
-        1 / (1 + exp(-value * 0.72))
-    }
-
-    /// What a Trick Room is worth, and to whom.
-    ///
-    /// It was worth nothing. The room reverses the order, so the engine saw
-    /// its effect inside the search — the slow Pokémon moving first — and
-    /// nothing at all about having it up. Setting one therefore looked like a
-    /// spent turn, and running one down looked like no achievement, which is
-    /// the opposite of how a game around Trick Room is actually played:
-    ///
-    ///     "Your goal is to minimise the number of turns where your opponent
-    ///      can actually benefit from Trick Room."
-    ///
-    /// Credited to whichever side is slower on the field, because that is the
-    /// side it is for, and scaled by the turns left — a room with one turn on
-    /// it is nearly spent.
-    private static func trickRoomEdge(_ board: Board) -> Double {
-        guard board.trickRoom > 0 else { return 0 }
-        func speed(_ team: [Fighter]) -> Int {
-            let up = team.prefix(board.activeCount).filter { !$0.fainted }
-            guard !up.isEmpty else { return 0 }
-            return up.reduce(0) { $0 + $1.build.speed(in: board.field) } / up.count
-        }
-        let mine = speed(board.mine), theirs = speed(board.theirs)
-        guard mine != theirs else { return 0 }
-        // Half a Pokémon at its fullest, falling away as the room runs out.
-        let turns = Swift.min(4, board.trickRoom)
-        let worth = 0.13 * Double(turns)
-        return mine < theirs ? worth : -worth
-    }
-
-    /// What a Tailwind is worth, given what the room is doing.
-    ///
-    /// Speed control is a real asset and the turn that sets it looks wasted
-    /// without saying so. But a Tailwind under a Trick Room is not an asset at
-    /// all — the room reverses the order, so doubling your Speed makes you
-    /// move *later*. The engine used to count it as a flat gain either way and
-    /// would cheerfully put a Tailwind up into a Trick Room that had four
-    /// turns left on it, which no player would do.
-    ///
-    /// Counted turn by turn: the turns the Tailwind runs inside the room are
-    /// worth what the turns outside it are worth, with the sign reversed. A
-    /// Trick Room with one turn left and a four-turn Tailwind comes out
-    /// positive, which is exactly when somebody would actually set it.
-    private static func speedControl(_ tailwind: Int, under trickRoom: Int) -> Double {
-        guard tailwind > 0 else { return 0 }
-        let reversed = Swift.min(tailwind, trickRoom)
-        let ordinary = Swift.max(0, tailwind - trickRoom)
-        return Double(ordinary - reversed) * 0.12
-    }
-
-    /// Quick Claw: a fifth of the time the holder goes first regardless.
-    /// Rolled once per turn per holder, when the turn is played; the search
-    /// never counts on it, the way it never counts on a second Protect.
-    static func quickClawed(_ fighter: Fighter, mine: Bool, slot: Int,
-                                    board: Board, rolling: Bool) -> Bool {
-        // Quick Draw is the ability version, three times in ten rather than
-        // two, and it rides the same pre-decided flip.
-        let odds = fighter.build.ability == "Quick Draw" ? 0.3
-            : (fighter.build.item == "Quick Claw" ? 0.2 : 0)
-        guard odds > 0 else { return false }
-        if rolling { return Double.random(in: 0..<1, using: &TurnModel.dice) < odds }
-        return board.rulings[Board.flip("quickclaw", mine, slot)] ?? false
-    }
-
-    private static func priority(of choice: Choice, for fighter: Fighter,
-                                 field: Field = Field()) -> Int {
-        var ignored: [String] = []
-        return priority(of: choice, for: fighter, field: field, reasons: &ignored)
-    }
-
-    /// The same, saying why.
-    ///
-    /// The reasons live next to the rules rather than in whatever screen wants
-    /// to explain a turn, because an explanation derived separately from the
-    /// thing it explains is an explanation that can be wrong — and a wrong one
-    /// is worse than none, since it is believed.
-    static func priority(of choice: Choice, for fighter: Fighter,
-                         field: Field = Field(), reasons: inout [String]) -> Int {
-        switch choice {
-        case .pass: return -99
-        case .swap:
-            reasons.append("switching, which happens before anything is thrown")
-            return 6
-        case .protectSelf(let index), .attack(let index, _):
-            guard fighter.moves.indices.contains(index) else { return 0 }
-            let move = fighter.moves[index]
-            var priority = move.priority
-            if move.priority != 0 {
-                reasons.append("\(move.name) is priority \(move.priority > 0 ? "+" : "")"
-                               + "\(move.priority)")
-            }
-            // Prankster: a stage on every status move, which is what puts a
-            // Whimsicott's Tailwind or Encore ahead of anything without
-            // priority of its own — though not ahead of a Fake Out at +3.
-            if fighter.build.ability == "Prankster", !move.isDamaging {
-                priority += 1
-                reasons.append("Prankster adds +1 to a status move")
-            }
-            // Grassy Glide, which is most of the reason a Rillaboom is worth a
-            // slot: under its own terrain it is a priority move, and without
-            // that it is a 60 power Grass attack nobody would run.
-            //
-            // The move data has said so all along — "if the user is under the
-            // effect of Grassy Terrain this move's priority becomes +1" — and
-            // the analysis screens quote it at you. The turn model never read
-            // it, so in an actual battle the Glide has never once gone first.
-            if move.id == "grassyglide", field.terrain == .grassy, fighter.isGrounded {
-                priority += 1
-                reasons.append("Grassy Glide is +1 under its own terrain")
-            }
-            // Stall always acts last, whatever it is doing.
-            if fighter.build.ability == "Stall" {
-                priority -= 7
-                reasons.append("Stall always acts last")
-            }
-            // Gale Wings: Flying moves first, while the bar is full.
-            if fighter.build.ability == "Gale Wings", move.type == "Flying",
-               fighter.hp == fighter.maxHP {
-                priority += 1
-                reasons.append("Gale Wings adds +1 to a Flying move at full health")
-            }
-            return priority
-        }
-    }
-
     /// Resolve one turn from both sides' choices.
     /// Play a turn out.
     ///
@@ -1458,7 +1230,7 @@ enum TurnModel {
                   out.mine[slot].charging == nil,
                   !heldInPlace(out.mine[slot], by: out.theirs, board: out) else { continue }
             leaving.append((true, slot, bench,
-                            speed(of: out.mine[slot], tailwind: out.myTailwind > 0, board: out)))
+                            TurnOrder.speed(of: out.mine[slot], tailwind: out.myTailwind > 0, board: out)))
         }
         for (slot, choice) in theirChoices.enumerated() {
             guard case .swap(let bench) = choice,
@@ -1467,7 +1239,7 @@ enum TurnModel {
                   out.theirs[slot].charging == nil,
                   !heldInPlace(out.theirs[slot], by: out.mine, board: out) else { continue }
             leaving.append((false, slot, bench,
-                            speed(of: out.theirs[slot], tailwind: out.theirTailwind > 0, board: out)))
+                            TurnOrder.speed(of: out.theirs[slot], tailwind: out.theirTailwind > 0, board: out)))
         }
         let inverted = out.trickRoom > 0
         leaving.sort { a, b in
@@ -1506,14 +1278,14 @@ enum TurnModel {
            slot < out.activeCount, out.mine[slot].pendingMega != nil,
            !(slot == 0 ? mine.left : mine.right).isSwap,
            !out.mine[slot].fainted, !out.mine.contains(where: \.hasMegaEvolved) {
-            evolving.append((true, slot, speed(of: out.mine[slot],
+            evolving.append((true, slot, TurnOrder.speed(of: out.mine[slot],
                                                tailwind: out.myTailwind > 0, board: out)))
         }
         if let slot = theirs.megaSlot, out.theirs.indices.contains(slot),
            slot < out.activeCount, out.theirs[slot].pendingMega != nil,
            !(slot == 0 ? theirs.left : theirs.right).isSwap,
            !out.theirs[slot].fainted, !out.theirs.contains(where: \.hasMegaEvolved) {
-            evolving.append((false, slot, speed(of: out.theirs[slot],
+            evolving.append((false, slot, TurnOrder.speed(of: out.theirs[slot],
                                                 tailwind: out.theirTailwind > 0, board: out)))
         }
         // Trick Room does not invert this: Mega Evolution is worked out on raw
@@ -1536,7 +1308,7 @@ enum TurnModel {
         // of Speed between actions — so that anything wanting to *describe*
         // the order walks the same code rather than a second opinion of it.
         var pending = TurnOrder.declare(&out, mine: myChoices, theirs: theirChoices,
-                                        rolling: rolling, quickClaw: quickClawed)
+                                        rolling: rolling)
         // What everyone is about to do, before anyone does it.
         for entry in pending {
             out.declared[(entry.mine ? "m" : "t") + "\(entry.slot)"] = entry.choice
@@ -1757,7 +1529,7 @@ enum TurnModel {
                 // whole reason a Blaziken is frightening if it is left alone.
                 if who.build.ability == "Speed Boost", hp > 0, !who.justArrived,
                    who.build.boosts[Stat.speed.rawValue] < 6 {
-                    change([.speed: 1], onMine: mine, slot: index, board: &board,
+                    StatChanges.change([.speed: 1], onMine: mine, slot: index, board: &board,
                            because: "Speed Boost")
                 }
                 // Shed Skin: one turn in three it shakes a condition off.
@@ -1774,8 +1546,8 @@ enum TurnModel {
                     let stats: [Stat] = [.attack, .defense, .spAttack, .spDefense, .speed]
                     if let up = stats.randomElement(using: &TurnModel.dice),
                        let down = stats.filter({ $0 != up }).randomElement(using: &TurnModel.dice) {
-                        change([up: 2], onMine: mine, slot: index, board: &board, because: "Moody")
-                        change([down: -1], onMine: mine, slot: index, board: &board, because: "Moody")
+                        StatChanges.change([up: 2], onMine: mine, slot: index, board: &board, because: "Moody")
+                        StatChanges.change([down: -1], onMine: mine, slot: index, board: &board, because: "Moody")
                     }
                 }
                 // Mimicry takes the terrain's type while it stands on it.
@@ -2125,7 +1897,7 @@ enum TurnModel {
 
                 // Octolock: a stage off each defence, every turn it stays.
                 if (side ? board.mine : board.theirs)[index].octolocked {
-                    change([.defense: -1, .spDefense: -1], onMine: side, slot: index,
+                    StatChanges.change([.defense: -1, .spDefense: -1], onMine: side, slot: index,
                            board: &board, because: "Octolock")
                 }
 
@@ -2143,7 +1915,7 @@ enum TurnModel {
                     if side { board.mine[index].drowsyFor -= 1 } else { board.theirs[index].drowsyFor -= 1 }
                     if (side ? board.mine : board.theirs)[index].drowsyFor == 0 {
                         let who = side ? board.mine[index] : board.theirs[index]
-                        if who.status == .none, !sleepRefused(who, board: board) {
+                        if who.status == .none, !Ailments.sleepRefused(who, board: board) {
                             if side { board.mine[index].status = .sleep; board.mine[index].asleepFor = 2 }
                             else { board.theirs[index].status = .sleep; board.theirs[index].asleepFor = 2 }
                             board.note("\(name) fell asleep.")
@@ -2169,16 +1941,6 @@ enum TurnModel {
                 else { board.theirs[index].destinyBound = false }
             }
         }
-    }
-
-    /// Whether something cannot be put to sleep — the same rules Spore is held
-    /// to, which is what Yawn has to ask before it comes due.
-    private static func sleepRefused(_ who: Fighter, board: Board) -> Bool {
-        if who.build.ability == "Insomnia" || who.build.ability == "Vital Spirit" { return true }
-        if who.build.ability == "Sweet Veil" || who.build.ability == "Comatose" { return true }
-        if board.field.terrain == .electric && who.isGrounded { return true }
-        if who.build.ability == "Leaf Guard" && board.field.weather == .sun { return true }
-        return false
     }
 
     /// Turn one Pokémon into its Mega, with whatever that brings with it.
@@ -2279,7 +2041,7 @@ enum TurnModel {
             parts += rallied
             var herbs: [String] = []
             for index in opposing.indices.prefix(2) {
-                if let herb = whiteHerb(&opposing[index]) { herbs.append(herb) }
+                if let herb = StatChanges.whiteHerb(&opposing[index]) { herbs.append(herb) }
             }
             guard !parts.isEmpty else { return nil }
             return "\(name)'s Intimidate " + parts.joined(separator: "; ") + "."
@@ -2313,72 +2075,6 @@ enum TurnModel {
         case "Misty Surge":    field.terrain = .misty;    return "\(name)'s Misty Surge covered the field in mist."
         case "Psychic Surge":  field.terrain = .psychic;  return "\(name)'s Psychic Surge made the field feel strange."
         default: return nil
-        }
-    }
-
-    /// One pending action's Speed, as the board stands right now.
-    /// Speed as the board has it right now, with everything applied.
-    ///
-    /// One reader, because the turn re-checks this between actions and
-    /// anything explaining the turn has to get the same number back.
-    static func liveSpeed(side: Bool, slot: Int, board: Board) -> Int {
-        let team = side ? board.mine : board.theirs
-        guard team.indices.contains(slot) else { return 0 }
-        var value = speed(of: team[slot],
-                          tailwind: (side ? board.myTailwind : board.theirTailwind) > 0,
-                          board: board)
-        if team[slot].status.halvesSpeed { value /= 2 }
-        return value
-    }
-
-    static func speed(of fighter: Fighter, tailwind: Bool, board: Board) -> Int {
-        let base = fighter.build.speed(in: board.field)
-        return tailwind ? base * 2 : base
-    }
-
-    /// Who acts when, and why — from the same bracket and Speed the turn uses.
-    ///
-    /// Reconstructed rather than recorded: the turn itself re-checks Speed
-    /// before every action, because a Tailwind that goes up mid-turn changes
-    /// the order of what is left. This reads the position as it stood at the
-    /// start, which is the question somebody asking "why did that go first" is
-    /// actually asking.
-    struct Billing: Sendable, Identifiable {
-        let mine: Bool
-        let slot: Int
-        let who: String
-        let what: String
-        let bracket: Int
-        let speed: Int
-        /// What moved the bracket off the move's own number.
-        let becauseOfPriority: [String]
-        /// What moved the Speed off the Pokémon's own number.
-        let becauseOfSpeed: [String]
-        var id: String { "\(mine)-\(slot)" }
-    }
-
-    static func billing(_ board: Board, mine: Play, theirs: Play) -> [Billing] {
-        // A throwaway copy, because declaring notices things out loud — a
-        // Quick Claw going off is a line in the log — and describing a turn
-        // must not write to the turn.
-        var scratch = board
-        let entries = TurnOrder.declare(&scratch, mine: [mine.left, mine.right],
-                                        theirs: [theirs.left, theirs.right],
-                                        rolling: false, quickClaw: quickClawed)
-        let game = TurnGame(board: board)
-        return TurnOrder.wholeTurn(from: entries, board: board).compactMap { entry in
-            let team = entry.mine ? board.mine : board.theirs
-            guard team.indices.contains(entry.slot) else { return nil }
-            return Billing(
-                mine: entry.mine, slot: entry.slot,
-                who: team[entry.slot].build.form.formLabel,
-                what: game.describe(entry.choice, fighter: team[entry.slot],
-                                    foes: Array((entry.mine ? board.theirs : board.mine)
-                                        .prefix(board.activeCount)),
-                                    team: team),
-                bracket: entry.bracket, speed: entry.speed,
-                becauseOfPriority: entry.becauseOfPriority,
-                becauseOfSpeed: entry.becauseOfSpeed)
         }
     }
 
@@ -2475,8 +2171,8 @@ enum TurnModel {
         let name = actor.build.form.formLabel
         if actor.flinched {
             board.note("\(name) flinched and could not move.")
-            dropCharge(byMine: byMine, slot: slot, board: &board)
-            markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+            MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
+            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return
         }
         // A disabled move cannot be used, and trying costs the turn. The
@@ -2486,15 +2182,15 @@ enum TurnModel {
         if case .attack(let index, _) = choice, actor.disabled == index,
            actor.moves.indices.contains(index) {
             board.note("\(name)'s \(actor.moves[index].name) is disabled.")
-            markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return
         }
         // Sleep and paralysis cost turns, which is the whole reason they are
         // worth a move slot.
         if actor.status == .sleep {
             board.note("\(name) is fast asleep.")
-            dropCharge(byMine: byMine, slot: slot, board: &board)
-            markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+            MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
+            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return
         }
         // Frozen solid. One turn in five it thaws on its own, and a Fire move
@@ -2512,15 +2208,15 @@ enum TurnModel {
                 board.note("\(name) thawed out.")
             } else {
                 board.note("\(name) is frozen solid.")
-                dropCharge(byMine: byMine, slot: slot, board: &board)
-                markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
+                MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
                 return
             }
         }
         if actor.status == .paralysis, rolling, Double.random(in: 0...1, using: &TurnModel.dice) < 0.25 {
             board.note("\(name) is paralysed and cannot move.")
-            dropCharge(byMine: byMine, slot: slot, board: &board)
-            markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+            MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
+            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return
         }
         // Infatuation: half of its actions are lost while whatever it fell for
@@ -2533,8 +2229,8 @@ enum TurnModel {
                 else { board.theirs[slot].infatuatedWith = nil }
             } else if rolling, Double.random(in: 0..<1, using: &TurnModel.dice) < 0.5 {
                 board.note("\(name) is immobilised by love.")
-                dropCharge(byMine: byMine, slot: slot, board: &board)
-                markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
+                MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
                 return
             }
         }
@@ -2542,8 +2238,8 @@ enum TurnModel {
         // stops something clicking one button all game.
         if actor.tormented, case .attack(let index, _) = choice, actor.lastMove == index {
             board.note("\(name) cannot use the same move twice in a row.")
-            dropCharge(byMine: byMine, slot: slot, board: &board)
-            markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+            MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
+            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return
         }
 
@@ -2566,8 +2262,8 @@ enum TurnModel {
                     else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - hurt) }
                     board.note("It hurt itself in its confusion for \(hurt).")
                     if (byMine ? board.mine : board.theirs)[slot].fainted { board.note("\(name) fainted.") }
-                    dropCharge(byMine: byMine, slot: slot, board: &board)
-                    markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                    MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
+                    MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
                     return
                 }
             }
@@ -2580,17 +2276,17 @@ enum TurnModel {
             return
         case .protectSelf(let index):
             let label = actor.moves.indices.contains(index) ? actor.moves[index].name : "Protect"
-            remember(byMine: byMine, slot: slot, move: index, target: 0, board: &board)
-            let held = tryProtect(label, byMine: byMine, slot: slot, board: &board, rolling: rolling)
-            markFailed(byMine: byMine, slot: slot, board: &board, failed: !held)
+            MoveHistory.remember(byMine: byMine, slot: slot, move: index, target: 0, board: &board)
+            let held = Protection.tryProtect(label, byMine: byMine, slot: slot, board: &board, rolling: rolling)
+            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: !held)
         case .attack(let moveIndex, let target):
             guard actor.moves.indices.contains(moveIndex) else { return }
             let move = actor.moves[moveIndex]
-            remember(byMine: byMine, slot: slot, move: moveIndex, target: target, board: &board)
+            MoveHistory.remember(byMine: byMine, slot: slot, move: moveIndex, target: target, board: &board)
             // Taunted: nothing but attacks until it wears off.
             if !move.isDamaging, actor.tauntedFor > 0 {
                 board.note("\(name) cannot use \(move.name) — it is still taunted.")
-                markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
                 return
             }
             guard move.isDamaging else {
@@ -2599,7 +2295,7 @@ enum TurnModel {
                         to: &board, rolling: rolling)
                 // A support move that only had "but" to say for itself failed.
                 let failed = board.story.dropFirst(before).contains { $0.hasPrefix("But ") || $0.contains("but it failed") }
-                markFailed(byMine: byMine, slot: slot, board: &board, failed: failed)
+                MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: failed)
                 selfKO(move, byMine: byMine, slot: slot, board: &board)
                 return
             }
@@ -2627,7 +2323,7 @@ enum TurnModel {
                         ? "\(name) used \(move.name). In the \(board.field.weather.rawValue.lowercased()) it needs no time to charge."
                         : (charge.hides ? "\(name) used \(move.name) and is out of reach."
                                         : "\(name) began charging \(move.name)."))
-                    applySelf(charge.boosts, toMine: byMine, slot: slot, board: &board)
+                    StatChanges.applySelf(charge.boosts, toMine: byMine, slot: slot, board: &board)
                     if !waived {
                         if byMine {
                             board.mine[slot].charging = moveIndex
@@ -2641,7 +2337,7 @@ enum TurnModel {
                         return
                     }
                 } else {
-                    dropCharge(byMine: byMine, slot: slot, board: &board, quietly: true)
+                    MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board, quietly: true)
                     board.note("\(name) unleashed \(move.name).")
                 }
             } else {
@@ -2653,14 +2349,14 @@ enum TurnModel {
                 ? board.myScreens : board.theirScreens
             if move.isSpread, farScreens.wideGuard {
                 board.note("Wide Guard blocked it.")
-                markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
                 return
             }
             // Quick Guard turns away anything that moves first, which is what
             // a Fake Out team is actually afraid of.
             if move.priority > 0, target < Choice.allyTarget, farScreens.quickGuard {
                 board.note("Quick Guard blocked it.")
-                markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
                 return
             }
             // Armor Tail and Queenly Majesty refuse priority outright: nothing
@@ -2688,7 +2384,7 @@ enum TurnModel {
                 if !aimedAt.isEmpty, aimedAt.allSatisfy({ defenders[$0].isGrounded }) {
                     let who = defenders[aimedAt[0]].build.form.formLabel
                     board.note("The Psychic Terrain refused it — \(who) is standing on it, and nothing quick gets through.")
-                    markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                    MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
                     return
                 }
             }
@@ -2707,7 +2403,7 @@ enum TurnModel {
                 }()
                 guard attacking else {
                     board.note("But it failed — \(move.name) needs a target that is about to attack.")
-                    markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                    MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
                     return
                 }
             }
@@ -2878,7 +2574,7 @@ enum TurnModel {
                 // 85% can hit one of them and miss the other. The search's
                 // averages were always per target; only the dice were not.
                 if rolling, !move.neverMisses, move.accuracy > 0,
-                   Double.random(in: 0...100, using: &TurnModel.dice) > chanceToHit(move, attacker: actor,
+                   Double.random(in: 0...100, using: &TurnModel.dice) > Accuracy.chanceToHit(move, attacker: actor,
                                                             defender: defending[index],
                                                             board: board) {
                     board.detail(aimed.count > 1 ? "\(hitName) avoided it." : "It missed.")
@@ -3002,7 +2698,7 @@ enum TurnModel {
                         }
                         if paid.isEmpty { board.note("\(hitName)'s \(who) absorbed it.") }
                         else {
-                            change(paid, onMine: hitMine, slot: index, board: &board, because: who)
+                            StatChanges.change(paid, onMine: hitMine, slot: index, board: &board, because: who)
                         }
                     }
                     continue
@@ -3024,7 +2720,7 @@ enum TurnModel {
 
                 // 4. The roll.
                 let accuracy = move.neverMisses || move.accuracy == 0
-                    ? 1.0 : chanceToHit(move, attacker: actor, defender: defending[index],
+                    ? 1.0 : Accuracy.chanceToHit(move, attacker: actor, defender: defending[index],
                                         board: board) / 100
                 // One blow, not the flurry. `calculate` already multiplies a
                 // multi-hit move up by the strikes it assumes, because that is
@@ -3152,12 +2848,12 @@ enum TurnModel {
                 // specifically to stand in front of a Fake Out did not, which
                 // is most of the reason anybody wears it.
                 if result.notes.contains(where: { $0.contains("Weakness Policy") }) {
-                    applySelf([.attack: 2, .spAttack: 2], toMine: hitMine, slot: index,
+                    StatChanges.applySelf([.attack: 2, .spAttack: 2], toMine: hitMine, slot: index,
                               board: &board)
                     if hitMine { board.mine[index].build.itemSpent = true }
                     else { board.theirs[index].build.itemSpent = true }
                 }
-                applyDrops(move.targetDrops, toMine: hitMine, slot: index, board: &board)
+                StatChanges.applyDrops(move.targetDrops, toMine: hitMine, slot: index, board: &board)
                 secondary(of: move, byMine: byMine, hitMine: hitMine, slot: slot, hit: index,
                           rolling: rolling, board: &board)
                 let after = hitMine ? board.mine[index] : board.theirs[index]
@@ -3173,10 +2869,10 @@ enum TurnModel {
                     // Moxie and its kin take something from the knockout.
                     switch actor.build.ability {
                     case "Moxie", "Chilling Neigh":
-                        change([.attack: 1], onMine: byMine, slot: slot, board: &board,
+                        StatChanges.change([.attack: 1], onMine: byMine, slot: slot, board: &board,
                                because: actor.build.ability)
                     case "Grim Neigh", "Soul-Heart":
-                        change([.spAttack: 1], onMine: byMine, slot: slot, board: &board,
+                        StatChanges.change([.spAttack: 1], onMine: byMine, slot: slot, board: &board,
                                because: actor.build.ability)
                     case "Beast Boost":
                         // Whichever of its stats is highest, which is the whole
@@ -3184,7 +2880,7 @@ enum TurnModel {
                         let build = actor.build
                         let best = [Stat.attack, .defense, .spAttack, .spDefense, .speed]
                             .max { build.stat($0) < build.stat($1) } ?? .attack
-                        change([best: 1], onMine: byMine, slot: slot, board: &board, because: "Beast Boost")
+                        StatChanges.change([best: 1], onMine: byMine, slot: slot, board: &board, because: "Beast Boost")
                     default: break
                     }
                 }
@@ -3193,7 +2889,7 @@ enum TurnModel {
             // there to hit. Stomping Tantrum remembers, and a move that hurts
             // its user when it fails hurts its user now — High Jump Kick into
             // a Protect crashes just as it does into thin air.
-            markFailed(byMine: byMine, slot: slot, board: &board, failed: reached == 0)
+            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: reached == 0)
             if reached == 0 {
                 let costs = move.drawbacks
                 if costs.crash > 0 {
@@ -3236,11 +2932,11 @@ enum TurnModel {
             if move.name == "Rapid Spin", sweepOwnHazards(byMine: byMine, board: &board) {
                 board.note("\(name) spun the hazards away from its own side.")
             }
-            applySelf(move.selfBoosts, toMine: byMine, slot: slot, board: &board)
+            StatChanges.applySelf(move.selfBoosts, toMine: byMine, slot: slot, board: &board)
             // What the move takes off its user: Close Combat's defences,
             // Overheat's Special Attack. Missed entirely until now, so a
             // Sneasler could Close Combat all game at full Defence.
-            applySelf(move.selfDrops.mapValues { -$0 }, toMine: byMine, slot: slot, board: &board)
+            StatChanges.applySelf(move.selfDrops.mapValues { -$0 }, toMine: byMine, slot: slot, board: &board)
             cost(of: move, dealt: totalDealt, byMine: byMine, slot: slot, board: &board)
         }
     }
@@ -3279,7 +2975,7 @@ enum TurnModel {
 
         // Stamina does not need contact: any hit raises Defense.
         if defender.build.ability == "Stamina", !defender.fainted {
-            applySelf([.defense: 1], toMine: hitMine, slot: hit, board: &board)
+            StatChanges.applySelf([.defense: 1], toMine: hitMine, slot: hit, board: &board)
         }
         // Rocky Helmet: a sixth of the attacker's health for touching it, which
         // is the item's whole job and the reason a physical attacker thinks
@@ -3324,7 +3020,7 @@ enum TurnModel {
             default: break
             }
             if !answer.isEmpty {
-                change(answer, onMine: hitMine, slot: hit, board: &board, because: defender.build.ability)
+                StatChanges.change(answer, onMine: hitMine, slot: hit, board: &board, because: defender.build.ability)
             }
         }
         // Anger Point needs no contact: any critical hit takes it to the top.
@@ -3370,7 +3066,7 @@ enum TurnModel {
         // the field, which is the whole of it.
         if attacker.build.ability == "Stench", !defender.fainted, rolling,
            Double.random(in: 0..<1, using: &TurnModel.dice) < 0.1 {
-            flinch(onMine: hitMine, slot: hit, board: &board, because: "the stench")
+            Ailments.flinch(onMine: hitMine, slot: hit, board: &board, because: "the stench")
         }
 
         // Aftermath and Innards Out charge whoever landed the finishing hit.
@@ -3437,7 +3133,7 @@ enum TurnModel {
         // Gooey and Tangling Hair take a stage of Speed off whatever touches
         // them, which is how a slow Pokémon stops being outrun.
         if ["Gooey", "Tangling Hair"].contains(defender.build.ability), !defender.fainted {
-            change([.speed: -1], onMine: byMine, slot: slot, board: &board,
+            StatChanges.change([.speed: -1], onMine: byMine, slot: slot, board: &board,
                    because: defender.build.ability)
         }
         // Magician takes the item off whatever it hits, if its own hands are
@@ -3563,53 +3259,6 @@ enum TurnModel {
         }
     }
 
-    /// Stat stages a move takes off whatever it hit.
-    /// Stat stages taken off a Pokémon by the other side: Icy Wind, Snarl, a
-    /// Weakness Policy going off on the wrong one. The abilities that answer
-    /// a drop from outside all live here: Clear Body refuses it, Contrary
-    /// turns it round, Defiant and Competitive take it and hit back.
-    private static func applyDrops(_ drops: [Stat: Int], toMine: Bool, slot: Int,
-                                   board: inout Board) {
-        guard !drops.isEmpty else { return }
-        let team = toMine ? board.mine : board.theirs
-        guard team.indices.contains(slot), !team[slot].fainted else { return }
-        let name = team[slot].build.form.formLabel
-        let ability = team[slot].build.ability
-        // Big Pecks keeps its Defense where it is, and nothing else.
-        if ability == "Big Pecks", drops.keys.contains(.defense), drops.count == 1 {
-            board.note("\(name)'s Big Pecks kept its Defense where it was.")
-            return
-        }
-        if ["Clear Body", "White Smoke", "Full Metal Body", "Mirror Armor"].contains(ability) {
-            board.note("\(name)'s \(ability) kept its stats where they were.")
-            return
-        }
-        // Flower Veil covers the Grass types on its own side, itself included.
-        let partner = slot == 0 ? 1 : 0
-        if team[slot].types.contains(.grass),
-           team.indices.contains(partner), !team[partner].fainted,
-           team[partner].build.ability == "Flower Veil" || ability == "Flower Veil" {
-            board.note("\(name) is covered by Flower Veil; its stats stay where they are.")
-            return
-        }
-        let deltas = Dictionary(uniqueKeysWithValues: drops.map { ($0.key, -$0.value) })
-        change(deltas, onMine: toMine, slot: slot, board: &board)
-        if ability == "Defiant" {
-            change([.attack: 2], onMine: toMine, slot: slot, board: &board, because: "Defiant")
-        } else if ability == "Competitive" {
-            change([.spAttack: 2], onMine: toMine, slot: slot, board: &board, because: "Competitive")
-        }
-    }
-
-    /// Stat stages a Pokémon gives itself, up or down: Swords Dance, Close
-    /// Combat's cost, Weakness Policy. Nothing refuses these except Contrary,
-    /// which reverses them — the whole reason Contrary Close Combat exists.
-    private static func applySelf(_ boosts: [Stat: Int], toMine: Bool, slot: Int,
-                                  board: inout Board) {
-        change(boosts, onMine: toMine, slot: slot, board: &board)
-        opportunist(after: boosts, onMine: toMine, board: &board)
-    }
-
     /// Protect, with the odds the game gives it: certain the first time, a
     /// third the next, a ninth after that, and back to certain the moment one
     /// fails or a turn goes by without one. A played turn rolls it; the search
@@ -3703,7 +3352,7 @@ enum TurnModel {
                 board.note("The veil kept \(name) from being \(ailment.rawValue).")
                 return
             }
-            if let refused = refusesStatus(ailment, onMine: hitMine, slot: hit, board: board) {
+            if let refused = Ailments.refusesStatus(ailment, onMine: hitMine, slot: hit, board: board) {
                 board.note("\(name)'s \(refused) kept it from being \(ailment.rawValue).")
                 return
             }
@@ -3713,84 +3362,27 @@ enum TurnModel {
             }
             if hitMine { board.mine[hit].status = ailment } else { board.theirs[hit].status = ailment }
             board.note("\(name) was \(ailment.rawValue)" + (chance < 100 ? " — the \(chance)% came up." : "."))
-            synchronize(ailment, from: hitMine, slot: hit, onto: byMine, slot: slot, board: &board)
+            Ailments.synchronize(ailment, from: hitMine, slot: hit, onto: byMine, slot: slot, board: &board)
         case .flinch:
             // Only matters if it has yet to move this turn; the flag clears at
             // the turn's start either way. Inner Focus is handled inside.
-            flinch(onMine: hitMine, slot: hit, board: &board,
+            Ailments.flinch(onMine: hitMine, slot: hit, board: &board,
                    because: chance < 100 ? "the \(chance)% came up" : nil)
         case .drops(let drops):
-            applyDrops(drops, toMine: hitMine, slot: hit, board: &board)
+            StatChanges.applyDrops(drops, toMine: hitMine, slot: hit, board: &board)
         case .targetBoosts(let raises):
-            applySelf(raises, toMine: hitMine, slot: hit, board: &board)
+            StatChanges.applySelf(raises, toMine: hitMine, slot: hit, board: &board)
         case .selfBoosts(let raises):
             // Charge Beam, Meteor Mash, Ancient Power, Steel Wing: the payment
             // goes to whoever used the move, not to whoever was hit.
-            applySelf(raises, toMine: byMine, slot: slot, board: &board)
+            StatChanges.applySelf(raises, toMine: byMine, slot: slot, board: &board)
         case .selfDrops(let drops):
-            applyDrops(drops, toMine: byMine, slot: slot, board: &board)
+            StatChanges.applyDrops(drops, toMine: byMine, slot: slot, board: &board)
         case .confuse:
             // Whether the confusion lands was settled above; `rolling` here
             // only decides how long it lasts, and a played turn should roll
             // that rather than always taking the two turns the search assumes.
-            confuse(onMine: hitMine, slot: hit, board: &board, rolling: rolling, chance: chance)
-        }
-    }
-
-    /// Leave a Pokémon confused for two to five turns, unless something on it
-    /// or under it says no.
-    private static func confuse(onMine: Bool, slot: Int, board: inout Board, rolling: Bool, chance: Int) {
-        let team = onMine ? board.mine : board.theirs
-        guard team.indices.contains(slot), !team[slot].fainted else { return }
-        let target = team[slot]
-        let name = target.build.form.formLabel
-        if target.isConfused { return }
-        if target.build.ability == "Own Tempo" {
-            board.note("\(name)'s Own Tempo kept it clear-headed.")
-            return
-        }
-        if board.field.terrain == .misty, target.isGrounded {
-            board.note("The mist kept \(name) from being confused.")
-            return
-        }
-        // Two to five turns of it. The search takes the shortest, so it never
-        // counts on more than the game guarantees.
-        let turns = rolling ? Int.random(in: 2...5, using: &TurnModel.dice) : 2
-        if onMine { board.mine[slot].confusedFor = turns } else { board.theirs[slot].confusedFor = turns }
-        board.note("\(name) became confused" + (chance < 100 ? " — the \(chance)% came up." : "."))
-    }
-
-    /// White Herb: the moment any of the holder's stats sits below zero, the
-    /// herb goes and the drops are undone. It is what turns Unburden on — the
-    /// item is gone, so the Speed doubles — which is the whole Sneasler set.
-    static func whiteHerb(_ fighter: inout Fighter) -> String? {
-        guard fighter.build.item == "White Herb", !fighter.build.itemSpent,
-              fighter.build.boosts.contains(where: { $0 < 0 }) else { return nil }
-        for index in fighter.build.boosts.indices where fighter.build.boosts[index] < 0 {
-            fighter.build.boosts[index] = 0
-        }
-        fighter.build.itemSpent = true
-        let name = fighter.build.form.formLabel
-        var said = "\(name)'s White Herb restored its stats."
-        if fighter.build.ability == "Unburden" { said += " Its Unburden doubled its Speed." }
-        return said
-    }
-
-    /// Note what a Pokémon used and where, for Encore; and if it is under an
-    /// Encore, count that down.
-    private static func remember(byMine: Bool, slot: Int, move: Int, target: Int, board: inout Board) {
-        if byMine {
-            board.mine[slot].lastMove = move; board.mine[slot].lastTarget = target
-            if board.mine[slot].encoredFor > 0 {
-                board.mine[slot].encoredFor -= 1
-                if board.mine[slot].encoredFor == 0 { board.note("\(board.mine[slot].build.form.formLabel)'s Encore ended.") }
-            }
-        } else {
-            board.theirs[slot].lastMove = move; board.theirs[slot].lastTarget = target
-            if board.theirs[slot].encoredFor > 0 {
-                board.theirs[slot].encoredFor -= 1
-                if board.theirs[slot].encoredFor == 0 { board.note("\(board.theirs[slot].build.form.formLabel)'s Encore ended.") }
-            }
+            Ailments.confuse(onMine: hitMine, slot: hit, board: &board, rolling: rolling, chance: chance)
         }
     }
 
@@ -3823,109 +3415,6 @@ enum TurnModel {
         return true
     }
 
-    /// Synchronize: a burn, a poison or a paralysis goes straight back to
-    /// whoever handed it over.
-    private static func synchronize(_ ailment: Ailment, from side: Bool, slot victim: Int,
-                                    onto other: Bool, slot giver: Int, board: inout Board) {
-        let team = side ? board.mine : board.theirs
-        guard team.indices.contains(victim),
-              team[victim].build.ability == "Synchronize",
-              [.burn, .poison, .badPoison, .paralysis].contains(ailment) else { return }
-        let givers = other ? board.mine : board.theirs
-        guard givers.indices.contains(giver), !givers[giver].fainted,
-              givers[giver].status == .none else { return }
-        if other { board.mine[giver].status = ailment } else { board.theirs[giver].status = ailment }
-        board.note("\(team[victim].build.form.formLabel)'s Synchronize passed it back: "
-                   + "\(givers[giver].build.form.formLabel) is \(ailment.rawValue).")
-    }
-
-    /// Make something flinch, and let a Steadfast take the Speed it is owed
-    /// for the trouble.
-    /// Make something flinch, if anything can.
-    ///
-    /// Inner Focus is checked here rather than at the call sites. It was
-    /// guarded on the secondary-effect path only, so a Fake Out — the one move
-    /// whose whole purpose is the flinch — went straight through the ability
-    /// that exists to stop it.
-    private static func flinch(onMine: Bool, slot: Int, board: inout Board, because: String? = nil) {
-        let team = onMine ? board.mine : board.theirs
-        guard team.indices.contains(slot), !team[slot].fainted else { return }
-        // Already flinching. Nothing to add, and saying so twice reads as two
-        // separate things having happened.
-        guard !team[slot].flinched else { return }
-        if team[slot].build.ability == "Inner Focus" {
-            board.note("\(team[slot].build.form.formLabel)'s Inner Focus kept it going.")
-            return
-        }
-        if onMine { board.mine[slot].flinched = true } else { board.theirs[slot].flinched = true }
-        let name = team[slot].build.form.formLabel
-        // Only say it here when there is something to explain — which roll came
-        // up, whose ability did it. A flinch that simply happened is announced
-        // where the game announces it, at the moment the Pokémon would have
-        // moved and does not; saying it twice reads as two separate events.
-        if let because { board.note("\(name) flinched — \(because).") }
-        if team[slot].build.ability == "Steadfast" {
-            change([.speed: 1], onMine: onMine, slot: slot, board: &board, because: "Steadfast")
-        }
-    }
-
-    /// How likely a move is to land, once everything on both sides has had its
-    /// say: the move's own accuracy, a Bright Powder, a Sand Veil in the sand,
-    /// a Keen Eye refusing to be blinded. Kept in one place so the played roll
-    /// and the search's average can never disagree.
-    static func chanceToHit(_ move: Move, attacker: Fighter, defender: Fighter,
-                            board: Board) -> Double {
-        guard !move.neverMisses, move.accuracy > 0 else { return 100 }
-        var chance = Double(move.accuracy)
-        // What the sky does to a move's accuracy. Hurricane and Thunder are
-        // certain in rain and half-blind in sun, and a Blizzard does not miss
-        // in snow — which is most of the reason a rain team runs Thunder and a
-        // snow team runs Blizzard at all. None of it was here, so a Hurricane
-        // under a rain the team had built its whole turn around was still
-        // rolling 70.
-        switch board.field.weather {
-        case .rain where move.id == "hurricane" || move.id == "thunder": return 100
-        case .snow where move.id == "blizzard": return 100
-        case .sun where move.id == "hurricane" || move.id == "thunder": chance = 50
-        default: break
-        }
-        // No Guard makes everything land, from either side of it.
-        if attacker.build.ability == "No Guard" || defender.build.ability == "No Guard" { return 100 }
-        if attacker.build.ability == "Compound Eyes" { chance *= 1.3 }
-        if attacker.build.ability == "Victory Star" { chance *= 1.1 }
-        // A Wide Lens was being read when a set was scored and ignored when
-        // the move was actually thrown, so the builder recommended it and the
-        // battle pretended it was not there.
-        if attacker.build.item == "Wide Lens" { chance *= 1.1 }
-        if attacker.build.item == "Zoom Lens", defender.build.item != "" { chance *= 1.2 }
-        // Nothing dodges a Keen Eye, and a Mold Breaker ignores the dodging
-        // ability entirely.
-        let blind = attacker.build.ability == "Keen Eye"
-            || attacker.build.ability == "Mold Breaker" || attacker.build.ability == "Unaware"
-        if !blind {
-            if defender.build.item == "Bright Powder" { chance *= 0.9 }
-            if defender.build.ability == "Sand Veil", board.field.weather == .sand { chance *= 0.8 }
-            if defender.build.ability == "Snow Cloak", board.field.weather == .snow { chance *= 0.8 }
-            if defender.build.ability == "Tangled Feet", defender.isConfused { chance *= 0.8 }
-        }
-        return Swift.max(1, Swift.min(100, chance))
-    }
-
-    /// Opportunist: whatever the other side just gained, it gains too.
-    ///
-    /// Called after a raise lands, and deliberately only for a raise on the
-    /// far side — copying its own partner's would be a loop.
-    private static func opportunist(after raised: [Stat: Int], onMine: Bool,
-                                    board: inout Board) {
-        let watchers = onMine ? board.theirs : board.mine
-        let positive = raised.filter { $0.value > 0 }
-        guard !positive.isEmpty else { return }
-        for index in watchers.indices.prefix(board.activeCount)
-        where !watchers[index].fainted && watchers[index].build.ability == "Opportunist" {
-            change(positive, onMine: !onMine, slot: index, board: &board, because: "Opportunist")
-        }
-    }
-
     /// Sweep one side's own hazards away, and say whether there were any.
     ///
     /// Defog and Rapid Spin both do this; Rapid Spin does nothing else to the
@@ -3940,121 +3429,11 @@ enum TurnModel {
         return had
     }
 
-    /// An ability on that side that turns a condition away, and its name.
-    ///
-    /// Leaf Guard covers everything but only in the sun. Sweet Veil and Flower
-    /// Veil cover the whole side, and only against sleep — a Pokémon does not
-    /// have to be the one carrying it.
-    private static func refusesStatus(_ ailment: Ailment, onMine: Bool, slot: Int,
-                                      board: Board) -> String? {
-        let side = onMine ? board.mine : board.theirs
-        guard side.indices.contains(slot) else { return nil }
-        if side[slot].build.ability == "Leaf Guard", board.field.weather == .sun {
-            return "Leaf Guard"
-        }
-        if ailment == .sleep {
-            // Sweet Veil covers the whole side; the other two are personal.
-            for who in side.prefix(board.activeCount) where !who.fainted {
-                if who.build.ability == "Sweet Veil" { return "Sweet Veil" }
-            }
-            if ["Vital Spirit", "Insomnia"].contains(side[slot].build.ability) {
-                return side[slot].build.ability
-            }
-            if board.field.terrain == .electric, side[slot].build.grounded { return "Electric Terrain" }
-        }
-        return nil
-    }
-
     /// The move index a choice picks, or -1 for anything that is not an attack.
     private static func pickedMove(_ choice: Choice) -> Int {
         if case .attack(let index, _) = choice { return index }
         if case .protectSelf(let index) = choice { return index }
         return -1
-    }
-
-    /// Whether a Pokémon's last move came off, for Stomping Tantrum.
-    private static func markFailed(byMine: Bool, slot: Int, board: inout Board, failed: Bool) {
-        if byMine, board.mine.indices.contains(slot) { board.mine[slot].lastMoveFailed = failed }
-        if !byMine, board.theirs.indices.contains(slot) { board.theirs[slot].lastMoveFailed = failed }
-    }
-
-    @discardableResult
-    private static func tryProtect(_ label: String?, byMine: Bool, slot: Int,
-                                   board: inout Board, rolling: Bool) -> Bool {
-        let team = byMine ? board.mine : board.theirs
-        guard team.indices.contains(slot) else { return false }
-        let fighter = team[slot]
-        let name = fighter.build.form.formLabel
-        let word = label ?? "Protect"
-        let chance = fighter.protectChance
-        // A played turn rolls it. The search asks for one branch at a time
-        // and weighs them itself, so a 33% Protect is worth a third of a
-        // Protect to it rather than nothing — which is what it is worth, and
-        // is why a Gholdengo that has already protected is still not a free
-        // Sucker Punch.
-        let ruling = board.rulings[Board.flip("protect", byMine, slot)]
-        let works = rolling ? Double.random(in: 0..<1, using: &TurnModel.dice) < chance : (ruling ?? (chance >= 0.5))
-        if works {
-            if byMine { board.mine[slot].isProtected = true; board.mine[slot].protectStreak += 1 }
-            else { board.theirs[slot].isProtected = true; board.theirs[slot].protectStreak += 1 }
-            board.note(chance < 1
-                ? "\(name) used \(word) and braced — a \(Int((chance * 100).rounded()))% chance, and it held."
-                : "\(name) used \(word) and braced.")
-            return true
-        } else {
-            if byMine { board.mine[slot].protectStreak = 0 } else { board.theirs[slot].protectStreak = 0 }
-            board.note("\(name) used \(word), but it failed — \(Int((chance * 100).rounded()))% after using it last turn.")
-            return false
-        }
-    }
-
-    /// A charge that will not be finished: the Pokémon was stopped, or the
-    /// move is landing now.
-    private static func dropCharge(byMine: Bool, slot: Int, board: inout Board, quietly: Bool = false) {
-        let team = byMine ? board.mine : board.theirs
-        guard team.indices.contains(slot), let charging = team[slot].charging else { return }
-        if !quietly, team[slot].moves.indices.contains(charging) {
-            board.note("\(team[slot].build.form.formLabel) lost its \(team[slot].moves[charging].name).")
-        }
-        if byMine { board.mine[slot].charging = nil; board.mine[slot].hidden = false }
-        else { board.theirs[slot].charging = nil; board.theirs[slot].hidden = false }
-    }
-
-    /// Move a Pokémon's stages, through whatever its ability does to stage
-    /// changes, and say what happened in one line.
-    private static func change(_ deltas: [Stat: Int], onMine: Bool, slot: Int,
-                               board: inout Board, because: String? = nil) {
-        guard !deltas.isEmpty else { return }
-        let team = onMine ? board.mine : board.theirs
-        guard team.indices.contains(slot), !team[slot].fainted else { return }
-        let name = team[slot].build.form.formLabel
-        let ability = team[slot].build.ability
-        var applied = deltas
-        if ability == "Contrary" { applied = applied.mapValues { -$0 } }
-        if ability == "Simple" { applied = applied.mapValues { $0 * 2 } }
-        var rose: [String] = [], fell: [String] = []
-        for (stat, amount) in applied.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
-            let before = team[slot].build.boosts[stat.rawValue]
-            let after = Swift.max(-6, Swift.min(6, before + amount))
-            guard after != before else { continue }
-            if onMine { board.mine[slot].build.boosts[stat.rawValue] = after }
-            else { board.theirs[slot].build.boosts[stat.rawValue] = after }
-            let word = abs(amount) >= 2 ? "\(stat.short) sharply" : stat.short
-            if amount > 0 { rose.append(word) } else { fell.append(word) }
-        }
-        guard !rose.isEmpty || !fell.isEmpty else { return }
-        var parts: [String] = []
-        if !rose.isEmpty { parts.append("\(rose.joined(separator: " and ")) rose") }
-        if !fell.isEmpty { parts.append("\(fell.joined(separator: " and ")) fell") }
-        var line = "\(name)'s " + parts.joined(separator: "; ") + "."
-        if let because { line = "\(name)'s \(because): " + parts.joined(separator: "; ") + "." }
-        else if ability == "Contrary" { line = "\(name)'s Contrary turned it round: " + parts.joined(separator: "; ") + "." }
-        else if ability == "Simple" { line = "\(name)'s Simple doubled it: " + parts.joined(separator: "; ") + "." }
-        board.note(line)
-        if !fell.isEmpty {
-            let herb = onMine ? whiteHerb(&board.mine[slot]) : whiteHerb(&board.theirs[slot])
-            if let herb { board.note(herb) }
-        }
     }
 
     /// What a non-damaging move actually does.
@@ -4140,7 +3519,7 @@ enum TurnModel {
             let far = byMine ? board.theirs : board.mine
             let index = far.indices.contains(target) && target < board.activeCount ? target : 0
             if far.indices.contains(index), !far[index].fainted, !far[index].isProtected {
-                applyDrops([.attack: 1, .spAttack: 1], toMine: !byMine, slot: index, board: &board)
+                StatChanges.applyDrops([.attack: 1, .spAttack: 1], toMine: !byMine, slot: index, board: &board)
             } else if far.indices.contains(index), far[index].isProtected {
                 board.note("\(far[index].build.form.formLabel) protected itself.")
             }
@@ -4420,7 +3799,7 @@ enum TurnModel {
         // is noted where the omission is made — so two thirds of Coil lands
         // and the third is recorded here rather than pretended.
         if move.name == "Coil" {
-            change([.attack: 1, .defense: 1], onMine: byMine, slot: slot, board: &board)
+            StatChanges.change([.attack: 1, .defense: 1], onMine: byMine, slot: slot, board: &board)
             return
         }
 
@@ -4804,7 +4183,7 @@ enum TurnModel {
             }
             let paid: [Stat: Int] = move.name == "Decorate" ? [.attack: 2, .spAttack: 2]
                                                             : [.spDefense: 1]
-            applySelf(paid, toMine: byMine, slot: partner, board: &board)
+            StatChanges.applySelf(paid, toMine: byMine, slot: partner, board: &board)
             return
         }
 
@@ -4813,7 +4192,7 @@ enum TurnModel {
             let cost = team[slot].maxHP / 3
             guard team[slot].hp > cost else { board.note("But it failed."); return }
             setNear { $0.hp -= cost }
-            applySelf([.attack: 1, .defense: 1, .spAttack: 1, .spDefense: 1, .speed: 1],
+            StatChanges.applySelf([.attack: 1, .defense: 1, .spAttack: 1, .spDefense: 1, .speed: 1],
                       toMine: byMine, slot: slot, board: &board)
             return
         }
@@ -4822,7 +4201,7 @@ enum TurnModel {
         if move.name == "Acupressure" {
             let stats: [Stat] = [.attack, .defense, .spAttack, .spDefense, .speed]
             let picked = rolling ? (stats.randomElement(using: &TurnModel.dice) ?? .attack) : .attack
-            applySelf([picked: 2], toMine: byMine, slot: slot, board: &board)
+            StatChanges.applySelf([picked: 2], toMine: byMine, slot: slot, board: &board)
             return
         }
 
@@ -4857,7 +4236,7 @@ enum TurnModel {
             }
             setNear { $0.build.itemSpent = true
                       $0.hp = Swift.min($0.maxHP, $0.hp + $0.maxHP / 4) }
-            applySelf([.defense: 2], toMine: byMine, slot: slot, board: &board)
+            StatChanges.applySelf([.defense: 2], toMine: byMine, slot: slot, board: &board)
             board.note("\(name) stuffed its cheeks with its \(team[slot].build.item).")
             return
         }
@@ -4925,7 +4304,7 @@ enum TurnModel {
             for index in (byMine ? board.mine : board.theirs).indices.prefix(board.activeCount) {
                 let who = (byMine ? board.mine : board.theirs)[index]
                 guard !who.fainted, pairing.contains(who.build.ability) else { continue }
-                applySelf([.defense: 1, .spDefense: 1], toMine: byMine, slot: index, board: &board)
+                StatChanges.applySelf([.defense: 1, .spDefense: 1], toMine: byMine, slot: index, board: &board)
                 paid += 1
             }
             if paid == 0 { board.note("But nobody was carrying Plus or Minus.") }
@@ -4951,10 +4330,10 @@ enum TurnModel {
         if move.effect.contains("of the user and its allies"), !move.selfBoosts.isEmpty {
             let boosts = move.selfBoosts
             let partner = slot == 0 ? 1 : 0
-            applySelf(boosts, toMine: byMine, slot: slot, board: &board)
+            StatChanges.applySelf(boosts, toMine: byMine, slot: slot, board: &board)
             let own = byMine ? board.mine : board.theirs
             if board.activeCount > 1, own.indices.contains(partner), !own[partner].fainted {
-                applySelf(boosts, toMine: byMine, slot: partner, board: &board)
+                StatChanges.applySelf(boosts, toMine: byMine, slot: partner, board: &board)
             }
             return
         }
@@ -5019,8 +4398,8 @@ enum TurnModel {
                     board.note("\(far[index].build.form.formLabel) protected itself.")
                     continue
                 }
-                applySelf(move.targetBoosts, toMine: !byMine, slot: index, board: &board)
-                confuse(onMine: !byMine, slot: index, board: &board, rolling: rolling, chance: 100)
+                StatChanges.applySelf(move.targetBoosts, toMine: !byMine, slot: index, board: &board)
+                Ailments.confuse(onMine: !byMine, slot: index, board: &board, rolling: rolling, chance: 100)
             }
             return
         }
@@ -5049,7 +4428,7 @@ enum TurnModel {
         // move rather than through the dedicated choice, which is how the
         // interface offers it and how the search sometimes picks it.
         if Move.protectMoves.contains(move.name) {
-            tryProtect(nil, byMine: byMine, slot: slot, board: &board, rolling: rolling)
+            Protection.tryProtect(nil, byMine: byMine, slot: slot, board: &board, rolling: rolling)
             return
         }
 
@@ -5087,7 +4466,7 @@ enum TurnModel {
                 board.note("But there was no one to coach.")
                 return
             }
-            applySelf([.attack: 1, .defense: 1], toMine: byMine, slot: partner, board: &board)
+            StatChanges.applySelf([.attack: 1, .defense: 1], toMine: byMine, slot: partner, board: &board)
             return
         case "Focus Energy", "Dragon Cheer":
             // Focus Energy is the user's own; Dragon Cheer is the partner's,
@@ -5214,12 +4593,12 @@ enum TurnModel {
                 let defending = byMine ? board.theirs : board.mine
                 guard defending.indices.contains(index), !defending[index].fainted,
                       !defending[index].isProtected else { continue }
-                applyDrops(drops, toMine: !byMine, slot: index, board: &board)
+                StatChanges.applyDrops(drops, toMine: !byMine, slot: index, board: &board)
             }
             return
         }
         if !move.selfBoosts.isEmpty {
-            applySelf(move.selfBoosts, toMine: byMine, slot: slot, board: &board)
+            StatChanges.applySelf(move.selfBoosts, toMine: byMine, slot: slot, board: &board)
             return
         }
 
@@ -5261,7 +4640,7 @@ enum TurnModel {
                 board.note("The veil kept \(victim.build.form.formLabel) safe.")
                 return
             }
-            if let refused = refusesStatus(ailment, onMine: !byMine, slot: target, board: board) {
+            if let refused = Ailments.refusesStatus(ailment, onMine: !byMine, slot: target, board: board) {
                 board.note("\(victim.build.form.formLabel)'s \(refused) refused it.")
                 return
             }
@@ -5278,7 +4657,7 @@ enum TurnModel {
             // Synchronize hands the condition straight back. It was wired to
             // the secondary effects of attacks only, so a Will-O-Wisp — the
             // most common way anything gets burned — went one way.
-            synchronize(ailment, from: !byMine, slot: target, onto: byMine, slot: slot, board: &board)
+            Ailments.synchronize(ailment, from: !byMine, slot: target, onto: byMine, slot: slot, board: &board)
             return
         }
         board.note("Nothing came of it.")

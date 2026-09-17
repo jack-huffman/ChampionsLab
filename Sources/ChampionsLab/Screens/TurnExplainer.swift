@@ -6,7 +6,7 @@
 //  argument about a turn actually lives: why did that move go first, why did
 //  that do so much less than expected, why did my setup not happen.
 //
-//  The order and its reasons come from TurnModel.billing, which calls the same
+//  The order and its reasons come from TurnOrder.billing, which calls the same
 //  priority and Speed the turn itself calls. That matters more than it looks:
 //  an explanation worked out separately from the thing it explains is an
 //  explanation that can be wrong, and a wrong one is worse than none, because
@@ -22,8 +22,8 @@ struct TurnExplainer: View {
 
     @Environment(\.snapshotMode) private var snapshotMode
 
-    private var order: [TurnModel.Billing] {
-        TurnModel.billing(review.before, mine: review.minePlay, theirs: review.theirPlay)
+    private var order: [TurnOrder.Billing] {
+        TurnOrder.billing(review.before, mine: review.minePlay, theirs: review.theirPlay)
     }
 
     var body: some View {
@@ -114,7 +114,7 @@ struct TurnExplainer: View {
 
     /// The sentence somebody actually wants: not the numbers again, but which
     /// of the two rules settled it.
-    private func verdict(_ first: TurnModel.Billing, over second: TurnModel.Billing,
+    private func verdict(_ first: TurnOrder.Billing, over second: TurnOrder.Billing,
                          inverted: Bool) -> String {
         if first.bracket != second.bracket {
             return "\(first.who) moved first on priority — \(first.bracket) against "
@@ -213,7 +213,7 @@ struct TurnExplainer: View {
         return out
     }
 
-    private func plays(_ act: TurnModel.Billing) -> Choice {
+    private func plays(_ act: TurnOrder.Billing) -> Choice {
         let play = act.mine ? review.minePlay : review.theirPlay
         return act.slot == 0 ? play.left : play.right
     }

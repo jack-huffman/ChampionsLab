@@ -30,7 +30,7 @@ print("\n== the arithmetic ==")
                              ("Garchomp", "Life Orb", ["Earthquake", "Protect"])])
         let theirs = fighters([("Incineroar", "Sitrus Berry", ["Fake Out", "Flare Blitz", "Protect"]),
                                ("Rillaboom", "Assault Vest", ["Wood Hammer", "Protect"])])
-        var start = board(mine: mine, theirs: theirs)
+        let start = board(mine: mine, theirs: theirs)
         check("Whimsicott actually has Prankster",
               start.mine[0].build.ability == "Prankster", start.mine[0].build.ability)
 

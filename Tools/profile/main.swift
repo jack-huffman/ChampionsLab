@@ -46,7 +46,7 @@ import SwiftUI
     rows.append(time("TurnModel.outcomes, one cell", 500) {
         _ = TurnModel.outcomes(board, mine: mySide[0], theirs: theirSide[0])
     })
-    rows.append(time("TurnModel.value", 5000) { _ = TurnModel.value(board) })
+    rows.append(time("Evaluation.value", 5000) { _ = Evaluation.value(board) })
     rows.append(time("equilibrium 900, \(mySide.count)x\(theirSide.count)", 20) {
         _ = TurnGame.equilibrium(solved.payoff, iterations: 900)
     })

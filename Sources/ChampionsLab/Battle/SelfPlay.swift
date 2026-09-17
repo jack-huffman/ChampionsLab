@@ -535,7 +535,7 @@ enum SelfPlay {
         }
         // Nobody finished it. Whoever is further ahead on the board takes it,
         // because calling a clear lead a draw would hide a real difference.
-        let standing = TurnModel.value(board)
+        let standing = Evaluation.value(board)
         ledger.turns = limit
         if standing > 0.25 { ledger.winner = .mine }
         else if standing < -0.25 { ledger.winner = .theirs }
