@@ -357,7 +357,7 @@ struct TeamEditor: View {
         var slot = TeamSlot(formID: form.id)
         slot.ability = form.abilities.first?.name ?? ""
         // A Mega is useless without its stone, so fill it in.
-        if form.isMega { slot.item = form.megaStone.isEmpty ? "Mega Stone" : form.megaStone }
+        if form.isMega { slot.item = form.megaTrigger }
         team.slots.append(slot)
         onSave()
     }

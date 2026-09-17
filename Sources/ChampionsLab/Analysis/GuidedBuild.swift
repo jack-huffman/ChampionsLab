@@ -88,7 +88,7 @@ struct BuildInterview {
         weaknesses.sort { ($0.1 * (0.3 + $0.2)) > ($1.1 * (0.3 + $1.2)) }
 
         var combatant = Combatant(form: seed, ability: seed.abilities.first?.name ?? "",
-                                  item: seed.megaStone)
+                                  item: seed.megaTrigger)
         combatant.sp = [2, 32, 0, 0, 0, 32]
         combatant.alignment = Alignment.named(
             seed.attack >= seed.spAttack ? "Adamant" : "Modest")
@@ -202,7 +202,7 @@ struct BuildInterview {
         let forecast = Forecast(store: store, format: format)
         let marks = forecast.speedLandscape
         var combatant = Combatant(form: seed, ability: seed.abilities.first?.name ?? "",
-                                  item: seed.megaStone)
+                                  item: seed.megaTrigger)
         combatant.sp = [2, 32, 0, 0, 0, 32]
         combatant.alignment = Alignment.named(seed.attack >= seed.spAttack ? "Jolly" : "Timid")
         let flat = combatant.speed(in: Field(isDoubles: true))

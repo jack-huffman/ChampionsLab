@@ -174,11 +174,14 @@ struct Fighter {
     /// already in there.
     var isSoundproof: Bool { build.ability == "Soundproof" }
     /// Standing on the ground, so the floor can reach it: hazards, the terrain,
-    /// an Earthquake. Was written out twice inline and once without the
-    /// balloon, which is the sort of thing that drifts.
-    var isGrounded: Bool {
-        !types.contains(.flying) && build.ability != "Levitate" && build.item != "Air Balloon"
-    }
+    /// an Earthquake.
+    ///
+    /// Delegated rather than restated. It had been written out inline in five
+    /// places with four different answers — one forgot the balloon, one forgot
+    /// Levitate too, one read the printed types instead of the ones it has
+    /// after a Soak — and a terrain that reaches a Pokémon it should not is the
+    /// kind of bug that only shows up in a game somebody is losing.
+    var isGrounded: Bool { build.grounded }
     /// What it is held to, if anything.
     var encored: Choice? {
         guard encoredFor > 0, let last = lastMove, moves.indices.contains(last) else { return nil }
@@ -1724,8 +1727,7 @@ enum TurnModel {
                     if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
                     board.note("The sandstorm buffets \(name).")
                 }
-                if board.field.terrain == .grassy, !types.contains(.flying),
-                   who.build.ability != "Levitate", hp < maxHP, hp > 0 {
+                if board.field.terrain == .grassy, who.isGrounded, hp < maxHP, hp > 0 {
                     hp = Swift.min(maxHP, hp + Swift.max(1, maxHP / 16))
                     if mine { board.mine[index].hp = hp } else { board.theirs[index].hp = hp }
                     board.note("Grassy Terrain tops \(name) up.")
@@ -2667,13 +2669,25 @@ enum TurnModel {
             // is what stops a Fake Out taking the setup turn away.
             // Psychic Terrain: nothing quick reaches anything standing on it.
             // It is why a Psychic Surge team can set up in front of a Fake Out.
+            // The terrain only reaches what is standing on it. A Staraptor is
+            // in the air, so a Fake Out gets to it however psychic the floor
+            // is — and this used to refuse the move if *anything* on that side
+            // was grounded, so the Staraptor was protected by its partner's
+            // feet. The shield belongs to whoever the move is aimed at.
             if move.priority > 0, target < Choice.allyTarget,
                board.field.terrain == .psychic,
                move.aim == .foe || move.aim == .spread {
                 let defenders = byMine ? board.theirs : board.mine
-                if let shielded = (0..<Swift.min(board.activeCount, defenders.count)).first(where: {
-                    !defenders[$0].fainted && defenders[$0].build.grounded }) {
-                    board.note("The Psychic Terrain refused it — \(defenders[shielded].build.form.formLabel) is standing on it, and nothing quick gets through.")
+                let reachable = (0..<Swift.min(board.activeCount, defenders.count))
+                    .filter { !defenders[$0].fainted }
+                // A spread move is refused only when there is nothing left for
+                // it to hit; with one grounded and one not, it still lands on
+                // the one in the air, and the loop below skips the other.
+                let aimedAt = move.aim == .spread ? reachable
+                    : reachable.filter { $0 == target }
+                if !aimedAt.isEmpty, aimedAt.allSatisfy({ defenders[$0].isGrounded }) {
+                    let who = defenders[aimedAt[0]].build.form.formLabel
+                    board.note("The Psychic Terrain refused it — \(who) is standing on it, and nothing quick gets through.")
                     markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
                     return
                 }
@@ -3693,7 +3707,7 @@ enum TurnModel {
                 board.note("\(name)'s \(refused) kept it from being \(ailment.rawValue).")
                 return
             }
-            if board.field.terrain == .misty, !types.contains(.flying), defender.build.ability != "Levitate" {
+            if board.field.terrain == .misty, defender.isGrounded {
                 board.note("The mist kept \(name) from being \(ailment.rawValue).")
                 return
             }
@@ -3735,8 +3749,7 @@ enum TurnModel {
             board.note("\(name)'s Own Tempo kept it clear-headed.")
             return
         }
-        if board.field.terrain == .misty, !target.build.form.pokeTypes.contains(.flying),
-           target.build.ability != "Levitate" {
+        if board.field.terrain == .misty, target.isGrounded {
             board.note("The mist kept \(name) from being confused.")
             return
         }
@@ -5237,7 +5250,7 @@ enum TurnModel {
                 immune = (!corrodes && victim.types.contains(where: { [.poison, .steel].contains($0) }))
                     || ["Immunity"].contains(victim.build.ability)
             case .sleep: immune = ["Insomnia", "Vital Spirit"].contains(victim.build.ability)
-                || board.field.terrain == .electric
+                || (board.field.terrain == .electric && victim.isGrounded)
             default: immune = false
             }
             if immune {

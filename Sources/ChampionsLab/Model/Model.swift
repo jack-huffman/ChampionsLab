@@ -102,6 +102,20 @@ struct Form: Codable, Identifiable, Hashable, Sendable {
 
     /// Mega Evolution is spelled "Mega " with a space — "Meganium" is not one.
     var megaStone: String { stone ?? "" }
+
+    /// The held item that turns the base form into this Mega.
+    ///
+    /// Serebii has not published a name for every stone in this game — 26 of
+    /// the 81 Megas have none — so where there is no name this stands in for
+    /// one. Per form rather than a single shared "Mega Stone", because a
+    /// species can have two Megas and one placeholder could not say which was
+    /// meant: Absol has Mega Absol with a published Absolite and Mega Absol Z
+    /// with nothing, so a base Absol holding the only stone there was could
+    /// never become the Z form at all.
+    var megaTrigger: String {
+        if let stone, !stone.isEmpty { return stone }
+        return "Mega Stone (\(formLabel))"
+    }
 }
 
 struct Ability: Codable, Hashable {

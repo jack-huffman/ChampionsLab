@@ -70,7 +70,7 @@ struct BattleEngine: Sendable {
         }
         if form.isMega || !form.megaStone.isEmpty {
             // A Mega has no choice: it holds its stone or it is not a Mega.
-            return [(form.megaStone.isEmpty ? "Mega Stone" : form.megaStone, 1)]
+            return [(form.megaTrigger, 1)]
         }
         guard let rows = entry?.itemUsage, !rows.isEmpty else {
             return [("Leftovers", 1)]

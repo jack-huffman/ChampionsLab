@@ -74,8 +74,9 @@ struct Rulebook: Sendable {
         guard !item.isEmpty, !base.isMega else { return nil }
         if base.species == "floette", base.suffix.isEmpty { return nil }
         let candidates = forms.filter { $0.dex == base.dex && $0.isMega }
-        if let exact = candidates.first(where: { $0.megaStone == item }) { return exact }
+        if let exact = candidates.first(where: { $0.megaTrigger == item }) { return exact }
         // Only one Mega for this species and the item is some stone: take it.
+        // Kept for teams saved before the placeholder named which Mega it was.
         if candidates.count == 1, item == "Mega Stone" { return candidates.first }
         return nil
     }

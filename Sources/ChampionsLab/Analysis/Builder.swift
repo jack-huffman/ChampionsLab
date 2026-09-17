@@ -699,7 +699,7 @@ struct TeamBuilder {
         let physicalAttacker = form.attack >= form.spAttack
         // Measured item share first, then the role-appropriate fallbacks.
         var wanted: [String] = (live?.itemUsage?.map(\.name) ?? usage?.commonItems ?? [])
-        if form.isMega { wanted = [form.megaStone.isEmpty ? "Mega Stone" : form.megaStone] }
+        if form.isMega { wanted = [form.megaTrigger] }
         // A Choice item has to match the attacking stat: Specs on an Adamant
         // physical attacker is a wasted slot, which an earlier version did.
         wanted += roles.contains(.redirection) || roles.contains(.tailwind)
