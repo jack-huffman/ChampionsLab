@@ -118,6 +118,11 @@ for (const move of Object.values(Moves)) {
     // to each foe, and both to the same one when only one can be reached.
     smartTarget: !!move.smartTarget,
     power: move.basePower,
+    // Who the move is for, in Showdown's words: normal, self, allySide,
+    // adjacentAlly, allAdjacentFoes. Serebii writes "Selected Target" for
+    // Swords Dance, which is no help to anything that has to know the
+    // difference between a move on a foe and one on the user.
+    target: move.target,
     accuracy: move.accuracy === true ? 0 : move.accuracy,
     type: move.type,
     priority: move.priority,

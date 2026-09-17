@@ -477,6 +477,11 @@ struct Board {
         /// The far-side slot an attack was aimed at, so a move that missed or
         /// was blocked still flies at the Pokemon it was meant for.
         var target: Int?
+        /// Whether the move is on the user itself, or on its partner: the
+        /// playback draws a Swords Dance over the dancer and a Helping Hand
+        /// over the one being helped, not over a foe.
+        var aimsAtUser = false
+        var aimsAtAlly = false
 
         /// The action behind a choice, read off the move it actually plays.
         /// A switch, a Protect and a pass each read as themselves.
@@ -490,6 +495,11 @@ struct Board {
                 self.category = move?.category ?? "Other"
                 self.type = move?.type ?? ""
                 if case .attack(_, let aimed) = played { self.target = aimed }
+                if case .protectSelf = played { self.aimsAtUser = true }
+                else {
+                    self.aimsAtUser = move?.aimsAtUser ?? false
+                    self.aimsAtAlly = move?.aimsAtAlly ?? false
+                }
             case .swap:
                 self.move = ""; self.category = "Switch"; self.type = ""
             case .pass:

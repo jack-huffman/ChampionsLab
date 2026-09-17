@@ -239,7 +239,14 @@ final class TurnPlayback: ObservableObject {
                 targets = []
                 recipe = Self.stoppedAs[why].flatMap { table.status($0) }
             } else {
-                if targets.isEmpty, let aimed = action.target {
+                // The client plays a move against its target, and a move on
+                // the user has the user as its target: Swords Dance is written
+                // against the defender, and the defender is the one dancing.
+                if action.aimsAtUser {
+                    targets = []
+                } else if action.aimsAtAlly {
+                    targets = [Seat(mine: action.byMine, slot: action.slot == 0 ? 1 : 0)]
+                } else if targets.isEmpty, let aimed = action.target {
                     targets = [Seat(mine: !action.byMine, slot: aimed)]
                 }
                 recipe = table.recipe(forMove: action.move)

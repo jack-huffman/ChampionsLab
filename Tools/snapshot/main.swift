@@ -409,11 +409,13 @@ private func demoStage(_ size: CGSize) -> MoveTimeline.Stage {
 }
 
 @MainActor
-private func choreography(_ move: String, size: CGSize) -> TurnPlayback.Scene? {
+private func choreography(_ move: String, size: CGSize, onSelf: Bool = false) -> TurnPlayback.Scene? {
     let table = Choreography.shared
     guard let recipe = table.recipe(forMove: move) else { return nil }
+    // A move on the user has the user as its target too; the client writes
+    // Swords Dance against `defender`, and the defender is the one dancing.
     let timeline = MoveTimeline.build(recipe, attacker: Seat(mine: true, slot: 0),
-                                      targets: [Seat(mine: false, slot: 0)],
+                                      targets: onSelf ? [] : [Seat(mine: false, slot: 0)],
                                       sizes: table.sprites, stage: demoStage(size))
     return TurnPlayback.Scene(timeline: timeline, startedAt: Date(), ghosts: [:])
 }
@@ -447,10 +449,10 @@ private struct EffectCell<Content: View>: View {
 
 private struct EffectSheet: View {
     /// A move and the moment to freeze it at.
-    private let stills: [(move: String, at: Double)] = [
-        ("Flamethrower", 0.35), ("Flamethrower", 0.62), ("Surf", 0.5),
-        ("Dragon Claw", 0.55), ("Thunderbolt", 0.4), ("Earthquake", 0.6),
-        ("Follow Me", 0.5), ("Swords Dance", 0.5), ("Shadow Ball", 0.5),
+    private let stills: [(move: String, at: Double, onSelf: Bool)] = [
+        ("Flamethrower", 0.35, false), ("Flamethrower", 0.62, false), ("Surf", 0.5, false),
+        ("Dragon Claw", 0.55, false), ("Thunderbolt", 0.4, false), ("Earthquake", 0.6, false),
+        ("Follow Me", 0.5, true), ("Swords Dance", 0.5, true), ("Shadow Ball", 0.5, false),
     ]
 
     var body: some View {
@@ -462,7 +464,7 @@ private struct EffectSheet: View {
                 ForEach(Array(stills.enumerated()), id: \.offset) { _, still in
                     EffectCell("\(still.move), \(String(format: "%.2fs", still.at))") {
                         GeometryReader { geo in
-                            if let scene = choreography(still.move, size: geo.size) {
+                            if let scene = choreography(still.move, size: geo.size, onSelf: still.onSelf) {
                                 ChoreographyLayer(scene: scene, at: still.at)
                             }
                         }

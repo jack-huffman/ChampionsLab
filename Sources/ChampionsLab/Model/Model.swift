@@ -159,6 +159,10 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     let pp: Int
     let priority: Int
     let target: String
+    /// Who the move is for, in Showdown's words -- normal, self, allySide,
+    /// adjacentAlly, allAdjacentFoes -- because Serebii's target says
+    /// "Selected Target" for Swords Dance and Protect alike.
+    let showdownTarget: String?
     let critRate: Double
     let flags: [String: Bool]
     let effect: String
@@ -238,6 +242,7 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
         case id, name, type, category, power, accuracy, pp, priority, target
         case flags, effect, learnable, mainline, hits, multiaccuracy
         case smartTarget = "smart_target"
+        case showdownTarget = "showdown_target"
         case secondaryData = "secondaries"
         case neverMisses = "never_misses"
         case critRate = "crit_rate"
@@ -270,6 +275,15 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
 
     /// Also hits your own partner. Earthquake does; Rock Slide does not.
     var hitsAlly: Bool { target == "All Adjacent Pokémon" }
+    /// A move on the user, or on the user's side of the field: Swords Dance,
+    /// Protect, Tailwind, Trick Room. Its target is the user.
+    var aimsAtUser: Bool {
+        ["self", "allySide", "allyTeam", "all", "foeSide"].contains(showdownTarget ?? "")
+    }
+    /// A move on the partner: Helping Hand, Coaching, Decorate.
+    var aimsAtAlly: Bool {
+        ["adjacentAlly", "adjacentAllyOrSelf", "allies"].contains(showdownTarget ?? "")
+    }
 
     var accuracyLabel: String { neverMisses || accuracy == 0 ? "—" : "\(accuracy)" }
 

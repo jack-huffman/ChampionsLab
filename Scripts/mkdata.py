@@ -1130,6 +1130,8 @@ def apply_showdown(moves):
             move["multiaccuracy"] = True
         if ref.get("smartTarget"):
             move["smart_target"] = True
+        if ref.get("target"):
+            move["showdown_target"] = ref["target"]
         if move["secondaries"]:
             carried += 1
         # Flags decide which ability answers a move. Serebii publishes these
