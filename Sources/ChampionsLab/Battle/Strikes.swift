@@ -131,6 +131,7 @@ enum Strikes {
                                rolling: Bool) -> Bool {
         if actor.flinched {
             board.note("\(name) flinched and could not move.")
+            board.stopAction("flinched")
             MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
             MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return false
@@ -142,6 +143,7 @@ enum Strikes {
         if case .attack(let index, _) = choice, actor.disabled == index,
            actor.moves.indices.contains(index) {
             board.note("\(name)'s \(actor.moves[index].name) is disabled.")
+            board.stopAction("disabled")
             MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return false
         }
@@ -149,6 +151,7 @@ enum Strikes {
         // worth a move slot.
         if actor.status == .sleep {
             board.note("\(name) is fast asleep.")
+            board.stopAction("asleep")
             MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
             MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return false
@@ -168,6 +171,7 @@ enum Strikes {
                 board.note("\(name) thawed out.")
             } else {
                 board.note("\(name) is frozen solid.")
+                board.stopAction("frozen")
                 MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
                 MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
                 return false
@@ -175,6 +179,7 @@ enum Strikes {
         }
         if actor.status == .paralysis, rolling, Double.random(in: 0...1, using: &Dice.source) < 0.25 {
             board.note("\(name) is paralysed and cannot move.")
+            board.stopAction("paralysed")
             MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
             MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return false
@@ -189,6 +194,7 @@ enum Strikes {
                 else { board.theirs[slot].infatuatedWith = nil }
             } else if rolling, Double.random(in: 0..<1, using: &Dice.source) < 0.5 {
                 board.note("\(name) is immobilised by love.")
+                board.stopAction("in love")
                 MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
                 MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
                 return false
@@ -198,6 +204,7 @@ enum Strikes {
         // stops something clicking one button all game.
         if actor.tormented, case .attack(let index, _) = choice, actor.lastMove == index {
             board.note("\(name) cannot use the same move twice in a row.")
+            board.stopAction("tormented")
             MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
             MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
             return false
@@ -221,6 +228,7 @@ enum Strikes {
                     if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - hurt) }
                     else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - hurt) }
                     board.note("It hurt itself in its confusion for \(hurt).")
+                    board.stopAction("confused")
                     if (byMine ? board.mine : board.theirs)[slot].fainted { board.note("\(name) fainted.") }
                     MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
                     MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)

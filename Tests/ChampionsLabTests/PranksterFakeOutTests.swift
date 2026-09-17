@@ -53,6 +53,13 @@ print("\n== so the Fake Out lands ==")
         for line in flinched.story where line.contains("Whimsicott") || line.contains("flinch") {
             print("    \(line)")
         }
+        // The step the playback animates says so too, which is what stops a
+        // flinched Pokemon lunging into a Tailwind it never got off.
+        let tailwindStep = flinched.steps.compactMap(\.action).first { $0.byMine && $0.slot == 0 }
+        check("the step says the Tailwind never happened", tailwindStep?.stopped == "flinched",
+              tailwindStep?.stopped ?? "nil")
+        let fakeOutStep = flinched.steps.compactMap(\.action).first { !$0.byMine && $0.slot == 0 }
+        check("and that the Fake Out did", fakeOutStep?.stopped == nil, fakeOutStep?.stopped ?? "nil")
 
 print("\n== but only on the turn it arrives ==")
         // Second turn out: Fake Out is spent, and the Tailwind goes up.

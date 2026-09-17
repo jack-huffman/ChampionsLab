@@ -467,6 +467,10 @@ struct Board {
         /// action that is not a move.
         let category: String
         let type: String
+        /// Why the action never happened -- "flinched", "asleep", "frozen",
+        /// "paralysed" -- and nil when it did. The playback reads it: a
+        /// Pokemon that never got its move off does not lunge, it recoils.
+        var stopped: String?
 
         /// The action behind a choice, read off the move it actually plays.
         /// A switch, a Protect and a pass each read as themselves.
@@ -615,6 +619,12 @@ struct Board {
         closeStep()
         acting = action
         gathering = []
+    }
+
+    /// The action being gathered never happened, and this is why. One door,
+    /// so the playback learns it from the same place the log does.
+    mutating func stopAction(_ reason: String) {
+        acting?.stopped = reason
     }
 
     /// Close the step being gathered, if it said anything.

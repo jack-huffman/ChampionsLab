@@ -132,9 +132,19 @@ final class TurnPlayback: ObservableObject {
                 let user = Seat(mine: action.byMine, slot: action.slot)
                 reached.removeAll { $0 == user }
 
-                flourish = Flourish(id: order, action: action, targets: reached)
-                flourishFrom = Date()
-                leanIn(action: action, at: reached, singles: singles)
+                if action.stopped != nil {
+                    // The move never happened -- flinched, asleep, frozen,
+                    // paralysed -- so nothing flies and nobody charges. The
+                    // Pokemon recoils where it stands, and the stepper's line
+                    // says why. The damage still shows, for the one stop that
+                    // costs health: hurting itself in confusion.
+                    flourish = nil
+                    recoil(user)
+                } else {
+                    flourish = Flourish(id: order, action: action, targets: reached)
+                    flourishFrom = Date()
+                    leanIn(action: action, at: reached, singles: singles)
+                }
                 // Travel, then the blow: the step's own health is shown at the
                 // moment the move reaches, not when it was thrown.
                 let whole = Self.flourishSeconds
@@ -232,6 +242,30 @@ final class TurnPlayback: ObservableObject {
         withAnimation(.easeIn(duration: strike)) { lungeBy = step }
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(strike * 1_000_000_000))
+            guard lunging == user else { return }
+            withAnimation(.easeOut(duration: Self.flourishSeconds * 0.45)) { lungeBy = .zero }
+        }
+    }
+
+    /// A Pokemon that never got its move off does not charge anything. It
+    /// jolts back where it stands, half-way forward again, and settles --
+    /// which is what a flinch looks like, and what a lunge at nothing does not.
+    /// Drawn through the same offset as the lunge, so the card needs no new
+    /// state to move.
+    private func recoil(_ user: Seat) {
+        lunging = user
+        lungeBy = .zero
+        // Away from the far side: your side stands on the left.
+        let away: CGFloat = user.mine ? -14 : 14
+        let beat = Self.flourishSeconds * Self.impactAt / 3
+        withAnimation(.easeOut(duration: beat)) { lungeBy = CGSize(width: away, height: 0) }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(beat * 1_000_000_000))
+            guard lunging == user else { return }
+            withAnimation(.easeInOut(duration: beat)) {
+                lungeBy = CGSize(width: -away * 0.5, height: 0)
+            }
+            try? await Task.sleep(nanoseconds: UInt64(beat * 1_000_000_000))
             guard lunging == user else { return }
             withAnimation(.easeOut(duration: Self.flourishSeconds * 0.45)) { lungeBy = .zero }
         }
