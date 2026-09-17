@@ -185,16 +185,19 @@ extension BattleFieldView {
 
     // MARK: - The readouts
 
-    /// The four Pokemon's readouts, kept out of the scene the way the games
-    /// keep them: theirs stacked in the top-left corner, yours in the
-    /// bottom-right, each with the Pokemon's own icon so the panel and the
-    /// sprite read as one. Name, condition, health, and every stat change as
-    /// a chip that says the number. A click opens the field's card, with the
-    /// Speed reading, the likely item and everything else it used to show.
+    /// The four Pokemon's readouts, kept out of the scene: yours stacked in
+    /// the top-left corner, on your side of the field and above your Pokemon
+    /// rather than on their feet; theirs in the bottom-right, on theirs.
+    /// Each carries the Pokemon's own icon so the panel and the sprite read
+    /// as one, and both stacks run the way the picture does, left to right.
+    /// Name, condition, health, and every stat change as a chip that says the
+    /// number. A click opens the field's card, with the Speed reading, the
+    /// likely item and everything else it used to show.
     func readouts(_ board: Board, stage: MoveTimeline.Stage) -> some View {
         func stack(_ mine: Bool) -> some View {
-            VStack(alignment: mine ? .trailing : .leading, spacing: 8) {
-                ForEach(0..<min(board.activeCount, (mine ? board.mine : board.theirs).count), id: \.self) { slot in
+            let slots = mine ? Array(0..<min(board.activeCount, board.mine.count)) : Seat.farSlotsLeftToRight(board)
+            return VStack(alignment: mine ? .leading : .trailing, spacing: 8) {
+                ForEach(slots, id: \.self) { slot in
                     let seat = Seat(mine: mine, slot: slot)
                     if let fighter = fighter(at: seat, in: board) {
                         statbar(fighter, seat: seat, stage: stage, board: board)
@@ -203,10 +206,10 @@ extension BattleFieldView {
             }
         }
         return ZStack {
-            stack(false)
+            stack(true)
                 .padding(14)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            stack(true)
+            stack(false)
                 .padding(14)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         }

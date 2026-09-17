@@ -344,4 +344,12 @@ struct Seat: Hashable {
     let mine: Bool
     let slot: Int
 
+    /// The far side's slots as they stand on screen, left to right. Their
+    /// first slot stands on the right -- the stage mirrors the field, so their
+    /// left is your right -- and a list a player reads against the picture
+    /// should run the way the picture does.
+    static func farSlotsLeftToRight(_ board: Board) -> [Int] {
+        Array((0..<min(board.activeCount, board.theirs.count)).reversed())
+    }
+
 }

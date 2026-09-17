@@ -400,7 +400,7 @@ struct CommandDeckView: View {
         // a target it cannot touch is said so, not left off.
         let perTarget: [(name: String, text: String, mega: String?, tint: Color)] =
             (aim == .foe || aim == .spread) && move.isDamaging
-            ? (0..<min(board.activeCount, board.theirs.count)).compactMap { target in
+            ? Seat.farSlotsLeftToRight(board).compactMap { target in
                 guard !board.theirs[target].fainted else { return nil }
                 let name = board.theirs[target].build.form.formLabel
                 guard let read = MovePreview(session: session, store: store).reading(board, fighter: fighter, slot: slot,
@@ -632,7 +632,7 @@ struct CommandDeckView: View {
                     VStack(alignment: .trailing, spacing: 8) {
                         Text("THEIR SIDE").font(.system(size: 9, weight: .bold)).kerning(0.6)
                             .foregroundStyle(.tertiary)
-                        ForEach(0..<min(board.activeCount, board.theirs.count), id: \.self) { foe in
+                        ForEach(Seat.farSlotsLeftToRight(board), id: \.self) { foe in
                             if !board.theirs[foe].fainted {
                                 targetCard(board, slot: slot, index: index, fighter: board.theirs[foe],
                                            choice: .attack(move: index, target: foe), tint: Palette.warn,
