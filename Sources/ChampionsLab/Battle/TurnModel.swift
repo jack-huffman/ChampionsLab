@@ -3106,9 +3106,14 @@ enum TurnModel {
                         wasAt: defending[index].hp, rolling: rolling, board: &board)
                 flee(ifNeeded: index, ofMine: hitMine, wasAt: defending[index].hp,
                      board: &board)
-                if move.name == "Fake Out" {
-                    flinch(onMine: hitMine, slot: index, board: &board)
-                }
+                // Fake Out used to flinch from here as well as through its
+                // own secondary, which is how it carries the flinch in the
+                // data: a hundred per cent, `kind: flinch`. Two paths for one
+                // effect said "flinched" twice in the log, and — the part that
+                // mattered — this one ran before the check that lets a Shield
+                // Dust or a Covert Cloak refuse a secondary. So the item worn
+                // specifically to stand in front of a Fake Out did not, which
+                // is most of the reason anybody wears it.
                 if result.notes.contains(where: { $0.contains("Weakness Policy") }) {
                     applySelf([.attack: 2, .spAttack: 2], toMine: hitMine, slot: index,
                               board: &board)
@@ -3809,13 +3814,20 @@ enum TurnModel {
     private static func flinch(onMine: Bool, slot: Int, board: inout Board, because: String? = nil) {
         let team = onMine ? board.mine : board.theirs
         guard team.indices.contains(slot), !team[slot].fainted else { return }
+        // Already flinching. Nothing to add, and saying so twice reads as two
+        // separate things having happened.
+        guard !team[slot].flinched else { return }
         if team[slot].build.ability == "Inner Focus" {
             board.note("\(team[slot].build.form.formLabel)'s Inner Focus kept it going.")
             return
         }
         if onMine { board.mine[slot].flinched = true } else { board.theirs[slot].flinched = true }
         let name = team[slot].build.form.formLabel
-        board.note("\(name) flinched" + (because.map { " — \($0)." } ?? "."))
+        // Only say it here when there is something to explain — which roll came
+        // up, whose ability did it. A flinch that simply happened is announced
+        // where the game announces it, at the moment the Pokémon would have
+        // moved and does not; saying it twice reads as two separate events.
+        if let because { board.note("\(name) flinched — \(because).") }
         if team[slot].build.ability == "Steadfast" {
             change([.speed: 1], onMine: onMine, slot: slot, board: &board, because: "Steadfast")
         }
