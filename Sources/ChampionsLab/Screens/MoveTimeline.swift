@@ -96,10 +96,17 @@ struct MoveTimeline: Sendable {
             self.size = size; self.singles = singles; self.pixel = pixel
         }
 
-        /// Points per scene unit, and where the scene's corner sits.
+        /// Points per scene unit for sizes and heights: the scene fitted to
+        /// the view.
         var k: CGFloat { max(0.1, min(size.width / Self.scene.width, size.height / Self.scene.height)) }
+        /// Points per scene unit across. A window wider than the client's
+        /// scene spreads the field rather than leaving it in a letterbox: x
+        /// stretches up to 1.7 times further than y, sizes stay true, and
+        /// every recipe's offset stretches with the seats it is written from.
+        var kx: CGFloat { max(k, min(size.width / Self.scene.width, k * 1.7)) }
+        /// Where the scene's corner sits.
         var origin: CGPoint {
-            CGPoint(x: (size.width - Self.scene.width * k) / 2, y: (size.height - Self.scene.height * k) / 2)
+            CGPoint(x: (size.width - Self.scene.width * kx) / 2, y: (size.height - Self.scene.height * k) / 2)
         }
 
         /// Where a seat's Pokemon stands, in scene units: the client's own
@@ -126,7 +133,7 @@ struct MoveTimeline: Sendable {
             let s = depthScale(p.z)
             let left = 210 + 220 * (p.z / 200) + p.x * s
             let top = 245 - 110 * (p.z / 200) - p.y * s
-            return CGPoint(x: origin.x + left * k, y: origin.y + top * k)
+            return CGPoint(x: origin.x + left * kx, y: origin.y + top * k)
         }
 
         /// Points per unit of something drawn at this depth.

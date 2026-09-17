@@ -72,9 +72,9 @@ extension BattleFieldView {
     }
 
     /// The ground: a platform under each side, in perspective, in the field's
-    /// colour. The client's backdrops are photographs it owns; this is ours.
+    /// colour, wide enough for both Pokemon standing on it. The client's
+    /// backdrops are photographs it owns; this is ours.
     func sceneGround(stage: MoveTimeline.Stage, tint: Color) -> some View {
-        let k = stage.k, o = stage.origin
         func platform(centre: CGPoint, width: CGFloat, height: CGFloat, strength: Double) -> some View {
             Ellipse()
                 .fill(RadialGradient(colors: [tint.opacity(0.28 * strength), tint.opacity(0.10 * strength),
@@ -84,14 +84,22 @@ extension BattleFieldView {
                 .frame(width: width, height: height)
                 .position(centre)
         }
+        // Under the seats, wherever the stage has put them.
+        func under(_ mine: Bool) -> (centre: CGPoint, width: CGFloat) {
+            let seats = stage.singles ? [Seat(mine: mine, slot: 0)] : [Seat(mine: mine, slot: 0), Seat(mine: mine, slot: 1)]
+            let points = seats.map { stage.project(stage.home($0)) }
+            let sprite = 96 * stage.scale(at: mine ? 0 : 200, pixelSprite: usesPixelSprites)
+            let left = points.map(\.x).min()!, right = points.map(\.x).max()!
+            let low = points.map(\.y).max()!
+            return (CGPoint(x: (left + right) / 2, y: low + sprite * 0.33), right - left + sprite * 1.15)
+        }
+        let far = under(false), near = under(true)
         return ZStack {
             // The horizon, faint, where the far platform sits.
             LinearGradient(colors: [tint.opacity(0.10), .clear, tint.opacity(0.05)],
                            startPoint: .top, endPoint: .bottom)
-            platform(centre: CGPoint(x: o.x + (stage.singles ? 430 : 412) * k, y: o.y + 150 * k),
-                     width: (stage.singles ? 150 : 230) * k, height: 46 * k, strength: 0.8)
-            platform(centre: CGPoint(x: o.x + (stage.singles ? 210 : 238) * k, y: o.y + 272 * k),
-                     width: (stage.singles ? 230 : 340) * k, height: 70 * k, strength: 1)
+            platform(centre: far.centre, width: far.width, height: far.width * 0.2, strength: 0.8)
+            platform(centre: near.centre, width: near.width, height: near.width * 0.2, strength: 1)
         }
         .allowsHitTesting(false)
     }
@@ -111,10 +119,10 @@ extension BattleFieldView {
         return ZStack {
             if !fighter.fainted {
                 Ellipse()
-                    .fill(RadialGradient(colors: [.black.opacity(0.42), .clear],
-                                         center: .center, startRadius: 1, endRadius: side * 0.36))
-                    .frame(width: side * 0.78, height: side * 0.2)
-                    .offset(y: side * 0.36)
+                    .fill(RadialGradient(colors: [.black.opacity(0.22), .clear],
+                                         center: .center, startRadius: 1, endRadius: side * 0.3))
+                    .frame(width: side * 0.6, height: side * 0.15)
+                    .offset(y: side * 0.38)
             }
             if asked {
                 Ellipse()
@@ -188,14 +196,15 @@ extension BattleFieldView {
     func statbar(_ fighter: Fighter, seat: Seat, stage: MoveTimeline.Stage, board: Board) -> some View {
         let k = stage.k
         let at = stage.project(stage.home(seat))
-        // The client's placement, then the second slot's bar staggered higher
-        // and pushed outward: in a double battle the two sprites stand seventy
-        // units apart, which is less than a bar is wide.
+        // The client's placement -- the far row's higher, the second slot a
+        // little more so -- and the second slot's bar pushed outward, because
+        // in a double battle two sprites stand closer than a bar is wide.
         let above = 73.0 + (seat.mine ? 20.0 - 7.0 * Double(seat.slot) : 30.0 + 17.0 * Double(seat.slot))
-            + 24.0 * Double(seat.slot)
         let outward: CGFloat = seat.slot == 1 ? (seat.mine ? 1 : -1) * 44 * k : 0
         let width: CGFloat = 150, height: CGFloat = 42
         let grow = min(1.15, max(0.85, k))
+        // Never off the top of the scene: the client clamps its bars the same way.
+        let top = max(stage.origin.y + 4 * k, at.y - above * k)
         let health = fighter.share
         let bar: Color = health > 0.5 ? Palette.good : (health > 0.2 ? Palette.warn : Palette.bad)
         let out = !opening || shown.contains("\(seat.mine ? "m" : "t")\(seat.slot)")
@@ -260,7 +269,7 @@ extension BattleFieldView {
         .scaleEffect(grow, anchor: .center)
         .opacity(out ? 1 : 0)
         .position(x: at.x - 80 * k + outward + width * grow / 2,
-                  y: at.y - above * k + height * grow / 2)
+                  y: top + height * grow / 2)
     }
 
     static func shortStatus(_ status: Ailment) -> String {
