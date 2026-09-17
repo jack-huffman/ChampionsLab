@@ -71,7 +71,7 @@ final class MultiHitTests: HarnessCase {
         again.mine[0].build.boosts[Stat.attack.rawValue] = 6
         let single = TurnModel.resolve(again,
                                        mine: Play(left: .attack(move: at(again.mine[0], "Earthquake"), target: 0), right: .pass),
-                                       theirs: Play(left: .pass, right: .pass), rolling: true)
+                                       theirs: Play(left: .pass, right: .pass), rolling: false)
         check("one blow, and the Sash holds it at one", single.theirs[0].hp == 1, "\(single.theirs[0].hp)")
     }
 }

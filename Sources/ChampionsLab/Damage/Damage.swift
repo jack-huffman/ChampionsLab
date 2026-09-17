@@ -860,3 +860,9 @@ enum DamageCalc {
         }
     }
 }
+
+// A game between two people sends a side's state across the wire.
+extension Weather: Codable {}
+extension Terrain: Codable {}
+extension Field: Codable {}
+extension Combatant: Codable {}

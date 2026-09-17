@@ -989,3 +989,6 @@ struct Dataset: Codable {
                 generated: generated, sources: sources, provenance: provenance)
     }
 }
+
+// A game between two people sends a side's state across the wire.
+extension Ailment: Codable {}

@@ -35,6 +35,44 @@ enum Wire {
         case ready(Bool)
         /// Out of the room, or the battle.
         case leave
+
+        /// The battle. Both ready, the host says start and both go to Team
+        /// Preview; the guest sends its team and its four; the host answers
+        /// with the opening as the guest may see it, and after every turn
+        /// with a snapshot and what it asks of the guest. The guest answers
+        /// each request by its number.
+        case start
+        case preview(team: Team, bringing: [String])
+        case snapshot(Snapshot)
+        case choice(rqid: Int, play: Play)
+        case sendIn(rqid: Int, picks: [Pick])
+        case pivot(rqid: Int, bench: Int)
+    }
+
+    /// A replacement: who comes in, and where.
+    struct Pick: Codable, Equatable, Sendable {
+        let slot: Int
+        let bench: Int
+    }
+
+    /// What the host asks of the guest, if anything.
+    enum Asking: Codable, Equatable, Sendable {
+        case orders
+        case sendIn([Int])
+        case pivot(Int)
+        case wait
+        case over(youWon: Bool)
+    }
+
+    /// The board as the guest may see it, the turn that got it there, and
+    /// what is asked. `rqid` numbers the request so an answer cannot land
+    /// on the wrong turn, as Showdown's does.
+    struct Snapshot: Codable, Equatable {
+        let rqid: Int
+        let turn: Int
+        let board: Board.Wired
+        let asking: Asking
+        static func == (a: Snapshot, b: Snapshot) -> Bool { a.rqid == b.rqid && a.turn == b.turn && a.asking == b.asking }
     }
 
     enum WireError: LocalizedError {

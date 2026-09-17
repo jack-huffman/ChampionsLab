@@ -712,7 +712,9 @@ struct Board {
     }
 
     /// The abilities that have fired since the step began, off the notes.
-    private var firing: [Step.Firing] = []
+    /// Not private: a private stored property would make the memberwise
+    /// initialiser private too, and a board is rebuilt from the wire with it.
+    var firing: [Step.Firing] = []
 
     /// The action being gathered never happened, and this is why. One door,
     /// so the playback learns it from the same place the log does.
@@ -1211,4 +1213,60 @@ struct Play: Hashable {
     /// is the one whose weather stays. Holding it back a turn is sometimes the
     /// whole plan.
     var megaSlot: Int?
+}
+
+// MARK: - Across the wire
+//
+// A game between two people is one board on one machine and a view of it on
+// the other, so the pieces of a board the other player may see have to be
+// encodable. Nothing here decides what they may see; `asTheOtherPlayerSeesIt`
+// in the LAN folder does that.
+
+extension Fighter: Codable {}
+extension Screens: Codable {}
+extension Choice: Codable {}
+extension Play: Codable {}
+extension Board.Action: Codable {}
+extension Board.Pivot: Codable {}
+extension Board.Carried: Codable {}
+extension Board.BenchGuess: Codable {}
+extension Board.Queued: Codable {}
+extension Board.Step.Firing: Codable {}
+extension Board.Step: Codable {
+    /// Everything but the id, which is the step's own and fresh on each side.
+    enum CodingKeys: String, CodingKey {
+        case text, action, myHP, theirHP, myForms, theirForms, field, myTailwind, theirTailwind,
+             trickRoom, myBoosts, theirBoosts, abilities, myStatus, theirStatus, myConfused, theirConfused
+    }
+}
+
+extension Board.Action {
+    /// The same action from the other chair.
+    var flipped: Board.Action {
+        var out = Board.Action(byMine: !byMine, slot: slot, move: move, category: category, type: type)
+        out.stopped = stopped
+        out.target = target
+        out.aimsAtUser = aimsAtUser
+        out.aimsAtAlly = aimsAtAlly
+        out.hits = hits
+        return out
+    }
+}
+
+extension Board.Step {
+    /// The same step from the other chair: each side's columns swapped, and
+    /// who acted and whose ability fired turned round.
+    var flipped: Board.Step {
+        var out = Board.Step(text: text, action: action?.flipped,
+                             myHP: theirHP, theirHP: myHP,
+                             myForms: theirForms, theirForms: myForms,
+                             field: field, myTailwind: theirTailwind, theirTailwind: myTailwind,
+                             trickRoom: trickRoom,
+                             myBoosts: theirBoosts, theirBoosts: myBoosts,
+                             abilities: abilities.map { Firing(mine: !$0.mine, slot: $0.slot, name: $0.name) },
+                             myStatus: theirStatus, theirStatus: myStatus,
+                             myConfused: theirConfused, theirConfused: myConfused)
+        out.action = action?.flipped
+        return out
+    }
 }

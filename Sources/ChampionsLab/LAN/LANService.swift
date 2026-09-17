@@ -316,6 +316,9 @@ final class LANService: ObservableObject {
             room?.theyAreReady = ready
         case .leave:
             lost(stage == .room ? "\(theirName) left the room." : "\(theirName) withdrew.")
+        case .start, .preview, .snapshot, .choice, .sendIn, .pivot:
+            // The battle's messages, for the link once there is one.
+            break
         }
     }
 
