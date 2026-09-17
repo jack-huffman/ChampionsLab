@@ -24,7 +24,7 @@
 SHELL := /bin/bash
 NICE  := nice -n 15
 
-.PHONY: test warnings hitch coverage profile accuracy snapshot app dmg data check clean delta full-sync duel replays reading
+.PHONY: animations test warnings hitch coverage profile accuracy snapshot app dmg data check clean delta full-sync duel replays reading
 
 test:
 	$(NICE) swift test 2>&1 | tail -25
@@ -122,3 +122,8 @@ check: test warnings hitch snapshot app
 
 clean:
 	rm -rf .build build
+
+# The battle animations: the Showdown client's choreography, translated to
+# data. --fetch pulls the two client sources into .cache/psclient first.
+animations:
+	$(NICE) python3 Scripts/mkanimations.py --fetch > data/animations.json

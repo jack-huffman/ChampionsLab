@@ -64,6 +64,7 @@ cp "$BUILD/ChampionsLab" "$APP/Contents/MacOS/ChampionsLab"
 chmod +x "$APP/Contents/MacOS/ChampionsLab"
 [ -f "$SRC_DIR/AppIcon.icns" ] && cp "$SRC_DIR/AppIcon.icns" "$APP/Contents/Resources/"
 cp "$SRC_DIR/data/champions.json" "$APP/Contents/Resources/champions.json"
+[ -f "$SRC_DIR/data/animations.json" ] && cp "$SRC_DIR/data/animations.json" "$APP/Contents/Resources/animations.json"
 # Subdirectories, so Bundle.url(forResource:subdirectory:) can find them.
 for set in sprites types items; do
 	if [ -d "$SRC_DIR/data/$set" ]; then
