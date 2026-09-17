@@ -882,11 +882,21 @@ struct Board {
     }
 
     /// Slots on my side standing empty with somebody able to fill them.
+    /// The slots you have to send something into — and never more of them than
+    /// you have Pokémon to send.
+    ///
+    /// This used to report every fallen active as long as *any* bench Pokémon
+    /// was standing, which is right until it is not: lose both actives with one
+    /// Pokémon left and it asked for two replacements, you gave it the only one
+    /// you had, and the screen waited for a second that could not exist. The
+    /// game has no such state — you send in what you have — and the battle
+    /// screen had no way out of it.
     var gapsOfMine: [Int] {
-        (0..<min(activeCount, mine.count)).filter { slot in
-            mine[slot].fainted
-                && (activeCount..<mine.count).contains { !mine[$0].fainted }
-        }
+        let ready = (activeCount..<mine.count).filter { !mine[$0].fainted }.count
+        guard ready > 0 else { return [] }
+        return Array((0..<Swift.min(activeCount, mine.count))
+            .filter { mine[$0].fainted }
+            .prefix(ready))
     }
 
     /// Bring one specific Pokémon in, which is the choice the game gives you.

@@ -111,7 +111,17 @@ struct BattleView: View {
 
     /// How long one move takes on screen. Four actions a turn, so this is the
     /// number that decides whether a turn feels brisk or slow.
-    static let flourishSeconds: Double = 0.52
+    ///
+    /// It was 0.52, which put four actions inside two seconds and ran them
+    /// together into one event you could not follow. A move wants long enough
+    /// to be read as a thing that happened to somebody.
+    static let flourishSeconds: Double = 0.92
+    /// A beat between one action and the next.
+    ///
+    /// Without it the moves were continuous — the second beam left before the
+    /// first had finished bursting — and four separate decisions looked like
+    /// one animation. The pause is what makes them four.
+    static let betweenActions: Double = 0.24
     /// How far through a move the blow actually lands. The beam is travelling
     /// before this and bursting after it, and the board is held at the state
     /// *before* the move until this moment — so the health bar drops as the
@@ -3958,6 +3968,11 @@ struct BattleView: View {
                     nanoseconds: UInt64(whole * (1 - BattleView.impactAt) * 1_000_000_000))
                 guard !Task.isCancelled else { return }
                 withAnimation(.easeIn(duration: 0.2)) { damage = [:] }
+                // Let it land before the next one starts.
+                if order < actions.count - 1 {
+                    try? await Task.sleep(
+                        nanoseconds: UInt64(BattleView.betweenActions * 1_000_000_000))
+                }
             }
             guard !Task.isCancelled else { return }
             flourish = nil

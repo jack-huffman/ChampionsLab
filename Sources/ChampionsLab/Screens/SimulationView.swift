@@ -34,6 +34,8 @@ struct SimulationView: View {
     /// that".
     @State private var opponent = ""
     @Environment(\.snapshotMode) private var snapshotMode
+    /// The Pokémon whose full record is open, if any.
+    @State private var inspecting: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -45,6 +47,17 @@ struct SimulationView: View {
         }
         // Deliberately nothing here. The run outlives the screen; the sidebar
         // says it is going and can stop it from anywhere.
+        .sheet(item: Binding(get: { inspecting.map { Inspected(form: $0) } },
+                             set: { inspecting = $0?.form })) { open in
+            if let report = seeded ?? store.measured(for: team) {
+                MemberDetail(form: open.form, report: report, team: team) { inspecting = nil }
+            }
+        }
+    }
+
+    private struct Inspected: Identifiable {
+        let form: String
+        var id: String { form }
     }
 
     // MARK: - Setting it going
@@ -280,13 +293,19 @@ struct SimulationView: View {
     /// Who is carrying the team and who is being carried.
     private func carrying(_ report: TeamLab.Report) -> some View {
         let rows = report.byTrade
-        return Card(padding: 12) {
+        let worst = rows.first, best = rows.last
+        return Fold(title: "Who is carrying it",
+                    summary: [best.map { String(format: "%@ %.2f", $0.form, $0.record.trade) },
+                              worst.map { String(format: "%@ %.2f", $0.form, $0.record.trade) }]
+                        .compactMap { $0 }.joined(separator: " down to "),
+                    subtitle: "Knockouts against times fainted. Around one is an "
+                            + "even trade; well under it is a Pokémon costing the "
+                            + "team more than it brings, whatever its typing says. "
+                            + "Click any of them for the whole record.",
+                    open: true) {
             VStack(alignment: .leading, spacing: 8) {
-                SectionHeader(title: "Who is carrying it",
-                              subtitle: "Knockouts against times fainted. Around one is an "
-                                      + "even trade; well under it is a Pokémon costing the "
-                                      + "team more than it brings, whatever its typing says.")
                 ForEach(rows, id: \.form) { row in
+                    Button { inspecting = row.form } label: {
                     HStack(spacing: 10) {
                         Text(row.form).font(.system(size: 12))
                             .frame(width: 150, alignment: .leading).lineLimit(1)
@@ -308,7 +327,12 @@ struct SimulationView: View {
                                        * min(1, row.record.trade / 2.5))
                         }
                         .frame(height: 4)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .bold)).foregroundStyle(.quaternary)
                     }
+                    .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -318,14 +342,18 @@ struct SimulationView: View {
     private func fours(_ report: TeamLab.Report) -> some View {
         let least = max(4, report.games / 40)
         let rows = report.fours(least: least)
+        let spread = rows.isEmpty ? 0
+            : (Double(rows[0].wins) / Double(max(1, rows[0].games))
+               - Double(rows[rows.count - 1].wins) / Double(max(1, rows[rows.count - 1].games)))
         return Group {
             if rows.count >= 2 {
-                Card(padding: 12) {
+                Fold(title: "Which four to bring",
+                     summary: String(format: "%.0f points between the best four and the worst",
+                                     spread * 100),
+                     subtitle: "The same six, chosen differently. This is a "
+                             + "team-preview decision, and it is usually worth "
+                             + "more than any change to the team.") {
                     VStack(alignment: .leading, spacing: 8) {
-                        SectionHeader(title: "Which four to bring",
-                                      subtitle: "The same six, chosen differently. This is a "
-                                              + "team-preview decision, and it is usually worth "
-                                              + "more than any change to the team.")
                         ForEach(rows.prefix(6), id: \.four) { row in
                             bringRow(row)
                         }
@@ -358,13 +386,17 @@ struct SimulationView: View {
     /// The teams it cannot beat.
     private func hardest(_ report: TeamLab.Report) -> some View {
         let rows = report.matchups(least: max(3, report.games / 120))
+        let beaten = rows.filter { Double($0.wins) / Double(max(1, $0.games)) < 0.35 }
         return Group {
             if rows.count >= 3 {
-                Card(padding: 12) {
+                Fold(title: "What it cannot beat",
+                     summary: beaten.isEmpty
+                        ? "nothing in the field beats it badly"
+                        : "\(beaten.count) of \(rows.count) teams beat it, worst is "
+                          + (rows.first?.foe ?? ""),
+                     subtitle: "Worst matchups in the field, and the best, "
+                             + "over enough games to mean something.") {
                     VStack(alignment: .leading, spacing: 8) {
-                        SectionHeader(title: "What it cannot beat",
-                                      subtitle: "Worst matchups in the field, and the best, "
-                                              + "over enough games to mean something.")
                         ForEach(rows.prefix(5), id: \.foe) { row in matchupRow(row) }
                         if let best = rows.last, rows.count > 5 {
                             Text("and the easiest:").font(.system(size: 10))
@@ -410,12 +442,14 @@ struct SimulationView: View {
         let ours = Set(team.slots.compactMap { $0.battleForm(in: store.rulebook) }
                         .map(SelfPlay.recordLabel))
         if !worst.isEmpty {
-            Card(padding: 12) {
+            Fold(title: "What is killing you",
+                 summary: worst.first.map {
+                     "\($0.victim) falls to \($0.attacker)'s \($0.move), \($0.knockouts) times"
+                 } ?? "",
+                 subtitle: "Every knockout against your side, by who dealt it "
+                         + "and with what. The Analyse tab builds spreads "
+                         + "against these rather than against the usage table.") {
                 VStack(alignment: .leading, spacing: 8) {
-                    SectionHeader(title: "What is killing you",
-                                  subtitle: "Every knockout against your side, by who dealt it "
-                                          + "and with what. The Analysis tab builds spreads "
-                                          + "against these rather than against the usage table.")
                     ForEach(worst.prefix(8)) { threat in
                         HStack(spacing: 8) {
                             Text(threat.victim)
@@ -450,12 +484,16 @@ struct SimulationView: View {
         let past = store.history(for: team)
         if !past.isEmpty {
             let now = store.measured(for: team)
-            Card(padding: 12) {
+            Fold(title: "What changing it did",
+                 summary: {
+                     guard let now, let older = past.first else { return "\(past.count) earlier" }
+                     let delta = (now.winRate - older.entry.report.winRate) * 100
+                     return String(format: "%+.1f points since the last version", delta)
+                 }(),
+                 subtitle: "Earlier versions of this team, newest first, "
+                         + "with what changed after each one. The comparison "
+                         + "is the reason to keep them.") {
                 VStack(alignment: .leading, spacing: 8) {
-                    SectionHeader(title: "What changing it did",
-                                  subtitle: "Earlier versions of this team, newest first, "
-                                          + "with what changed after each one. The comparison "
-                                          + "is the reason to keep them.")
                     if let now {
                         versionRow(label: "now", rate: now.winRate, games: now.games,
                                    against: nil, changed: [])
@@ -515,13 +553,14 @@ struct SimulationView: View {
     @ViewBuilder private func acrossTeams() -> some View {
         let roster = store.roster.filter { $0.teams.count > 1 }
         if !roster.isEmpty {
-            Card(padding: 12) {
+            Fold(title: "Across your teams",
+                 summary: roster.first.map {
+                     String(format: "%@ trades %.2f over %d teams",
+                            $0.form, $0.trade, $0.teams.count) } ?? "",
+                 subtitle: "Pokémon on more than one team you have simulated, pooled. "
+                         + "Worst trade first — this is where a Pokémon that is quietly "
+                         + "costing you games on several teams at once shows up.") {
                 VStack(alignment: .leading, spacing: 8) {
-                    SectionHeader(
-                        title: "Across your teams",
-                        subtitle: "Pokémon on more than one team you have simulated, pooled. "
-                                + "Worst trade first — this is where a Pokémon that is quietly "
-                                + "costing you games on several teams at once shows up.")
                     ForEach(roster) { entry in
                         HStack(spacing: 10) {
                             Text(entry.form).font(.system(size: 12))
@@ -558,12 +597,12 @@ struct SimulationView: View {
         let quiet = report.quietMoves.prefix(6)
         return Group {
             if !quiet.isEmpty {
-                Card(padding: 12) {
+                Fold(title: "Moves it rarely reaches for",
+                     summary: quiet.first.map { "\($0.move) used \($0.uses) times" } ?? "",
+                     subtitle: "Across every game. A move at the bottom of "
+                             + "this over a thousand games is a slot the team "
+                             + "is not using.") {
                     VStack(alignment: .leading, spacing: 6) {
-                        SectionHeader(title: "Moves it rarely reaches for",
-                                      subtitle: "Across every game. A move at the bottom of "
-                                              + "this over a thousand games is a slot the team "
-                                              + "is not using.")
                         ForEach(Array(quiet), id: \.move) { row in
                             HStack {
                                 Text(row.move).font(.system(size: 11))

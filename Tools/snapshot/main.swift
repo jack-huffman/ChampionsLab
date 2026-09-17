@@ -330,6 +330,12 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
                            ran: Date().addingTimeInterval(-3 * 86_400),
                            report: oldest, slots: Array(wasSlots.dropLast())),
         ]
+        // The member sheet, which is where the depth went.
+        if let carrying = found.byTrade.first {
+            render(MemberDetail(form: carrying.form, report: found, team: playing) {},
+                   named: "team-member-dark",
+                   size: CGSize(width: 560, height: 1500), dark: true)
+        }
         render(SimulationView(team: playing, seeded: found), named: "team-simulate-dark",
                size: CGSize(width: 900, height: 1700), dark: true)
     }

@@ -104,6 +104,75 @@ struct Card<Content: View>: View {
     }
 }
 
+/// A card that keeps its detail folded away until it is wanted.
+///
+/// The screens in this app answer a lot of questions at once, and the ones
+/// worth the most — a team's win rate, which Pokémon is costing it games —
+/// were being read at the same size as the ones worth the least. Depth is not
+/// the problem; showing all of it at once is. So every section states its
+/// finding in one line and holds the table behind it.
+///
+/// `summary` is the point of the thing. A section whose folded line reads
+/// "6 rows" has saved nobody anything: it should say what the rows came to,
+/// so the fold can be left alone when the answer is already there.
+struct Fold<Content: View>: View {
+    let title: String
+    /// The finding, in one line, for when this is closed.
+    var summary: String = ""
+    var subtitle: String? = nil
+    /// Whether it starts open. The one or two sections that answer the main
+    /// question should; the rest should not.
+    var open = false
+    /// Snapshots and anything else that cannot click have to see it all.
+    @Environment(\.snapshotMode) private var snapshotMode
+    @ViewBuilder var content: Content
+
+    @State private var shown: Bool?
+
+    private var isOpen: Bool { snapshotMode || (shown ?? open) }
+
+    var body: some View {
+        Card(padding: 12) {
+            VStack(alignment: .leading, spacing: isOpen ? 8 : 0) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.16)) { shown = !isOpen }
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.tertiary)
+                            .rotationEffect(.degrees(isOpen ? 90 : 0))
+                            .frame(width: 10)
+                        Text(title)
+                            .font(.system(size: 13, weight: .semibold))
+                            .textCase(.uppercase).kerning(0.6)
+                            .foregroundStyle(.secondary)
+                        if !summary.isEmpty, !isOpen {
+                            Text(summary)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if isOpen {
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 12)).foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.leading, 18)
+                    }
+                    content.padding(.leading, 18)
+                }
+            }
+        }
+    }
+}
+
 struct SectionHeader: View {
     let title: String
     var subtitle: String? = nil
