@@ -83,7 +83,7 @@ struct TurnGame {
         // search spending one of its few choices on a priority move.
         let priorityRefused = (0..<Swift.min(board.activeCount, foes.count)).contains {
             guard !foes[$0].fainted else { return false }
-            return TurnModel.priorityBlockers.contains(foes[$0].build.ability)
+            return Strikes.priorityBlockers.contains(foes[$0].build.ability)
                 || (board.field.terrain == .psychic && foes[$0].build.grounded)
         }
         func allowed(_ move: Move) -> Bool {

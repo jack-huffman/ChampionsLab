@@ -37,14 +37,22 @@ final class MoveDataOwnershipTests: HarnessCase {
     ]
 
     @MainActor func testDamagingMovesAreDataNotCode() throws {
-        let path = URL(fileURLWithPath: #filePath)
+        // Every file of the battle model, not one. The turn model used to be a
+        // single file and this read it; the resolver and the status moves have
+        // homes of their own now, and a rule restated by hand in any of them
+        // is the same fault.
+        let battle = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Sources/ChampionsLab/Battle/TurnModel.swift")
-        guard let source = try? String(contentsOf: path, encoding: .utf8) else {
-            check("the turn model is where it is expected to be", false, path.path)
-            XCTAssertEqual(fails, 0); return
-        }
+            .appendingPathComponent("Sources/ChampionsLab/Battle")
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: battle.path))?
+            .filter { $0.hasSuffix(".swift") }.sorted() ?? []
+        check("the battle model is where it is expected to be", files.count > 5,
+              "\(files.count) files at \(battle.path)")
+        let source = files.compactMap {
+            try? String(contentsOf: battle.appendingPathComponent($0), encoding: .utf8)
+        }.joined(separator: "\n")
+        print("  read \(files.count) files: \(files.joined(separator: ", "))")
         let byName = Dictionary(store.data.moves.values.map { ($0.name, $0) },
                                 uniquingKeysWith: { a, _ in a })
         var named: Set<String> = []
