@@ -9,8 +9,8 @@
 //  the budgets are set a little above where things stand, so ordinary work
 //  passes and the file that quietly doubles does not.
 //
-//  Three functions are allowed to be long and are named here with the reason.
-//  Adding a fourth means adding a line, which is the point -- it forces the
+//  Two functions are allowed to be long and are named here with the reason.
+//  Adding a third means adding a line, which is the point -- it forces the
 //  question to be asked once, out loud. The damage calculator is held to the
 //  same limit: it was one function of 451 lines, and is twelve phases now.
 
@@ -49,7 +49,6 @@ final class BattleModelShapeTests: XCTestCase {
 
     /// Functions allowed past the ordinary limit, with why.
     static let longFunctions: [String: String] = [
-        "Residuals.endOfTurn": "every end-of-turn effect, in the order the game applies them",
         "Board.flipped": "every field of the state, mirrored -- long because the state is",
         "SelfPlay.playLogged": "the game loop with its ledger readers nested inside it, "
                              + "so they can write to the ledger they are reading for",
