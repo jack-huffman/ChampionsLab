@@ -34,7 +34,7 @@ struct TeamChooser: View {
     private var format: String { singles ? "singles" : "doubles" }
     private var chosen: String { side == .mine ? myTeamID : opponentID }
     private var groups: [String] {
-        side == .mine ? ["My teams"] : ["Meta archetypes", "Tournament results", "My teams"]
+        side == .mine ? ["My teams"] : ["Ladder teams", "Meta archetypes", "Tournament results", "My teams"]
     }
 
     var body: some View {
@@ -116,6 +116,16 @@ struct TeamChooser: View {
     private var candidates: [Candidate] {
         var out: [Candidate] = []
         if side == .theirs {
+            // What the ladder is running, built from the usage table -- the
+            // latest one fetched, or the one the app shipped with.
+            let source = store.liveUsage.map { "from \($0.formatName)" } ?? "from the bundled usage table"
+            for (place, ladder) in store.ladderTeams(format: format).enumerated() {
+                out.append(Candidate(id: "ladder-\(format)-\(place)",
+                                     name: ladder.team.name,
+                                     tag: String(format: "%.0f%% of the field \u{00B7} %@", ladder.weight * 100, source),
+                                     group: "Ladder teams",
+                                     forms: ladder.team.slots.map { $0.battleForm(in: store.rulebook) }))
+            }
             for meta in store.data.metaTeams where meta.format == format {
                 out.append(Candidate(
                     id: meta.id,

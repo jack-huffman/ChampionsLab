@@ -369,15 +369,23 @@ struct MetaModel {
                         member.form.moves.first { store.move($0)?.name == name }
                     }
                 }
-                // A representative spread: into its better attacking stat and
-                // Speed, which is what most measured sets look like.
-                let physical = member.form.attack >= member.form.spAttack
-                var sp = Array(repeating: 0, count: 6)
-                sp[physical ? Stat.attack.rawValue : Stat.spAttack.rawValue] = 32
-                sp[Stat.speed.rawValue] = 32
-                sp[Stat.hp.rawValue] = 2
-                slot.sp = sp
-                slot.alignmentName = physical ? "Adamant" : "Modest"
+                // The spread the ladder actually runs, when the table has one;
+                // otherwise a representative one, into its better attacking
+                // stat and Speed, which is what most measured sets look like.
+                if let measured = (member.entry.spreadUsage ?? []).lazy
+                    .compactMap({ Self.spread($0.name, perStat: store.data.rules.spPerStat,
+                                              total: store.data.rules.spTotal) }).first {
+                    slot.sp = measured.sp
+                    slot.alignmentName = measured.alignment
+                } else {
+                    let physical = member.form.attack >= member.form.spAttack
+                    var sp = Array(repeating: 0, count: 6)
+                    sp[physical ? Stat.attack.rawValue : Stat.spAttack.rawValue] = 32
+                    sp[Stat.speed.rawValue] = 32
+                    sp[Stat.hp.rawValue] = 2
+                    slot.sp = sp
+                    slot.alignmentName = physical ? "Adamant" : "Modest"
+                }
                 return slot
             }
             team.locked = true
@@ -385,6 +393,22 @@ struct MetaModel {
             if out.count >= limit { break }
         }
         return out
+    }
+
+    /// A published spread -- "Jolly 2/32/0/0/0/32", the alignment then Stat
+    /// Points in HP, Attack, Defense, Sp. Atk, Sp. Def, Speed order -- read
+    /// into a slot's terms. Nil for anything that is not a legal spread.
+    nonisolated static func spread(_ text: String, perStat: Int = 32, total: Int = 66) -> (alignment: String, sp: [Int])? {
+        let parts = text.split(separator: " ")
+        guard parts.count == 2 else { return nil }
+        let values = parts[1].split(separator: "/").compactMap { Int($0) }
+        guard values.count == 6, values.allSatisfy({ (0...perStat).contains($0) }),
+              values.reduce(0, +) <= total, !parts[0].isEmpty else { return nil }
+        var sp = Array(repeating: 0, count: 6)
+        for (stat, value) in zip([Stat.hp, .attack, .defense, .spAttack, .spDefense, .speed], values) {
+            sp[stat.rawValue] = value
+        }
+        return (String(parts[0]), sp)
     }
 
     /// Share of the tracked field carrying an attacking move of this type.

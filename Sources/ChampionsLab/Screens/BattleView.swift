@@ -170,6 +170,7 @@ struct BattleView: View {
         if let meta = store.data.metaTeams.first(where: { $0.id == opponentID }) {
             return store.opponentTeam(meta)
         }
+        if opponentID.hasPrefix("ladder-") { return store.ladderOpponent(id: opponentID) }
         return store.teams.first { $0.id.uuidString == opponentID }
     }
     private var bringCount: Int { singles ? 3 : 4 }

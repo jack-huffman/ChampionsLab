@@ -27,6 +27,7 @@ struct VersusPageView: View {
     /// Which side's chooser is open, under that side's name.
     @State private var choosingMine = false
     @State private var choosingTheirs = false
+    @State private var refreshing = false
 
     private var format: String { singles ? "singles" : "doubles" }
     private var bringCount: Int { singles ? 3 : 4 }
@@ -118,11 +119,13 @@ struct VersusPageView: View {
             } else {
                 lobbyHint
             }
+            refreshLine
             if !store.games.isEmpty {
                 pastGames
             }
         }
         .padding(20)
+        .sheet(isPresented: $refreshing) { UsageRefreshSheet().environmentObject(store) }
     }
 
     // MARK: Past games
@@ -150,6 +153,7 @@ struct VersusPageView: View {
         let mineSaved = store.teams.contains { $0.id.uuidString == game.myTeamID }
         let theirsKnown = store.data.metaTeams.contains { $0.id == game.theirID }
             || store.teams.contains { $0.id.uuidString == game.theirID }
+            || store.ladderOpponent(id: game.theirID) != nil
         let available = mineSaved && theirsKnown
         let tint = game.won ? Palette.good : Palette.bad
         return Button {
@@ -254,6 +258,20 @@ struct VersusPageView: View {
         .frame(minWidth: 120, alignment: leading ? .leading : .trailing)
     }
 
+    /// The ladder's teams come from the usage table, and the table can be
+    /// refreshed from here.
+    private var refreshLine: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.down.circle").foregroundStyle(.secondary)
+            Text(store.liveUsage.map { "Ladder teams are built from \($0.formatName)." }
+                 ?? "Ladder teams are built from the usage table the app shipped with.")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+            Button("Fetch the latest from Smogon") { refreshing = true }
+                .controlSize(.small)
+                .help("Download the latest month of Smogon's ladder statistics; the ladder teams are rebuilt from it.")
+        }
+    }
+
     /// What the page is for, while a side is still open.
     private var lobbyHint: some View {
         VStack(spacing: 6) {
@@ -296,6 +314,7 @@ struct VersusPageView: View {
     }
 
     private var theirTag: String {
+        if opponentID.hasPrefix("ladder-") { return "built from the usage table" }
         if let meta = store.data.metaTeams.first(where: { $0.id == opponentID }) {
             if meta.projected { return "projected · \(meta.archetype)" }
             if let record = meta.record {

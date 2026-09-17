@@ -1,5 +1,6 @@
 //  UsageRefreshView.swift
-//  The sheet that pulls a fresh ladder table down.
+//  The sheet that pulls a fresh ladder table down, from Smogon's published
+//  statistics or from Pikalytics.
 
 import SwiftUI
 
@@ -9,6 +10,12 @@ final class UsageRefreshModel: ObservableObject {
         case idle, working, finished, failed(String)
     }
 
+    /// Where the table comes from. Smogon is one file with the spreads in
+    /// it; Pikalytics is a page a Pokemon, with winrates.
+    enum Source: String, CaseIterable {
+        case smogon, pikalytics
+    }
+    @Published var source: Source = .smogon
     @Published var format = UsageFeed.formats.first?.id ?? ""
     @Published var customSlug = ""
     @Published var usesCustom = false
@@ -23,6 +30,18 @@ final class UsageRefreshModel: ObservableObject {
 
     var slug: String {
         usesCustom ? customSlug.trimmingCharacters(in: .whitespaces) : format
+    }
+    /// The formats a source publishes. Smogon has the Showdown ladders;
+    /// Pikalytics adds its own in-game and tournament tables.
+    var formats: [UsageFeed.FormatChoice] {
+        source == .smogon ? UsageFeed.formats.filter { $0.id.hasPrefix("gen9champions") }
+                          : UsageFeed.formats
+    }
+    func choose(_ newSource: Source) {
+        source = newSource
+        if !usesCustom, !formats.contains(where: { $0.id == format }) {
+            format = formats.first?.id ?? ""
+        }
     }
 
     var isWorking: Bool { phase == .working }
@@ -42,15 +61,18 @@ final class UsageRefreshModel: ObservableObject {
         result = nil
         saveWarning = nil
 
+        let from = source
         task = Task { [weak self] in
             do {
-                let snapshot = try await UsageFeed.refresh(format: target, index: index) {
-                    @MainActor @Sendable done, total, name in
+                let tell: @MainActor @Sendable (Int, Int, String) -> Void = { done, total, name in
                     guard let self else { return }
                     self.done = done
                     self.total = total
                     self.current = name
                 }
+                let snapshot = from == .smogon
+                    ? try await SmogonFeed.refresh(format: target, index: index, progress: tell)
+                    : try await UsageFeed.refresh(format: target, index: index, progress: tell)
                 guard !Task.isCancelled else { return }
                 store.apply(snapshot)
                 do {
@@ -88,6 +110,7 @@ struct UsageRefreshSheet: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
+                    sourcePicker
                     formatPicker
                     scopeNote
                     switch model.phase {
@@ -114,17 +137,33 @@ struct UsageRefreshSheet: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Refresh usage data")
                 .font(.system(size: 17, weight: .bold, design: .rounded))
-            Text("Pulls the measured ladder table from Pikalytics — usage, winrate, and the share of sets running each move, item and ability.")
+            Text(model.source == .smogon
+                 ? "Pulls the latest month of Smogon's published ladder statistics: usage, and the share of sets running each move, item, ability and Stat Point spread. The teams built from the table are what the lobby plays against."
+                 : "Pulls the measured ladder table from Pikalytics: usage, winrate, and the share of sets running each move, item and ability.")
                 .font(.system(size: 11)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(18)
     }
 
+    private var sourcePicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeader(title: "Source")
+            row(selected: model.source == .smogon, title: "Smogon usage statistics",
+                detail: "One file a month, with the Stat Point spreads actually run. Seconds.") {
+                model.choose(.smogon)
+            }
+            row(selected: model.source == .pikalytics, title: "Pikalytics",
+                detail: "A page per Pokemon, with winrates and in-game ranked data. A few minutes.") {
+                model.choose(.pikalytics)
+            }
+        }
+    }
+
     private var formatPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionHeader(title: "Format")
-            ForEach(UsageFeed.formats) { choice in
+            ForEach(model.formats) { choice in
                 row(selected: !model.usesCustom && model.format == choice.id,
                     title: choice.name, detail: choice.detail) {
                     model.usesCustom = false
@@ -132,7 +171,8 @@ struct UsageRefreshSheet: View {
                 }
             }
             row(selected: model.usesCustom, title: "Another format",
-                detail: "Type the slug from the Pikalytics URL") {
+                detail: model.source == .smogon ? "Type the Showdown format id, as Smogon's file is named"
+                                                : "Type the slug from the Pikalytics URL") {
                 model.usesCustom = true
             }
             if model.usesCustom {
@@ -172,7 +212,8 @@ struct UsageRefreshSheet: View {
                 Text("The usage table only: rankings, winrates, common moves, items, abilities and teammates. Pokémon, learnsets, abilities and items come from Serebii and stay a build-time job — run ./mkdata.py for those.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Data from Pikalytics, \(UsageFeed.license). Every fetched reference is checked against the bundled dex and dropped if the Pokémon cannot legally do it.")
+                Text((model.source == .smogon ? SmogonFeed.credit + "." : "Data from Pikalytics, \(UsageFeed.license).")
+                     + " Every fetched reference is checked against the bundled dex and dropped if the Pokémon cannot legally do it.")
                     .font(.system(size: 10)).foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }

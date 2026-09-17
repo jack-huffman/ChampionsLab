@@ -254,6 +254,15 @@ final class Store: ObservableObject {
         return made
     }
 
+    /// A ladder team by the id the lobby remembers it under: "ladder-", the
+    /// format, and its place in the list.
+    func ladderOpponent(id: String) -> Team? {
+        let parts = id.split(separator: "-")
+        guard parts.count == 3, parts[0] == "ladder", let place = Int(parts[2]) else { return nil }
+        let teams = ladderTeams(format: String(parts[1]))
+        return teams.indices.contains(place) ? teams[place].team : nil
+    }
+
     /// What winning teams carry, worked out once. It depends only on the
     /// dataset, and rebuilding forty-eight teams inside every team evaluation
     /// took a score from 100ms to 390ms.

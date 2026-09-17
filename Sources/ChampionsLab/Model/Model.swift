@@ -826,6 +826,9 @@ struct UsageEntry: Codable, Identifiable, Hashable, Sendable {
     let itemUsage: [UsageShare]?
     let abilityUsage: [UsageShare]?
     let teammates: [String]?
+    /// The Stat Point spreads run, as "Jolly 2/32/0/0/0/32", where the source
+    /// publishes them: Smogon does, Pikalytics' pages do not.
+    var spreadUsage: [UsageShare]? = nil
 
     var hasLiveData: Bool { winrate != nil || (moveUsage?.isEmpty == false) }
     var record: String? {
@@ -844,6 +847,7 @@ struct UsageEntry: Codable, Identifiable, Hashable, Sendable {
         case moveUsage = "move_usage"
         case itemUsage = "item_usage"
         case abilityUsage = "ability_usage"
+        case spreadUsage = "spread_usage"
     }
 }
 

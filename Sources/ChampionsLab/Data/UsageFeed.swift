@@ -343,7 +343,8 @@ enum UsageFeed {
     // cannot be true. Their ability figures are noisy on a format this young and
     // claim things like a Basculegion with Trace.
 
-    static func build(row: RosterRow, form: Form, detail: Detail, index: Index)
+    static func build(row: RosterRow, form: Form, detail: Detail, index: Index,
+                      spreads: [UsageShare] = [])
         -> (UsageEntry, [String])
     {
         var dropped: [String] = []
@@ -395,7 +396,8 @@ enum UsageFeed {
                                                 : describe(form, detail: checked),
             winrate: detail.winrate, wins: detail.wins, losses: detail.losses,
             moveUsage: moves, itemUsage: items, abilityUsage: abilities,
-            teammates: Array(detail.teammates.prefix(4)))
+            teammates: Array(detail.teammates.prefix(4)),
+            spreadUsage: spreads.isEmpty ? nil : spreads)
         return (entry, dropped)
     }
 
