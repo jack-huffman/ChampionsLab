@@ -33,105 +33,8 @@ enum Strikes {
         let actor = byMine ? board.mine[slot] : board.theirs[slot]
         guard !actor.fainted else { return }
         let name = actor.build.form.formLabel
-        if actor.flinched {
-            board.note("\(name) flinched and could not move.")
-            MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
-            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
-            return
-        }
-        // A disabled move cannot be used, and trying costs the turn. The
-        // search sees that as a wasted turn and learns to pick something else,
-        // which is the honest way round: the model refuses, rather than the
-        // search quietly substituting a move nobody chose.
-        if case .attack(let index, _) = choice, actor.disabled == index,
-           actor.moves.indices.contains(index) {
-            board.note("\(name)'s \(actor.moves[index].name) is disabled.")
-            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
-            return
-        }
-        // Sleep and paralysis cost turns, which is the whole reason they are
-        // worth a move slot.
-        if actor.status == .sleep {
-            board.note("\(name) is fast asleep.")
-            MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
-            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
-            return
-        }
-        // Frozen solid. One turn in five it thaws on its own, and a Fire move
-        // or a move that defrosts its user thaws it outright. Blizzard has
-        // frozen things since the reference table landed and nothing happened
-        // when it did: the condition was inflictable and inert.
-        if actor.status == .freeze {
-            let thawsItself = actor.moves.indices.contains(pickedMove(choice))
-                && (actor.moves[pickedMove(choice)].type == "Fire"
-                    || actor.moves[pickedMove(choice)].flags["defrosts"] == true)
-            let thaws = thawsItself
-                || (rolling && Double.random(in: 0..<1, using: &Dice.source) < 0.2)
-            if thaws {
-                if byMine { board.mine[slot].status = .none } else { board.theirs[slot].status = .none }
-                board.note("\(name) thawed out.")
-            } else {
-                board.note("\(name) is frozen solid.")
-                MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
-                MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
-                return
-            }
-        }
-        if actor.status == .paralysis, rolling, Double.random(in: 0...1, using: &Dice.source) < 0.25 {
-            board.note("\(name) is paralysed and cannot move.")
-            MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
-            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
-            return
-        }
-        // Infatuation: half of its actions are lost while whatever it fell for
-        // is still standing there. Like confusion, the search averages and
-        // lets it act; a played turn rolls.
-        if let loves = actor.infatuatedWith {
-            let far = byMine ? board.theirs : board.mine
-            if !far.indices.contains(loves) || far[loves].fainted {
-                if byMine { board.mine[slot].infatuatedWith = nil }
-                else { board.theirs[slot].infatuatedWith = nil }
-            } else if rolling, Double.random(in: 0..<1, using: &Dice.source) < 0.5 {
-                board.note("\(name) is immobilised by love.")
-                MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
-                MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
-                return
-            }
-        }
-        // Torment: it cannot use the same move twice running, which is what
-        // stops something clicking one button all game.
-        if actor.tormented, case .attack(let index, _) = choice, actor.lastMove == index {
-            board.note("\(name) cannot use the same move twice in a row.")
-            MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
-            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
-            return
-        }
-
-        // Confusion: counted down each time it comes to act, and one action in
-        // three goes into its own face — a typeless forty-power hit with its
-        // own Attack against its own Defence. The search, which averages,
-        // lets it act; a played turn rolls.
-        if actor.confusedFor > 0 {
-            if byMine { board.mine[slot].confusedFor -= 1 } else { board.theirs[slot].confusedFor -= 1 }
-            if (byMine ? board.mine : board.theirs)[slot].confusedFor == 0 {
-                board.note("\(name) snapped out of its confusion.")
-            } else {
-                board.note("\(name) is confused.")
-                if rolling, Double.random(in: 0..<1, using: &Dice.source) < 1.0 / 3.0 {
-                    let attack = Double(actor.build.stagedStat(.attack))
-                    let defence = Double(actor.build.stagedStat(.defense))
-                    let base = (2.0 * 50 / 5 + 2) * 40 * attack / defence / 50 + 2
-                    let hurt = Swift.max(1, Int(base * Double.random(in: 0.85...1.0, using: &Dice.source)))
-                    if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - hurt) }
-                    else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - hurt) }
-                    board.note("It hurt itself in its confusion for \(hurt).")
-                    if (byMine ? board.mine : board.theirs)[slot].fainted { board.note("\(name) fainted.") }
-                    MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
-                    MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
-                    return
-                }
-            }
-        }
+        guard canAct(choice, actor: actor, name: name, byMine: byMine, slot: slot,
+                     board: &board, rolling: rolling) else { return }
 
         switch choice {
         case .pass:
@@ -172,211 +75,19 @@ enum Strikes {
                 return
             }
 
-            // A turn is resolved in the same five phases every time, and each
-            // one says what it did. Declaring the move, then what the far side
-            // brings to it, then the roll, then what it cost, in that order --
-            // so the commentary is the computation rather than a summary of it.
-            //
-            // 1. Declare — and check it can be used at all. First Impression
-            // and Fake Out work on the turn the Pokémon arrives and never
-            // again, which is the whole cost of a 90 base power priority move.
-            if move.drawbacks.firstTurnOnly, !actor.justArrived {
-                board.note("\(name) used \(move.name), but it only works on the turn it comes in.")
-                return
-            }
-            // A two-turn move: this turn is the wind-up unless the weather
-            // waives it, and the next turn is the hit. Electro Shot in rain
-            // does both at once — the boost, then the beam.
-            if let charge = move.charge {
-                let firing = actor.charging == moveIndex
-                let waived = charge.skipsIn != nil && board.field.weather == charge.skipsIn
-                if !firing {
-                    board.note(waived
-                        ? "\(name) used \(move.name). In the \(board.field.weather.rawValue.lowercased()) it needs no time to charge."
-                        : (charge.hides ? "\(name) used \(move.name) and is out of reach."
-                                        : "\(name) began charging \(move.name)."))
-                    StatChanges.applySelf(charge.boosts, toMine: byMine, slot: slot, board: &board)
-                    if !waived {
-                        if byMine {
-                            board.mine[slot].charging = moveIndex
-                            board.mine[slot].chargingTarget = target
-                            board.mine[slot].hidden = charge.hides
-                        } else {
-                            board.theirs[slot].charging = moveIndex
-                            board.theirs[slot].chargingTarget = target
-                            board.theirs[slot].hidden = charge.hides
-                        }
-                        return
-                    }
-                } else {
-                    MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board, quietly: true)
-                    board.note("\(name) unleashed \(move.name).")
-                }
-            } else {
-                board.note("\(name) used \(move.name).")
-            }
-
-            // 2. The field: anything that stops it before it starts.
+            // Then the five phases, each a function that says what it did.
+            guard declare(move, index: moveIndex, target: target, actor: actor, name: name,
+                          byMine: byMine, slot: slot, board: &board) else { return }
             let farScreens = (target >= Choice.allyTarget ? byMine : !byMine)
                 ? board.myScreens : board.theirScreens
-            if move.isSpread, farScreens.wideGuard {
-                board.note("Wide Guard blocked it.")
-                MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
-                return
-            }
-            // Quick Guard turns away anything that moves first, which is what
-            // a Fake Out team is actually afraid of.
-            if move.priority > 0, target < Choice.allyTarget, farScreens.quickGuard {
-                board.note("Quick Guard blocked it.")
-                MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
-                return
-            }
-            // Armor Tail and Queenly Majesty refuse priority outright: nothing
-            // with increased priority can be aimed at that Pokémon or its
-            // partner. It is the reason Farigiraf is on Trick Room teams — it
-            // is what stops a Fake Out taking the setup turn away.
-            // Psychic Terrain: nothing quick reaches anything standing on it.
-            // It is why a Psychic Surge team can set up in front of a Fake Out.
-            // The terrain only reaches what is standing on it. A Staraptor is
-            // in the air, so a Fake Out gets to it however psychic the floor
-            // is — and this used to refuse the move if *anything* on that side
-            // was grounded, so the Staraptor was protected by its partner's
-            // feet. The shield belongs to whoever the move is aimed at.
-            if move.priority > 0, target < Choice.allyTarget,
-               board.field.terrain == .psychic,
-               move.aim == .foe || move.aim == .spread {
-                let defenders = byMine ? board.theirs : board.mine
-                let reachable = (0..<Swift.min(board.activeCount, defenders.count))
-                    .filter { !defenders[$0].fainted }
-                // A spread move is refused only when there is nothing left for
-                // it to hit; with one grounded and one not, it still lands on
-                // the one in the air, and the loop below skips the other.
-                let aimedAt = move.aim == .spread ? reachable
-                    : reachable.filter { $0 == target }
-                if !aimedAt.isEmpty, aimedAt.allSatisfy({ defenders[$0].isGrounded }) {
-                    let who = defenders[aimedAt[0]].build.form.formLabel
-                    board.note("The Psychic Terrain refused it — \(who) is standing on it, and nothing quick gets through.")
-                    MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
-                    return
-                }
-            }
-            // Sucker Punch only lands on a Pokémon that is winding up to
-            // attack and has not gone yet. Against a Protect, a status move or
-            // something that has already moved, it does nothing at all.
-            if move.id == "suckerpunch", target < Choice.allyTarget {
-                let defenders = byMine ? board.theirs : board.mine
-                let key = (byMine ? "t" : "m") + "\(target)"
-                let attacking: Bool = {
-                    guard let choice = board.declared[key], !board.acted.contains(key),
-                          defenders.indices.contains(target) else { return false }
-                    guard case .attack(let index, _) = choice,
-                          defenders[target].moves.indices.contains(index) else { return false }
-                    return defenders[target].moves[index].isDamaging
-                }()
-                guard attacking else {
-                    board.note("But it failed — \(move.name) needs a target that is about to attack.")
-                    MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
-                    return
-                }
-            }
-            if move.priority > 0, target < Choice.allyTarget, move.aim == .foe || move.aim == .spread {
-                let defenders = byMine ? board.theirs : board.mine
-                if let refused = (0..<Swift.min(board.activeCount, defenders.count)).first(where: {
-                    !defenders[$0].fainted
-                        && Strikes.priorityBlockers.contains(defenders[$0].build.ability) }) {
-                    board.note("\(defenders[refused].build.form.formLabel)'s "
-                               + "\(defenders[refused].build.ability) refused it. "
-                               + "Nothing with priority gets through.")
-                    return
-                }
-            }
-
-            // Aimed at your own partner, for the techs that want it: the hit
-            // lands on your side, with everything that follows from that.
-            let atAlly = target >= Choice.allyTarget
-            let hitMine = atAlly ? byMine : !byMine
-            let partner = slot == 0 ? 1 : 0
-            var aimed = move.isSpread ? [0, 1] : (atAlly ? [partner] : [target])
-            if !move.isSpread, atAlly {
-                let own = byMine ? board.mine : board.theirs
-                if !own.indices.contains(partner) || partner >= board.activeCount || own[partner].fainted {
-                    board.note("But there was no one there to hit.")
-                    return
-                }
-            }
-            if !move.isSpread, !atAlly {
-                let defenders = hitMine ? board.mine : board.theirs
-                // The target went down before this move's turn came: it turns
-                // to whoever is left standing across the field. A Whimsicott on
-                // one point of Focus Sash health is exactly who this finds.
-                let gone = !defenders.indices.contains(target) || target >= board.activeCount
-                    || defenders[target].fainted
-                if gone, let other = (0..<Swift.min(board.activeCount, defenders.count))
-                    .first(where: { $0 != target && !defenders[$0].fainted }) {
-                    aimed = [other]
-                    board.note("\(name)'s \(move.name) turned toward \(defenders[other].build.form.formLabel) instead.")
-                }
-                // Stalwart and Propeller Tail aim where they meant to; nothing
-                // draws them off it.
-                let ignoresRedirection = ["Stalwart", "Propeller Tail"].contains(actor.build.ability)
-                if !ignoresRedirection,
-                   let pulled = (0..<Swift.min(board.activeCount, defenders.count)).first(where: {
-                    defenders[$0].drawingFire && !defenders[$0].fainted }), pulled != aimed[0] {
-                    aimed = [pulled]
-                    board.note("It was drawn to \(defenders[pulled].build.form.formLabel).")
-                }
-            }
-            // Dragon Darts, and nothing else in the game. Its two darts go
-            // one to each foe in a double battle rather than both to the one
-            // it was aimed at — and when only one of them can be reached,
-            // because the other is protecting or already down, both darts go
-            // there instead. Aiming it at a Protect is how it ends up hitting
-            // the partner twice.
-            var dartedTwice = false
-            if move.smartTarget == true, !atAlly, board.activeCount > 1 {
-                let far = hitMine ? board.mine : board.theirs
-                let reachable = (0..<Swift.min(board.activeCount, far.count)).filter {
-                    !far[$0].fainted && !far[$0].hidden
-                        && !(far[$0].isProtected && move.isProtectable)
-                }
-                if reachable.count > 1 {
-                    aimed = reachable
-                    board.note("The darts split, one to each.")
-                } else if let only = reachable.first {
-                    aimed = [only]
-                    dartedTwice = true
-                    if only != target { board.note("Both darts went to \(far[only].build.form.formLabel).") }
-                }
-            }
-
-            // Who this actually lands on, side by side.
-            //
-            // `aimed` is the far side alone, and everything around this loop —
-            // the redirection above it, the Liquid Ooze below — is written
-            // against that, so it stays exactly as it was. What is added here
-            // is the other half of a spread move nobody had modelled: Earthquake,
-            // Surf and Discharge say "All Adjacent Pokemon", and the adjacent
-            // Pokemon include your own partner.
-            //
-            // Leaving that out made Earthquake free. An engine that never pays
-            // for hitting its own side will click it beside a grounded partner
-            // all day, over-rate every Ground attacker on the team, and never
-            // discover why real teams pair one with a Flying type, a Levitate
-            // or an Air Balloon. The partner's own immunity is not special-cased
-            // here: a Flying partner takes nothing because the damage calculator
-            // says so, which is the right place for it to be said.
-            var aimedAt: [(hitMine: Bool, index: Int)] = aimed.map { (hitMine, $0) }
-            if move.isSpread, move.hitsAlly, !atAlly {
-                let own = byMine ? board.mine : board.theirs
-                if board.activeCount > 1, own.indices.contains(partner),
-                   partner < board.activeCount, !own[partner].fainted {
-                    aimedAt.append((byMine, partner))
-                }
-            }
+            if fieldRefuses(move, target: target, farScreens: farScreens,
+                            byMine: byMine, slot: slot, board: &board) { return }
+            guard let aim = aim(move, at: target, actor: actor, name: name,
+                                byMine: byMine, slot: slot, board: &board) else { return }
 
             var totalDealt = 0
             var reached = 0
-            for (hitMine, index) in aimedAt {
+            for (hitMine, index) in aim.aimedAt {
                 let defending = hitMine ? board.mine : board.theirs
                 guard defending.indices.contains(index), !defending[index].fainted else { continue }
                 let hitName = defending[index].build.form.formLabel
@@ -449,7 +160,7 @@ enum Strikes {
                    Double.random(in: 0...100, using: &Dice.source) > Accuracy.chanceToHit(move, attacker: actor,
                                                             defender: defending[index],
                                                             board: board) {
-                    board.detail(aimed.count > 1 ? "\(hitName) avoided it." : "It missed.")
+                    board.detail(aim.aimed.count > 1 ? "\(hitName) avoided it." : "It missed.")
                     continue
                 }
                 reached += 1
@@ -616,7 +327,7 @@ enum Strikes {
                 var blows = move.blows(for: actor.build.ability, accuracy: accuracy,
                                        rolling: rolling, using: &Dice.source)
                 if move.smartTarget == true, board.activeCount > 1 {
-                    blows = dartedTwice ? 2 : 1
+                    blows = aim.dartedTwice ? 2 : 1
                 }
                 // Parental Bond adds its own second blow, but not to a move
                 // that already throws several and not to Dragon Darts, which
@@ -757,60 +468,438 @@ enum Strikes {
                     }
                 }
             }
-            // A move that reached nobody failed: missed, blocked, or nothing
-            // there to hit. Stomping Tantrum remembers, and a move that hurts
-            // its user when it fails hurts its user now — High Jump Kick into
-            // a Protect crashes just as it does into thin air.
-            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: reached == 0)
-            if reached == 0 {
-                let costs = move.drawbacks
-                if costs.crash > 0 {
-                    let lost = Swift.max(1, Int(Double(actor.maxHP) * costs.crash))
-                    if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - lost) }
-                    else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - lost) }
-                    board.note("\(name) kept going and crashed.")
-                }
-                return
+            settle(move, actor: actor, name: name, aim: aim, totalDealt: totalDealt,
+                   reached: reached, byMine: byMine, slot: slot, board: &board)
+        }
+    }
+
+    /// Who a move is going to land on, once every redirection has had its say.
+    struct Aim {
+        /// Aimed at the user's own partner, for the techs that want it.
+        let atAlly: Bool
+        /// Which side the far targets are on.
+        let hitMine: Bool
+        let partner: Int
+        /// The far-side slots, as the redirection left them.
+        let aimed: [Int]
+        /// Everyone it reaches, side by side -- the far side, and the user's
+        /// own partner when the move hits all adjacent Pokemon.
+        let aimedAt: [(hitMine: Bool, index: Int)]
+        /// Dragon Darts with only one target reachable: both darts to it.
+        let dartedTwice: Bool
+    }
+
+    // MARK: - The phases of an action
+
+    /// Whether the Pokemon gets to act at all this turn.
+    ///
+    /// Flinched, asleep, frozen solid, fully paralysed, immobilised by love,
+    /// tormented into repeating itself, hurt in its own confusion -- each of
+    /// these costs the action and says so. A frozen Pokemon may thaw here and
+    /// carry on. Every failure marks the move failed, for Stomping Tantrum,
+    /// and drops any charge, because a wind-up interrupted is a wind-up lost.
+    private static func canAct(_ choice: Choice, actor: Fighter, name: String,
+                               byMine: Bool, slot: Int, board: inout Board,
+                               rolling: Bool) -> Bool {
+        if actor.flinched {
+            board.note("\(name) flinched and could not move.")
+            MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
+            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+            return false
+        }
+        // A disabled move cannot be used, and trying costs the turn. The
+        // search sees that as a wasted turn and learns to pick something else,
+        // which is the honest way round: the model refuses, rather than the
+        // search quietly substituting a move nobody chose.
+        if case .attack(let index, _) = choice, actor.disabled == index,
+           actor.moves.indices.contains(index) {
+            board.note("\(name)'s \(actor.moves[index].name) is disabled.")
+            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+            return false
+        }
+        // Sleep and paralysis cost turns, which is the whole reason they are
+        // worth a move slot.
+        if actor.status == .sleep {
+            board.note("\(name) is fast asleep.")
+            MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
+            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+            return false
+        }
+        // Frozen solid. One turn in five it thaws on its own, and a Fire move
+        // or a move that defrosts its user thaws it outright. Blizzard has
+        // frozen things since the reference table landed and nothing happened
+        // when it did: the condition was inflictable and inert.
+        if actor.status == .freeze {
+            let thawsItself = actor.moves.indices.contains(pickedMove(choice))
+                && (actor.moves[pickedMove(choice)].type == "Fire"
+                    || actor.moves[pickedMove(choice)].flags["defrosts"] == true)
+            let thaws = thawsItself
+                || (rolling && Double.random(in: 0..<1, using: &Dice.source) < 0.2)
+            if thaws {
+                if byMine { board.mine[slot].status = .none } else { board.theirs[slot].status = .none }
+                board.note("\(name) thawed out.")
+            } else {
+                board.note("\(name) is frozen solid.")
+                MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
+                MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                return false
             }
-            // What comes back: Leech Life and its kind restore a share of what
-            // they took.
-            if let share = move.drainShare, totalDealt > 0 {
-                let team = byMine ? board.mine : board.theirs
-                let far = hitMine ? board.mine : board.theirs
-                // Liquid Ooze turns a drain into a cost: what would have been
-                // healed is taken off the attacker instead.
-                let oozed = aimed.contains { far.indices.contains($0)
-                    && far[$0].build.ability == "Liquid Ooze" }
-                if !team[slot].fainted {
-                    let amount = Swift.max(1, Int(Double(totalDealt) * share))
-                    if oozed {
-                        if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - amount) }
-                        else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - amount) }
-                        board.note("\(name) drank the Liquid Ooze and lost \(amount).")
-                        if (byMine ? board.mine : board.theirs)[slot].fainted {
-                            board.note("\(name) fainted.")
-                        }
+        }
+        if actor.status == .paralysis, rolling, Double.random(in: 0...1, using: &Dice.source) < 0.25 {
+            board.note("\(name) is paralysed and cannot move.")
+            MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
+            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+            return false
+        }
+        // Infatuation: half of its actions are lost while whatever it fell for
+        // is still standing there. Like confusion, the search averages and
+        // lets it act; a played turn rolls.
+        if let loves = actor.infatuatedWith {
+            let far = byMine ? board.theirs : board.mine
+            if !far.indices.contains(loves) || far[loves].fainted {
+                if byMine { board.mine[slot].infatuatedWith = nil }
+                else { board.theirs[slot].infatuatedWith = nil }
+            } else if rolling, Double.random(in: 0..<1, using: &Dice.source) < 0.5 {
+                board.note("\(name) is immobilised by love.")
+                MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
+                MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                return false
+            }
+        }
+        // Torment: it cannot use the same move twice running, which is what
+        // stops something clicking one button all game.
+        if actor.tormented, case .attack(let index, _) = choice, actor.lastMove == index {
+            board.note("\(name) cannot use the same move twice in a row.")
+            MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
+            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+            return false
+        }
+
+        // Confusion: counted down each time it comes to act, and one action in
+        // three goes into its own face — a typeless forty-power hit with its
+        // own Attack against its own Defence. The search, which averages,
+        // lets it act; a played turn rolls.
+        if actor.confusedFor > 0 {
+            if byMine { board.mine[slot].confusedFor -= 1 } else { board.theirs[slot].confusedFor -= 1 }
+            if (byMine ? board.mine : board.theirs)[slot].confusedFor == 0 {
+                board.note("\(name) snapped out of its confusion.")
+            } else {
+                board.note("\(name) is confused.")
+                if rolling, Double.random(in: 0..<1, using: &Dice.source) < 1.0 / 3.0 {
+                    let attack = Double(actor.build.stagedStat(.attack))
+                    let defence = Double(actor.build.stagedStat(.defense))
+                    let base = (2.0 * 50 / 5 + 2) * 40 * attack / defence / 50 + 2
+                    let hurt = Swift.max(1, Int(base * Double.random(in: 0.85...1.0, using: &Dice.source)))
+                    if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - hurt) }
+                    else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - hurt) }
+                    board.note("It hurt itself in its confusion for \(hurt).")
+                    if (byMine ? board.mine : board.theirs)[slot].fainted { board.note("\(name) fainted.") }
+                    MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
+                    MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                    return false
+                }
+            }
+        }
+        return true
+    }
+
+    /// 1. Declare the move, and check it can be used at all.
+    ///
+    /// First Impression and Fake Out work on the turn the Pokemon arrives and
+    /// never again. A two-turn move spends this turn winding up unless the
+    /// weather waives it, and fires next turn. Returns whether the move goes on
+    /// to be resolved this turn.
+    private static func declare(_ move: Move, index moveIndex: Int, target: Int,
+                                actor: Fighter, name: String, byMine: Bool, slot: Int,
+                                board: inout Board) -> Bool {
+        // A turn is resolved in the same five phases every time, and each
+        // one says what it did. Declaring the move, then what the far side
+        // brings to it, then the roll, then what it cost, in that order --
+        // so the commentary is the computation rather than a summary of it.
+        //
+        // 1. Declare — and check it can be used at all. First Impression
+        // and Fake Out work on the turn the Pokémon arrives and never
+        // again, which is the whole cost of a 90 base power priority move.
+        if move.drawbacks.firstTurnOnly, !actor.justArrived {
+            board.note("\(name) used \(move.name), but it only works on the turn it comes in.")
+            return false
+        }
+        // A two-turn move: this turn is the wind-up unless the weather
+        // waives it, and the next turn is the hit. Electro Shot in rain
+        // does both at once — the boost, then the beam.
+        if let charge = move.charge {
+            let firing = actor.charging == moveIndex
+            let waived = charge.skipsIn != nil && board.field.weather == charge.skipsIn
+            if !firing {
+                board.note(waived
+                    ? "\(name) used \(move.name). In the \(board.field.weather.rawValue.lowercased()) it needs no time to charge."
+                    : (charge.hides ? "\(name) used \(move.name) and is out of reach."
+                                    : "\(name) began charging \(move.name)."))
+                StatChanges.applySelf(charge.boosts, toMine: byMine, slot: slot, board: &board)
+                if !waived {
+                    if byMine {
+                        board.mine[slot].charging = moveIndex
+                        board.mine[slot].chargingTarget = target
+                        board.mine[slot].hidden = charge.hides
                     } else {
-                        let gained = Swift.min(team[slot].maxHP - team[slot].hp, amount)
-                        if gained > 0 {
-                            if byMine { board.mine[slot].hp += gained } else { board.theirs[slot].hp += gained }
-                            board.note("\(name) drained \(gained) health back.")
-                        }
+                        board.theirs[slot].charging = moveIndex
+                        board.theirs[slot].chargingTarget = target
+                        board.theirs[slot].hidden = charge.hides
+                    }
+                    return false
+                }
+            } else {
+                MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board, quietly: true)
+                board.note("\(name) unleashed \(move.name).")
+            }
+        } else {
+            board.note("\(name) used \(move.name).")
+        }
+        return true
+    }
+
+    /// 2. The field: anything that stops the move before it starts.
+    ///
+    /// Wide Guard against a spread move, Quick Guard against priority, a
+    /// Psychic Terrain under a grounded target, a Sucker Punch into something
+    /// that is not attacking, an Armor Tail or Queenly Majesty on the far side.
+    /// Returns true when the move is refused; it will already have said why.
+    private static func fieldRefuses(_ move: Move, target: Int, farScreens: Screens,
+                                     byMine: Bool, slot: Int, board: inout Board) -> Bool {
+        // 2. The field: anything that stops it before it starts.
+        if move.isSpread, farScreens.wideGuard {
+            board.note("Wide Guard blocked it.")
+            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+            return true
+        }
+        // Quick Guard turns away anything that moves first, which is what
+        // a Fake Out team is actually afraid of.
+        if move.priority > 0, target < Choice.allyTarget, farScreens.quickGuard {
+            board.note("Quick Guard blocked it.")
+            MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+            return true
+        }
+        // Armor Tail and Queenly Majesty refuse priority outright: nothing
+        // with increased priority can be aimed at that Pokémon or its
+        // partner. It is the reason Farigiraf is on Trick Room teams — it
+        // is what stops a Fake Out taking the setup turn away.
+        // Psychic Terrain: nothing quick reaches anything standing on it.
+        // It is why a Psychic Surge team can set up in front of a Fake Out.
+        // The terrain only reaches what is standing on it. A Staraptor is
+        // in the air, so a Fake Out gets to it however psychic the floor
+        // is — and this used to refuse the move if *anything* on that side
+        // was grounded, so the Staraptor was protected by its partner's
+        // feet. The shield belongs to whoever the move is aimed at.
+        if move.priority > 0, target < Choice.allyTarget,
+           board.field.terrain == .psychic,
+           move.aim == .foe || move.aim == .spread {
+            let defenders = byMine ? board.theirs : board.mine
+            let reachable = (0..<Swift.min(board.activeCount, defenders.count))
+                .filter { !defenders[$0].fainted }
+            // A spread move is refused only when there is nothing left for
+            // it to hit; with one grounded and one not, it still lands on
+            // the one in the air, and the loop below skips the other.
+            let aimedAt = move.aim == .spread ? reachable
+                : reachable.filter { $0 == target }
+            if !aimedAt.isEmpty, aimedAt.allSatisfy({ defenders[$0].isGrounded }) {
+                let who = defenders[aimedAt[0]].build.form.formLabel
+                board.note("The Psychic Terrain refused it — \(who) is standing on it, and nothing quick gets through.")
+                MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                return true
+            }
+        }
+        // Sucker Punch only lands on a Pokémon that is winding up to
+        // attack and has not gone yet. Against a Protect, a status move or
+        // something that has already moved, it does nothing at all.
+        if move.id == "suckerpunch", target < Choice.allyTarget {
+            let defenders = byMine ? board.theirs : board.mine
+            let key = (byMine ? "t" : "m") + "\(target)"
+            let attacking: Bool = {
+                guard let choice = board.declared[key], !board.acted.contains(key),
+                      defenders.indices.contains(target) else { return false }
+                guard case .attack(let index, _) = choice,
+                      defenders[target].moves.indices.contains(index) else { return false }
+                return defenders[target].moves[index].isDamaging
+            }()
+            guard attacking else {
+                board.note("But it failed — \(move.name) needs a target that is about to attack.")
+                MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                return true
+            }
+        }
+        if move.priority > 0, target < Choice.allyTarget, move.aim == .foe || move.aim == .spread {
+            let defenders = byMine ? board.theirs : board.mine
+            if let refused = (0..<Swift.min(board.activeCount, defenders.count)).first(where: {
+                !defenders[$0].fainted
+                    && Strikes.priorityBlockers.contains(defenders[$0].build.ability) }) {
+                board.note("\(defenders[refused].build.form.formLabel)'s "
+                           + "\(defenders[refused].build.ability) refused it. "
+                           + "Nothing with priority gets through.")
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Who the move actually reaches.
+    ///
+    /// The slot it was aimed at, unless that Pokemon has gone down and it turns
+    /// to the other; unless a Follow Me pulls it; unless it is Dragon Darts and
+    /// splits. And, for a move that hits all adjacent Pokemon, the user's own
+    /// partner as well -- which is what makes Earthquake cost something. Nil
+    /// when there is nobody to hit at all.
+    private static func aim(_ move: Move, at target: Int, actor: Fighter, name: String,
+                            byMine: Bool, slot: Int, board: inout Board) -> Aim? {
+        // Aimed at your own partner, for the techs that want it: the hit
+        // lands on your side, with everything that follows from that.
+        let atAlly = target >= Choice.allyTarget
+        let hitMine = atAlly ? byMine : !byMine
+        let partner = slot == 0 ? 1 : 0
+        var aimed = move.isSpread ? [0, 1] : (atAlly ? [partner] : [target])
+        if !move.isSpread, atAlly {
+            let own = byMine ? board.mine : board.theirs
+            if !own.indices.contains(partner) || partner >= board.activeCount || own[partner].fainted {
+                board.note("But there was no one there to hit.")
+                return nil
+            }
+        }
+        if !move.isSpread, !atAlly {
+            let defenders = hitMine ? board.mine : board.theirs
+            // The target went down before this move's turn came: it turns
+            // to whoever is left standing across the field. A Whimsicott on
+            // one point of Focus Sash health is exactly who this finds.
+            let gone = !defenders.indices.contains(target) || target >= board.activeCount
+                || defenders[target].fainted
+            if gone, let other = (0..<Swift.min(board.activeCount, defenders.count))
+                .first(where: { $0 != target && !defenders[$0].fainted }) {
+                aimed = [other]
+                board.note("\(name)'s \(move.name) turned toward \(defenders[other].build.form.formLabel) instead.")
+            }
+            // Stalwart and Propeller Tail aim where they meant to; nothing
+            // draws them off it.
+            let ignoresRedirection = ["Stalwart", "Propeller Tail"].contains(actor.build.ability)
+            if !ignoresRedirection,
+               let pulled = (0..<Swift.min(board.activeCount, defenders.count)).first(where: {
+                defenders[$0].drawingFire && !defenders[$0].fainted }), pulled != aimed[0] {
+                aimed = [pulled]
+                board.note("It was drawn to \(defenders[pulled].build.form.formLabel).")
+            }
+        }
+        // Dragon Darts, and nothing else in the game. Its two darts go
+        // one to each foe in a double battle rather than both to the one
+        // it was aimed at — and when only one of them can be reached,
+        // because the other is protecting or already down, both darts go
+        // there instead. Aiming it at a Protect is how it ends up hitting
+        // the partner twice.
+        var dartedTwice = false
+        if move.smartTarget == true, !atAlly, board.activeCount > 1 {
+            let far = hitMine ? board.mine : board.theirs
+            let reachable = (0..<Swift.min(board.activeCount, far.count)).filter {
+                !far[$0].fainted && !far[$0].hidden
+                    && !(far[$0].isProtected && move.isProtectable)
+            }
+            if reachable.count > 1 {
+                aimed = reachable
+                board.note("The darts split, one to each.")
+            } else if let only = reachable.first {
+                aimed = [only]
+                dartedTwice = true
+                if only != target { board.note("Both darts went to \(far[only].build.form.formLabel).") }
+            }
+        }
+
+        // Who this actually lands on, side by side.
+        //
+        // `aimed` is the far side alone, and everything around this loop —
+        // the redirection above it, the Liquid Ooze below — is written
+        // against that, so it stays exactly as it was. What is added here
+        // is the other half of a spread move nobody had modelled: Earthquake,
+        // Surf and Discharge say "All Adjacent Pokemon", and the adjacent
+        // Pokemon include your own partner.
+        //
+        // Leaving that out made Earthquake free. An engine that never pays
+        // for hitting its own side will click it beside a grounded partner
+        // all day, over-rate every Ground attacker on the team, and never
+        // discover why real teams pair one with a Flying type, a Levitate
+        // or an Air Balloon. The partner's own immunity is not special-cased
+        // here: a Flying partner takes nothing because the damage calculator
+        // says so, which is the right place for it to be said.
+        var aimedAt: [(hitMine: Bool, index: Int)] = aimed.map { (hitMine, $0) }
+        if move.isSpread, move.hitsAlly, !atAlly {
+            let own = byMine ? board.mine : board.theirs
+            if board.activeCount > 1, own.indices.contains(partner),
+               partner < board.activeCount, !own[partner].fainted {
+                aimedAt.append((byMine, partner))
+            }
+        }
+        return Aim(atAlly: atAlly, hitMine: hitMine, partner: partner,
+                   aimed: aimed, aimedAt: aimedAt, dartedTwice: dartedTwice)
+    }
+
+    /// 5. Afterwards: what the action cost and gave back, once every target has
+    /// been struck.
+    ///
+    /// A move that reached nobody failed, and a move that crashes when it fails
+    /// crashes now. Drain moves take back a share of what they did, or lose it
+    /// to a Liquid Ooze. Rapid Spin sweeps its own side. Then what the move does
+    /// to its user: Close Combat's defences, Overheat's Special Attack, recoil,
+    /// a Life Orb.
+    private static func settle(_ move: Move, actor: Fighter, name: String, aim: Aim,
+                               totalDealt: Int, reached: Int, byMine: Bool, slot: Int,
+                               board: inout Board) {
+        // A move that reached nobody failed: missed, blocked, or nothing
+        // there to hit. Stomping Tantrum remembers, and a move that hurts
+        // its user when it fails hurts its user now — High Jump Kick into
+        // a Protect crashes just as it does into thin air.
+        MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: reached == 0)
+        if reached == 0 {
+            let costs = move.drawbacks
+            if costs.crash > 0 {
+                let lost = Swift.max(1, Int(Double(actor.maxHP) * costs.crash))
+                if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - lost) }
+                else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - lost) }
+                board.note("\(name) kept going and crashed.")
+            }
+            return
+        }
+        // What comes back: Leech Life and its kind restore a share of what
+        // they took.
+        if let share = move.drainShare, totalDealt > 0 {
+            let team = byMine ? board.mine : board.theirs
+            let far = aim.hitMine ? board.mine : board.theirs
+            // Liquid Ooze turns a drain into a cost: what would have been
+            // healed is taken off the attacker instead.
+            let oozed = aim.aimed.contains { far.indices.contains($0)
+                && far[$0].build.ability == "Liquid Ooze" }
+            if !team[slot].fainted {
+                let amount = Swift.max(1, Int(Double(totalDealt) * share))
+                if oozed {
+                    if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - amount) }
+                    else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - amount) }
+                    board.note("\(name) drank the Liquid Ooze and lost \(amount).")
+                    if (byMine ? board.mine : board.theirs)[slot].fainted {
+                        board.note("\(name) fainted.")
+                    }
+                } else {
+                    let gained = Swift.min(team[slot].maxHP - team[slot].hp, amount)
+                    if gained > 0 {
+                        if byMine { board.mine[slot].hp += gained } else { board.theirs[slot].hp += gained }
+                        board.note("\(name) drained \(gained) health back.")
                     }
                 }
             }
-            // Rapid Spin clears its own side on the way past, which is a
-            // damaging move doing something only a status move otherwise does.
-            if move.name == "Rapid Spin", board.sweepHazards(mine: byMine) {
-                board.note("\(name) spun the hazards away from its own side.")
-            }
-            StatChanges.applySelf(move.selfBoosts, toMine: byMine, slot: slot, board: &board)
-            // What the move takes off its user: Close Combat's defences,
-            // Overheat's Special Attack. Missed entirely until now, so a
-            // Sneasler could Close Combat all game at full Defence.
-            StatChanges.applySelf(move.selfDrops.mapValues { -$0 }, toMine: byMine, slot: slot, board: &board)
-            cost(of: move, dealt: totalDealt, byMine: byMine, slot: slot, board: &board)
         }
+        // Rapid Spin clears its own side on the way past, which is a
+        // damaging move doing something only a status move otherwise does.
+        if move.name == "Rapid Spin", board.sweepHazards(mine: byMine) {
+            board.note("\(name) spun the hazards away from its own side.")
+        }
+        StatChanges.applySelf(move.selfBoosts, toMine: byMine, slot: slot, board: &board)
+        // What the move takes off its user: Close Combat's defences,
+        // Overheat's Special Attack. Missed entirely until now, so a
+        // Sneasler could Close Combat all game at full Defence.
+        StatChanges.applySelf(move.selfDrops.mapValues { -$0 }, toMine: byMine, slot: slot, board: &board)
+        cost(of: move, dealt: totalDealt, byMine: byMine, slot: slot, board: &board)
     }
 
     /// Whether one of the calculator's notes is worth reading out.
