@@ -1616,8 +1616,24 @@ struct BattleView: View {
     }
 
     private func guarding(_ fighter: Fighter) -> Bool {
-        guard !fighter.fainted else { return false }
-        return fighter.isProtected || (playback != nil && fighter.protectedLast)
+        BattleView.guarding(fainted: fighter.fainted, isProtected: fighter.isProtected,
+                            protectedLast: fighter.protectedLast,
+                            duringPlayback: playback != nil)
+    }
+
+    /// Whether to draw the shield, as a rule rather than as a line inside a
+    /// view — this has been wrong in both directions now and is worth pinning.
+    ///
+    /// A Protect covers the turn it was used on and comes down at the end of
+    /// it, so `isProtected` is false by the time the board is handed back.
+    /// While the turn is being played out, though, the shield has to be on
+    /// screen or a move visibly bounces off nothing — and that is what
+    /// `protectedLast` is for. The moment playback ends it must stop counting,
+    /// or the shield stays drawn over a Pokémon that is open again.
+    static func guarding(fainted: Bool, isProtected: Bool, protectedLast: Bool,
+                         duringPlayback: Bool) -> Bool {
+        guard !fainted else { return false }
+        return isProtected || (duringPlayback && protectedLast)
     }
 
     /// How far a card leans when it is throwing a physical move: a short step
@@ -4038,6 +4054,20 @@ struct BattleView: View {
             // Stepping forward off the end clears the replay, as it always did.
             at = Swift.max(0, replay.count - 1)
             flash(hitMine: hitMine, hitTheirs: hitTheirs)
+            // The turn is over, so let go of the task.
+            //
+            // Nothing released it before, so `playback` stayed non-nil for the
+            // rest of the game once a single turn had played. Two things read
+            // it and both were wrong from that moment: the Protect bubble is
+            // drawn during playback from the flag the turn left behind, so it
+            // stayed drawn over a Pokémon that was open again; and the ring
+            // that asks "what will this one do?" is suppressed during playback,
+            // so it never came back at all.
+            //
+            // Safe to clear from inside: a replaced playback is cancelled
+            // first, and a cancelled task returns above this line rather than
+            // nilling out its replacement.
+            playback = nil
         }
     }
 
