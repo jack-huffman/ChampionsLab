@@ -47,10 +47,9 @@ print("\n== aliases and includes ==")
     }
 
     func testARecipeLandsBetweenTheSeats() throws {
-        let stage = MoveTimeline.Stage(arena: CGSize(width: 800, height: 480)) { seat in
-            Seat.point(seat, w: 800, h: 480, singles: false)
-        }
+        let stage = MoveTimeline.Stage(size: CGSize(width: 800, height: 480), singles: false)
         let mine = Seat(mine: true, slot: 0), theirs = Seat(mine: false, slot: 1)
+        func home(_ seat: Seat) -> CGPoint { stage.project(stage.home(seat)) }
         let flame = try XCTUnwrap(table.recipe(forMove: "Flamethrower"), "Flamethrower has no recipe")
         let timeline = MoveTimeline.build(flame, attacker: mine, targets: [theirs], sizes: table.sprites, stage: stage)
 print("\n== Flamethrower, on the arena ==")
@@ -59,7 +58,7 @@ print("\n== Flamethrower, on the arena ==")
         check("each starts before it ends", timeline.sprites.allSatisfy { $0.start <= $0.end })
         check("and the whole thing takes a moment, not a minute", timeline.duration > 0.3 && timeline.duration < 5,
               String(format: "%.2fs", timeline.duration))
-        let from = stage.home(mine), to = stage.home(theirs)
+        let from = home(mine), to = home(theirs)
         let fireballs = timeline.sprites.filter { $0.name == "fireball" }
         check("the fireballs leave from the user",
               fireballs.allSatisfy { hypot($0.from.point.x - from.x, $0.from.point.y - from.y) < 80 },
@@ -83,7 +82,7 @@ print("\n== a contact attack queues the user's leans ==")
         check("and comes home at the end", leans.last.map { abs($0.offset.width) < 1 && abs($0.offset.height) < 1 } ?? false,
               leans.last.map { "\($0.offset)" } ?? "none")
 
-print("\n== depth is a slide along the field ==")
+print("\n== depth slides up and to the right, as the client draws it ==")
         let behind = Choreography.Coordinate(d: 1, db: 30)
         let stepIn = Choreography.Step(kind: .effect, sprite: "wisp", from: Choreography.Pose(x: .init(d: 1), y: .init(d: 1), z: .init(d: 1)),
                                        to: Choreography.Pose(x: .init(d: 1), y: .init(d: 1), z: behind))

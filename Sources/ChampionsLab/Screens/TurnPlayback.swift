@@ -47,17 +47,10 @@ final class TurnPlayback: ObservableObject {
     /// replaced. Stepping through the finished board would map the health of a
     /// Pokemon that fainted onto the one that came in for it.
     @Published var replayBoard: Board?
-    /// The move being shown right now, and when it started. The start date is
-    /// what the animation reads, so nothing redraws per frame.
-    @Published var flourish: Flourish?
-    @Published var flourishFrom = Date()
     /// What each Pokemon just lost, floating off it as the blow lands. The
     /// number is the thing a player actually wants at that moment and the log
     /// is the last place to look for it.
     @Published var damage: [Seat: Int] = [:]
-    /// The Pokemon leaning into a physical move, and how far.
-    @Published var lunging: Seat?
-    @Published var lungeBy: CGSize = .zero
     /// Who took a hit on the last turn, so they can flinch on screen.
     @Published var struck: Set<Int> = []
     @Published var struckTheirs: Set<Int> = []
@@ -86,15 +79,15 @@ final class TurnPlayback: ObservableObject {
     @Published var scene: Scene?
     @Published var tracks: Tracks?
     @Published var moveClock: Double = 0
-    /// The arena as laid out, told to the playback by the field so a recipe
-    /// can be placed on it. Zero until the arena has appeared, and then the
-    /// old beam and burst play instead.
-    private(set) var arena = CGSize.zero
+    /// The scene as the field has laid it out, told to the playback so a
+    /// recipe can be placed on it. Nil until the field has appeared, and
+    /// then a move plays as a pause with no picture.
+    private(set) var stage: MoveTimeline.Stage?
     /// The longest a move is allowed to take. A recipe past this is played
     /// faster rather than cut short.
     static let longestMove: TimeInterval = 2.2
 
-    func stage(_ size: CGSize) { arena = size }
+    func stage(_ laid: MoveTimeline.Stage) { stage = laid }
 
     /// A turn's steps to walk, and the board they were recorded against.
     func show(_ recorded: Board, steps: [Board.Step]) {
@@ -109,7 +102,7 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        flourish = nil; lunging = nil; lungeBy = .zero; damage = [:]
+        damage = [:]
         struck = []; struckTheirs = []
         replay = []; at = 0; replayBoard = nil
     }
@@ -132,7 +125,6 @@ final class TurnPlayback: ObservableObject {
             step.action == nil ? nil : (index, step)
         }
         guard !actions.isEmpty else {
-            flourish = nil
             flash(hitMine: hitMine, hitTheirs: hitTheirs)
             return
         }
@@ -188,12 +180,8 @@ final class TurnPlayback: ObservableObject {
                 try? await Task.sleep(
                     nanoseconds: UInt64(max(0, staged.total - staged.impact) * 1_000_000_000))
                 guard !Task.isCancelled else { return }
-                // Take the beam away but leave the number: what is worth
-                // looking at after a move has landed is what it did. `lunging`
-                // is deliberately left alone — leanIn owns the return and is
-                // mid-animation right about now, and clearing it here would
-                // snap the card back instead of letting it settle.
-                flourish = nil
+                // Take the picture away but leave the number: what is worth
+                // looking at after a move has landed is what it did.
                 scene = nil
                 stopTracks()
                 try? await Task.sleep(
@@ -206,10 +194,8 @@ final class TurnPlayback: ObservableObject {
                 }
             }
             guard !Task.isCancelled else { return }
-            flourish = nil
             scene = nil
             stopTracks()
-            lunging = nil
             damage = [:]
             // Rest on the last step rather than past it: the field shows the end
             // of the turn, and the Back and Forward buttons still work from
@@ -234,19 +220,19 @@ final class TurnPlayback: ObservableObject {
         }
     }
 
-    /// The move on the arena, and when it lands and ends.
+    /// The move on the scene, and when it lands and ends.
     ///
-    /// With the table and a measured arena, the client's choreography: the
-    /// move's own recipe, or the client's fallback for that kind of move, or
-    /// -- when the Pokemon never got to act -- the condition's own animation,
-    /// a flinch drawn as the client draws one. The recipe's primitives go to
-    /// the scene the arena draws; its leans become card poses scheduled on
-    /// the same clock, so the cards keep animating with SwiftUI. Without
-    /// either, the beam, the burst and the lunge as before.
+    /// The client's choreography: the move's own recipe, or the client's
+    /// fallback for that kind of move, or -- when the Pokemon never got to
+    /// act -- the condition's own animation, a flinch drawn as the client
+    /// draws one. The recipe's primitives go to the scene the field draws;
+    /// its leans ride the move's clock as geometry effects. A switch draws
+    /// nothing, and so does a move before the field has told the playback
+    /// its stage.
     private func stage(_ action: Board.Action, order: Int, user: Seat, reached: [Seat],
                        singles: Bool) -> (impact: TimeInterval, total: TimeInterval) {
         let table = Choreography.shared
-        if !table.isEmpty, arena.width > 0, action.category != "Switch" {
+        if !table.isEmpty, let geometry = stage, action.category != "Switch" {
             var targets = reached
             let recipe: Choreography.Resolved?
             if let why = action.stopped {
@@ -260,10 +246,6 @@ final class TurnPlayback: ObservableObject {
                     ?? table.fallback(category: action.category, targetsSelf: targets.isEmpty)
             }
             if let recipe {
-                let size = arena
-                let geometry = MoveTimeline.Stage(arena: size) { seat in
-                    Seat.point(seat, w: size.width, h: size.height, singles: singles)
-                }
                 var timeline = MoveTimeline.build(recipe, attacker: user, targets: targets,
                                                   sizes: table.sprites, stage: geometry)
                 if timeline.duration > Self.longestMove {
@@ -279,16 +261,9 @@ final class TurnPlayback: ObservableObject {
                 scene = Scene(timeline: timeline, startedAt: Date(), ghosts: ghosts)
                 tracks = Tracks(leans: timeline.leans, shakes: timeline.shakes, duration: total)
                 withAnimation(.linear(duration: total)) { moveClock = 1 }
-                return (timeline.impact(near: targets.map(geometry.home), attacker: user), total)
+                return (timeline.impact(near: targets.map { geometry.project(geometry.home($0)) },
+                                        attacker: user, within: 60 * geometry.k + 10), total)
             }
-        }
-        if action.stopped != nil {
-            flourish = nil
-            recoil(user)
-        } else {
-            flourish = Flourish(id: order, action: action, targets: reached)
-            flourishFrom = Date()
-            leanIn(action: action, at: reached, singles: singles)
         }
         return (Self.flourishSeconds * Self.impactAt, Self.flourishSeconds)
     }
@@ -314,66 +289,6 @@ final class TurnPlayback: ObservableObject {
         withTransaction(still) {
             moveClock = 0
             tracks = nil
-        }
-    }
-
-    /// A physical move is the Pokémon arriving in person, so the card leans
-    /// into it and comes back. Two animated state changes for the whole thing
-    /// rather than an offset recomputed every frame.
-    private func leanIn(action: Board.Action, at targets: [Seat], singles: Bool) {
-        guard action.category == "Physical" else {
-            withAnimation(.easeOut(duration: 0.12)) { lunging = nil }
-            return
-        }
-        let user = Seat(mine: action.byMine, slot: action.slot)
-        // Toward whoever it reached; toward the other side when it reached
-        // nobody, because the Pokémon still swung.
-        let from = Seat.fraction(user, singles: singles)
-        let toward = targets.first.map { Seat.fraction($0, singles: singles) }
-            ?? CGPoint(x: user.mine ? 0.75 : 0.25, y: from.y)
-        let dx = toward.x - from.x, dy = toward.y - from.y
-        let length = max(0.0001, (dx * dx + dy * dy).squareRoot())
-        // Far enough to read as a charge rather than a twitch. A physical
-        // move is the Pokémon crossing the field and hitting something.
-        let reach: CGFloat = 52
-        let step = CGSize(width: dx / length * reach, height: dy / length * reach)
-        // `lunging` first and unanimated, so the card is eligible to move but
-        // has not moved; then the offset animates from nothing to the lean.
-        // Setting both at once put the card there without the step.
-        lunging = user
-        lungeBy = .zero
-        // Out fast, arriving as the blow lands, then back slower — which is
-        // what a charge looks like and what a recoil from one looks like.
-        let strike = Self.flourishSeconds * Self.impactAt
-        withAnimation(.easeIn(duration: strike)) { lungeBy = step }
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(strike * 1_000_000_000))
-            guard lunging == user else { return }
-            withAnimation(.easeOut(duration: Self.flourishSeconds * 0.45)) { lungeBy = .zero }
-        }
-    }
-
-    /// A Pokemon that never got its move off does not charge anything. It
-    /// jolts back where it stands, half-way forward again, and settles --
-    /// which is what a flinch looks like, and what a lunge at nothing does not.
-    /// Drawn through the same offset as the lunge, so the card needs no new
-    /// state to move.
-    private func recoil(_ user: Seat) {
-        lunging = user
-        lungeBy = .zero
-        // Away from the far side: your side stands on the left.
-        let away: CGFloat = user.mine ? -14 : 14
-        let beat = Self.flourishSeconds * Self.impactAt / 3
-        withAnimation(.easeOut(duration: beat)) { lungeBy = CGSize(width: away, height: 0) }
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(beat * 1_000_000_000))
-            guard lunging == user else { return }
-            withAnimation(.easeInOut(duration: beat)) {
-                lungeBy = CGSize(width: -away * 0.5, height: 0)
-            }
-            try? await Task.sleep(nanoseconds: UInt64(beat * 1_000_000_000))
-            guard lunging == user else { return }
-            withAnimation(.easeOut(duration: Self.flourishSeconds * 0.45)) { lungeBy = .zero }
         }
     }
 

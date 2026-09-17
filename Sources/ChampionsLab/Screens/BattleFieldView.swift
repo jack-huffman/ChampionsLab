@@ -19,7 +19,7 @@ import SwiftUI
 
 struct BattleFieldView: View {
     @EnvironmentObject private var store: Store
-    @Environment(\.snapshotMode) private var snapshotMode
+    @Environment(\.snapshotMode) var snapshotMode
     @ObservedObject var session: BattleSession
     @ObservedObject var playback: TurnPlayback
     let opening: Bool
@@ -31,12 +31,14 @@ struct BattleFieldView: View {
     /// How the Pokemon are drawn on their cards: the app's illustrations, or
     /// Showdown's pixel sprites. A setting, because it is a matter of taste
     /// and the pixel sprites are fetched the first time they are wanted.
-    @AppStorage("battleSpriteStyle") private var spriteStyle = "illustrated"
-    @ObservedObject private var pixels = PixelSprites.shared
+    @AppStorage("battleSpriteStyle") var spriteStyle = "pixel"
+    @ObservedObject var pixels = PixelSprites.shared
 
     typealias TurnReview = BattleSession.TurnReview
     typealias Panel = BattleSession.Panel
-    @State private var bob: CGFloat = 0
+    @State var bob: CGFloat = 0
+    /// The statbar whose card is open.
+    @State var detail: DetailSeat?
     private var board: Board? { get { session.board } nonmutating set { session.board = newValue } }
     private var log: [String] { get { session.log } nonmutating set { session.log = newValue } }
     private var thinking: Bool { get { session.thinking } nonmutating set { session.thinking = newValue } }
@@ -52,16 +54,12 @@ struct BattleFieldView: View {
     private var replay: [Board.Step] { get { playback.replay } nonmutating set { playback.replay = newValue } }
     private var at: Int { get { playback.at } nonmutating set { playback.at = newValue } }
     private var replayBoard: Board? { get { playback.replayBoard } nonmutating set { playback.replayBoard = newValue } }
-    private var flourish: Flourish? { get { playback.flourish } nonmutating set { playback.flourish = newValue } }
-    private var flourishFrom: Date { get { playback.flourishFrom } nonmutating set { playback.flourishFrom = newValue } }
-    private var damage: [Seat: Int] { get { playback.damage } nonmutating set { playback.damage = newValue } }
-    private var lunging: Seat? { get { playback.lunging } nonmutating set { playback.lunging = newValue } }
-    private var lungeBy: CGSize { get { playback.lungeBy } nonmutating set { playback.lungeBy = newValue } }
-    private var scene: TurnPlayback.Scene? { playback.scene }
-    private var tracks: TurnPlayback.Tracks? { playback.tracks }
-    private var moveClock: Double { playback.moveClock }
-    private var struck: Set<Int> { get { playback.struck } nonmutating set { playback.struck = newValue } }
-    private var struckTheirs: Set<Int> { get { playback.struckTheirs } nonmutating set { playback.struckTheirs = newValue } }
+    var damage: [Seat: Int] { get { playback.damage } nonmutating set { playback.damage = newValue } }
+    var scene: TurnPlayback.Scene? { playback.scene }
+    var tracks: TurnPlayback.Tracks? { playback.tracks }
+    var moveClock: Double { playback.moveClock }
+    var struck: Set<Int> { get { playback.struck } nonmutating set { playback.struck = newValue } }
+    var struckTheirs: Set<Int> { get { playback.struckTheirs } nonmutating set { playback.struckTheirs = newValue } }
 
     var body: some View {
         if let board { field(board) } else { openingCard.padding(14) }
@@ -458,7 +456,7 @@ struct BattleFieldView: View {
             }
         }
     }
-    private func guarding(_ fighter: Fighter) -> Bool {
+    func guarding(_ fighter: Fighter) -> Bool {
         Self.guarding(fainted: fighter.fainted, isProtected: fighter.isProtected,
                             protectedLast: fighter.protectedLast,
                             duringPlayback: playback.task != nil)
@@ -477,23 +475,8 @@ struct BattleFieldView: View {
         guard !fainted else { return false }
         return isProtected || (duringPlayback && protectedLast)
     }
-    /// The Pokemon on its card. Showdown's pixel sprite -- its back for your
-    /// side, its front for theirs -- when that style is on and the sprite has
-    /// arrived; the illustration otherwise, and always while one is fetched.
-    @ViewBuilder private func fighterSprite(_ form: Form, mine: Bool) -> some View {
-        if spriteStyle == "pixel", let image = pixels.image(for: form, back: mine) {
-            PixelSpriteView(image: image).frame(width: 86, height: 86)
-        } else {
-            SpriteImage(form: form, side: 78)
-        }
-    }
-    /// How far a card leans when it is throwing a physical move: a short step
-    /// toward whoever it is hitting, and back.
-    private func lunge(_ seat: Seat) -> CGSize {
-        lunging == seat ? lungeBy : .zero
-    }
     /// The card carried through its leans by the move's clock.
-    private func carried(_ seat: Seat) -> LeanEffect {
+    func carried(_ seat: Seat) -> LeanEffect {
         LeanEffect(progress: moveClock, leans: tracks?.leans.filter { $0.seat == seat } ?? [],
                    duration: tracks?.duration ?? 1)
     }
@@ -508,6 +491,9 @@ struct BattleFieldView: View {
         default: return 1
         }
     }
+
+    /// The field: weather and terrain behind, the scene in front, the sides'
+    /// conditions across the top.
     private func arena(_ board: Board) -> some View {
         let tint: Color = {
             switch board.field.weather {
@@ -525,11 +511,8 @@ struct BattleFieldView: View {
                 }
             }
         }()
-        let lit = board.field.weather != .none || board.field.terrain != .none
-        let singlesGame = board.activeCount == 1
         return GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
-            let lean = h * 0.18
             ZStack {
                 // The room the battle happens in, behind everything else. It
                 // thins out as the weather runs down, so a rain about to stop
@@ -538,80 +521,9 @@ struct BattleFieldView: View {
                              strength: fade(board.terrainTurns))
                 WeatherLayer(weather: board.field.weather,
                              strength: fade(board.weatherTurns))
-                // The line down the middle, leaning the way the versus page does.
-                SlantLines(lean: lean, spacing: 72)
-                    .stroke(tint.opacity(lit ? 0.09 : 0.05), lineWidth: 1)
-                Path { p in
-                    p.move(to: CGPoint(x: w / 2 + lean, y: 0))
-                    p.addLine(to: CGPoint(x: w / 2 - lean, y: h))
-                }
-                .stroke(tint.opacity(lit ? 0.5 : 0.28), lineWidth: 1.5)
-                Text("VS").font(.system(size: 11, weight: .heavy)).kerning(1)
-                    .foregroundStyle(tint.opacity(0.85))
-                    .padding(.horizontal, 7).padding(.vertical, 3)
-                    .background(Palette.surface)
-                    .clipShape(Capsule())
-                    .position(x: w / 2, y: h / 2)
-
-                // Yours: first up and left, second diagonally down and in.
-                ForEach(0..<min(board.activeCount, board.mine.count), id: \.self) { slot in
-                    let out = !opening || shown.contains("m\(slot)")
-                    fighterCard(board.mine[slot], mine: true, slot: slot, field: board.field,
-                                tailwind: board.myTailwind > 0, trickRoom: board.trickRoom > 0)
-                        .opacity(out ? 1 : 0)
-                        .scaleEffect(out ? 1 : 0.4)
-                        .offset(lunge(Seat(mine: true, slot: slot)))
-                        .modifier(carried(Seat(mine: true, slot: slot)))
-                        .position(x: w * Seat.fraction(Seat(mine: true, slot: slot),
-                                                                 singles: singlesGame).x,
-                                  y: h * Seat.fraction(Seat(mine: true, slot: slot),
-                                                                 singles: singlesGame).y)
-                }
-                // Theirs: first up and left of their side, second down and right.
-                ForEach(0..<min(board.activeCount, board.theirs.count), id: \.self) { slot in
-                    let out = !opening || shown.contains("t\(slot)")
-                    fighterCard(board.theirs[slot], mine: false, slot: slot, field: board.field,
-                                tailwind: board.theirTailwind > 0, trickRoom: board.trickRoom > 0)
-                        .opacity(out ? 1 : 0)
-                        .scaleEffect(out ? 1 : 0.4)
-                        .offset(lunge(Seat(mine: false, slot: slot)))
-                        .modifier(carried(Seat(mine: false, slot: slot)))
-                        .position(x: w * Seat.fraction(Seat(mine: false, slot: slot),
-                                                                 singles: singlesGame).x,
-                                  y: h * Seat.fraction(Seat(mine: false, slot: slot),
-                                                                 singles: singlesGame).y)
-                }
+                battleScene(board, size: geo.size, tint: tint)
                 sideState(board, mine: true).position(x: w * 0.25, y: 18)
                 sideState(board, mine: false).position(x: w * 0.75, y: 18)
-                // The move being used, over the cards: a beam for a special,
-                // a burst where a physical one lands, a ring for a status move.
-                // Driven off a start date rather than a per-frame @State, so
-                // the arena is not rebuilt sixty times a second.
-                if let flourish {
-                    TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { slice in
-                        let progress = min(1, max(0, slice.date.timeIntervalSince(flourishFrom)
-                                                     / TurnPlayback.flourishSeconds))
-                        let place: (Seat) -> CGPoint = {
-                            Seat.point($0, w: w, h: h, singles: singlesGame)
-                        }
-                        ZStack {
-                            if flourish.isSpecial {
-                                BeamLayer(flourish: flourish, progress: progress, place: place)
-                            } else if flourish.isPhysical {
-                                ImpactLayer(flourish: flourish, progress: progress, place: place)
-                            } else if !flourish.isSwitch {
-                                AuraLayer(flourish: flourish, progress: progress, place: place)
-                            }
-                        }
-                    }
-                    .allowsHitTesting(false)
-                }
-                // The move's choreography, over the cards, when the table is
-                // there: what flies, drawn where the timeline says it is.
-                if let scene {
-                    ChoreographyLayer(scene: scene)
-                        .frame(width: w, height: h)
-                }
                 if startFlash {
                     Text("BATTLE START")
                         .font(.system(size: 44, weight: .black)).italic().kerning(2)
@@ -622,13 +534,10 @@ struct BattleFieldView: View {
                         .position(x: w / 2, y: h / 2)
                 }
             }
-            .modifier(QuakeEffect(progress: moveClock, shakes: tracks?.shakes ?? [], duration: tracks?.duration ?? 1))
-            // The playback places a recipe on the arena, so it has to know
-            // how big the arena is.
-            .onAppear { playback.stage(geo.size) }
-            .onChange(of: geo.size) { size in playback.stage(size) }
-            .overlay(alignment: .top) {
-                VStack(spacing: 8) {
+            .overlay(alignment: .topLeading) {
+                // In the corner: the far row's statbars stand near the top of
+                // the scene, where a pill in the middle covered one of them.
+                VStack(alignment: .leading, spacing: 8) {
                     fieldState(board)
                     if let callout {
                         Text(callout)
@@ -641,28 +550,11 @@ struct BattleFieldView: View {
                             .id(callout)
                     }
                 }
-                .padding(.top, 10)
+                .padding(.top, 10).padding(.leading, 14)
             }
-            .overlay(alignment: .topLeading) {
-                Text("YOURS").font(.system(size: 9, weight: .bold)).kerning(0.6)
-                    .foregroundStyle(.tertiary).padding(14)
-            }
-            .overlay(alignment: .bottomLeading) { bench(board, mine: true).padding(12) }
-            .overlay(alignment: .topTrailing) { bench(board, mine: false).padding(12) }
-            .overlay(alignment: .bottom) { terrainState(board).padding(.bottom, 10) }
         }
-        .background(
-            LinearGradient(colors: [tint.opacity(lit ? 0.18 : 0.07),
-                                    tint.opacity(lit ? 0.05 : 0.02)],
-                           startPoint: .top, endPoint: .bottom)
-        )
-        .background(Palette.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .strokeBorder(tint.opacity(lit ? 0.45 : 0.18), lineWidth: 1))
-        .animation(.easeInOut(duration: 0.4), value: board.field.weather)
-        .animation(.easeInOut(duration: 0.4), value: board.field.terrain)
     }
+
     /// The Pokémon waiting behind a side. Yours are yours to see; theirs are
     /// what has shown itself, question marks for what has not, and the odds
     /// on who is behind them.
@@ -755,7 +647,7 @@ struct BattleFieldView: View {
     }
     /// A colour for each condition, so the word on the name is recognisable
     /// before it is read.
-    private func statusTint(_ status: Ailment) -> Color {
+    func statusTint(_ status: Ailment) -> Color {
         switch status {
         case .burn:      return Color(red: 0.93, green: 0.45, blue: 0.28)
         case .paralysis: return Color(red: 0.95, green: 0.78, blue: 0.20)
@@ -778,13 +670,13 @@ struct BattleFieldView: View {
     /// Which stats have moved, in the order they are read. Speed last: it is
     /// the one that decides the turn, so it reads at the bottom where the eye
     /// finishes.
-    private func changedStats(_ fighter: Fighter) -> [Stat] {
+    func changedStats(_ fighter: Fighter) -> [Stat] {
         [.attack, .spAttack, .defense, .spDefense, .speed].filter {
             fighter.build.boosts.indices.contains($0.rawValue)
                 && fighter.build.boosts[$0.rawValue] != 0
         }
     }
-    private func stages(_ fighter: Fighter, changed: [Stat]) -> some View {
+    func stages(_ fighter: Fighter, changed: [Stat]) -> some View {
         VStack(alignment: .trailing, spacing: 1) {
             ForEach(changed, id: \.rawValue) { stat in
                 let stage = fighter.build.boosts[stat.rawValue]
@@ -932,7 +824,7 @@ struct BattleFieldView: View {
         case .none: return field.terrain == .none ? "circle.grid.cross" : "square.stack.3d.down.forward.fill"
         }
     }
-    private func fighterCard(_ fighter: Fighter, mine: Bool, slot: Int,
+    func fighterCard(_ fighter: Fighter, mine: Bool, slot: Int,
                              field: Field, tailwind: Bool = false, trickRoom: Bool = false) -> some View {
         let hit = mine ? struck.contains(slot) : struckTheirs.contains(slot)
         let health = fighter.share
@@ -975,7 +867,7 @@ struct BattleFieldView: View {
                         .offset(y: 32)
                         .allowsHitTesting(false)
                 }
-                fighterSprite(fighter.build.form, mine: mine)
+                fighterSprite(fighter.build.form, mine: mine, side: 78)
                     .offset(y: fighter.fainted ? 0 : bob)
                     .opacity(fighter.fainted ? 0.22 : 1)
                     .saturation(fighter.fainted ? 0 : 1)

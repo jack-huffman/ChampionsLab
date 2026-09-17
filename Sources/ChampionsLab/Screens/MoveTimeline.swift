@@ -29,7 +29,8 @@ struct MoveTimeline: Sendable {
     struct Sprite: Identifiable, Sendable {
         let id: Int
         let name: String
-        /// The primitive's drawn size at scale one, in points.
+        /// The primitive's size in scene units; the pose's scale carries depth
+        /// and the view's scale, so the drawn width is size times xscale.
         let size: CGSize
         let from: Pose
         let to: Pose
@@ -74,31 +75,66 @@ struct MoveTimeline: Sendable {
     /// When the last thing finishes.
     var duration: TimeInterval = 0
 
-    /// How the arena is laid out: its size, where each seat's Pokemon is, and
-    /// how big a Pokemon is drawn.
+    /// The client's scene, fitted to this view.
+    ///
+    /// Showdown draws a battle in a 640 by 360 scene: your side stands at the
+    /// front, at depth 0, and theirs at the back, at depth 200, and a point's
+    /// depth slides it up and to the right and shrinks it -- that is the whole
+    /// of the perspective, and every recipe's coordinates assume it. This is
+    /// that scene, scaled to fit the arena and centred in it, so a recipe's
+    /// numbers mean here exactly what they mean there.
     struct Stage: Sendable {
-        let arena: CGSize
-        let home: @Sendable (Seat) -> CGPoint
-        /// The height a Pokemon's sprite is drawn at, in points.
-        var sprite: CGFloat = 78
+        static let scene = CGSize(width: 640, height: 360)
+        /// The view, in points.
+        let size: CGSize
+        let singles: Bool
+        /// Gen 5 pixel sprites are drawn bigger than everything else, as the
+        /// client draws them: twice life size at the front.
+        let pixel: Bool
 
-        init(arena: CGSize, sprite: CGFloat = 78, home: @escaping @Sendable (Seat) -> CGPoint) {
-            self.arena = arena; self.sprite = sprite; self.home = home
+        init(size: CGSize, singles: Bool, pixel: Bool = true) {
+            self.size = size; self.singles = singles; self.pixel = pixel
         }
 
-        /// One client scene unit in points, for positions. In their scene the
-        /// two sides stand about three hundred units apart on screen; the
-        /// same offset here is the same share of the distance between the
-        /// seats, so behind(30) is a step whatever the window's width.
-        var unit: CGFloat {
-            let near = home(Seat(mine: true, slot: 0)), far = home(Seat(mine: false, slot: 0))
-            return max(0.5, hypot(far.x - near.x, far.y - near.y) / 300)
+        /// Points per scene unit, and where the scene's corner sits.
+        var k: CGFloat { max(0.1, min(size.width / Self.scene.width, size.height / Self.scene.height)) }
+        var origin: CGPoint {
+            CGPoint(x: (size.width - Self.scene.width * k) / 2, y: (size.height - Self.scene.height * k) / 2)
         }
-        /// One client scene unit in points, for sizes. Their sprites are 96
-        /// units tall; ours are `sprite` points, and a fireball should be
-        /// the same size beside one as it is beside the other.
-        var sizeUnit: CGFloat { sprite / 96 }
-        var centre: CGPoint { CGPoint(x: arena.width / 2, y: arena.height / 2) }
+
+        /// Where a seat's Pokemon stands, in scene units: the client's own
+        /// numbers for a double battle -- the first slot a little toward the
+        /// middle, the second out to the side, their back row a touch higher
+        /// and your front row a touch lower.
+        func home(_ seat: Seat) -> SIMD3<Double> {
+            let z: Double = seat.mine ? 0 : 200
+            if singles { return SIMD3(0, 0, z) }
+            let spread = pixel ? -100.0 : -75.0
+            let x = (Double(seat.slot) * spread + 18) * (seat.mine ? -1 : 1)
+            let y = seat.mine ? Double(seat.slot) * -10 : Double(seat.slot) * 7
+            return SIMD3(x, y, z)
+        }
+
+        /// How big something at this depth is drawn, relative to its size at
+        /// the middle of the field.
+        func depthScale(_ z: Double, pixelSprite: Bool = false) -> Double {
+            max(0.1, pixelSprite ? 2.0 - z / 200 : 1.5 - 0.5 * (z / 200))
+        }
+
+        /// A scene point on this view: the client's `pos`, then scaled and offset.
+        func project(_ p: SIMD3<Double>) -> CGPoint {
+            let s = depthScale(p.z)
+            let left = 210 + 220 * (p.z / 200) + p.x * s
+            let top = 245 - 110 * (p.z / 200) - p.y * s
+            return CGPoint(x: origin.x + left * k, y: origin.y + top * k)
+        }
+
+        /// Points per unit of something drawn at this depth.
+        func scale(at z: Double, pixelSprite: Bool = false) -> CGFloat {
+            depthScale(z, pixelSprite: pixelSprite) * k
+        }
+
+        var centre: CGPoint { project(SIMD3(0, 0, 100)) }
     }
 
     // MARK: - Building
@@ -163,7 +199,7 @@ struct MoveTimeline: Sendable {
                 let end = seconds(to.time ?? (from.time! + 500)) + offset
                 let ghost = name == "attacker" || name == "defender"
                 let drawn = ghost ? [96.0, 96.0] : (sizes[name] ?? [100, 100])
-                let size = CGSize(width: drawn[0] * stage.sizeUnit, height: drawn[1] * stage.sizeUnit)
+                let size = CGSize(width: drawn[0], height: drawn[1])
                 timeline.sprites.append(Sprite(
                     id: next, name: name, size: size,
                     from: place(from), to: place(to),
@@ -182,14 +218,17 @@ struct MoveTimeline: Sendable {
                 // sprite's own position under the end pose.
                 let own = Choreography.Coordinate(a: who == .attacker ? 1 : nil, d: who == .defender ? 1 : nil)
                 pose.x = pose.x ?? own; pose.y = pose.y ?? own; pose.z = pose.z ?? own
-                let placed = place(pose, scaleDefault: 1, opacityDefault: 1)
+                let there = point(pose)
+                let from = stage.project(home), to = stage.project(there)
+                // Bigger as it comes toward the front, smaller as it goes back.
+                let depth = stage.depthScale(there.z) / stage.depthScale(home.z)
                 let start = clock[who] ?? 0
                 let length = seconds(pose.time ?? 500)
                 let end = start + length
                 timeline.leans.append(Lean(
                     id: next, seat: at,
-                    offset: CGSize(width: placed.point.x - home.x, height: placed.point.y - home.y),
-                    scale: (placed.xscale + placed.yscale) / 2, opacity: placed.opacity,
+                    offset: CGSize(width: to.x - from.x, height: to.y - from.y),
+                    scale: CGFloat(pose.scale ?? 1) * CGFloat(depth), opacity: pose.opacity ?? 1,
                     start: start, end: end, easing: step.easing ?? .linear))
                 next += 1
                 clock[who] = end
@@ -218,39 +257,41 @@ struct MoveTimeline: Sendable {
             }
         }
 
-        /// A client pose on this arena.
+        /// A client pose in the scene, then on this view.
         ///
-        /// Each axis mixes the two Pokemon's positions by its weights, and
-        /// what is left over sits on the arena's centre, the client's origin.
-        /// The constant and the leftof terms are scene units; behind(n) and
-        /// the z constant are depth, drawn here as a slide along the line
-        /// from your side to theirs -- right and a little up for something
-        /// going behind the far side, left and a little down for the near.
+        /// Each axis is the weighted sum the recipe wrote -- so much of the
+        /// attacker's coordinate, so much of the defender's, a constant --
+        /// with behind(n) and leftof(n) signed by the side each Pokemon stands
+        /// on, exactly as the client evaluates them. The point is then
+        /// projected, and the size scaled by depth the same way.
         func place(_ pose: Choreography.Pose, scaleDefault: Double = 1, opacityDefault: Double = 1) -> Pose {
-            let a = stage.home(attacker), d = stage.home(defender), o = stage.centre
-            let unit = stage.unit
-            func facing(_ seat: Seat) -> CGFloat { seat.mine ? -1 : 1 }
-            func mix(_ coord: Choreography.Coordinate?, _ axis: (CGPoint) -> CGFloat) -> (CGFloat, Choreography.Coordinate) {
-                let coord = coord ?? Choreography.Coordinate()
-                let wa = CGFloat(coord.onAttacker), wd = CGFloat(coord.onDefender)
-                return (wa * axis(a) + wd * axis(d) + (1 - wa - wd) * axis(o), coord)
-            }
-            let (baseX, cx) = mix(pose.x) { $0.x }
-            let (baseY, cy) = mix(pose.y) { $0.y }
-            let cz = pose.z ?? Choreography.Coordinate()
-            // Depth relative to the anchors: the constant, and behind(n) per side.
-            let depth = CGFloat(cz.c ?? 0)
-                + CGFloat(cz.ab ?? 0) * facing(attacker) + CGFloat(cz.db ?? 0) * facing(defender)
-            // A pose whose x follows one Pokemon and whose depth follows the
-            // other sits between them.
-            let between = (CGFloat(cz.onDefender) - CGFloat(cx.onDefender)) * 0.6
-            let leftof = CGFloat(cx.al ?? 0) * facing(attacker) + CGFloat(cx.dl ?? 0) * facing(defender)
-            let x = baseX + unit * (CGFloat(cx.c ?? 0) + leftof) + unit * 1.1 * depth + between * (d.x - a.x)
-            let y = baseY - unit * CGFloat(cy.c ?? 0) - unit * 0.55 * depth
+            let p = point(pose)
+            let s = stage.scale(at: p.z)
             let scale = pose.scale ?? scaleDefault
-            return Pose(point: CGPoint(x: x, y: y),
-                        xscale: CGFloat(pose.xscale ?? scale), yscale: CGFloat(pose.yscale ?? scale),
+            return Pose(point: stage.project(p),
+                        xscale: CGFloat(pose.xscale ?? scale) * s, yscale: CGFloat(pose.yscale ?? scale) * s,
                         opacity: pose.opacity ?? opacityDefault)
+        }
+
+        /// The scene coordinates a pose names, before projection.
+        func point(_ pose: Choreography.Pose) -> SIMD3<Double> {
+            let a = stage.home(attacker), d = stage.home(defender)
+            func facing(_ seat: Seat) -> Double { seat.mine ? -1 : 1 }
+            func axis(_ coord: Choreography.Coordinate?, _ own: (SIMD3<Double>) -> Double, behind: Bool) -> Double {
+                guard let coord else { return 0 }
+                var value = (coord.a ?? 0) * own(a) + (coord.d ?? 0) * own(d) + (coord.c ?? 0)
+                value += (coord.ax ?? 0) * a.x + (coord.ay ?? 0) * a.y + (coord.az ?? 0) * a.z
+                value += (coord.dx ?? 0) * d.x + (coord.dy ?? 0) * d.y + (coord.dz ?? 0) * d.z
+                if behind {
+                    value += (coord.ab ?? 0) * facing(attacker) + (coord.db ?? 0) * facing(defender)
+                } else {
+                    value += (coord.al ?? 0) * facing(attacker) + (coord.dl ?? 0) * facing(defender)
+                }
+                return value
+            }
+            return SIMD3(axis(pose.x, { $0.x }, behind: false),
+                         axis(pose.y, { $0.y }, behind: false),
+                         axis(pose.z, { $0.z }, behind: true))
         }
     }
 
@@ -258,10 +299,10 @@ struct MoveTimeline: Sendable {
     /// first lean that carries the user somewhere, or -- for a recipe that
     /// never goes near anyone -- a little past half way. The health bar drops
     /// at this moment rather than when the move was thrown.
-    func impact(near targets: [CGPoint], attacker: Seat) -> TimeInterval {
+    func impact(near targets: [CGPoint], attacker: Seat, within reach: CGFloat = 70) -> TimeInterval {
         var soonest: TimeInterval?
         for sprite in sprites where sprite.ghostOf == nil
-            && targets.contains(where: { hypot(sprite.to.point.x - $0.x, sprite.to.point.y - $0.y) < 70 }) {
+            && targets.contains(where: { hypot(sprite.to.point.x - $0.x, sprite.to.point.y - $0.y) < reach }) {
             soonest = min(soonest ?? .infinity, sprite.end)
         }
         for lean in leans where lean.seat == attacker && hypot(lean.offset.width, lean.offset.height) > 40 {

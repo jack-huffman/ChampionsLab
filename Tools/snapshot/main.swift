@@ -402,30 +402,20 @@ MainActor.assumeIsolated { renderAll() }
 // MARK: - The effect layers, on a grid
 
 /// Four seats, the way the arena lays them out.
+/// The client's scene in a demo cell, and a move's recipe placed on it.
 @MainActor
-/// A move's recipe placed on a demo arena, ready to draw at an instant.
-private func choreography(_ move: String, size: CGSize) -> TurnPlayback.Scene? {
-    let table = Choreography.shared
-    guard let recipe = table.recipe(forMove: move) else { return nil }
-    // The same four points the cell draws its circles at, read once so the
-    // stage's closure carries only points.
-    let place = demoPlace(size)
-    let seats = [Seat(mine: true, slot: 0), Seat(mine: true, slot: 1), Seat(mine: false, slot: 0), Seat(mine: false, slot: 1)]
-    let anchors = Dictionary(uniqueKeysWithValues: seats.map { ($0, place($0)) })
-    let stage = MoveTimeline.Stage(arena: size) { seat in anchors[seat] ?? CGPoint(x: size.width / 2, y: size.height / 2) }
-    let timeline = MoveTimeline.build(recipe, attacker: Seat(mine: true, slot: 0),
-                                      targets: [Seat(mine: false, slot: 0)],
-                                      sizes: table.sprites, stage: stage)
-    return TurnPlayback.Scene(timeline: timeline, startedAt: Date(), ghosts: [:])
+private func demoStage(_ size: CGSize) -> MoveTimeline.Stage {
+    MoveTimeline.Stage(size: size, singles: false, pixel: false)
 }
 
 @MainActor
-private func demoPlace(_ size: CGSize) -> (Seat) -> CGPoint {
-    { seat in
-        let x: CGFloat = seat.mine ? (seat.slot == 0 ? 0.17 : 0.35) : (seat.slot == 0 ? 0.65 : 0.83)
-        let y: CGFloat = seat.mine ? (seat.slot == 0 ? 0.40 : 0.64) : (seat.slot == 0 ? 0.36 : 0.60)
-        return CGPoint(x: size.width * x, y: size.height * y)
-    }
+private func choreography(_ move: String, size: CGSize) -> TurnPlayback.Scene? {
+    let table = Choreography.shared
+    guard let recipe = table.recipe(forMove: move) else { return nil }
+    let timeline = MoveTimeline.build(recipe, attacker: Seat(mine: true, slot: 0),
+                                      targets: [Seat(mine: false, slot: 0)],
+                                      sizes: table.sprites, stage: demoStage(size))
+    return TurnPlayback.Scene(timeline: timeline, startedAt: Date(), ghosts: [:])
 }
 
 private struct EffectCell<Content: View>: View {
@@ -444,7 +434,7 @@ private struct EffectCell<Content: View>: View {
                     // Markers where the four Pokémon would be standing.
                     ForEach([Seat(mine: true, slot: 0), Seat(mine: true, slot: 1),
                              Seat(mine: false, slot: 0), Seat(mine: false, slot: 1)], id: \.self) { seat in
-                        let at = demoPlace(geo.size)(seat)
+                        let at = demoStage(geo.size).project(demoStage(geo.size).home(seat))
                         Circle().strokeBorder(Palette.dim.opacity(0.35), lineWidth: 1)
                             .frame(width: 30, height: 30).position(at)
                     }
@@ -456,80 +446,35 @@ private struct EffectCell<Content: View>: View {
 }
 
 private struct EffectSheet: View {
-    private func shot(_ name: String, category: String, type: String,
-                      targets: [Seat]) -> Flourish {
-        Flourish(id: 0,
-                 action: Board.Action(byMine: true, slot: 0, move: name,
-                                      category: category, type: type),
-                 targets: targets)
-    }
+    /// A move and the moment to freeze it at.
+    private let stills: [(move: String, at: Double)] = [
+        ("Flamethrower", 0.35), ("Flamethrower", 0.62), ("Surf", 0.5),
+        ("Dragon Claw", 0.55), ("Thunderbolt", 0.4), ("Earthquake", 0.6),
+        ("Follow Me", 0.5), ("Swords Dance", 0.5), ("Shadow Ball", 0.5),
+    ]
 
     var body: some View {
-        let one = [Seat(mine: false, slot: 0)]
-        let both = [Seat(mine: false, slot: 0), Seat(mine: false, slot: 1)]
-        return VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 14) {
             Text("What a move looks like")
                 .font(.system(size: 18, weight: .bold))
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 3),
                       spacing: 14) {
-                ForEach([0.30, 0.58, 0.85], id: \.self) { at in
-                    EffectCell("Special, one target — Flamethrower, \(Int(at * 100))%") {
+                ForEach(Array(stills.enumerated()), id: \.offset) { _, still in
+                    EffectCell("\(still.move), \(String(format: "%.2fs", still.at))") {
                         GeometryReader { geo in
-                            BeamLayer(flourish: shot("Flamethrower", category: "Special", type: "Fire",
-                                                     targets: one),
-                                      progress: at, place: demoPlace(geo.size))
-                        }
-                    }
-                    .frame(height: 210)
-                }
-                ForEach([0.45, 0.70], id: \.self) { at in
-                    EffectCell("Special, both — Surf, \(Int(at * 100))%") {
-                        GeometryReader { geo in
-                            BeamLayer(flourish: shot("Surf", category: "Special", type: "Water",
-                                                     targets: both),
-                                      progress: at, place: demoPlace(geo.size))
-                        }
-                    }
-                    .frame(height: 210)
-                }
-                ForEach([("Flamethrower", 0.35), ("Dragon Claw", 0.55), ("Follow Me", 0.5)], id: \.0) { name, at in
-                    EffectCell("Choreography — \(name), \(String(format: "%.2fs", at))") {
-                        GeometryReader { geo in
-                            if let scene = choreography(name, size: geo.size) {
-                                ChoreographyLayer(scene: scene, at: at)
+                            if let scene = choreography(still.move, size: geo.size) {
+                                ChoreographyLayer(scene: scene, at: still.at)
                             }
                         }
                     }
                     .frame(height: 210)
                 }
-                EffectCell("Special, missed — Thunder, 70%") {
-                    GeometryReader { geo in
-                        BeamLayer(flourish: shot("Thunder", category: "Special", type: "Electric",
-                                                 targets: []),
-                                  progress: 0.70, place: demoPlace(geo.size))
-                    }
-                }
-                .frame(height: 210)
-                ForEach([0.55, 0.80], id: \.self) { at in
-                    EffectCell("Physical impact — Earthquake, \(Int(at * 100))%") {
-                        GeometryReader { geo in
-                            ImpactLayer(flourish: shot("Earthquake", category: "Physical",
-                                                       type: "Ground", targets: both),
-                                        progress: at, place: demoPlace(geo.size))
-                        }
-                    }
-                    .frame(height: 210)
-                }
-                EffectCell("Status on self — Swords Dance, 60%") {
-                    GeometryReader { geo in
-                        AuraLayer(flourish: shot("Swords Dance", category: "Status", type: "Normal",
-                                                 targets: []),
-                                  progress: 0.60, place: demoPlace(geo.size))
-                    }
-                }
-                .frame(height: 210)
             }
-            Spacer(minLength: 0)
+            Text("The Showdown client's choreography for each move, drawn with our primitives on the "
+                 + "client's own scene: your side at the front, theirs at the back. Circles mark where "
+                 + "the four Pokemon stand.")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(18)
     }
