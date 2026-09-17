@@ -142,6 +142,19 @@ extension BattleFieldView {
                     .strokeBorder(Palette.dim.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
                     .frame(width: side * 0.98, height: side * 0.98)
             }
+            let moved = playback.boosts[seat] ?? []
+            let rising = moved.contains { $0.delta > 0 }, falling = moved.contains { $0.delta < 0 }
+            // The game's own sign for a stage moving: the Pokemon lit in the
+            // colour of it, arrows streaming up for a rise, down for a fall.
+            // Orange up and blue down, a pair told apart by most eyes, and
+            // the direction says it anyway.
+            if rising || falling {
+                Circle()
+                    .fill(RadialGradient(colors: [(rising ? Self.riseTint : Self.fallTint).opacity(0.45), .clear],
+                                         center: .center, startRadius: side * 0.1, endRadius: side * 0.55))
+                    .frame(width: side, height: side)
+                    .transition(.opacity)
+            }
             fighterSprite(fighter.build.form, mine: seat.mine, side: side * 0.92)
                 .offset(y: fighter.fainted ? side * 0.12 : (pixel ? 0 : bob))
                 .opacity(fighter.fainted ? 0.2 : 1)
@@ -150,21 +163,59 @@ extension BattleFieldView {
                 .shadow(color: hit ? Palette.bad.opacity(0.6) : .clear, radius: 10)
                 .animation(.spring(response: 0.32, dampingFraction: 0.5), value: hit)
                 .animation(.easeOut(duration: 0.35), value: fighter.fainted)
+            if rising { StatArrows(up: true, tint: Self.riseTint, side: side * 0.9).transition(.opacity) }
+            if falling { StatArrows(up: false, tint: Self.fallTint, side: side * 0.9).transition(.opacity) }
         }
         .frame(width: side, height: side)
         .overlay(alignment: .top) {
-            if let lost = damage[seat], lost > 0 {
-                Text("-\(lost)")
-                    .font(.system(size: max(15, 13 * stage.k), weight: .heavy, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.white)
-                    .shadow(color: Palette.bad, radius: 6)
-                    .shadow(color: .black.opacity(0.8), radius: 2, y: 1)
-                    .offset(y: -6)
-                    .transition(.asymmetric(insertion: .offset(y: 14).combined(with: .opacity),
-                                            removal: .offset(y: -12).combined(with: .opacity)))
-                    .allowsHitTesting(false)
+            // What the step did to this one, stacked over it: the health
+            // lost, the stages moved, the ability that went off.
+            VStack(spacing: 3) {
+                if let lost = damage[seat], lost > 0 {
+                    Text("-\(lost)")
+                        .font(.system(size: max(15, 13 * stage.k), weight: .heavy, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                        .shadow(color: Palette.bad, radius: 6)
+                        .shadow(color: .black.opacity(0.8), radius: 2, y: 1)
+                        .transition(.asymmetric(insertion: .offset(y: 14).combined(with: .opacity),
+                                                removal: .offset(y: -12).combined(with: .opacity)))
+                }
+                if let moved = playback.boosts[seat], !moved.isEmpty {
+                    HStack(spacing: 3) {
+                        ForEach(moved, id: \.stat) { change in
+                            Text("\(Stat(rawValue: change.stat)?.short ?? "") \(change.delta > 0 ? "+" : "")\(change.delta)")
+                                .font(.system(size: max(10, 9 * stage.k), weight: .heavy, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(Capsule().fill(change.delta > 0 ? Self.riseTint : Self.fallTint))
+                                .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
+                        }
+                    }
+                    .transition(.asymmetric(insertion: .offset(y: 10).combined(with: .opacity),
+                                            removal: .opacity))
+                }
+                if let fired = playback.abilities[seat], !fired.isEmpty {
+                    ForEach(fired, id: \.self) { name in
+                        HStack(spacing: 4) {
+                            Image(systemName: "wand.and.stars").font(.system(size: max(9, 8 * stage.k), weight: .bold))
+                            Text(name).font(.system(size: max(10, 9 * stage.k), weight: .bold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(Color(red: 0.08, green: 0.09, blue: 0.13).opacity(0.92)))
+                        .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .strokeBorder(.white.opacity(0.7), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
+                    }
+                    .transition(.asymmetric(insertion: .scale(scale: 0.7).combined(with: .opacity),
+                                            removal: .opacity))
+                }
             }
+            .offset(y: -6)
+            .allowsHitTesting(false)
         }
         .modifier(carried(seat))
         .opacity(out ? 1 : 0)
@@ -172,6 +223,11 @@ extension BattleFieldView {
         .position(at)
         .allowsHitTesting(false)
     }
+
+    /// The colours of a stage rising and falling, chosen to be told apart
+    /// by most kinds of colour vision; the arrows' direction says it too.
+    static let riseTint = Color(red: 1.0, green: 0.56, blue: 0.16)
+    static let fallTint = Color(red: 0.42, green: 0.50, blue: 1.0)
 
     /// The Pokemon itself. Showdown's pixel sprite -- its back for your side,
     /// its front for theirs -- when that style is on and the sprite has

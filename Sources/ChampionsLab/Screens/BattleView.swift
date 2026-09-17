@@ -509,6 +509,7 @@ struct BattleView: View {
             var running = start
             for entry in order {
                 let before = running.story.count
+                let was = running
                 running.landed(mine: entry.mine, slot: entry.slot)
                 let said = Array(running.story.dropFirst(before))
                 guard !said.isEmpty else { continue }
@@ -516,6 +517,27 @@ struct BattleView: View {
                     board = running
                     callout = said.joined(separator: " ")
                 }
+                // What the arrival did, over whoever it happened to: the
+                // stages an Intimidate took, the ability that took them.
+                var moved: [Seat: [TurnPlayback.StatChange]] = [:]
+                for mineSide in [true, false] {
+                    let now = mineSide ? running.mine : running.theirs
+                    let then = mineSide ? was.mine : was.theirs
+                    for slot in 0..<min(running.activeCount, now.count, then.count) {
+                        let changes = now[slot].build.boosts.indices
+                            .filter { $0 < then[slot].build.boosts.count && now[slot].build.boosts[$0] != then[slot].build.boosts[$0] }
+                            .map { TurnPlayback.StatChange(stat: $0, delta: now[slot].build.boosts[$0] - then[slot].build.boosts[$0]) }
+                        if !changes.isEmpty { moved[Seat(mine: mineSide, slot: slot)] = changes }
+                    }
+                }
+                var fired: [Seat: [String]] = [:]
+                for line in said {
+                    for firing in running.abilitiesNamed(in: line) where firing.slot < 2 {
+                        let seat = Seat(mine: firing.mine, slot: firing.slot)
+                        if !(fired[seat] ?? []).contains(firing.name) { fired[seat, default: []].append(firing.name) }
+                    }
+                }
+                playback.flash(boosts: moved, abilities: fired)
                 log += said
                 try? await Task.sleep(nanoseconds: 1_300_000_000)
             }

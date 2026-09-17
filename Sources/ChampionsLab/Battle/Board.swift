@@ -570,6 +570,13 @@ struct Board {
         /// the Intimidate that has landed and not the Swords Dance that has yet to.
         var myBoosts: [[Int]] = []
         var theirBoosts: [[Int]] = []
+        /// An ability that went off during the step, and whose.
+        struct Firing: Equatable {
+            let mine: Bool
+            let slot: Int
+            let name: String
+        }
+        var abilities: [Firing] = []
         var myStatus: [Ailment] = []
         var theirStatus: [Ailment] = []
         var myConfused: [Bool] = []
@@ -688,6 +695,9 @@ struct Board {
         leftThisStep = false
     }
 
+    /// The abilities that have fired since the step began, off the notes.
+    private var firing: [Step.Firing] = []
+
     /// The action being gathered never happened, and this is why. One door,
     /// so the playback learns it from the same place the log does.
     mutating func stopAction(_ reason: String) {
@@ -703,27 +713,56 @@ struct Board {
         acting = nil
     }
 
-    private func snapshot(_ text: String) -> Step {
-        Step(text: text, action: acting,
-             myHP: mine.map(\.hp), theirHP: theirs.map(\.hp),
-             myForms: mine.map(\.build.form.id),
-             theirForms: theirs.map(\.build.form.id),
-             field: field, myTailwind: myTailwind,
-             theirTailwind: theirTailwind, trickRoom: trickRoom,
-             myBoosts: mine.map(\.build.boosts), theirBoosts: theirs.map(\.build.boosts),
-             myStatus: mine.map(\.status), theirStatus: theirs.map(\.status),
-             myConfused: mine.map(\.isConfused), theirConfused: theirs.map(\.isConfused))
+    private mutating func snapshot(_ text: String) -> Step {
+        defer { firing = [] }
+        return Step(text: text, action: acting,
+                    myHP: mine.map(\.hp), theirHP: theirs.map(\.hp),
+                    myForms: mine.map(\.build.form.id),
+                    theirForms: theirs.map(\.build.form.id),
+                    field: field, myTailwind: myTailwind,
+                    theirTailwind: theirTailwind, trickRoom: trickRoom,
+                    myBoosts: mine.map(\.build.boosts), theirBoosts: theirs.map(\.build.boosts),
+                    abilities: firing,
+                    myStatus: mine.map(\.status), theirStatus: theirs.map(\.status),
+                    myConfused: mine.map(\.isConfused), theirConfused: theirs.map(\.isConfused))
     }
 
     /// Say what happened, and remember what the board looked like when it did.
+    /// A note that names an active Pokemon's own ability is that ability
+    /// going off, and the step remembers whose, so the field can say so over
+    /// the Pokemon the way it says what a hit took.
     mutating func note(_ text: String) {
         guard narrating else { return }
         story.append(text)
+        firing.append(contentsOf: abilitiesNamed(in: text).filter { !firing.contains($0) })
         if gathering != nil {
             gathering?.append(text)
         } else {
             steps.append(snapshot(text))
         }
+    }
+
+    /// Which active Pokemon's abilities a line names. The board knows what
+    /// everyone standing has, so only those names count; "Incineroar's
+    /// Intimidate" names Incineroar, and a bare "Supreme Overlord" the one
+    /// acting, or the only one standing that has it.
+    func abilitiesNamed(in text: String) -> [Step.Firing] {
+        var out: [Step.Firing] = []
+        for mineSide in [true, false] {
+            let team = mineSide ? mine : theirs
+            for slot in 0..<Swift.min(activeCount, team.count) {
+                let ability = team[slot].build.ability
+                guard !ability.isEmpty, text.contains(ability) else { continue }
+                let owned = text.contains("\(team[slot].build.form.formLabel)'s \(ability)")
+                let others = (0..<Swift.min(activeCount, mine.count)).filter { mine[$0].build.ability == ability }.count
+                    + (0..<Swift.min(activeCount, theirs.count)).filter { theirs[$0].build.ability == ability }.count
+                let isActing = acting.map { $0.byMine == mineSide && $0.slot == slot } ?? false
+                if owned || others == 1 || isActing {
+                    out.append(Step.Firing(mine: mineSide, slot: slot, name: ability))
+                }
+            }
+        }
+        return out
     }
 
     var myActive: ArraySlice<Fighter> { mine.prefix(activeCount) }

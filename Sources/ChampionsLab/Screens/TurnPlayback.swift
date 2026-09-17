@@ -57,6 +57,16 @@ final class TurnPlayback: ObservableObject {
     /// number is the thing a player actually wants at that moment and the log
     /// is the last place to look for it.
     @Published var damage: [Seat: Int] = [:]
+    /// A stage that moved, and by how much.
+    struct StatChange: Equatable {
+        let stat: Int
+        let delta: Int
+    }
+    /// Whose stages moved as the step landed, and which: the arrows rising or
+    /// falling over the Pokemon, and the labels beside them.
+    @Published var boosts: [Seat: [StatChange]] = [:]
+    /// Whose abilities went off as the step landed, named over the Pokemon.
+    @Published var abilities: [Seat: [String]] = [:]
     /// Who took a hit on the last turn, so they can flinch on screen.
     @Published var struck: Set<Int> = []
     @Published var struckTheirs: Set<Int> = []
@@ -110,7 +120,7 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]
+        damage = [:]; boosts = [:]; abilities = [:]
         struck = []; struckTheirs = []
         replay = []; at = 0; seen = 0; replayBoard = nil
     }
@@ -151,7 +161,20 @@ final class TurnPlayback: ObservableObject {
             guard !Task.isCancelled else { return }
             scene = nil
             stopTracks()
-            damage = [:]
+            damage = [:]; boosts = [:]; abilities = [:]
+            // The end of the turn: what the residuals took and gave -- a burn,
+            // Leftovers, a Speed Boost -- shown over whoever it happened to,
+            // one step at a time, since those steps have no move to play.
+            let lastAction = actions.last?.0 ?? -1
+            for index in steps.indices where index > lastAction && steps[index].action == nil {
+                guard !Task.isCancelled else { return }
+                at = index
+                seen = Swift.max(seen, index + 1)
+                withAnimation(.easeOut(duration: 0.18)) { land(index, in: steps) }
+                try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1.6 * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:] }
+            }
             // Rest on the last step rather than past it: the field shows the end
             // of the turn, and the stepper still works from there, which is how
             // a turn was reviewed before it was played out.
@@ -184,20 +207,76 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]
+        damage = [:]; boosts = [:]; abilities = [:]
         struck = []; struckTheirs = []
         seen = Swift.max(seen, index + 1)
-        guard replay[index].action != nil else { at = index; return }
-        at = Swift.max(0, index - 1)
         let steps = replay
+        guard steps[index].action != nil else {
+            // Nothing to play, but something to show: what the step took and gave.
+            at = index
+            withAnimation(.easeOut(duration: 0.18)) { land(index, in: steps) }
+            task = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1.6 * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:] }
+                task = nil
+            }
+            return
+        }
+        at = Swift.max(0, index - 1)
         task = Task { @MainActor in
             await perform(index, order: 0, in: steps, last: true)
             guard !Task.isCancelled else { return }
             scene = nil
             stopTracks()
-            damage = [:]
+            damage = [:]; boosts = [:]; abilities = [:]
             at = index
             task = nil
+        }
+    }
+
+    /// What a step changed, shown over whoever it changed: health lost, stages
+    /// moved, abilities that went off. Health and stages are the difference
+    /// from the step before -- or from the board the turn started on, for the
+    /// first -- and the abilities are the step's own record.
+    private func land(_ index: Int, in steps: [Board.Step]) {
+        let step = steps[index]
+        let earlier = index > 0 ? steps[index - 1] : nil
+        var took: [Seat: Int] = [:]
+        var moved: [Seat: [StatChange]] = [:]
+        for mineSide in [true, false] {
+            let hp = mineSide ? step.myHP : step.theirHP
+            let stages = mineSide ? step.myBoosts : step.theirBoosts
+            for slot in hp.indices where slot < 2 {
+                let seat = Seat(mine: mineSide, slot: slot)
+                let hpBefore: Int? = earlier.map { mineSide ? $0.myHP : $0.theirHP }?[safe: slot]
+                    ?? (mineSide ? replayBoard?.mine : replayBoard?.theirs)?[safe: slot]?.hp
+                if let hpBefore, hp[slot] < hpBefore { took[seat] = hpBefore - hp[slot] }
+                let before: [Int]? = earlier.map { mineSide ? $0.myBoosts : $0.theirBoosts }?[safe: slot]
+                    ?? (mineSide ? replayBoard?.mine : replayBoard?.theirs)?[safe: slot]?.build.boosts
+                guard let before, stages.indices.contains(slot) else { continue }
+                let after = stages[slot]
+                let changes = after.indices.filter { $0 < before.count && after[$0] != before[$0] }
+                    .map { StatChange(stat: $0, delta: after[$0] - before[$0]) }
+                if !changes.isEmpty { moved[seat] = changes }
+            }
+        }
+        var fired: [Seat: [String]] = [:]
+        for firing in step.abilities where firing.slot < 2 {
+            fired[Seat(mine: firing.mine, slot: firing.slot), default: []].append(firing.name)
+        }
+        damage = took
+        boosts = moved
+        abilities = fired
+    }
+
+    /// Stages moved and abilities fired outside a turn -- the leads coming
+    /// out, an Intimidate landing -- shown for a moment over the Pokemon.
+    func flash(boosts moved: [Seat: [StatChange]], abilities fired: [Seat: [String]]) {
+        withAnimation(.easeOut(duration: 0.18)) { boosts = moved; abilities = fired }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            withAnimation(.easeIn(duration: 0.2)) { boosts = [:]; abilities = [:] }
         }
     }
 
@@ -207,7 +286,7 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]
+        damage = [:]; boosts = [:]; abilities = [:]
         replay = []; at = 0; seen = 0; replayBoard = nil
     }
 
@@ -249,20 +328,9 @@ final class TurnPlayback: ObservableObject {
         guard !Task.isCancelled else { return }
         at = index
         seen = Swift.max(seen, index + 1)
-        // The blow lands: show what it took, from the same health diff the
-        // targets were worked out from.
-        var took: [Seat: Int] = [:]
-        if let earlier {
-            for seat in reached {
-                let before = seat.mine ? earlier.myHP : earlier.theirHP
-                let after = seat.mine ? step.myHP : step.theirHP
-                guard before.indices.contains(seat.slot),
-                      after.indices.contains(seat.slot) else { continue }
-                let lost = before[seat.slot] - after[seat.slot]
-                if lost > 0 { took[seat] = lost }
-            }
-        }
-        withAnimation(.easeOut(duration: 0.18)) { damage = took }
+        // The blow lands: show what it took and what it moved, from the same
+        // differences the targets were worked out from.
+        withAnimation(.easeOut(duration: 0.18)) { land(index, in: steps) }
         // The rest of the move, and then it is over.
         try? await Task.sleep(
             nanoseconds: UInt64(max(0, staged.total - staged.impact) * 1_000_000_000))
@@ -273,7 +341,7 @@ final class TurnPlayback: ObservableObject {
         stopTracks()
         try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1_000_000_000))
         guard !Task.isCancelled else { return }
-        withAnimation(.easeIn(duration: 0.2)) { damage = [:] }
+        withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:] }
         if !last {
             try? await Task.sleep(nanoseconds: UInt64(Self.betweenActions * 1_000_000_000))
         }
@@ -366,4 +434,8 @@ final class TurnPlayback: ObservableObject {
             struck = []; struckTheirs = []
         }
     }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
 }
