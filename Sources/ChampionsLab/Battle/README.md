@@ -34,7 +34,7 @@ depend on nothing. **Nothing depends on TurnModel.** There are no cycles.
 | `TurnOrder.swift` | who acts when | Bracket first, then Speed; After You and Quash; the mid-turn re-read. The explainer walks the same code. |
 | `Strikes.swift` | the action pipeline | Can it be used, who does it reach, what it does to each, what it costs. |
 | `SupportMoves.swift` | the status moves | Each is its own rule, found by name. Hands a `Followup` up rather than calling down. |
-| `Switching.swift` | entering and leaving | Entry abilities, Mega Evolution, Regenerator, Emergency Exit; and the Board's arrival methods, as an extension. |
+| `Switching.swift` | entering and leaving | Entry abilities, Mega Evolution, Regenerator, Emergency Exit; pivots (U-turn, Parting Shot, an Eject Button) -- in a played turn, one of yours stops the turn for the choice of who comes in and `TurnModel.resume` finishes it, while theirs and the search send in the best answer at once; and the Board's arrival methods, as an extension. |
 | `Residuals.swift` | end of turn | Weather, terrain healing, poison, Leech Seed, berries, every field clock. |
 | `Ailments.swift` | status conditions | `inflict` is the one door; Misty, Safeguard, immunities and Synchronize live behind it. |
 | `ChampionsRules.swift` | the numbers Champions changed | Paralysis, sleep, freeze, Healer -- each with the line of Showdown's champions mod beside it. |

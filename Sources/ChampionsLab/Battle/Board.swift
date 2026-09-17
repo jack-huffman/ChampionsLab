@@ -448,6 +448,47 @@ struct Board {
     /// walked through rather than landing all at once.
     var steps: [Step] = []
 
+    /// A Pokemon leaving under its own move -- a U-turn, a Parting Shot, an
+    /// Eject Button -- with the turn stopped for the choice of who comes in.
+    struct Pivot: Equatable, Sendable {
+        let mine: Bool
+        let slot: Int
+        var carrying: Carried? = nil
+    }
+    /// What a pivot hands to whoever comes in: Baton Pass its stages, its
+    /// substitute and its Aqua Ring; Shed Tail the shell it paid for.
+    struct Carried: Equatable, Sendable {
+        var boosts: [Int]? = nil
+        var substitute = 0
+        var aquaRing = false
+    }
+    /// Set by a played turn, so a pivot of yours stops the turn and the
+    /// screen asks. Off for the search, which sends in the best answer at
+    /// once, the way it replaces a fallen Pokemon.
+    var asksBeforePivot = false
+    var pendingPivot: Pivot?
+    /// The actions still to come when a pivot stopped the turn, for
+    /// `TurnModel.resume`.
+    var paused: [Queued]?
+
+    /// One Pokémon's action this turn, with the reasoning behind where it sits.
+    struct Queued: Sendable {
+        let mine: Bool
+        let slot: Int
+        let choice: Choice
+        let bracket: Int
+        /// Speed as it stood when the turn was declared. `next` re-reads the
+        /// live value; this is kept for anything describing the turn later.
+        let speed: Int
+        /// What moved the bracket off the move's own number.
+        let becauseOfPriority: [String]
+        /// What moved the Speed off the Pokémon's own number.
+        let becauseOfSpeed: [String]
+    }
+    /// Whether the Pokemon acting has already left during this action, so a
+    /// Parting Shot's own leaving and the pipeline's do not both fire.
+    var leftThisStep = false
+
     /// A moment inside a turn.
     /// What a Pokémon was doing when a step happened, for the screen to draw.
     ///
@@ -594,6 +635,14 @@ struct Board {
         out.rulings = relabel(rulings)
         out.declared = [:]
         out.acted = []
+        if let pivot = pendingPivot {
+            out.pendingPivot = Pivot(mine: !pivot.mine, slot: pivot.slot, carrying: pivot.carrying)
+        }
+        out.paused = paused?.map {
+            Queued(mine: !$0.mine, slot: $0.slot, choice: $0.choice, bracket: $0.bracket,
+                   speed: $0.speed, becauseOfPriority: $0.becauseOfPriority,
+                   becauseOfSpeed: $0.becauseOfSpeed)
+        }
         return out
     }
 
@@ -636,6 +685,7 @@ struct Board {
         closeStep()
         acting = action
         gathering = []
+        leftThisStep = false
     }
 
     /// The action being gathered never happened, and this is why. One door,

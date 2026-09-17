@@ -123,6 +123,13 @@ for (const move of Object.values(Moves)) {
     // Swords Dance, which is no help to anything that has to know the
     // difference between a move on a foe and one on the user.
     target: move.target,
+    // A move whose user leaves the field after it: U-turn, Volt Switch,
+    // Parting Shot, Teleport. Baton Pass carries its boosts across and Shed
+    // Tail its substitute, and Showdown says which by name.
+    // Revival Blessing borrows the flag to open the bench for the revival,
+    // and does not leave; a slot condition marks the borrowing.
+    selfSwitch: move.selfSwitch && !move.slotCondition
+      ? (typeof move.selfSwitch === 'string' ? move.selfSwitch : 'yes') : undefined,
     accuracy: move.accuracy === true ? 0 : move.accuracy,
     type: move.type,
     priority: move.priority,

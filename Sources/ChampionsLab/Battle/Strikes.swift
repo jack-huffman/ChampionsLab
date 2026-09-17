@@ -1031,6 +1031,12 @@ enum Strikes {
         // Sneasler could Close Combat all game at full Defence.
         StatChanges.applySelf(move.selfDrops.mapValues { -$0 }, toMine: byMine, slot: slot, board: &board)
         cost(of: move, dealt: totalDealt, byMine: byMine, slot: slot, board: &board)
+        // A pivot -- U-turn, Volt Switch, Flip Turn -- leaves once it has hit
+        // something; a miss, or a Protect, keeps it where it is. Reaching
+        // nobody returned above, so here it reached somebody.
+        if move.pivots, !(byMine ? board.mine : board.theirs)[slot].fainted {
+            Switching.leave(byMine: byMine, slot: slot, board: &board)
+        }
     }
 
     /// Whether one of the calculator's notes is worth reading out.

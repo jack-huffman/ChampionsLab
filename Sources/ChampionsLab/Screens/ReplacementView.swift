@@ -1,5 +1,5 @@
 //  ReplacementView.swift
-//  Something of yours went down; who comes in.
+//  Something of yours went down, or went out under its own move; who comes in.
 //
 //  The game asks this and it matters: whoever arrives takes whatever lands
 //  next turn without acting first, so it is a choice between what answers what
@@ -32,10 +32,16 @@ struct ReplacementView: View {
             .map { (index: $0, reading: BattleSession.sendInReading(board, bench: $0)) }
             .sorted { $0.reading.score > $1.reading.score }
         let theyToo = (0..<min(board.activeCount, board.theirs.count)).contains { board.theirs[$0].fainted }
+        // A pivot -- U-turn, Parting Shot, an Eject Button -- stopped the
+        // turn partway; the rest of it plays once somebody has come in.
+        let pivoting = session.pivoting
+        let leaving = board.mine.indices.contains(slot) ? board.mine[slot].build.form.formLabel : "It"
         return Card {
             VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(title: sending.count > 1 ? "Send two in" : "Send one in",
-                              subtitle: (theyToo
+                SectionHeader(title: pivoting ? "Who comes in?" : sending.count > 1 ? "Send two in" : "Send one in",
+                              subtitle: pivoting
+                                ? "\(leaving) is coming back under its own move. The rest of the turn plays out once someone has taken its place, and whoever comes in takes whatever is still to land."
+                                : (theyToo
                                 ? "They lost one too. Both sides send in at once, and the faster arrives first — its ability going off before the slower one even lands. "
                                 : "")
                                 + "Whoever comes arrives without acting, so it takes whatever lands next turn.")
@@ -50,6 +56,10 @@ struct ReplacementView: View {
                           alignment: .leading, spacing: 8) {
                     ForEach(Array(options.enumerated()), id: \.offset) { rank, option in
                         Button {
+                            if pivoting {
+                                session.resumeTurn(bench: option.index)
+                                return
+                            }
                             chosenSends.append((slot: slot, bench: option.index))
                             guard chosenSends.count >= sending.count else { return }
                             var next = board

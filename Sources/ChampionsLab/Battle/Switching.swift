@@ -275,19 +275,64 @@ enum Switching {
         board.landed(mine: mine, slot: slot)
     }
 
-    /// A Pokémon leaving the field under its own move — Parting Shot, and
-    /// whatever else pivots. Whoever is waiting comes in and does what
-    /// arriving does.
-    static func leave(byMine: Bool, slot: Int, board: inout Board) {
+    /// A Pokemon leaving the field under its own move -- U-turn, Parting
+    /// Shot, Teleport -- or under an Eject Button, a Red Card, an Emergency
+    /// Exit. Who comes in is a decision, one of the sharper ones in the game,
+    /// so in a played turn a pivot of yours stops the turn here and the
+    /// screen asks; `TurnModel.resume` finishes the turn once somebody has
+    /// been chosen. Theirs, and yours inside a search, send in the best
+    /// answer to what is standing across the field, the way a fallen Pokemon
+    /// is replaced. Once per action: a Parting Shot's own leaving and the
+    /// pipeline's must not both fire.
+    static func leave(byMine: Bool, slot: Int, board: inout Board, carrying: Board.Carried? = nil) {
+        guard !board.leftThisStep else { return }
         let team = byMine ? board.mine : board.theirs
-        guard let next = (board.activeCount..<team.count).first(where: { !team[$0].fainted }) else {
-            board.note("\(team[slot].build.form.formLabel) had nowhere to go.")
+        guard team.indices.contains(slot), !team[slot].fainted else { return }
+        let name = team[slot].build.form.formLabel
+        let waiting = (board.activeCount..<team.count).filter { !team[$0].fainted }
+        guard !waiting.isEmpty else {
+            board.note("\(name) had nowhere to go.")
             return
         }
+        board.leftThisStep = true
+        if byMine, board.asksBeforePivot, board.pendingPivot == nil {
+            board.pendingPivot = Board.Pivot(mine: true, slot: slot, carrying: carrying)
+            board.note("\(name) went out.")
+            return
+        }
+        let next = (byMine ? board.myBestReplacement(for: slot, excluding: [])
+                           : board.theirBestReplacement(for: slot, excluding: [])) ?? waiting[0]
+        arrive(byMine: byMine, slot: slot, bench: next, board: &board, carrying: carrying, announcingLeaving: true)
+    }
+
+    /// The chosen Pokemon comes in for one that left, and does what arriving
+    /// does. The leaving was already said when the turn stopped for the
+    /// choice; it is said here when nothing stopped.
+    static func arrive(byMine: Bool, slot: Int, bench: Int, board: inout Board,
+                       carrying: Board.Carried? = nil, announcingLeaving: Bool) {
+        let team = byMine ? board.mine : board.theirs
+        guard team.indices.contains(slot), team.indices.contains(bench), !team[bench].fainted else { return }
         let leaving = team[slot].build.form.formLabel
-        if byMine { board.mine.swapAt(slot, next) } else { board.theirs.swapAt(slot, next) }
+        if byMine { board.mine.swapAt(slot, bench) } else { board.theirs.swapAt(slot, bench) }
         let arriving = (byMine ? board.mine : board.theirs)[slot].build.form.formLabel
-        board.note("\(leaving) went out; \(arriving) came in.")
+        board.note(announcingLeaving ? "\(leaving) went out; \(arriving) came in."
+                                     : "\(arriving) came in for \(leaving).")
+        // What the one that left handed over, before anything of the
+        // arrival's own goes off.
+        if let carrying {
+            func hand(_ fighter: inout Fighter) {
+                if let boosts = carrying.boosts { fighter.build.boosts = boosts }
+                if carrying.substitute > 0 { fighter.substitute = carrying.substitute }
+                if carrying.aquaRing { fighter.aquaRing = true }
+            }
+            if byMine { hand(&board.mine[slot]) } else { hand(&board.theirs[slot]) }
+            if carrying.boosts?.contains(where: { $0 != 0 }) == true {
+                board.note("\(arriving) took over every stat change.")
+            }
+            if carrying.substitute > 0 {
+                board.note("\(arriving) stands behind the substitute left for it.")
+            }
+        }
         board.landed(mine: byMine, slot: slot)
     }
 }
@@ -360,6 +405,12 @@ extension Board {
         }
         fieldSettled(from: before)
         terrainSeeds()
+    }
+
+    /// Your pick for a gap, when nobody is asked: the same judgement turned
+    /// round, for a pivot inside a search.
+    func myBestReplacement(for slot: Int, excluding taken: Set<Int>) -> Int? {
+        flipped.theirBestReplacement(for: slot, excluding: taken)
     }
 
     /// Their pick for a gap: the benched one that takes least from whatever

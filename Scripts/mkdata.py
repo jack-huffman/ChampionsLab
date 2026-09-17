@@ -1132,6 +1132,8 @@ def apply_showdown(moves):
             move["smart_target"] = True
         if ref.get("target"):
             move["showdown_target"] = ref["target"]
+        if ref.get("selfSwitch"):
+            move["self_switch"] = ref["selfSwitch"]
         if move["secondaries"]:
             carried += 1
         # Flags decide which ability answers a move. Serebii publishes these

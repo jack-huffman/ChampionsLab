@@ -118,12 +118,16 @@ final class TurnPlayback: ObservableObject {
     /// `hitMine` and `hitTheirs` are the whole turn's damage, kept for the end:
     /// once the moves have played, whatever took a hit flashes, which is the
     /// summary the screen used to show on its own.
-    func play(_ steps: [Board.Step], hitMine: Set<Int>, hitTheirs: Set<Int>, singles: Bool) {
+    /// `from` starts partway: a turn that stopped for a pivot has already
+    /// played its first steps, and only the rest are new.
+    func play(_ steps: [Board.Step], hitMine: Set<Int>, hitTheirs: Set<Int>, singles: Bool,
+              from: Int = 0) {
         task?.cancel()
         struck = []; struckTheirs = []
-        let actions = steps.enumerated().compactMap { index, step -> (Int, Board.Step)? in
+        let actions = steps.enumerated().dropFirst(from).compactMap { index, step -> (Int, Board.Step)? in
             step.action == nil ? nil : (index, step)
         }
+        if from > 0 { at = Swift.max(0, from - 1) }
         guard !actions.isEmpty else {
             flash(hitMine: hitMine, hitTheirs: hitTheirs)
             return

@@ -28,20 +28,9 @@
 import Foundation
 
 enum TurnOrder {
-    /// One Pokémon's action this turn, with the reasoning behind where it sits.
-    struct Entry {
-        let mine: Bool
-        let slot: Int
-        let choice: Choice
-        let bracket: Int
-        /// Speed as it stood when the turn was declared. `next` re-reads the
-        /// live value; this is kept for anything describing the turn later.
-        let speed: Int
-        /// What moved the bracket off the move's own number.
-        let becauseOfPriority: [String]
-        /// What moved the Speed off the Pokémon's own number.
-        let becauseOfSpeed: [String]
-    }
+    /// An action waiting its turn. Kept on the Board as `Board.Queued`, so a
+    /// turn stopped by a pivot is state and resumes from the Board alone.
+    typealias Entry = Board.Queued
 
     /// A Pokémon halfway through a two-turn move, or held by an Encore, has no
     /// choice this turn — it does what it is held to.

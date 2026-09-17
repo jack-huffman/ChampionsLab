@@ -163,6 +163,11 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     /// adjacentAlly, allAdjacentFoes -- because Serebii's target says
     /// "Selected Target" for Swords Dance and Protect alike.
     let showdownTarget: String?
+    /// Set when the user leaves the field after the move -- U-turn, Volt
+    /// Switch, Flip Turn, Parting Shot, Teleport, Chilly Reception -- as
+    /// Showdown's table has it; "copyvolatile" for Baton Pass, "shedtail" for
+    /// Shed Tail, "yes" for the plain ones.
+    let selfSwitch: String?
     let critRate: Double
     let flags: [String: Bool]
     let effect: String
@@ -243,6 +248,7 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
         case flags, effect, learnable, mainline, hits, multiaccuracy
         case smartTarget = "smart_target"
         case showdownTarget = "showdown_target"
+        case selfSwitch = "self_switch"
         case secondaryData = "secondaries"
         case neverMisses = "never_misses"
         case critRate = "crit_rate"
@@ -280,6 +286,8 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     var aimsAtUser: Bool {
         ["self", "allySide", "allyTeam", "all", "foeSide"].contains(showdownTarget ?? "")
     }
+    /// Whether the user leaves the field once the move is done.
+    var pivots: Bool { selfSwitch != nil }
     /// A move on the partner: Helping Hand, Coaching, Decorate.
     var aimsAtAlly: Bool {
         ["adjacentAlly", "adjacentAllyOrSelf", "allies"].contains(showdownTarget ?? "")

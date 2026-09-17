@@ -167,6 +167,32 @@ enum TurnModel {
             out.declared[(entry.mine ? "m" : "t") + "\(entry.slot)"] = entry.choice
         }
 
+        finish(&out, pending: &pending, rolling: rolling)
+        return out
+    }
+
+    /// The turn picked up where a pivot stopped it: the chosen Pokemon comes
+    /// in for the one that left, and the actions still waiting play out,
+    /// then the end of the turn. The story and the steps carry on from where
+    /// they were, so the screen shows one turn.
+    static func resume(_ board: Board, sendingIn bench: Int, rolling: Bool = false) -> Board {
+        var out = board
+        guard let pivot = out.pendingPivot, var pending = out.paused else { return out }
+        out.pendingPivot = nil
+        out.paused = nil
+        out.beginStep(Board.Action(byMine: pivot.mine, slot: pivot.slot,
+                                   move: "", category: "Switch", type: ""))
+        Switching.arrive(byMine: pivot.mine, slot: pivot.slot, bench: bench, board: &out,
+                         carrying: pivot.carrying, announcingLeaving: false)
+        out.closeStep()
+        finish(&out, pending: &pending, rolling: rolling)
+        return out
+    }
+
+    /// The actions in order, then the end of the turn -- or a stop partway,
+    /// with what is left kept on the board, when one of yours pivots in a
+    /// played turn and the screen has to ask who comes in.
+    private static func finish(_ out: inout Board, pending: inout [TurnOrder.Entry], rolling: Bool) {
         while let entry = TurnOrder.next(from: &pending, board: out) {
             // One action, one step: whatever it does to however many. What it
             // is held to is checked now, not when the turn was queued: an
@@ -186,6 +212,10 @@ enum TurnModel {
                                        byMine: entry.mine, slot: entry.slot))
             Strikes.apply(playing, byMine: entry.mine, slot: entry.slot, to: &out, rolling: rolling)
             out.closeStep()
+            if out.pendingPivot != nil {
+                out.paused = pending
+                return
+            }
         }
 
         // The residuals together, since they land together.
@@ -195,8 +225,6 @@ enum TurnModel {
         out.rulings = [:]
         out.declared = [:]
         out.acted = []
-
-        return out
     }
 
     /// Every way the turn can come out when somebody is trying a Protect

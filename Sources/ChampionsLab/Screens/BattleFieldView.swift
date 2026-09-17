@@ -736,15 +736,16 @@ struct BattleFieldView: View {
         out.trickRoom = step.trickRoom
         return out
     }
-    /// The weather and the speed control, over the top of the field. Weather
-    /// carries its clock: it runs out, and knowing when is a turn's plan.
+    /// The weather, the terrain and the speed control, over the top of the
+    /// field. Weather and terrain carry their clocks: they run out, and
+    /// knowing when is a turn's plan.
     @ViewBuilder
     private func fieldState(_ board: Board) -> some View {
         // Only what covers the whole field. Tailwind and screens belong to a
         // side and sit over that side.
         let control = [board.trickRoom > 0 ? "Trick Room · \(board.trickRoom) left" : nil]
             .compactMap { $0 }
-        if board.field.weather == .none && control.isEmpty {
+        if board.field.weather == .none && board.field.terrain == .none && control.isEmpty {
             Text("clear skies")
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
         } else {
@@ -753,6 +754,7 @@ struct BattleFieldView: View {
                     fieldClock(symbol: weatherSymbol(board.field), title: board.field.weather.rawValue,
                                turns: board.weatherTurns)
                 }
+                terrainState(board)
                 ForEach(control, id: \.self) { line in
                     Text(line).font(.system(size: 10, weight: .semibold))
                         .padding(.horizontal, 10).padding(.vertical, 4)
@@ -791,12 +793,21 @@ struct BattleFieldView: View {
             }
         }
     }
-    /// Terrain, along the bottom of the field, with its clock.
+    /// Terrain, beside the weather, with its clock.
     @ViewBuilder
     private func terrainState(_ board: Board) -> some View {
         if board.field.terrain != .none {
-            fieldClock(symbol: "square.grid.3x3.bottomleft.filled",
+            fieldClock(symbol: terrainSymbol(board.field.terrain),
                        title: "\(board.field.terrain.rawValue) Terrain", turns: board.terrainTurns)
+        }
+    }
+    private func terrainSymbol(_ terrain: Terrain) -> String {
+        switch terrain {
+        case .grassy:   return "leaf.fill"
+        case .electric: return "bolt.fill"
+        case .psychic:  return "eye.fill"
+        case .misty:    return "cloud.fog.fill"
+        case .none:     return "square.grid.3x3.bottomleft.filled"
         }
     }
     private func fieldClock(symbol: String, title: String, turns: Int) -> some View {

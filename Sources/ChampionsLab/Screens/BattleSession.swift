@@ -110,6 +110,16 @@ final class BattleSession: ObservableObject {
     /// Replacements chosen so far this turn, sent in together once every gap
     /// has one, in Speed order alongside theirs.
     @Published var chosenSends: [(slot: Int, bench: Int)] = []
+    /// A turn stopped partway: one of yours pivoted -- a U-turn, a Parting
+    /// Shot, an Eject Button -- and the rest of the turn waits on who comes
+    /// in. What `conclude` needs once it does.
+    struct PausedTurn {
+        let before: Board
+        let orders: String
+        let stepsPlayed: Int
+    }
+    @Published var pausedTurn: PausedTurn?
+    var pivoting: Bool { pausedTurn != nil }
     /// Which of the readings the side panel is showing.
     @Published var panel: Panel = .engine
 
@@ -363,8 +373,45 @@ final class BattleSession: ObservableObject {
         history.append((board: current, log: log, turn: turn))
 
         // A battle rolls. The search does not, which is deliberate: it wants
-        // the average and a player wants the dice.
-        var next = TurnModel.resolve(current, mine: mine, theirs: theirPlay, rolling: true)
+        // the average and a player wants the dice. A pivot of yours -- a
+        // U-turn, a Parting Shot, an Eject Button -- stops the turn for who
+        // comes in, and the rest of it plays in `resumeTurn`.
+        var asked = current
+        asked.asksBeforePivot = true
+        let next = TurnModel.resolve(asked, mine: mine, theirs: theirPlay, rolling: true)
+        let orders = "You \(game.describe(mine, mine: true)); they \(game.describe(theirPlay, mine: false))."
+        if let pivot = next.pendingPivot {
+            pausedTurn = PausedTurn(before: current, orders: orders, stepsPlayed: next.steps.count)
+            board = next
+            playback.show(next, steps: next.steps)
+            sending = [pivot.slot]
+            chosenSends = []
+            leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
+            thought = nil; self.solved = nil
+            playback.play(next.steps, hitMine: Self.hurt(mine: true, next, since: current),
+                          hitTheirs: Self.hurt(mine: false, next, since: current),
+                          singles: next.activeCount == 1)
+            return
+        }
+        conclude(next, before: current, orders: orders, stepsPlayed: 0)
+    }
+
+    /// The chosen Pokemon comes in for the one that pivoted, and the turn
+    /// finishes: the actions that were waiting, then the end of the turn.
+    func resumeTurn(bench: Int) {
+        guard let paused = pausedTurn, let stopped = board, stopped.pendingPivot != nil else { return }
+        pausedTurn = nil
+        sending = []
+        let next = TurnModel.resume(stopped, sendingIn: bench, rolling: true)
+        conclude(next, before: paused.before, orders: paused.orders, stepsPlayed: paused.stepsPlayed)
+    }
+
+    /// Everything a finished turn does: the review, the log, replacements
+    /// for the fallen, and the steps played out on the field -- from the
+    /// first, or from where a pivot stopped the turn.
+    private func conclude(_ resolved: Board, before current: Board, orders: String, stepsPlayed: Int) {
+        var next = resolved
+        next.asksBeforePivot = false
         let told = next.story
         // The review needed the turn's own story, which only exists now.
         if let waiting = pendingReview {
@@ -388,16 +435,12 @@ final class BattleSession: ObservableObject {
         }
 
         log.append(Self.dividerMark + "Turn \(turn)")
-        log.append("You \(game.describe(mine, mine: true)); "
-                   + "they \(game.describe(theirPlay, mine: false)).")
+        log.append(orders)
         log.append(contentsOf: told)
         log.append(contentsOf: arrivals)
 
-        var hitMine: Set<Int> = [], hitTheirs: Set<Int> = []
-        for index in next.mine.indices where index < current.mine.count
-            && next.mine[index].hp < current.mine[index].hp { hitMine.insert(index) }
-        for index in next.theirs.indices where index < current.theirs.count
-            && next.theirs[index].hp < current.theirs[index].hp { hitTheirs.insert(index) }
+        let hitMine = Self.hurt(mine: true, next, since: current)
+        let hitTheirs = Self.hurt(mine: false, next, since: current)
 
         board = next
         turn += 1
@@ -407,10 +450,16 @@ final class BattleSession: ObservableObject {
         leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
         thought = nil; self.solved = nil
         playback.play(recorded.steps, hitMine: hitMine, hitTheirs: hitTheirs,
-                      singles: next.activeCount == 1)
+                      singles: next.activeCount == 1, from: stepsPlayed)
         if next.isOut(mine: false) { finished = "They have nothing left. You win." }
         else if next.isOut(mine: true) { finished = "You have nothing left. They win." }
         else { think() }
+    }
+
+    /// Whose health is lower than it was: what the field flashes.
+    private static func hurt(mine: Bool, _ now: Board, since then: Board) -> Set<Int> {
+        let after = mine ? now.mine : now.theirs, before = mine ? then.mine : then.theirs
+        return Set(after.indices.filter { $0 < before.count && after[$0].hp < before[$0].hp })
     }
 
     /// Give both orders from the engine's mix, sampled so a watched game varies.
@@ -559,7 +608,7 @@ final class BattleSession: ObservableObject {
         finished = nil
         leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
         grade = nil; sending = []
-        chosenSends = []; playing = false
+        chosenSends = []; playing = false; pausedTurn = nil
         think()
     }
 }

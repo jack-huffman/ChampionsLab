@@ -194,10 +194,23 @@ enum SupportMoves {
             weatherAndTerrain,
         ]
         for section in sections {
-            if let outcome = section(cast, &board) { return outcome.followup }
+            if let outcome = section(cast, &board) {
+                pivotIfItLeaves(cast, &board)
+                return outcome.followup
+            }
         }
-        board.note("Nothing came of it.")
+        // Teleport does nothing but leave, and a move nobody answers for is
+        // still a pivot if the table says so.
+        if move.pivots { pivotIfItLeaves(cast, &board) } else { board.note("Nothing came of it.") }
         return nil
+    }
+
+    /// The user leaves after a status pivot -- Teleport, Baton Pass, Shed
+    /// Tail, and Parting Shot and Chilly Reception when their own sections
+    /// have not already sent it on its way.
+    private static func pivotIfItLeaves(_ cast: Cast, _ board: inout Board) {
+        guard cast.move.pivots else { return }
+        Switching.leave(byMine: cast.byMine, slot: cast.slot, board: &board)
     }
 
     /// What a section says about a move: handled, with whatever it asks the
@@ -574,20 +587,17 @@ enum SupportMoves {
         if move.name == "Shed Tail" {
             let cost = team[slot].maxHP / 2
             let shell = team[slot].maxHP / 4
-            let bench = (byMine ? board.mine : board.theirs).indices.first {
-                $0 >= board.activeCount && !(byMine ? board.mine : board.theirs)[$0].fainted
-            }
-            guard team[slot].hp > cost, team[slot].substitute == 0, let bench else {
+            let own = byMine ? board.mine : board.theirs
+            let somebodyWaiting = (board.activeCount..<own.count).contains { !own[$0].fainted }
+            guard team[slot].hp > cost, team[slot].substitute == 0, somebodyWaiting else {
                 board.note("But it failed."); return .handled(nil)
             }
-            setNear(cast, board: &board) { $0.hp -= cost; $0.substitute = shell }
+            setNear(cast, board: &board) { $0.hp -= cost }
             board.note("\(name) gave up half its health to leave a substitute worth \(shell).")
-            if let said = Switching.swapIn(mine: byMine, active: slot, bench: bench, board: &board) {
-                board.note(said)
-            }
-            // The shell belongs to the slot, not to the Pokémon that made it.
-            if byMine { board.mine[slot].substitute = shell }
-            else { board.theirs[slot].substitute = shell }
+            // The shell belongs to the slot, not to the Pokemon that made it:
+            // whoever is chosen to come in stands behind it.
+            Switching.leave(byMine: byMine, slot: slot, board: &board,
+                            carrying: Board.Carried(substitute: shell))
             return .handled(nil)
         }
 
@@ -647,28 +657,14 @@ enum SupportMoves {
         // normally wipes them.
         if move.name == "Baton Pass" {
             let own = byMine ? board.mine : board.theirs
-            let bench = (board.activeCount..<own.count).filter { !own[$0].fainted }
-            guard let coming = bench.first else { board.note("But it failed."); return .handled(nil) }
-            let passed = own[slot].build.boosts
-            let sub = own[slot].substitute
-            let ring = own[slot].aquaRing
-            let arriving = own[coming].build.form.formLabel
-            board.note("\(name) passed the baton to \(arriving).")
-            if let said = Switching.swapIn(mine: byMine, active: slot, bench: coming, board: &board) {
-                board.note(said)
+            guard (board.activeCount..<own.count).contains(where: { !own[$0].fainted }) else {
+                board.note("But it failed."); return .handled(nil)
             }
-            if byMine {
-                board.mine[slot].build.boosts = passed
-                board.mine[slot].substitute = sub
-                board.mine[slot].aquaRing = ring
-            } else {
-                board.theirs[slot].build.boosts = passed
-                board.theirs[slot].substitute = sub
-                board.theirs[slot].aquaRing = ring
-            }
-            if passed.contains(where: { $0 != 0 }) {
-                board.note("\(arriving) took over every stat change.")
-            }
+            board.note("\(name) passed the baton.")
+            Switching.leave(byMine: byMine, slot: slot, board: &board,
+                            carrying: Board.Carried(boosts: own[slot].build.boosts,
+                                                    substitute: own[slot].substitute,
+                                                    aquaRing: own[slot].aquaRing))
             return .handled(nil)
         }
         return nil
