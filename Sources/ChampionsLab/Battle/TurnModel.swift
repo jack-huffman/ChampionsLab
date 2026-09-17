@@ -1334,7 +1334,8 @@ enum TurnModel {
         return board.rulings[Board.flip("quickclaw", mine, slot)] ?? false
     }
 
-    private static func priority(of choice: Choice, for fighter: Fighter) -> Int {
+    private static func priority(of choice: Choice, for fighter: Fighter,
+                                 field: Field = Field()) -> Int {
         switch choice {
         case .pass: return -99
         case .swap: return 6
@@ -1346,6 +1347,17 @@ enum TurnModel {
             // Whimsicott's Tailwind or Encore ahead of anything without
             // priority of its own — though not ahead of a Fake Out at +3.
             if fighter.build.ability == "Prankster", !move.isDamaging { priority += 1 }
+            // Grassy Glide, which is most of the reason a Rillaboom is worth a
+            // slot: under its own terrain it is a priority move, and without
+            // that it is a 60 power Grass attack nobody would run.
+            //
+            // The move data has said so all along — "if the user is under the
+            // effect of Grassy Terrain this move's priority becomes +1" — and
+            // the analysis screens quote it at you. The turn model never read
+            // it, so in an actual battle the Glide has never once gone first.
+            if move.id == "grassyglide", field.terrain == .grassy, fighter.isGrounded {
+                priority += 1
+            }
             // Stall always acts last, whatever it is doing.
             if fighter.build.ability == "Stall" { priority -= 7 }
             // Gale Wings: Flying moves first, while the bar is full.
@@ -1503,7 +1515,7 @@ enum TurnModel {
             guard out.mine.indices.contains(slot), !out.mine[slot].fainted else { continue }
             let choice = forced(out.mine[slot], given)
             guard !choice.isSwap else { continue }
-            var bracket = priority(of: choice, for: out.mine[slot])
+            var bracket = priority(of: choice, for: out.mine[slot], field: out.field)
             if quickClawed(out.mine[slot], mine: true, slot: slot, board: out, rolling: rolling) {
                 bracket += 1
                 out.note("\(out.mine[slot].build.form.formLabel)'s Quick Claw let it move first.")
@@ -1515,7 +1527,7 @@ enum TurnModel {
             guard out.theirs.indices.contains(slot), !out.theirs[slot].fainted else { continue }
             let choice = forced(out.theirs[slot], given)
             guard !choice.isSwap else { continue }
-            var bracket = priority(of: choice, for: out.theirs[slot])
+            var bracket = priority(of: choice, for: out.theirs[slot], field: out.field)
             if quickClawed(out.theirs[slot], mine: false, slot: slot, board: out, rolling: rolling) {
                 bracket += 1
                 out.note("\(out.theirs[slot].build.form.formLabel)'s Quick Claw let it move first.")

@@ -109,19 +109,25 @@ struct BattleView: View {
     // flash on whatever had lost health. These walk the steps the model
     // recorded and show them in the order they happened.
 
-    /// How long one move takes on screen. Four actions a turn, so this is the
-    /// number that decides whether a turn feels brisk or slow.
-    ///
-    /// It was 0.52, which put four actions inside two seconds and ran them
-    /// together into one event you could not follow. A move wants long enough
-    /// to be read as a thing that happened to somebody.
-    static let flourishSeconds: Double = 0.92
-    /// A beat between one action and the next.
-    ///
-    /// Without it the moves were continuous — the second beam left before the
-    /// first had finished bursting — and four separate decisions looked like
-    /// one animation. The pause is what makes them four.
-    static let betweenActions: Double = 0.24
+    // Three numbers rather than one, because an attack and a turn want opposite
+    // things. An attack should be fast: a beam crosses the field, a Pokémon
+    // lunges and is back. A turn should not, or four of them blur into one
+    // event nobody can follow.
+    //
+    // These were the same number once, so slowing the turn down slowed the
+    // attacks with it and every move became a languid drift. The time a turn
+    // takes now lives in the pause *after* a move rather than in the move, and
+    // the pause is where it belongs anyway: that is when the damage number is
+    // on screen and there is something to read.
+
+    /// The attack itself — beam travel and burst, or the lunge and the return.
+    /// Short on purpose.
+    static let flourishSeconds: Double = 0.40
+    /// How long the damage sits there once the move has finished, which is
+    /// what actually paces a turn.
+    static let dwellSeconds: Double = 0.52
+    /// A beat between one action and the next, so four decisions read as four.
+    static let betweenActions: Double = 0.20
     /// How far through a move the blow actually lands. The beam is travelling
     /// before this and bursting after it, and the board is held at the state
     /// *before* the move until this moment — so the health bar drops as the
@@ -3964,11 +3970,20 @@ struct BattleView: View {
                     }
                 }
                 withAnimation(.easeOut(duration: 0.18)) { damage = took }
+                // The rest of the burst, and then the move is over.
                 try? await Task.sleep(
                     nanoseconds: UInt64(whole * (1 - BattleView.impactAt) * 1_000_000_000))
                 guard !Task.isCancelled else { return }
+                // Take the beam away but leave the number: what is worth
+                // looking at after a move has landed is what it did. `lunging`
+                // is deliberately left alone — leanIn owns the return and is
+                // mid-animation right about now, and clearing it here would
+                // snap the card back instead of letting it settle.
+                flourish = nil
+                try? await Task.sleep(
+                    nanoseconds: UInt64(BattleView.dwellSeconds * 1_000_000_000))
+                guard !Task.isCancelled else { return }
                 withAnimation(.easeIn(duration: 0.2)) { damage = [:] }
-                // Let it land before the next one starts.
                 if order < actions.count - 1 {
                     try? await Task.sleep(
                         nanoseconds: UInt64(BattleView.betweenActions * 1_000_000_000))

@@ -122,4 +122,57 @@ print("\n== and it is announced once ==")
         print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
         XCTAssertEqual(fails, 0)
     }
+
+    /// Grassy Glide only has priority under its own terrain
+    ///
+    /// The whole reason a Rillaboom is worth a slot. The move data has always
+    /// carried the rule and the analysis screens quote it; the turn model did
+    /// not read it, so the Glide had never once gone first in a battle.
+    @MainActor func testGrassyGlideHasPriorityOnlyUnderItsTerrain() throws {
+print("\n== Grassy Glide ==")
+        let mine = fighters([("Rillaboom", "Assault Vest", ["Grassy Glide", "Wood Hammer", "Protect"]),
+                             ("Whimsicott", "Focus Sash", ["Moonblast", "Protect"])])
+        // Faster than Rillaboom, so only priority can put the Glide first.
+        // Dragon Claw as well as the Earthquake: the airborne case below needs
+        // an attack that can actually reach a Levitating Rillaboom, and a
+        // Ground move is exactly the one that cannot.
+        let theirs = fighters([("Garchomp", "Choice Scarf", ["Earthquake", "Dragon Claw", "Protect"]),
+                               ("Kingambit", "Leftovers", ["Iron Head", "Protect"])])
+        let glide = { (b: Board) in self.at(b.mine[0], "Grassy Glide") }
+
+        var bare = board(mine: mine, theirs: theirs)
+        bare.theirs[0].hp = 1
+        bare.mine[0].hp = 1
+        let open = TurnModel.resolve(bare,
+            mine: Play(left: .attack(move: glide(bare), target: 0), right: .protectSelf(move: 1)),
+            theirs: Play(left: .attack(move: at(bare.theirs[0], "Earthquake"), target: 0),
+                         right: .protectSelf(move: 1)))
+        check("with no terrain the faster Garchomp goes first and Rillaboom falls",
+              open.mine[0].fainted, "\(open.mine[0].hp)")
+
+        var grassy = board(mine: mine, theirs: theirs, terrain: .grassy)
+        grassy.theirs[0].hp = 1
+        grassy.mine[0].hp = 1
+        let under = TurnModel.resolve(grassy,
+            mine: Play(left: .attack(move: glide(grassy), target: 0), right: .protectSelf(move: 1)),
+            theirs: Play(left: .attack(move: at(grassy.theirs[0], "Earthquake"), target: 0),
+                         right: .protectSelf(move: 1)))
+        check("under Grassy Terrain the Glide goes first and Garchomp falls",
+              under.theirs[0].fainted, "\(under.theirs[0].hp)")
+
+        // Off the ground there is no terrain to glide on.
+        var airborne = board(mine: mine, theirs: theirs, terrain: .grassy)
+        airborne.mine[0].build.ability = "Levitate"
+        airborne.theirs[0].hp = 1
+        airborne.mine[0].hp = 1
+        let floating = TurnModel.resolve(airborne,
+            mine: Play(left: .attack(move: glide(airborne), target: 0), right: .protectSelf(move: 1)),
+            theirs: Play(left: .attack(move: at(airborne.theirs[0], "Dragon Claw"), target: 0),
+                         right: .protectSelf(move: 1)))
+        check("a Pokémon off the ground gets no priority from it",
+              floating.mine[0].fainted, "\(floating.mine[0].hp)")
+
+        print(fails == 0 ? "\nALL PASSED" : "\n\(fails) FAILED")
+        XCTAssertEqual(fails, 0)
+    }
 }
