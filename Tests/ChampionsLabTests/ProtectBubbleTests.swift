@@ -18,7 +18,7 @@ final class ProtectBubbleTests: HarnessCase {
 print("\n== the rule ==")
         func drawn(_ isProtected: Bool, _ protectedLast: Bool,
                    playback: Bool, fainted: Bool = false) -> Bool {
-            BattleView.guarding(fainted: fainted, isProtected: isProtected,
+            BattleFieldView.guarding(fainted: fainted, isProtected: isProtected,
                                 protectedLast: protectedLast, duringPlayback: playback)
         }
         check("while it is actually protecting", drawn(true, false, playback: false))
