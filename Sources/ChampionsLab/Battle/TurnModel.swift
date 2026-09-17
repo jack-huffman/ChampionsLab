@@ -1323,7 +1323,7 @@ enum TurnModel {
     /// Quick Claw: a fifth of the time the holder goes first regardless.
     /// Rolled once per turn per holder, when the turn is played; the search
     /// never counts on it, the way it never counts on a second Protect.
-    private static func quickClawed(_ fighter: Fighter, mine: Bool, slot: Int,
+    static func quickClawed(_ fighter: Fighter, mine: Bool, slot: Int,
                                     board: Board, rolling: Bool) -> Bool {
         // Quick Draw is the ability version, three times in ten rather than
         // two, and it rides the same pre-decided flip.
@@ -1528,97 +1528,32 @@ enum TurnModel {
         }
 
         // -- everything else, in order ---------------------------------------
-        // A Pokémon halfway through a two-turn move has no choice this turn:
-        // it fires, whatever it was asked to do.
-        func forced(_ fighter: Fighter, _ choice: Choice) -> Choice {
-            if let charging = fighter.charging {
-                return .attack(move: charging, target: fighter.chargingTarget)
-            }
-            // Encore: the move it used last, three turns running.
-            if let encored = fighter.encored { return encored }
-            return choice
-        }
-        var entries: [(mine: Bool, slot: Int, choice: Choice, priority: Int, speed: Int)] = []
-        for (slot, given) in myChoices.enumerated() {
-            guard out.mine.indices.contains(slot), !out.mine[slot].fainted else { continue }
-            let choice = forced(out.mine[slot], given)
-            guard !choice.isSwap else { continue }
-            var bracket = priority(of: choice, for: out.mine[slot], field: out.field)
-            if quickClawed(out.mine[slot], mine: true, slot: slot, board: out, rolling: rolling) {
-                bracket += 1
-                out.note("\(out.mine[slot].build.form.formLabel)'s Quick Claw let it move first.")
-            }
-            entries.append((true, slot, choice, bracket,
-                            speed(of: out.mine[slot], tailwind: out.myTailwind > 0, board: out)))
-        }
-        for (slot, given) in theirChoices.enumerated() {
-            guard out.theirs.indices.contains(slot), !out.theirs[slot].fainted else { continue }
-            let choice = forced(out.theirs[slot], given)
-            guard !choice.isSwap else { continue }
-            var bracket = priority(of: choice, for: out.theirs[slot], field: out.field)
-            if quickClawed(out.theirs[slot], mine: false, slot: slot, board: out, rolling: rolling) {
-                bracket += 1
-                out.note("\(out.theirs[slot].build.form.formLabel)'s Quick Claw let it move first.")
-            }
-            entries.append((false, slot, choice, bracket,
-                            speed(of: out.theirs[slot], tailwind: out.theirTailwind > 0, board: out)))
-        }
-
-        // Chosen one at a time rather than sorted once, because Speed is
-        // re-checked before every action and things change mid-turn. A
-        // Prankster Whimsicott putting up Tailwind goes first on priority, and
-        // its partner — who has not moved yet — is twice as fast from that
-        // moment, which can move it ahead of something it was behind. Sorting
-        // the whole turn up front makes that impossible.
+        // Who acts, in what order. TurnOrder owns that decision — the
+        // bracket, After You and Quash, the Trick Room inversion, the re-read
+        // of Speed between actions — so that anything wanting to *describe*
+        // the order walks the same code rather than a second opinion of it.
+        var pending = TurnOrder.declare(&out, mine: myChoices, theirs: theirChoices,
+                                        rolling: rolling, quickClaw: quickClawed)
         // What everyone is about to do, before anyone does it.
-        for entry in entries {
+        for entry in pending {
             out.declared[(entry.mine ? "m" : "t") + "\(entry.slot)"] = entry.choice
         }
 
-        var pending = entries
-        while !pending.isEmpty {
-            let inverted = out.trickRoom > 0
-            var choice = 0
-            typealias Entry = (mine: Bool, slot: Int, choice: Choice, priority: Int, speed: Int)
-            func jumpsQueue(_ e: Entry) -> Bool {
-                let team = e.mine ? out.mine : out.theirs
-                return team.indices.contains(e.slot) && team[e.slot].goesNext
-            }
-            func sentToTheBack(_ e: Entry) -> Bool {
-                let team = e.mine ? out.mine : out.theirs
-                return team.indices.contains(e.slot) && team[e.slot].goesLast
-            }
-            for index in pending.indices.dropFirst() {
-                let a = pending[index], b = pending[choice]
-                // After You beats priority and Speed both: the whole move is
-                // that the target acts next, whatever it was going to do.
-                if jumpsQueue(a) != jumpsQueue(b) { if jumpsQueue(a) { choice = index }; continue }
-                // Quash is the same in reverse, and loses to everything.
-                if sentToTheBack(a) != sentToTheBack(b) {
-                    if sentToTheBack(b) { choice = index }; continue
-                }
-                if a.priority != b.priority { if a.priority > b.priority { choice = index }; continue }
-                let aSpeed = current(a, board: out), bSpeed = current(b, board: out)
-                if aSpeed != bSpeed {
-                    if inverted ? aSpeed < bSpeed : aSpeed > bSpeed { choice = index }
-                    continue
-                }
-                // A genuine tie is a coin flip in the game. Resolved the same
-                // way every time here so a search is reproducible.
-                if a.mine && !b.mine { choice = index }
-            }
-            let entry = pending.remove(at: choice)
+        while let entry = TurnOrder.next(from: &pending, board: out) {
             // One action, one step: whatever it does to however many. What it
             // is held to is checked now, not when the turn was queued: an
             // Encore that landed a moment ago already applies.
             let actor = (entry.mine ? out.mine : out.theirs)[entry.slot]
-            if entry.mine { out.mine[entry.slot].goesNext = false; out.mine[entry.slot].goesLast = false }
-            else { out.theirs[entry.slot].goesNext = false; out.theirs[entry.slot].goesLast = false }
+            if entry.mine {
+                out.mine[entry.slot].goesNext = false; out.mine[entry.slot].goesLast = false
+            } else {
+                out.theirs[entry.slot].goesNext = false; out.theirs[entry.slot].goesLast = false
+            }
             out.acted.insert((entry.mine ? "m" : "t") + "\(entry.slot)")
             // What is actually played, not what was asked for: an Encore or a
             // Choice lock substitutes a different move, and the screen should
             // draw the one that happens.
-            let playing = forced(actor, entry.choice)
+            let playing = TurnOrder.forced(actor, entry.choice)
             out.beginStep(Board.Action(played: playing, by: actor,
                                        byMine: entry.mine, slot: entry.slot))
             apply(playing, byMine: entry.mine, slot: entry.slot, to: &out, rolling: rolling)
@@ -2380,19 +2315,21 @@ enum TurnModel {
     }
 
     /// One pending action's Speed, as the board stands right now.
-    private static func current(_ entry: (mine: Bool, slot: Int, choice: Choice,
-                                          priority: Int, speed: Int),
-                                board: Board) -> Int {
-        let team = entry.mine ? board.mine : board.theirs
-        guard team.indices.contains(entry.slot) else { return entry.speed }
-        var value = speed(of: team[entry.slot],
-                          tailwind: (entry.mine ? board.myTailwind : board.theirTailwind) > 0,
+    /// Speed as the board has it right now, with everything applied.
+    ///
+    /// One reader, because the turn re-checks this between actions and
+    /// anything explaining the turn has to get the same number back.
+    static func liveSpeed(side: Bool, slot: Int, board: Board) -> Int {
+        let team = side ? board.mine : board.theirs
+        guard team.indices.contains(slot) else { return 0 }
+        var value = speed(of: team[slot],
+                          tailwind: (side ? board.myTailwind : board.theirTailwind) > 0,
                           board: board)
-        if team[entry.slot].status.halvesSpeed { value /= 2 }
+        if team[slot].status.halvesSpeed { value /= 2 }
         return value
     }
 
-    private static func speed(of fighter: Fighter, tailwind: Bool, board: Board) -> Int {
+    static func speed(of fighter: Fighter, tailwind: Bool, board: Board) -> Int {
         let base = fighter.build.speed(in: board.field)
         return tailwind ? base * 2 : base
     }
@@ -2419,44 +2356,27 @@ enum TurnModel {
     }
 
     static func billing(_ board: Board, mine: Play, theirs: Play) -> [Billing] {
-        var out: [Billing] = []
+        // A throwaway copy, because declaring notices things out loud — a
+        // Quick Claw going off is a line in the log — and describing a turn
+        // must not write to the turn.
+        var scratch = board
+        let entries = TurnOrder.declare(&scratch, mine: [mine.left, mine.right],
+                                        theirs: [theirs.left, theirs.right],
+                                        rolling: false, quickClaw: quickClawed)
         let game = TurnGame(board: board)
-        for (side, play) in [(true, mine), (false, theirs)] {
-            let team = side ? board.mine : board.theirs
-            let tailwind = (side ? board.myTailwind : board.theirTailwind) > 0
-            for (slot, choice) in [play.left, play.right].enumerated() {
-                guard team.indices.contains(slot), !team[slot].fainted,
-                      slot < board.activeCount, !choice.isPass else { continue }
-                var why: [String] = []
-                let bracket = priority(of: choice, for: team[slot], field: board.field,
-                                       reasons: &why)
-                var speedWhy: [String] = []
-                let bare = team[slot].build.speed(in: Field(isDoubles: board.field.isDoubles))
-                let real = speed(of: team[slot], tailwind: tailwind, board: board)
-                if tailwind { speedWhy.append("Tailwind doubles it") }
-                if board.trickRoom > 0 { speedWhy.append("Trick Room, so slower acts first") }
-                if team[slot].build.item == "Choice Scarf" { speedWhy.append("Choice Scarf, +50%") }
-                if team[slot].status == .paralysis { speedWhy.append("paralysed, halved") }
-                if real != bare, speedWhy.isEmpty {
-                    speedWhy.append("the field is moving it from \(bare)")
-                }
-                out.append(Billing(
-                    mine: side, slot: slot,
-                    who: team[slot].build.form.formLabel,
-                    what: game.describe(choice, fighter: team[slot],
-                                        foes: Array((side ? board.theirs : board.mine)
-                                            .prefix(board.activeCount)),
-                                        team: team),
-                    bracket: bracket, speed: real,
-                    becauseOfPriority: why, becauseOfSpeed: speedWhy))
-            }
-        }
-        // The order the turn would take them in: bracket first, then Speed,
-        // inverted by a Trick Room.
-        let inverted = board.trickRoom > 0
-        return out.sorted {
-            $0.bracket != $1.bracket ? $0.bracket > $1.bracket
-                : (inverted ? $0.speed < $1.speed : $0.speed > $1.speed)
+        return TurnOrder.wholeTurn(from: entries, board: board).compactMap { entry in
+            let team = entry.mine ? board.mine : board.theirs
+            guard team.indices.contains(entry.slot) else { return nil }
+            return Billing(
+                mine: entry.mine, slot: entry.slot,
+                who: team[entry.slot].build.form.formLabel,
+                what: game.describe(entry.choice, fighter: team[entry.slot],
+                                    foes: Array((entry.mine ? board.theirs : board.mine)
+                                        .prefix(board.activeCount)),
+                                    team: team),
+                bracket: entry.bracket, speed: entry.speed,
+                becauseOfPriority: entry.becauseOfPriority,
+                becauseOfSpeed: entry.becauseOfSpeed)
         }
     }
 
