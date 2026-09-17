@@ -22,18 +22,55 @@ struct BattleView: View {
 
     enum Stage { case setup, versus, preview, battle }
 
+    /// The game itself, and the turn being shown. The pre-game flow is the
+    /// view's own state; everything from the first board onward lives on these
+    /// two, and the accessors below are how the drawing code reads them.
+    @StateObject private var session: BattleSession
+    @StateObject private var playback: TurnPlayback
+    typealias TurnReview = BattleSession.TurnReview
+    typealias Panel = BattleSession.Panel
+    typealias Command = BattleSession.Command
+
+    private var board: Board? { get { session.board } nonmutating set { session.board = newValue } }
+    private var log: [String] { get { session.log } nonmutating set { session.log = newValue } }
+    private var turn: Int { get { session.turn } nonmutating set { session.turn = newValue } }
+    private var leftPick: Choice? { get { session.leftPick } nonmutating set { session.leftPick = newValue } }
+    private var rightPick: Choice? { get { session.rightPick } nonmutating set { session.rightPick = newValue } }
+    private var megaSlot: Int? { get { session.megaSlot } nonmutating set { session.megaSlot = newValue } }
+    private var command: Command { get { session.command } nonmutating set { session.command = newValue } }
+    private var thinking: Bool { get { session.thinking } nonmutating set { session.thinking = newValue } }
+    private var thought: BattleEngine.Result? { get { session.thought } nonmutating set { session.thought = newValue } }
+    private var solved: TurnGame.Solution? { get { session.solved } nonmutating set { session.solved = newValue } }
+    private var mySide: [String] { get { session.mySide } nonmutating set { session.mySide = newValue } }
+    private var theirSide: [String] { get { session.theirSide } nonmutating set { session.theirSide = newValue } }
+    private var searchNote: String { get { session.searchNote } nonmutating set { session.searchNote = newValue } }
+    private var watching: Bool { get { session.watching } nonmutating set { session.watching = newValue } }
+    private var playing: Bool { get { session.playing } nonmutating set { session.playing = newValue } }
+    private var finished: String? { get { session.finished } nonmutating set { session.finished = newValue } }
+    private var history: [(board: Board, log: [String], turn: Int)] { get { session.history } nonmutating set { session.history = newValue } }
+    private var review: [TurnReview] { get { session.review } nonmutating set { session.review = newValue } }
+    private var grade: String? { get { session.grade } nonmutating set { session.grade = newValue } }
+    private var explaining: TurnReview? { get { session.explaining } nonmutating set { session.explaining = newValue } }
+    private var sending: [Int] { get { session.sending } nonmutating set { session.sending = newValue } }
+    private var chosenSends: [(slot: Int, bench: Int)] { get { session.chosenSends } nonmutating set { session.chosenSends = newValue } }
+    private var panel: Panel { get { session.panel } nonmutating set { session.panel = newValue } }
+
+    private var replay: [Board.Step] { get { playback.replay } nonmutating set { playback.replay = newValue } }
+    private var at: Int { get { playback.at } nonmutating set { playback.at = newValue } }
+    private var replayBoard: Board? { get { playback.replayBoard } nonmutating set { playback.replayBoard = newValue } }
+    private var flourish: Flourish? { get { playback.flourish } nonmutating set { playback.flourish = newValue } }
+    private var flourishFrom: Date { get { playback.flourishFrom } nonmutating set { playback.flourishFrom = newValue } }
+    private var damage: [Seat: Int] { get { playback.damage } nonmutating set { playback.damage = newValue } }
+    private var lunging: Seat? { get { playback.lunging } nonmutating set { playback.lunging = newValue } }
+    private var lungeBy: CGSize { get { playback.lungeBy } nonmutating set { playback.lungeBy = newValue } }
+    private var struck: Set<Int> { get { playback.struck } nonmutating set { playback.struck = newValue } }
+    private var struckTheirs: Set<Int> { get { playback.struckTheirs } nonmutating set { playback.struckTheirs = newValue } }
+
     @State private var stage: Stage = .setup
     @State private var myTeamID = ""
     @State private var opponentID = ""
     @State private var opponentSearch = ""
     @State private var startHover = false
-    /// Which search the view is waiting on; an older one's answer is dropped.
-    @State private var thinkTicket = 0
-    /// A turn is being played out: the button waits rather than starting a
-    /// second one on top of the first.
-    @State private var playing = false
-    /// Every turn of this game, marked. Read back in the Review panel.
-    @State private var review: [TurnReview] = []
     /// Which lobby is being worked out; an older one's answer is dropped.
     @State private var lobbyTicket = 0
     /// The start of the game, being shown: the flash, the leads coming out,
@@ -44,38 +81,7 @@ struct BattleView: View {
     @State private var shown: Set<String> = []
     /// The line being called out over the field right now.
     @State private var callout: String?
-    /// Replacements chosen so far this turn, sent in together once every gap
-    /// has one, in Speed order alongside theirs.
-    @State private var chosenSends: [(slot: Int, bench: Int)] = []
-    /// Which of the three readings the side panel is showing.
-    enum Panel: String, CaseIterable {
-        case engine = "Engine", theirs = "Their read", review = "Review", log = "Log"
-    }
 
-    /// One turn, marked. What you did, what it was worth against the mix they
-    /// were actually playing, and what the engine would have done instead —
-    /// kept for every turn, so a finished game can be read back.
-    struct TurnReview: Identifiable {
-        let id = UUID()
-        let turn: Int
-        let yours: String
-        let theirs: String
-        /// Both on the same scale: what your line and the engine's were worth
-        /// against their mix. Judging a choice against what they happened to
-        /// play would reward luck.
-        let played: Double
-        let best: Double
-        let bestLine: String
-        /// The board as it stood before the turn, so it can be played again.
-        let before: Board
-        /// Both plays and what the turn said, so the whole thing can be
-        /// explained afterwards rather than only scored.
-        let minePlay: Play
-        let theirPlay: Play
-        let told: [String]
-        var lost: Double { max(0, best - played) }
-    }
-    @State private var panel: Panel = .engine
     /// What the two sixes say about each other, worked out once both are
     /// chosen and read by the versus page and Team Preview.
     @State private var lobby = Lobby()
@@ -87,32 +93,7 @@ struct BattleView: View {
     /// another of yours is clicked.
     @State private var focused: String?
 
-    @State private var board: Board?
-    @State private var log: [String] = []
-    @State private var turn = 1
-    @State private var leftPick: Choice?
-    @State private var rightPick: Choice?
-    @State private var thinking = false
-    @State private var mySide: [String] = []
-    /// The search itself, kept so the tiles can read it.
-    @State private var thought: BattleEngine.Result?
-    @State private var solved: TurnGame.Solution?
-    /// Let the engine give my orders too, to watch a game out.
-    @State private var watching = false
-    @State private var theirSide: [String] = []
-    @State private var searchNote = ""
-    @State private var finished: String?
-    /// Toggled beside the move, the way the game asks for it.
-    @State private var megaSlot: Int?
-    /// Who took a hit on the last turn, so they can flinch on screen.
-    @State private var struck: Set<Int> = []
-    @State private var struckTheirs: Set<Int> = []
 
-    // -- a turn, played rather than printed ----------------------------------
-    //
-    // A turn resolves all at once; it used to appear all at once too, with one
-    // flash on whatever had lost health. These walk the steps the model
-    // recorded and show them in the order they happened.
 
     // Three numbers rather than one, because an attack and a turn want opposite
     // things. An attack should be fast: a beam crosses the field, a Pokémon
@@ -125,61 +106,8 @@ struct BattleView: View {
     // the pause is where it belongs anyway: that is when the damage number is
     // on screen and there is something to read.
 
-    /// The attack itself — beam travel and burst, or the lunge and the return.
-    /// Short on purpose.
-    static let flourishSeconds: Double = 0.40
-    /// How long the damage sits there once the move has finished, which is
-    /// what actually paces a turn.
-    static let dwellSeconds: Double = 0.52
-    /// A beat between one action and the next, so four decisions read as four.
-    static let betweenActions: Double = 0.20
-    /// How far through a move the blow actually lands. The beam is travelling
-    /// before this and bursting after it, and the board is held at the state
-    /// *before* the move until this moment — so the health bar drops as the
-    /// move arrives rather than before it has been thrown.
-    static let impactAt: Double = 0.55
 
-    /// The move being shown right now, and when it started. The start date is
-    /// what the animation reads, so nothing in this view changes per frame.
-    @State private var flourish: Flourish?
-    @State private var flourishFrom = Date()
-    /// The Pokémon leaning into a physical move, and how far.
-    /// A slow rise and fall on every sprite. One repeating animation on a
-    /// single value, so the render server owns it and nothing is rebuilt per
-    /// frame — this screen has had enough trouble with things that redraw.
-    /// What each Pokémon just lost, floating off it as the blow lands. The
-    /// number is the thing a player actually wants at that moment and the log
-    /// is the last place to look for it.
-    @State private var damage: [Seat: Int] = [:]
     @State private var bob: CGFloat = 0
-    @State private var lunging: Seat?
-    @State private var lungeBy: CGSize = .zero
-    /// The walk through a turn's steps. Held so that leaving the screen, or
-    /// taking a turn back, stops it: a detached task nobody cancelled is what
-    /// made this app stutter once already.
-    @State private var playback: Task<Void, Never>?
-    /// Every board so far, so a turn can be taken back and tried again.
-    @State private var history: [(board: Board, log: [String], turn: Int)] = []
-    /// What the engine wanted, against what was actually played.
-    @State private var grade: String?
-    /// The turn being explained, if the sheet is open.
-    @State private var explaining: TurnReview?
-    /// A review waiting on the turn's own story, which is not known until the
-    /// turn has actually been resolved.
-    @State private var pendingReview: (turn: Int, yours: String, theirs: String,
-                                       played: Double, best: Double, bestLine: String,
-                                       before: Board, minePlay: Play, theirPlay: Play)?
-    /// The turn being walked through, and how far into it we are.
-    @State private var replay: [Board.Step] = []
-    @State private var at = 0
-    /// The board the steps were recorded against, before anything fainted was
-    /// replaced. Stepping through the finished board would map the health of a
-    /// Pokémon that fainted onto the one that came in for it.
-    @State private var replayBoard: Board?
-    /// Where you are in giving orders to the Pokémon being commanded.
-    @State private var command: Command = .menu
-    /// Slots of mine standing empty, waiting for somebody to be sent in.
-    @State private var sending: [Int] = []
 
     /// Seeded state, so tools/snapshot.sh can render a screen nobody has
     /// clicked into. Done through init rather than onAppear, which an
@@ -192,21 +120,18 @@ struct BattleView: View {
          reviewing: [TurnReview] = [],
          logging: [String] = [],
          thinking seeded: (BattleEngine.Result, TurnGame.Solution)? = nil) {
-        _command = State(initialValue: showing)
-        if !logging.isEmpty {
-            _log = State(initialValue: logging)
-            _panel = State(initialValue: .log)
-        }
-        if !reviewing.isEmpty {
-            _review = State(initialValue: reviewing)
-            _panel = State(initialValue: .review)
-        }
         // The search runs as a task, which a snapshot never gets to run, so a
         // snapshot hands the answer in ready-made.
-        if let seeded {
-            _thought = State(initialValue: seeded.0)
-            _solved = State(initialValue: seeded.1)
-        }
+        let shared = Store.shared
+        let playbackObject = TurnPlayback()
+        _playback = StateObject(wrappedValue: playbackObject)
+        _session = StateObject(wrappedValue: BattleSession(
+            rules: shared.rulebook, playback: playbackObject,
+            board: playing,
+            log: playing.map { [BattleSession.opener] + $0.story } ?? logging,
+            command: showing, review: reviewing,
+            panel: !reviewing.isEmpty ? .review : (!logging.isEmpty ? .log : .engine),
+            thought: seeded?.0, solved: seeded?.1))
         if let openTeams {
             _myTeamID = State(initialValue: openTeams.mine)
             _opponentID = State(initialValue: openTeams.theirs)
@@ -214,7 +139,6 @@ struct BattleView: View {
             _stage = State(initialValue: stage)
             // A snapshot never runs the step that works the two sixes out, so
             // it is done here, against the shared store the sprites also use.
-            let shared = Store.shared
             if stage != .setup,
                let mine = shared.teams.first(where: { $0.id.uuidString == openTeams.mine }),
                let theirs = shared.data.metaTeams.first(where: { $0.id == openTeams.theirs })
@@ -225,16 +149,9 @@ struct BattleView: View {
             }
         }
         if !previewing.isEmpty { _bringing = State(initialValue: previewing) }
-        if let playing {
-            _board = State(initialValue: playing)
-            _stage = State(initialValue: .battle)
-            _log = State(initialValue: [BattleView.opener] + playing.story)
-        }
+        if playing != nil { _stage = State(initialValue: .battle) }
     }
 
-    static let opener = "Both sides send out their leads. Neither knows what the other is holding, nor which four came."
-    /// A log line that is a turn marker rather than an event.
-    static let dividerMark = "\u{00A7}"
 
     private var myTeam: Team? { store.teams.first { $0.id.uuidString == myTeamID } }
     private var theirTeam: Team? {
@@ -264,7 +181,7 @@ struct BattleView: View {
                 }
             }
         }
-        .sheet(item: $explaining) { entry in
+        .sheet(item: $session.explaining) { entry in
             TurnExplainer(review: entry, rules: store.rulebook) { explaining = nil }
                 .environmentObject(store)
         }
@@ -1127,7 +1044,7 @@ struct BattleView: View {
         history = []; grade = nil; replay = []; at = 0; replayBoard = nil; sending = []
         leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
         chosenSends = []; review = []; playing = false
-        log = [BattleView.opener]
+        log = [BattleSession.opener]
         board = nil
         opening = true
         shown = []
@@ -1151,7 +1068,7 @@ struct BattleView: View {
             board = start
             log += start.story
             opening = false
-            think()
+            session.think()
             return
         }
         // The start of the game, shown as it happens: the flash, the leads
@@ -1191,7 +1108,7 @@ struct BattleView: View {
             withAnimation(.easeOut(duration: 0.3)) { callout = nil }
             board = running
             opening = false
-            think()
+            session.think()
         }
     }
 
@@ -1248,10 +1165,7 @@ struct BattleView: View {
                 bob = -3.5
             }
         }
-        .onDisappear {
-            playback?.cancel(); playback = nil
-            flourish = nil; lunging = nil; lungeBy = .zero
-        }
+        .onDisappear { playback.reset() }
     }
 
     /// While the leads come out and their abilities go off.
@@ -1306,14 +1220,14 @@ struct BattleView: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer(minLength: 0)
-                            Button("Play it again") { rewind(to: entry.turn) }
+                            Button("Play it again") { session.rewind(to: entry.turn) }
                                 .controlSize(.small)
                         }
                     }
                 }
                 HStack(spacing: 8) {
                     Button("Back to Team Preview") { stage = .preview }.controlSize(.small)
-                    Button("Undo the last turn") { undo() }.controlSize(.small)
+                    Button("Undo the last turn") { session.undo() }.controlSize(.small)
                         .disabled(history.isEmpty)
                     Button("Every turn") { panel = .review }.controlSize(.small)
                         .disabled(review.isEmpty)
@@ -1399,7 +1313,7 @@ struct BattleView: View {
                 .help("The sum of what each turn cost against the line the engine wanted. Nought is perfect play by its own lights.")
                 ForEach(ordered) { entry in
                     VStack(alignment: .leading, spacing: 4) {
-                        Button { rewind(to: entry.turn) } label: { reviewRow(entry) }
+                        Button { session.rewind(to: entry.turn) } label: { reviewRow(entry) }
                             .buttonStyle(.plain)
                             .help("Take the game back to turn \(entry.turn) and play it differently")
                         HStack(spacing: 6) {
@@ -1473,7 +1387,7 @@ struct BattleView: View {
     private var logEntries: [LogEntry] {
         var out: [LogEntry] = []
         for (index, line) in log.enumerated() {
-            if line.hasPrefix(BattleView.dividerMark) {
+            if line.hasPrefix(BattleSession.dividerMark) {
                 out.append(LogEntry(id: index,
                                     headline: String(line.dropFirst()).uppercased(),
                                     details: [], isDivider: true))
@@ -1608,17 +1522,17 @@ struct BattleView: View {
     /// alive there was nothing connecting "What will Charizard do?" to the
     /// Charizard on the board. A ring is enough.
     private func awaitingOrders(_ board: Board) -> Int? {
-        guard finished == nil, sending.isEmpty, !playing, playback == nil else { return nil }
+        guard finished == nil, sending.isEmpty, !playing, playback.task == nil else { return nil }
         let living = (0..<board.activeCount).filter {
             board.mine.indices.contains($0) && !board.mine[$0].fainted
         }
-        return living.first { pick(for: $0) == nil }
+        return living.first { session.pick(for: $0) == nil }
     }
 
     private func guarding(_ fighter: Fighter) -> Bool {
         BattleView.guarding(fainted: fighter.fainted, isProtected: fighter.isProtected,
                             protectedLast: fighter.protectedLast,
-                            duringPlayback: playback != nil)
+                            duringPlayback: playback.task != nil)
     }
 
     /// Whether to draw the shield, as a rule rather than as a line inside a
@@ -1652,25 +1566,6 @@ struct BattleView: View {
         case 2:  return 0.75
         default: return 1
         }
-    }
-
-    /// Where a Pokémon's card sits in the arena, as a fraction of it.
-    ///
-    /// The cards and the animations both read this. They used to be two copies
-    /// of the same four pairs of numbers, which is fine until one of them is
-    /// edited and a Flamethrower starts arriving a little above Garchomp.
-    private static func seatFraction(_ seat: Seat, singles: Bool) -> CGPoint {
-        if singles { return CGPoint(x: seat.mine ? 0.26 : 0.74, y: 0.50) }
-        if seat.mine { return seat.slot == 0 ? CGPoint(x: 0.17, y: 0.40) : CGPoint(x: 0.35, y: 0.64) }
-        return seat.slot == 0 ? CGPoint(x: 0.65, y: 0.36) : CGPoint(x: 0.83, y: 0.60)
-    }
-
-    /// The same place in points — and raised, because a move is aimed at the
-    /// Pokémon and the sprite sits above the middle of its card.
-    private static func seatPoint(_ seat: Seat, w: CGFloat, h: CGFloat,
-                                  singles: Bool) -> CGPoint {
-        let fraction = seatFraction(seat, singles: singles)
-        return CGPoint(x: w * fraction.x, y: h * fraction.y - 30)
     }
 
     private func arena(_ board: Board) -> some View {
@@ -1726,9 +1621,9 @@ struct BattleView: View {
                         .opacity(out ? 1 : 0)
                         .scaleEffect(out ? 1 : 0.4)
                         .offset(lunge(Seat(mine: true, slot: slot)))
-                        .position(x: w * BattleView.seatFraction(Seat(mine: true, slot: slot),
+                        .position(x: w * Seat.fraction(Seat(mine: true, slot: slot),
                                                                  singles: singlesGame).x,
-                                  y: h * BattleView.seatFraction(Seat(mine: true, slot: slot),
+                                  y: h * Seat.fraction(Seat(mine: true, slot: slot),
                                                                  singles: singlesGame).y)
                 }
                 // Theirs: first up and left of their side, second down and right.
@@ -1739,9 +1634,9 @@ struct BattleView: View {
                         .opacity(out ? 1 : 0)
                         .scaleEffect(out ? 1 : 0.4)
                         .offset(lunge(Seat(mine: false, slot: slot)))
-                        .position(x: w * BattleView.seatFraction(Seat(mine: false, slot: slot),
+                        .position(x: w * Seat.fraction(Seat(mine: false, slot: slot),
                                                                  singles: singlesGame).x,
-                                  y: h * BattleView.seatFraction(Seat(mine: false, slot: slot),
+                                  y: h * Seat.fraction(Seat(mine: false, slot: slot),
                                                                  singles: singlesGame).y)
                 }
                 sideState(board, mine: true).position(x: w * 0.25, y: 18)
@@ -1753,9 +1648,9 @@ struct BattleView: View {
                 if let flourish {
                     TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { slice in
                         let progress = min(1, max(0, slice.date.timeIntervalSince(flourishFrom)
-                                                     / BattleView.flourishSeconds))
+                                                     / TurnPlayback.flourishSeconds))
                         let place: (Seat) -> CGPoint = {
-                            BattleView.seatPoint($0, w: w, h: h, singles: singlesGame)
+                            Seat.point($0, w: w, h: h, singles: singlesGame)
                         }
                         ZStack {
                             if flourish.isSpecial {
@@ -2573,7 +2468,7 @@ struct BattleView: View {
                             self.board = next
                             sending = next.gapsOfMine
                             chosenSends = []
-                            if sending.isEmpty { think() }
+                            if sending.isEmpty { session.think() }
                         } label: {
                             HStack(spacing: 9) {
                                 SpriteImage(form: board.mine[option.index].build.form, side: 42)
@@ -2705,40 +2600,14 @@ struct BattleView: View {
         return total
     }
 
-    /// Give both orders from the engine's mix, sampled so a watched game varies.
-    private func engineOrders(_ board: Board, result: BattleEngine.Result) {
-        guard !result.plays.isEmpty else { return }
-        let roll = Double.random(in: 0...1)
-        var running = 0.0
-        var chosen = result.plays[0]
-        for (index, weight) in result.mix.enumerated() {
-            running += weight
-            if roll <= running, result.plays.indices.contains(index) {
-                chosen = result.plays[index]; break
-            }
-        }
-        leftPick = chosen.left
-        rightPick = board.activeCount > 1 ? chosen.right : nil
-        megaSlot = chosen.megaSlot
-    }
-
     // MARK: Commanding, the way the game does it
-
-    /// Where you are in giving orders: one Pokémon at a time, first the choice
-    /// between fighting and switching, then the specific move or partner.
-    enum Command: Equatable {
-        case menu
-        case fight
-        case party
-        case aiming(move: Int)
-    }
 
     @ViewBuilder
     private func choices(_ board: Board) -> some View {
         let living = (0..<board.activeCount).filter {
             board.mine.indices.contains($0) && !board.mine[$0].fainted
         }
-        let pending = living.first { pick(for: $0) == nil }
+        let pending = living.first { session.pick(for: $0) == nil }
         Card(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 // What is already locked in, as a strip along the top.
@@ -2756,27 +2625,15 @@ struct BattleView: View {
         }
     }
 
-    /// The order given for a slot — or the one it has no choice about, when it
-    /// is halfway through a two-turn move.
-    private func pick(for slot: Int) -> Choice? {
-        if let board, board.mine.indices.contains(slot), let charging = board.mine[slot].charging {
-            return .attack(move: charging, target: board.mine[slot].chargingTarget)
-        }
-        if let board, board.mine.indices.contains(slot), let encored = board.mine[slot].encored {
-            return encored
-        }
-        return slot == 0 ? leftPick : rightPick
-    }
-
     /// The orders given so far. Click one to change it.
     private func lockedStrip(_ board: Board, living: [Int]) -> some View {
         HStack(spacing: 10) {
             ForEach(living, id: \.self) { slot in
                 let fighter = board.mine[slot]
-                let chosen = pick(for: slot)
+                let chosen = session.pick(for: slot)
                 Button {
                     // Reopen this one's orders.
-                    set(nil, slot: slot)
+                    session.set(nil, slot: slot)
                     command = .menu
                 } label: {
                     HStack(spacing: 7) {
@@ -2805,7 +2662,7 @@ struct BattleView: View {
             }
             Spacer()
             if !history.isEmpty {
-                Button("Take back") { undo() }.controlSize(.small)
+                Button("Take back") { session.undo() }.controlSize(.small)
             }
             if !searchNote.isEmpty {
                 Text(searchNote).font(.system(size: 10)).foregroundStyle(.tertiary)
@@ -2950,7 +2807,7 @@ struct BattleView: View {
                     }
                     Spacer(minLength: 0)
                     Button {
-                        engineOrders(board, result: thought)
+                        session.engineOrders(board, result: thought)
                         command = .menu
                     } label: {
                         Text("Take its orders").font(.system(size: 10, weight: .semibold))
@@ -3127,7 +2984,7 @@ struct BattleView: View {
             if aim == .foe || aim == .party {
                 command = .aiming(move: index)
             } else {
-                set(.attack(move: index, target: 0), slot: slot)
+                session.set(.attack(move: index, target: 0), slot: slot)
                 command = .menu
             }
         } label: {
@@ -3364,7 +3221,7 @@ struct BattleView: View {
                             choice: Choice, tint: Color, note: String?) -> some View {
         let reading = preview(board, fighter: board.mine[slot], slot: slot, choice: choice)
         return Button {
-            set(choice, slot: slot)
+            session.set(choice, slot: slot)
             command = .menu
         } label: {
             HStack(spacing: 12) {
@@ -3413,7 +3270,7 @@ struct BattleView: View {
                 ForEach(fallen, id: \.self) { bench in
                     let fighter = board.mine[bench]
                     Button {
-                        set(.attack(move: index, target: bench), slot: slot)
+                        session.set(.attack(move: index, target: bench), slot: slot)
                         command = .menu
                     } label: {
                         HStack(spacing: 10) {
@@ -3463,7 +3320,7 @@ struct BattleView: View {
                 ForEach(Array(options.enumerated()), id: \.offset) { rank, option in
                     let fighter = board.mine[option.index]
                     Button {
-                        set(.swap(to: option.index), slot: slot)
+                        session.set(.swap(to: option.index), slot: slot)
                         command = .menu
                     } label: {
                         HStack(spacing: 10) {
@@ -3508,7 +3365,7 @@ struct BattleView: View {
 
     /// Both orders given: the order they will go in, and the button.
     private func readyToPlay(_ board: Board) -> some View {
-        let mine = ordersAsPlay(board)
+        let mine = session.ordersAsPlay(board)
             ?? Play(left: leftPick ?? .pass, right: rightPick ?? .pass, megaSlot: megaSlot)
         return VStack(alignment: .leading, spacing: 12) {
             orderPreview(board)
@@ -3545,12 +3402,12 @@ struct BattleView: View {
                         .foregroundStyle(grade.hasPrefix("That is")
                                          ? AnyShapeStyle(Palette.good) : AnyShapeStyle(Palette.warn))
                 }
-                Toggle("Let the engine play me", isOn: $watching)
+                Toggle("Let the engine play me", isOn: $session.watching)
                     .toggleStyle(.checkbox).controlSize(.small)
                     .help("The engine gives your orders too, so you can watch a game out and see what it does.")
                 Spacer()
                 Button {
-                    playTurn()
+                    session.playTurn()
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "play.fill")
@@ -3576,10 +3433,6 @@ struct BattleView: View {
     private func switchOptions(_ board: Board) -> [Int] {
         guard board.mine.count > board.activeCount else { return [] }
         return (board.activeCount..<board.mine.count).filter { !board.mine[$0].fainted }
-    }
-
-    private func set(_ choice: Choice?, slot: Int) {
-        if slot == 0 { leftPick = choice } else { rightPick = choice }
     }
 
     /// A turn arrives as a sequence, so it is shown as one.
@@ -3700,455 +3553,6 @@ struct BattleView: View {
 
     // MARK: Running a turn
 
-    /// The search, off the main thread. The engine is a value that knows the
-    /// rulebook and nothing else, so it runs wherever it is put; the window
-    /// keeps drawing and the spinner actually spins.
-    private static func search(_ engine: BattleEngine, _ board: Board)
-        async -> (result: BattleEngine.Result, turnSolve: TurnGame.Solution, likeliest: Board) {
-        await Task.detached(priority: .userInitiated) {
-            let result = engine.think(board)
-            // The one-turn read is taken on the likeliest version of the board
-            // rather than the board itself, so nothing shown here can name a
-            // Pokémon of theirs that has not come out.
-            let likeliest = engine.imagine(board, belief: BattleEngine.Belief()).first?.board ?? board
-            var game = TurnGame(board: likeliest, believingTheirs: true)
-            game.width = engine.beam + 2
-            return (result, game.solve(), likeliest)
-        }.value
-    }
-
-    private func think() {
-        guard let board else { return }
-        thinking = true
-        thinkTicket += 1
-        let ticket = thinkTicket
-        let engine = BattleEngine(rules: store.rulebook, budget: 0.5)
-        Task { @MainActor in
-            let searched = await Self.search(engine, board)
-            // The board moved on while this was thinking; the answer is to a
-            // position that no longer exists.
-            guard ticket == thinkTicket else { return }
-            let result = searched.result
-            let turnSolve = searched.turnSolve
-            var game = TurnGame(board: searched.likeliest, believingTheirs: true)
-            game.width = engine.beam + 2
-
-            var ours: [String] = []
-            if let top = result.mix.indices.max(by: { result.mix[$0] < result.mix[$1] }),
-               result.plays.indices.contains(top) {
-                ours.append(String(format: "Best line, about %.0f%% of the time: %@.",
-                                   result.mix[top] * 100,
-                                   game.describe(result.plays[top], mine: true)))
-            }
-            ours.append(String(format: "Looking %d turns out the position is worth %+.2f to you.",
-                               result.depth, result.value))
-            if abs(result.drift) > 0.15 {
-                ours.append(String(format: "Searching deeper moved that by %+.2f, so the quick read was %@.",
-                                   result.drift,
-                                   result.drift < 0 ? "too optimistic" : "too pessimistic"))
-            }
-            if result.uncertainty > 0.2 {
-                ours.append(String(format: "It swings %.2f on what they are actually holding, so this turn is a guess as much as a calculation.",
-                                   result.uncertainty))
-            }
-            // Mega Evolution ordering, which decides a weather war on turn one.
-            let evolvingMine = board.mine.prefix(board.activeCount).first { $0.pendingMega != nil }
-            let evolvingTheirs = board.theirs.prefix(board.activeCount).first { $0.pendingMega != nil }
-            if let ours1 = evolvingMine, let theirs1 = evolvingTheirs {
-                let mySpeed = ours1.build.speed(in: board.field)
-                let theirSpeed = theirs1.build.speed(in: board.field)
-                let second = mySpeed < theirSpeed ? ours1 : theirs1
-                ours.append("Both sides Mega Evolve before any move, fastest first. \(second.build.form.formLabel) is slower, so it evolves second — and if both bring weather or terrain, the second one is the one that sticks.")
-            } else if let ours1 = evolvingMine {
-                ours.append("\(ours1.build.form.formLabel) Mega Evolves before any move this turn, bringing whatever its new ability does with it.")
-            }
-            // If the line it likes involves evolving, say which and why the
-            // order matters, since that is the toggle sitting on screen.
-            if let top = result.mix.indices.max(by: { result.mix[$0] < result.mix[$1] }),
-               result.plays.indices.contains(top),
-               let wants = result.plays[top].megaSlot,
-               board.mine.indices.contains(wants),
-               let becoming = board.mine[wants].pendingMega {
-                ours.append("It wants \(board.mine[wants].build.form.formLabel) to Mega Evolve into \(becoming.formLabel) this turn — the toggle beside its move.")
-            }
-            if board.hidesTheirBench {
-                let odds = board.liveBenchGuesses.prefix(2).map { guess in
-                    guess.fighters.map(\.build.form.formLabel).joined(separator: " + ")
-                        + String(format: " %.0f%%", guess.chance * 100)
-                }
-                ours.append("Their back two have not shown. The search plays the likeliest pairs: "
-                            + odds.joined(separator: ", ") + ".")
-            }
-            ours += result.principal.prefix(2)
-            mySide = Array(ours.prefix(6))
-            searchNote = "searched \(result.depth) turns, \(result.nodes) positions"
-            thought = result
-            self.solved = turnSolve
-
-            var theirs: [String] = []
-            if let likely = turnSolve.theirMix.indices.max(by: {
-                turnSolve.theirMix[$0] < turnSolve.theirMix[$1] }),
-               turnSolve.theirPlays.indices.contains(likely) {
-                theirs.append(String(format: "Most likely: %@, about %.0f%% of the time.",
-                                     game.describe(turnSolve.theirPlays[likely], mine: false),
-                                     turnSolve.theirMix[likely] * 100))
-            }
-            theirs += game.readingNotes(turnSolve)
-            let hidden = board.mine.prefix(board.activeCount)
-                .map { "\($0.build.form.formLabel)'s \($0.build.item)" }
-            if !hidden.isEmpty {
-                theirs.append("They cannot see " + hidden.joined(separator: " or ")
-                              + ", so they are playing the likeliest version of you.")
-            }
-            // What they make of your back two, which they cannot see either:
-            // from your six and the two you led with, the pair a good player
-            // would expect. It is what they are switching and spreading against.
-            let expected = board.liveGuesses(mine: true).first?.fighters ?? []
-            if !expected.isEmpty, board.hidesBench(mine: true) {
-                let real = Set(board.myUnseenBench.map { board.mine[$0].build.form.id })
-                let right = expected.filter { real.contains($0.build.form.id) }.count
-                theirs.append("They have not seen your back \(real.count == 1 ? "one" : "two"). From your six and your leads they expect "
-                              + expected.map(\.build.form.formLabel).joined(separator: " and ")
-                              + ", and that is the version of you their orders answer"
-                              + (real.isEmpty ? "." : right == expected.count ? " — they have it right." : right == 0 ? " — and they have it wrong, which is worth something." : " — half right."))
-            }
-            theirSide = Array(theirs.prefix(5))
-            thinking = false
-            // Watching: the engine gives my orders as well, and plays.
-            if watching, finished == nil, sending.isEmpty {
-                engineOrders(board, result: result)
-                if leftPick != nil { playTurn() }
-            }
-        }
-    }
-
-    /// The two orders as a play, with an empty or fainted slot passing. Orders
-    /// are only required of the Pokémon actually standing there.
-    private func ordersAsPlay(_ board: Board) -> Play? {
-        let standing = (0..<board.activeCount).filter {
-            board.mine.indices.contains($0) && !board.mine[$0].fainted
-        }
-        guard !standing.isEmpty, standing.allSatisfy({ pick(for: $0) != nil }) else { return nil }
-        return Play(left: standing.contains(0) ? (leftPick ?? .pass) : .pass,
-                    right: standing.contains(1) ? (rightPick ?? .pass) : .pass,
-                    megaSlot: megaSlot)
-    }
-
-    /// Play the turn out. Their orders come from a solve of the board as they
-    /// see it, which is the most expensive thing that happens on a turn, so it
-    /// happens off the main thread and the window keeps drawing while it does.
-    private func playTurn() {
-        guard let current = board, let mine = ordersAsPlay(current), !playing else { return }
-        playing = true
-        let playedTurn = turn
-        Task { @MainActor in
-            let solved = await Task.detached(priority: .userInitiated) {
-                var game = TurnGame(board: current, believingTheirs: true)
-                game.width = 10
-                return game.solve()
-            }.value
-            playing = false
-            // The board moved on underneath — an undo, a restart — so this
-            // answer is to a position that no longer exists.
-            guard turn == playedTurn, board != nil else { return }
-            resolve(current, mine: mine, solved: solved)
-        }
-    }
-
-    /// Everything a turn does once it is known what they played.
-    private func resolve(_ current: Board, mine: Play, solved: TurnGame.Solution) {
-        var game = TurnGame(board: current)
-        game.width = 10
-        let roll = Double.random(in: 0...1)
-        var running = 0.0
-        var theirPlay = solved.theirPlays.first ?? Play(left: .pass, right: .pass)
-        for (index, weight) in solved.theirMix.enumerated() {
-            running += weight
-            if roll <= running, solved.theirPlays.indices.contains(index) {
-                theirPlay = solved.theirPlays[index]
-                break
-            }
-        }
-
-        // What the engine would have done, so the turn can be marked. Both
-        // numbers are against their mix, which is the only fair comparison:
-        // judging a choice against what they actually did rewards luck.
-        func worth(_ play: Play) -> Double? {
-            guard let row = solved.myPlays.firstIndex(of: play) else { return nil }
-            return zip(solved.payoff[row], solved.theirMix).reduce(0) { $0 + $1.0 * $1.1 }
-        }
-        if let best = solved.lines.first, let played = worth(mine) {
-            let gap = played - best.expected
-            if solved.myPlays.firstIndex(of: mine) == nil {
-                grade = nil
-            } else if gap >= -0.02 {
-                grade = "That is the line the engine wanted."
-            } else {
-                grade = String(format: "The engine preferred %@ — %.2f better.",
-                               game.describe(best.play, mine: true), -gap)
-            }
-            pendingReview = (turn: turn,
-                             yours: game.describe(mine, mine: true),
-                             theirs: game.describe(theirPlay, mine: false),
-                             played: played, best: best.expected,
-                             bestLine: game.describe(best.play, mine: true),
-                             before: current, minePlay: mine, theirPlay: theirPlay)
-        } else {
-            grade = nil
-        }
-
-        // Everything needed to take the turn back.
-        history.append((board: current, log: log, turn: turn))
-
-        // A battle rolls. The search does not, which is deliberate: it wants
-        // the average and a player wants the dice.
-        var next = TurnModel.resolve(current, mine: mine, theirs: theirPlay, rolling: true)
-        let told = next.story
-        // The review needed the turn's own story, which only exists now.
-        if let waiting = pendingReview {
-            review.append(TurnReview(turn: waiting.turn, yours: waiting.yours,
-                                     theirs: waiting.theirs, played: waiting.played,
-                                     best: waiting.best, bestLine: waiting.bestLine,
-                                     before: waiting.before, minePlay: waiting.minePlay,
-                                     theirPlay: waiting.theirPlay, told: told))
-            pendingReview = nil
-        }
-        let recorded = next
-        // Replacements are sent in together at the end of the turn, faster
-        // first. Yours is a decision, and one of the sharper ones in the game,
-        // so when you have a gap the turn waits for you and theirs waits with
-        // it; when you have none, theirs arrives now.
-        var arrivals: [String] = []
-        if next.gapsOfMine.isEmpty {
-            next.story = []
-            next.replaceFallen(mine: [])
-            arrivals = next.story
-        }
-
-        log.append(BattleView.dividerMark + "Turn \(turn)")
-        log.append("You \(game.describe(mine, mine: true)); "
-                   + "they \(game.describe(theirPlay, mine: false)).")
-        log.append(contentsOf: told)
-        log.append(contentsOf: arrivals)
-
-        var hitMine: Set<Int> = [], hitTheirs: Set<Int> = []
-        for index in next.mine.indices where index < current.mine.count
-            && next.mine[index].hp < current.mine[index].hp { hitMine.insert(index) }
-        for index in next.theirs.indices where index < current.theirs.count
-            && next.theirs[index].hp < current.theirs[index].hp { hitTheirs.insert(index) }
-
-        board = next
-        turn += 1
-        replay = told.isEmpty ? [] : recorded.steps
-        replayBoard = recorded
-        at = 0
-        sending = next.gapsOfMine
-        chosenSends = []
-        leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
-        thought = nil; self.solved = nil
-        play(recorded.steps, hitMine: hitMine, hitTheirs: hitTheirs)
-        if next.isOut(mine: false) { finished = "They have nothing left. You win." }
-        else if next.isOut(mine: true) { finished = "You have nothing left. They win." }
-        else { think() }
-    }
-
-    /// Walk a turn's steps and show each move as it happened.
-    ///
-    /// The model records one step per action, carrying who acted and with
-    /// what, and the health of everything at that moment. Whoever lost health
-    /// between one step and the one before it is who that move reached — which
-    /// gets a spread move's two targets, a redirected move's real one, and a
-    /// miss's none, without the model having to predict any of them.
-    ///
-    /// `hitMine` and `hitTheirs` are the whole turn's damage, kept for the end:
-    /// once the moves have played, whatever took a hit flashes, which is the
-    /// summary the screen used to show on its own.
-    private func play(_ steps: [Board.Step], hitMine: Set<Int>, hitTheirs: Set<Int>) {
-        playback?.cancel()
-        struck = []; struckTheirs = []
-        let actions = steps.enumerated().compactMap { index, step -> (Int, Board.Step)? in
-            step.action == nil ? nil : (index, step)
-        }
-        guard !actions.isEmpty else {
-            flourish = nil
-            flash(hitMine: hitMine, hitTheirs: hitTheirs)
-            return
-        }
-        playback = Task { @MainActor in
-            for (order, (index, step)) in actions.enumerated() {
-                guard !Task.isCancelled, let action = step.action else { return }
-                // Hold the field on the state before this action. `replay` and
-                // `at` already drive this for the scrubber; the playback just
-                // walks them.
-                at = Swift.max(0, index - 1)
-                // Health before this step: the step before it, or the health
-                // the turn started at for the first one.
-                let earlier = index > 0 ? steps[index - 1] : nil
-                var reached: [Seat] = []
-                for slot in step.myHP.indices where slot < 2 {
-                    let was = earlier?.myHP.indices.contains(slot) == true
-                        ? earlier!.myHP[slot] : step.myHP[slot]
-                    if step.myHP[slot] < was { reached.append(Seat(mine: true, slot: slot)) }
-                }
-                for slot in step.theirHP.indices where slot < 2 {
-                    let was = earlier?.theirHP.indices.contains(slot) == true
-                        ? earlier!.theirHP[slot] : step.theirHP[slot]
-                    if step.theirHP[slot] < was { reached.append(Seat(mine: false, slot: slot)) }
-                }
-                // A move never animates as reaching the Pokémon that used it,
-                // even when that Pokémon lost health doing it: recoil, a Life
-                // Orb and Belly Drum all come off the user, and a Flare Blitz
-                // that bursts on its own face reads as a bug.
-                let user = Seat(mine: action.byMine, slot: action.slot)
-                reached.removeAll { $0 == user }
-
-                flourish = Flourish(id: order, action: action, targets: reached)
-                flourishFrom = Date()
-                leanIn(action: action, at: reached, singles: board?.activeCount == 1)
-                // Travel, then the blow: the step's own health is shown at the
-                // moment the move reaches, not when it was thrown.
-                let whole = BattleView.flourishSeconds
-                try? await Task.sleep(nanoseconds: UInt64(whole * BattleView.impactAt * 1_000_000_000))
-                guard !Task.isCancelled else { return }
-                at = index
-                // The blow lands: show what it took, from the same health diff
-                // the targets were worked out from.
-                var took: [Seat: Int] = [:]
-                if let earlier {
-                    for seat in reached {
-                        let before = seat.mine ? earlier.myHP : earlier.theirHP
-                        let after = seat.mine ? step.myHP : step.theirHP
-                        guard before.indices.contains(seat.slot),
-                              after.indices.contains(seat.slot) else { continue }
-                        let lost = before[seat.slot] - after[seat.slot]
-                        if lost > 0 { took[seat] = lost }
-                    }
-                }
-                withAnimation(.easeOut(duration: 0.18)) { damage = took }
-                // The rest of the burst, and then the move is over.
-                try? await Task.sleep(
-                    nanoseconds: UInt64(whole * (1 - BattleView.impactAt) * 1_000_000_000))
-                guard !Task.isCancelled else { return }
-                // Take the beam away but leave the number: what is worth
-                // looking at after a move has landed is what it did. `lunging`
-                // is deliberately left alone — leanIn owns the return and is
-                // mid-animation right about now, and clearing it here would
-                // snap the card back instead of letting it settle.
-                flourish = nil
-                try? await Task.sleep(
-                    nanoseconds: UInt64(BattleView.dwellSeconds * 1_000_000_000))
-                guard !Task.isCancelled else { return }
-                withAnimation(.easeIn(duration: 0.2)) { damage = [:] }
-                if order < actions.count - 1 {
-                    try? await Task.sleep(
-                        nanoseconds: UInt64(BattleView.betweenActions * 1_000_000_000))
-                }
-            }
-            guard !Task.isCancelled else { return }
-            flourish = nil
-            lunging = nil
-            damage = [:]
-            // Rest on the last step rather than past it: the field shows the end
-            // of the turn, and the Back and Forward buttons still work from
-            // there, which is how a turn was reviewed before it was played out.
-            // Stepping forward off the end clears the replay, as it always did.
-            at = Swift.max(0, replay.count - 1)
-            flash(hitMine: hitMine, hitTheirs: hitTheirs)
-            // The turn is over, so let go of the task.
-            //
-            // Nothing released it before, so `playback` stayed non-nil for the
-            // rest of the game once a single turn had played. Two things read
-            // it and both were wrong from that moment: the Protect bubble is
-            // drawn during playback from the flag the turn left behind, so it
-            // stayed drawn over a Pokémon that was open again; and the ring
-            // that asks "what will this one do?" is suppressed during playback,
-            // so it never came back at all.
-            //
-            // Safe to clear from inside: a replaced playback is cancelled
-            // first, and a cancelled task returns above this line rather than
-            // nilling out its replacement.
-            playback = nil
-        }
-    }
-
-    /// A physical move is the Pokémon arriving in person, so the card leans
-    /// into it and comes back. Two animated state changes for the whole thing
-    /// rather than an offset recomputed every frame.
-    private func leanIn(action: Board.Action, at targets: [Seat], singles: Bool) {
-        guard action.category == "Physical" else {
-            withAnimation(.easeOut(duration: 0.12)) { lunging = nil }
-            return
-        }
-        let user = Seat(mine: action.byMine, slot: action.slot)
-        // Toward whoever it reached; toward the other side when it reached
-        // nobody, because the Pokémon still swung.
-        let from = BattleView.seatFraction(user, singles: singles)
-        let toward = targets.first.map { BattleView.seatFraction($0, singles: singles) }
-            ?? CGPoint(x: user.mine ? 0.75 : 0.25, y: from.y)
-        let dx = toward.x - from.x, dy = toward.y - from.y
-        let length = max(0.0001, (dx * dx + dy * dy).squareRoot())
-        // Far enough to read as a charge rather than a twitch. A physical
-        // move is the Pokémon crossing the field and hitting something.
-        let reach: CGFloat = 52
-        let step = CGSize(width: dx / length * reach, height: dy / length * reach)
-        // `lunging` first and unanimated, so the card is eligible to move but
-        // has not moved; then the offset animates from nothing to the lean.
-        // Setting both at once put the card there without the step.
-        lunging = user
-        lungeBy = .zero
-        // Out fast, arriving as the blow lands, then back slower — which is
-        // what a charge looks like and what a recoil from one looks like.
-        let strike = BattleView.flourishSeconds * BattleView.impactAt
-        withAnimation(.easeIn(duration: strike)) { lungeBy = step }
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(strike * 1_000_000_000))
-            guard lunging == user else { return }
-            withAnimation(.easeOut(duration: BattleView.flourishSeconds * 0.45)) { lungeBy = .zero }
-        }
-    }
-
-    /// What took a hit over the whole turn, flashed once at the end.
-    private func flash(hitMine: Set<Int>, hitTheirs: Set<Int>) {
-        struck = hitMine; struckTheirs = hitTheirs
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 450_000_000)
-            struck = []; struckTheirs = []
-        }
-    }
-
-    /// Put the last turn back, so a line can be tried a different way.
-    private func undo() {
-        guard let last = history.popLast() else { return }
-        review.removeAll { $0.turn >= last.turn }
-        restore(last.board, log: last.log, turn: last.turn)
-    }
-
-    /// Take the whole game back to the start of a turn, so it can be played a
-    /// different way. This is what the Review panel is for: the engine has
-    /// already said which turns were worth the most, and the way to learn one
-    /// is to play it again rather than read about it.
-    private func rewind(to target: Int) {
-        guard let index = history.lastIndex(where: { $0.turn == target }) else { return }
-        let entry = history[index]
-        history.removeSubrange(index...)
-        review.removeAll { $0.turn >= target }
-        restore(entry.board, log: entry.log, turn: entry.turn)
-    }
-
-    private func restore(_ board: Board, log: [String], turn: Int) {
-        // Whatever was being played belongs to a turn that no longer happened.
-        playback?.cancel(); playback = nil
-        flourish = nil; lunging = nil; lungeBy = .zero; damage = [:]
-        self.board = board
-        self.log = log
-        self.turn = turn
-        finished = nil
-        leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
-        struck = []; struckTheirs = []
-        grade = nil; replay = []; at = 0; replayBoard = nil; sending = []
-        chosenSends = []; playing = false
-        think()
-    }
 }
 
 /// One choice, which is a button you want to press.

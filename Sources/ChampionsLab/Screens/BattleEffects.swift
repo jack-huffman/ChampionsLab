@@ -343,6 +343,25 @@ struct TerrainLayer: View {
 struct Seat: Hashable {
     let mine: Bool
     let slot: Int
+
+    /// Where a Pokémon's card sits in the arena, as a fraction of it.
+    ///
+    /// The cards and the animations both read this. They used to be two copies
+    /// of the same four pairs of numbers, which is fine until one of them is
+    /// edited and a Flamethrower starts arriving a little above Garchomp.
+    static func fraction(_ seat: Seat, singles: Bool) -> CGPoint {
+        if singles { return CGPoint(x: seat.mine ? 0.26 : 0.74, y: 0.50) }
+        if seat.mine { return seat.slot == 0 ? CGPoint(x: 0.17, y: 0.40) : CGPoint(x: 0.35, y: 0.64) }
+        return seat.slot == 0 ? CGPoint(x: 0.65, y: 0.36) : CGPoint(x: 0.83, y: 0.60)
+    }
+
+    /// The same place in points — and raised, because a move is aimed at the
+    /// Pokémon and the sprite sits above the middle of its card.
+    static func point(_ seat: Seat, w: CGFloat, h: CGFloat,
+                                  singles: Bool) -> CGPoint {
+        let fraction = fraction(seat, singles: singles)
+        return CGPoint(x: w * fraction.x, y: h * fraction.y - 30)
+    }
 }
 
 /// One move, mid-flight: who used it, what it was, and who it reached.
