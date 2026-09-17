@@ -9,20 +9,25 @@
 //  the budgets are set a little above where things stand, so ordinary work
 //  passes and the file that quietly doubles does not.
 //
-//  Two functions are allowed to be long and are named here with the reason.
-//  Adding a third means adding a line, which is the point -- it forces the
-//  question to be asked once, out loud.
+//  Three functions are allowed to be long and are named here with the reason.
+//  Adding a fourth means adding a line, which is the point -- it forces the
+//  question to be asked once, out loud. The damage calculator is held to the
+//  same limit: it was one function of 451 lines, and is twelve phases now.
 
 import XCTest
 @testable import ChampionsLab
 
 final class BattleModelShapeTests: XCTestCase {
-    private var battle: URL {
+    private var sources: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Sources/ChampionsLab/Battle")
+            .appendingPathComponent("Sources/ChampionsLab")
     }
+    private var battle: URL { sources.appendingPathComponent("Battle") }
+    /// The calculator is not an aspect of a turn, but its one function was the
+    /// longest in the project, and the same ratchet keeps it in phases.
+    private var damage: URL { sources.appendingPathComponent("Damage") }
 
     /// Every aspect, and the most lines it may run to.
     static let aspects: [String: Int] = [
@@ -108,12 +113,13 @@ final class BattleModelShapeTests: XCTestCase {
     }
 
     func testNoFunctionGrowsPastTheLimitUnannounced() throws {
-        let files = try FileManager.default.contentsOfDirectory(atPath: battle.path)
-            .filter { $0.hasSuffix(".swift") }
         var offenders: [String] = []
+        for folder in [battle, damage] {
+        let files = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+            .filter { $0.hasSuffix(".swift") }
         for file in files {
             let type = String(file.dropLast(6))
-            let lines = try String(contentsOf: battle.appendingPathComponent(file), encoding: .utf8)
+            let lines = try String(contentsOf: folder.appendingPathComponent(file), encoding: .utf8)
                 .split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
             for (index, line) in lines.enumerated() {
                 guard let range = line.range(of: #"func ([a-zA-Z]+)\("#, options: .regularExpression)
@@ -131,6 +137,7 @@ final class BattleModelShapeTests: XCTestCase {
                     offenders.append("\(key) is \(length) lines")
                 }
             }
+        }
         }
         XCTAssertTrue(offenders.isEmpty,
             "over \(Self.ordinaryLimit) lines and not declared: " + offenders.joined(separator: "; "))

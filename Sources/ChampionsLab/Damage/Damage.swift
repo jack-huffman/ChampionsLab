@@ -297,40 +297,34 @@ enum DamageCalc {
         return (printed, move.power, nil)
     }
 
+    /// One calculation in flight: the move as the field and the user's ability
+    /// make it, the power as everything else makes it, and the working written
+    /// down as it goes. The notes are what the calculator screen and the turn
+    /// explainer show, in the order the game applies them.
+    struct Working {
+        var type: PokeType
+        var power: Double
+        var notes: [String] = []
+    }
+
+    /// The damage one move does to one target, low roll to high, with the
+    /// working. Each phase below owns one part of the formula and they read in
+    /// the order the game applies them: what the move is, what its power
+    /// becomes, the two stats, the base, what multiplies the hit, the type
+    /// chart, what the defender takes off and the attacker adds, the strikes,
+    /// and the rolls. The multipliers are applied in place and in that order
+    /// on purpose -- floating-point products are not associative, and a
+    /// factor gathered up and applied later could move a roll across a
+    /// knock-out by one point.
     static func calculate(attacker: Combatant, defender: Combatant,
                           move: Move, field: Field) -> DamageResult {
-        // Magic Room switches every held item off, and Klutz does the same to
-        // one Pokémon. Taking them away here means every item rule below is
-        // covered by one check, including the ones added after this was
-        // written.
-        let klutzed = attacker.ability == "Klutz" && !attacker.item.isEmpty
-        let theirKlutz = defender.ability == "Klutz" && !defender.item.isEmpty
-        if field.magicRoom || klutzed || theirKlutz,
-           !attacker.item.isEmpty || !defender.item.isEmpty {
-            var bare = attacker, bareDefender = defender
-            if field.magicRoom || klutzed { bare.item = "" }
-            if field.magicRoom || theirKlutz { bareDefender.item = "" }
-            var without = field
-            without.magicRoom = false
-            let result = calculate(attacker: bare, defender: bareDefender,
-                                   move: move, field: without)
-            let why = field.magicRoom ? "Magic Room: held items do nothing"
-                                      : "Klutz: the item does nothing"
-            return DamageResult(minDamage: result.minDamage, maxDamage: result.maxDamage,
-                                targetHP: result.targetHP, effectiveness: result.effectiveness,
-                                notes: result.notes + [why])
+        if let bare = withoutItems(attacker: attacker, defender: defender, move: move, field: field) {
+            return bare
         }
-        var notes: [String] = []
         guard move.isDamaging, move.power > 0 else {
             return DamageResult(minDamage: 0, maxDamage: 0, targetHP: defender.maxHP,
                                 effectiveness: 1, notes: ["Status move"])
         }
-
-        // -- moves whose type and power come from the field --------------------
-        let form = fieldForm(of: move, in: field)
-        var moveType = form.type
-        var power = Double(form.power)
-        if let said = form.note { notes.append(said) }
         // Final Gambit deals the user's remaining health, not a base power of 1.
         // It costs the user its life, which the worth model already charges for.
         if move.id == "finalgambit" {
@@ -340,205 +334,282 @@ enum DamageCalc {
                                 notes: ["Final Gambit: deals \(dealt), equal to the user's HP, and the user faints"])
         }
 
-        // -- ability-driven type changes ------------------------------------
-        // Aerilate is the reason Mega Salamence clicks Double-Edge: a Normal
-        // move becomes Flying and gains 20% before anything else applies.
-        let ate = AteAbility.resolve(type: moveType, ability: attacker.ability)
-        if ate.boost > 1 {
-            if ate.type != moveType {
-                notes.append("\(attacker.ability): \(moveType.rawValue) → \(ate.type.rawValue), +20%")
-            }
-            moveType = ate.type
-            power *= ate.boost
-        }
+        var working = theMove(move, by: attacker, in: field)
+        variablePower(&working, move: move, attacker: attacker, defender: defender)
+        abilityPower(&working, move: move, attacker: attacker, field: field)
+        itemAndFieldPower(&working, move: move, attacker: attacker, defender: defender, field: field)
+        let type = working.type
 
-        // -- power modifiers -------------------------------------------------
-        // The pinch abilities: half again on the matching type once the user is
-        // down to a third. Only a battle ever gets there, so only a battle sees
-        // it, but a Charizard that has taken a hit hits back harder.
-        // Last Respects: 50, and 50 more for every teammate that has gone down.
-        // Four moves ignore their listed power and read weight instead. Serebii
-        // prints these as 1 base power, so without this they hit for nothing:
-        // the audit caught it when Grass Knot dealt 2 damage.
+        let physical = move.category == "Physical"
+        let attackStat = attack(of: attacker, physical: physical, field: field, notes: &working.notes)
+        let defenceStat = defence(of: defender, physical: physical, field: field, notes: &working.notes)
+
+        // -- base damage -----------------------------------------------------
+        let level = Double(ChampionsStats.level)
+        let base = floor(floor(floor(2 * level / 5 + 2) * working.power * attackStat / defenceStat) / 50) + 2
+
+        // -- multipliers -----------------------------------------------------
+        var modifier = 1.0
+        hitModifier(&modifier, move: move, type: type, attacker: attacker, field: field,
+                    notes: &working.notes)
+        let effective = effectiveness(of: type, into: defender, ignored: attacker.ignoresAbility,
+                                      notes: &working.notes)
+        modifier *= effective
+        if effective == 0 {
+            return DamageResult(minDamage: 0, maxDamage: 0, targetHP: defender.maxHP,
+                                effectiveness: 0, notes: working.notes + ["No effect"])
+        }
+        defensiveModifier(&modifier, move: move, type: type, physical: physical,
+                          effectiveness: effective, attacker: attacker, defender: defender,
+                          field: field, notes: &working.notes)
+        offensiveModifier(&modifier, type: type, effectiveness: effective, attacker: attacker,
+                          notes: &working.notes)
+
+        let hits = strikes(of: move, by: attacker, notes: &working.notes)
+        let damages = rolled(base: base, modifier: modifier, strikes: hits.count,
+                             multiHit: hits.multiHit, attacker: attacker, defender: defender,
+                             notes: &working.notes)
+        return DamageResult(minDamage: damages.first ?? 0,
+                            maxDamage: damages.last ?? 0,
+                            targetHP: defender.maxHP,
+                            effectiveness: effective,
+                            notes: working.notes,
+                            strikes: hits.count)
+    }
+
+    // MARK: - The phases of a calculation
+
+    /// Magic Room switches every held item off, and Klutz does the same to one
+    /// Pokemon. Taking them away here means every item rule below is covered
+    /// by one check, including the ones added after this was written. Nil when
+    /// every item is where it should be.
+    private static func withoutItems(attacker: Combatant, defender: Combatant,
+                                     move: Move, field: Field) -> DamageResult? {
+        let klutzed = attacker.ability == "Klutz" && !attacker.item.isEmpty
+        let theirKlutz = defender.ability == "Klutz" && !defender.item.isEmpty
+        guard field.magicRoom || klutzed || theirKlutz,
+              !attacker.item.isEmpty || !defender.item.isEmpty else { return nil }
+        var bare = attacker, bareDefender = defender
+        if field.magicRoom || klutzed { bare.item = "" }
+        if field.magicRoom || theirKlutz { bareDefender.item = "" }
+        var without = field
+        without.magicRoom = false
+        let result = calculate(attacker: bare, defender: bareDefender,
+                               move: move, field: without)
+        let why = field.magicRoom ? "Magic Room: held items do nothing"
+                                  : "Klutz: the item does nothing"
+        return DamageResult(minDamage: result.minDamage, maxDamage: result.maxDamage,
+                            targetHP: result.targetHP, effectiveness: result.effectiveness,
+                            notes: result.notes + [why])
+    }
+
+    /// 1. What the move is: its type and power under this field, and after the
+    /// user's ability has had its say. Aerilate is the reason Mega Salamence
+    /// clicks Double-Edge: a Normal move becomes Flying and gains 20% before
+    /// anything else applies.
+    private static func theMove(_ move: Move, by attacker: Combatant, in field: Field) -> Working {
+        let form = fieldForm(of: move, in: field)
+        var working = Working(type: form.type, power: Double(form.power))
+        if let said = form.note { working.notes.append(said) }
+        let ate = AteAbility.resolve(type: working.type, ability: attacker.ability)
+        if ate.boost > 1 {
+            if ate.type != working.type {
+                working.notes.append("\(attacker.ability): \(working.type.rawValue) → \(ate.type.rawValue), +20%")
+            }
+            working.type = ate.type
+            working.power *= ate.boost
+        }
+        return working
+    }
+
+    /// 2. Moves whose power is read off the board rather than the page. Serebii
+    /// prints the weight moves as 1 base power, so without this they hit for
+    /// nothing: the audit caught it when Grass Knot dealt 2 damage. Electro
+    /// Ball and Gyro Ball read the two Speeds against each other -- one rewards
+    /// outrunning the target, the other rewards being slower, which is why a
+    /// Gyro Ball user invests nothing in Speed at all. Last Respects is 50, and
+    /// 50 more for every teammate that has gone down.
+    private static func variablePower(_ working: inout Working, move: Move,
+                                      attacker: Combatant, defender: Combatant) {
         if move.id == "lowkick" || move.id == "grassknot" {
             let kg = defender.weightKg
-            power = kg >= 200 ? 120 : kg >= 100 ? 100 : kg >= 50 ? 80
-                  : kg >= 25 ? 60 : kg >= 10 ? 40 : 20
-            notes.append(String(format: "%@: %d power against %.1fkg",
-                                move.name, Int(power), kg))
+            working.power = kg >= 200 ? 120 : kg >= 100 ? 100 : kg >= 50 ? 80
+                          : kg >= 25 ? 60 : kg >= 10 ? 40 : 20
+            working.notes.append(String(format: "%@: %d power against %.1fkg",
+                                        move.name, Int(working.power), kg))
         }
         if move.id == "heavyslam" || move.id == "heatcrash" {
             let ratio = attacker.weightKg / defender.weightKg
-            power = ratio >= 5 ? 120 : ratio >= 4 ? 100 : ratio >= 3 ? 80
-                  : ratio >= 2 ? 60 : 40
-            notes.append(String(format: "%@: %d power at %.1fkg against %.1fkg",
-                                move.name, Int(power), attacker.weightKg, defender.weightKg))
+            working.power = ratio >= 5 ? 120 : ratio >= 4 ? 100 : ratio >= 3 ? 80
+                          : ratio >= 2 ? 60 : 40
+            working.notes.append(String(format: "%@: %d power at %.1fkg against %.1fkg",
+                                        move.name, Int(working.power), attacker.weightKg, defender.weightKg))
         }
-        // Electro Ball and Gyro Ball read the two Speeds against each other:
-        // one rewards outrunning the target, the other rewards being slower,
-        // which is why a Gyro Ball user invests nothing in Speed at all.
         if move.id == "electroball" || move.id == "gyroball" {
             let mine = Double(Swift.max(1, attacker.stagedStat(.speed)))
             let theirs = Double(Swift.max(1, defender.stagedStat(.speed)))
             if move.id == "electroball" {
                 let ratio = mine / theirs
-                power = ratio >= 4 ? 150 : ratio >= 3 ? 120 : ratio >= 2 ? 80
-                      : ratio > 1 ? 60 : 40
+                working.power = ratio >= 4 ? 150 : ratio >= 3 ? 120 : ratio >= 2 ? 80
+                              : ratio > 1 ? 60 : 40
             } else {
-                power = Swift.min(150, Double(Int(25 * theirs / mine)))
-                power = Swift.max(1, power)
+                working.power = Swift.min(150, Double(Int(25 * theirs / mine)))
+                working.power = Swift.max(1, working.power)
             }
-            notes.append("\(move.name): \(Int(power)) power at \(Int(mine)) Speed against \(Int(theirs))")
+            working.notes.append("\(move.name): \(Int(working.power)) power at \(Int(mine)) Speed against \(Int(theirs))")
         }
         if move.id == "lastrespects" {
-            power = Double(50 * (1 + attacker.fallenAllies))
+            working.power = Double(50 * (1 + attacker.fallenAllies))
             if attacker.fallenAllies > 0 {
-                notes.append("Last Respects: \(Int(power)) power for \(attacker.fallenAllies) fallen")
+                working.notes.append("Last Respects: \(Int(working.power)) power for \(attacker.fallenAllies) fallen")
             }
         }
         if move.doublesAfterFailure, attacker.lastMoveFailed {
-            power *= 2
-            notes.append("\(move.name): double power after last turn's failed move")
+            working.power *= 2
+            working.notes.append("\(move.name): double power after last turn's failed move")
         }
+    }
+
+    /// 3. The user's ability, and the allies' abilities the field carries as
+    /// flags -- an Electromorphosis charge, a partner's Steely Spirit, a Fairy
+    /// Aura. The pinch abilities pay half again on the matching type once the
+    /// user is down to a third; only a battle ever gets there, so only a battle
+    /// sees it, but a Charizard that has taken a hit hits back harder. Two of
+    /// Champions' Mega abilities rewrite the move's type on the way out, done
+    /// here before anything reads it, so the same-type bonus and the type
+    /// chart both see the new one. Analytic pays for going second, which is
+    /// the one thing a slow attacker has going for it; Stakeout doubles on
+    /// anything that has just walked in, which is what makes switching against
+    /// one so expensive.
+    private static func abilityPower(_ working: inout Working, move: Move,
+                                     attacker: Combatant, field: Field) {
         if attacker.lowHP {
             let pinch: [String: PokeType] = ["Blaze": .fire, "Torrent": .water,
                                              "Overgrow": .grass, "Swarm": .bug]
-            if let boosted = pinch[attacker.ability], moveType == boosted {
-                power *= 1.5
-                notes.append("\(attacker.ability): +50% while low")
+            if let boosted = pinch[attacker.ability], working.type == boosted {
+                working.power *= 1.5
+                working.notes.append("\(attacker.ability): +50% while low")
             }
         }
         if attacker.ability == "Tough Claws", move.makesContact {
-            power *= 1.3
-            notes.append("Tough Claws: +30%")
+            working.power *= 1.3
+            working.notes.append("Tough Claws: +30%")
         }
         if attacker.ability == "Sharpness", move.isSlicing {
-            power *= 1.5
-            notes.append("Sharpness: +50%")
+            working.power *= 1.5
+            working.notes.append("Sharpness: +50%")
         }
-        // Champions gives some of its Megas an ability that rewrites a move's
-        // type on the way out. Done here, before anything reads `moveType`, so
-        // the same-type bonus and the type chart both see the new one.
         switch attacker.ability {
-        case "Dragonize" where moveType == .normal:
-            moveType = .dragon
-            power *= 1.2
-            notes.append("Dragonize: Normal becomes Dragon, +20%")
+        case "Dragonize" where working.type == .normal:
+            working.type = .dragon
+            working.power *= 1.2
+            working.notes.append("Dragonize: Normal becomes Dragon, +20%")
         case "Liquid Voice" where move.isSound:
-            moveType = .water
-            notes.append("Liquid Voice: the sound becomes Water")
+            working.type = .water
+            working.notes.append("Liquid Voice: the sound becomes Water")
         default: break
         }
-        if field.charged, moveType == .electric {
-            power *= 2
-            notes.append("Electromorphosis: the stored charge doubles it")
+        if field.charged, working.type == .electric {
+            working.power *= 2
+            working.notes.append("Electromorphosis: the stored charge doubles it")
         }
         if attacker.ability == "Mega Launcher", move.isPulse {
-            power *= 1.5
-            notes.append("Mega Launcher: +50%")
+            working.power *= 1.5
+            working.notes.append("Mega Launcher: +50%")
         }
-        if attacker.ability == "Fire Mane", moveType == .fire {
-            power *= 1.5
-            notes.append("Fire Mane: +50%")
+        if attacker.ability == "Fire Mane", working.type == .fire {
+            working.power *= 1.5
+            working.notes.append("Fire Mane: +50%")
         }
-        if moveType == .steel, attacker.ability == "Steely Spirit" || field.alliedSteelySpirit {
-            power *= 1.5
-            notes.append("Steely Spirit: +50%")
+        if working.type == .steel, attacker.ability == "Steely Spirit" || field.alliedSteelySpirit {
+            working.power *= 1.5
+            working.notes.append("Steely Spirit: +50%")
         }
-        if moveType == .fairy, field.fairyAura {
-            power *= 1.33
-            notes.append("Fairy Aura: +33%")
+        if working.type == .fairy, field.fairyAura {
+            working.power *= 1.33
+            working.notes.append("Fairy Aura: +33%")
         }
-        // Analytic pays for going second, which is the one thing a slow
-        // attacker has going for it.
         if attacker.ability == "Analytic", field.movingLast {
-            power *= 1.3
-            notes.append("Analytic: +30% for moving last")
+            working.power *= 1.3
+            working.notes.append("Analytic: +30% for moving last")
         }
-        // Stakeout doubles on anything that has just walked in, which is what
-        // makes switching against one so expensive.
         if attacker.ability == "Stakeout", field.targetJustArrived {
-            power *= 2
-            notes.append("Stakeout: doubled against something that just came in")
+            working.power *= 2
+            working.notes.append("Stakeout: doubled against something that just came in")
         }
-        if attacker.ability == "Iron Fist", move.isPunch { power *= 1.2 }
-        if attacker.ability == "Strong Jaw", move.flags["bite"] == true { power *= 1.5 }
-        if attacker.ability == "Punk Rock", move.isSound { power *= 1.3 }
-        if attacker.ability == "Technician", move.power <= 60 { power *= 1.5 }
-        if attacker.ability == "Sheer Force", move.effectRate > 0 { power *= 1.3 }
+        if attacker.ability == "Iron Fist", move.isPunch { working.power *= 1.2 }
+        if attacker.ability == "Strong Jaw", move.flags["bite"] == true { working.power *= 1.5 }
+        if attacker.ability == "Punk Rock", move.isSound { working.power *= 1.3 }
+        if attacker.ability == "Technician", move.power <= 60 { working.power *= 1.5 }
+        if attacker.ability == "Sheer Force", move.effectRate > 0 { working.power *= 1.3 }
+    }
 
+    /// 4. The user's item, Helping Hand, and the terrain. Aerilate converts the
+    /// type but a Normal Gem still fires, which is why it shows up on Mega
+    /// Salamence sets. Helping Hand is a power modifier, applied before the
+    /// stats are divided, so it compounds with everything above it. Terrain
+    /// boosts the grounded user's matching type; Grassy Terrain is the
+    /// structural answer to Earthquake spam; and Rising Voltage is twice the
+    /// power into something standing in the charge, which is the whole reason
+    /// an Electric Terrain team runs it.
+    private static func itemAndFieldPower(_ working: inout Working, move: Move, attacker: Combatant,
+                                          defender: Combatant, field: Field) {
         switch attacker.item {
-        case "Normal Gem" where moveType == .normal:
-            // Aerilate converts the type but the Gem still fires, which is why
-            // Normal Gem shows up on Mega Salamence sets.
-            power *= 1.3
-            notes.append("Normal Gem: +30%")
-        case "Punching Glove" where move.isPunch: power *= 1.1
-        case "Muscle Band" where move.category == "Physical": power *= 1.1
-        case "Wise Glasses" where move.category == "Special": power *= 1.1
+        case "Normal Gem" where working.type == .normal:
+            working.power *= 1.3
+            working.notes.append("Normal Gem: +30%")
+        case "Punching Glove" where move.isPunch: working.power *= 1.1
+        case "Muscle Band" where move.category == "Physical": working.power *= 1.1
+        case "Wise Glasses" where move.category == "Special": working.power *= 1.1
         default: break
         }
-
-        // Helping Hand is a power modifier, applied before the stats are
-        // divided, so it compounds with everything above it.
         if field.helpingHand {
-            power *= 1.5
-            notes.append("Helping Hand: +50%")
+            working.power *= 1.5
+            working.notes.append("Helping Hand: +50%")
         }
-
-        // Terrain boosts the grounded user's matching type.
-        switch (field.terrain, moveType) {
+        switch (field.terrain, working.type) {
         case (.electric, .electric), (.grassy, .grass), (.psychic, .psychic):
-            power *= 1.3
-            notes.append("\(field.terrain.rawValue) Terrain: +30%")
+            working.power *= 1.3
+            working.notes.append("\(field.terrain.rawValue) Terrain: +30%")
         default: break
         }
-        if field.terrain == .misty, moveType == .dragon {
-            power *= 0.5
-            notes.append("Misty Terrain halves Dragon")
+        if field.terrain == .misty, working.type == .dragon {
+            working.power *= 0.5
+            working.notes.append("Misty Terrain halves Dragon")
         }
-        // Grassy Terrain is the structural answer to Earthquake spam.
         if field.terrain == .grassy, ["earthquake", "bulldoze", "magnitude"].contains(move.id) {
-            power *= 0.5
-            notes.append("Grassy Terrain halves Earthquake")
+            working.power *= 0.5
+            working.notes.append("Grassy Terrain halves Earthquake")
         }
-        // Rising Voltage: twice the power into something standing in the
-        // charge, which is the whole reason an Electric Terrain team runs it.
         if move.id == "risingvoltage", field.terrain == .electric, defender.grounded {
-            power *= 2
-            notes.append("Rising Voltage: double power on Electric Terrain")
+            working.power *= 2
+            working.notes.append("Rising Voltage: double power on Electric Terrain")
         }
+    }
 
-        // -- attack and defence ---------------------------------------------
-        let physical = move.category == "Physical"
+    /// 5. The attacking stat with its stage, and everything that multiplies it.
+    /// A critical hit ignores the attacker's negative stages -- the usual crit
+    /// rule. Plus and Minus pay each other, and only each other: half again the
+    /// Special Attack when the partner carries the matching one. A burn halves
+    /// what a physical attacker does; it was applied as a stage off Attack once,
+    /// which is a third rather than a half, and being a stage it compounded
+    /// with whatever stages were already there, so a burned Pokemon at +6 lost
+    /// an eighth of its damage instead of half. Guts ignores the burn and is
+    /// paid for the condition instead, which is why the two are decided
+    /// together.
+    private static func attack(of attacker: Combatant, physical: Bool, field: Field,
+                               notes: inout [String]) -> Double {
         let atkStat: Stat = physical ? .attack : .spAttack
-        // Wonder Room trades the two defences, so a physical attack is worked
-        // out against Special Defense and the other way round. It swaps the
-        // stat, not the stage, which is why it reads as a stat choice here.
-        var defStat: Stat = physical ? .defense : .spDefense
-        if field.wonderRoom { defStat = physical ? .spDefense : .defense }
-
         var attack = Double(attacker.stagedStat(atkStat))
-        // Ignore the defender's positive boosts on a crit, and the attacker's
-        // negative ones — the usual crit rules.
         if field.critical {
             attack = Double(ChampionsStats.staged(attacker.stat(atkStat),
                                                   stage: max(0, attacker.boosts[atkStat.rawValue])))
         }
-        // Plus and Minus pay each other, and only each other: half again the
-        // Special Attack when its partner is carrying the matching one.
         if field.paired, !physical { attack *= 1.5 }
         if attacker.ability == "Huge Power" || attacker.ability == "Pure Power", physical {
             attack *= 2
             notes.append("\(attacker.ability): Attack doubled")
         }
-        // A burn halves what a physical attacker does. It was applied as a
-        // stage off Attack, which is a third rather than a half — and being a
-        // stage it compounded with whatever stages were already there, so a
-        // burned Pokémon at +6 lost an eighth of its damage instead of half.
-        //
-        // Guts ignores the burn and is paid for the condition instead, which is
-        // why the two are decided together.
         if attacker.status != .none, physical {
             if attacker.ability == "Guts" { attack *= 1.5 }
             else if attacker.status == .burn { attack *= 0.5 }
@@ -549,15 +620,25 @@ enum DamageCalc {
         case "Choice Specs" where !physical: attack *= 1.5
         default: break
         }
+        return attack
+    }
 
+    /// 6. The defending stat. Wonder Room trades the two defences, so a physical
+    /// attack is worked out against Special Defense and the other way round --
+    /// it swaps the stat, not the stage, which is why it reads as a stat choice
+    /// here. A critical hit ignores the defender's positive stages. Fur Coat is
+    /// a second Defense, and the reason a Furfrou wall exists; Marvel Scale is
+    /// paid for being ill, Grass Pelt for standing on grass.
+    private static func defence(of defender: Combatant, physical: Bool, field: Field,
+                                notes: inout [String]) -> Double {
+        var defStat: Stat = physical ? .defense : .spDefense
+        if field.wonderRoom { defStat = physical ? .spDefense : .defense }
         var defense = Double(defender.stagedStat(defStat))
         if field.critical {
             defense = Double(ChampionsStats.staged(defender.stat(defStat),
                                                   stage: min(0, defender.boosts[defStat.rawValue])))
         }
-        // Fur Coat is a second Defense, and the reason a Furfrou wall exists.
         if defender.ability == "Fur Coat", physical { defense *= 2 }
-        // Marvel Scale is paid for being ill; Grass Pelt for standing on grass.
         if defender.ability == "Marvel Scale", defender.status != .none, physical {
             defense *= 1.5
         }
@@ -573,57 +654,62 @@ enum DamageCalc {
         if field.weather == .sand, defender.effectiveTypes.contains(.rock), !physical {
             defense *= 1.5
         }
+        return defense
+    }
 
-        // -- base damage -----------------------------------------------------
-        let level = Double(ChampionsStats.level)
-        let base = floor(floor(floor(2 * level / 5 + 2) * power * attack / defense) / 50) + 2
-
-        // -- multipliers -----------------------------------------------------
-        var modifier = 1.0
-
+    /// 7. What multiplies the hit before the type chart: a spread move in
+    /// doubles, the weather, a critical hit, and the same-type bonus -- doubled
+    /// rather than half again under Adaptability. Sniper makes a critical hit
+    /// worth half again as much as it already is, which is the entire ability.
+    private static func hitModifier(_ modifier: inout Double, move: Move, type: PokeType,
+                                    attacker: Combatant, field: Field, notes: inout [String]) {
         if field.isDoubles, move.isSpread {
             modifier *= 0.75
             notes.append("Spread: ×0.75")
         }
-
-        switch (field.weather, moveType) {
+        switch (field.weather, type) {
         case (.sun, .fire), (.rain, .water): modifier *= 1.5
         case (.sun, .water), (.rain, .fire): modifier *= 0.5
         default: break
         }
-
         if field.critical {
-            // Sniper makes a critical hit worth half again as much as it
-            // already is, which is the entire ability.
             modifier *= attacker.ability == "Sniper" ? 2.25 : 1.5
         }
-
-        // STAB, doubled rather than 1.5x under Adaptability.
-        var stab = attacker.effectiveTypes.contains(moveType) ? 1.5 : 1.0
+        var stab = attacker.effectiveTypes.contains(type) ? 1.5 : 1.0
         if attacker.ability == "Adaptability", stab > 1 { stab = 2.0 }
         modifier *= stab
+    }
 
-        // -- effectiveness ---------------------------------------------------
+    /// 8. The type chart, and the defender's ability where it changes the
+    /// answer: an immunity, an absorption, a Thick Fat.
+    private static func effectiveness(of type: PokeType, into defender: Combatant, ignored: Bool,
+                                      notes: inout [String]) -> Double {
         var effectiveness = 1.0
-        for type in defender.effectiveTypes {
-            effectiveness *= TypeChart.multiplier(moveType, into: type)
+        for defending in defender.effectiveTypes {
+            effectiveness *= TypeChart.multiplier(type, into: defending)
         }
-        effectiveness = applyDefensiveAbility(effectiveness, moveType: moveType,
-                                              defender: defender, ignored: attacker.ignoresAbility, notes: &notes)
-        modifier *= effectiveness
+        return applyDefensiveAbility(effectiveness, moveType: type, defender: defender,
+                                     ignored: ignored, notes: &notes)
+    }
 
-        if effectiveness == 0 {
-            return DamageResult(minDamage: 0, maxDamage: 0, targetHP: defender.maxHP,
-                                effectiveness: 0, notes: notes + ["No effect"])
-        }
-
-        // Aura Guard is what makes Mega Lucario Z awkward to break: it halves
-        // every contact move, and most physical attackers only have those.
+    /// 9. What the defender takes off the hit. Aura Guard is what makes Mega
+    /// Lucario Z awkward to break: it halves every contact move, and most
+    /// physical attackers only have those. Multiscale only while the bar is
+    /// full -- the first hit is halved, the rest are not. The resist berries
+    /// halve one super-effective hit of their type; Kingambit holds a Chople
+    /// on 42% of measured sets precisely to survive one Fighting move, and
+    /// that was not being modelled at all. Chilan halves any Normal-type hit,
+    /// super-effective or not. Friend Guard is a quarter off everything aimed
+    /// at its partner, which is the whole of a support slot that does nothing
+    /// else.
+    private static func defensiveModifier(_ modifier: inout Double, move: Move, type: PokeType,
+                                          physical: Bool, effectiveness: Double,
+                                          attacker: Combatant, defender: Combatant, field: Field,
+                                          notes: inout [String]) {
         if !attacker.ignoresAbility, defender.ability == "Aura Guard", move.makesContact {
             modifier *= 0.5
             notes.append("Aura Guard: contact halved")
         }
-        // Only while the bar is full: the first hit is halved, the rest are not.
         if !attacker.ignoresAbility, defender.ability == "Multiscale" || defender.ability == "Shadow Shield", defender.atFullHP {
             modifier *= 0.5
             notes.append("\(defender.ability) at full HP: ×0.5")
@@ -637,61 +723,58 @@ enum DamageCalc {
         if effectiveness > 1, defender.item == "Weakness Policy" {
             notes.append("Triggers Weakness Policy (+2 Atk / +2 SpA)")
         }
-
-        // Resist berries halve one super-effective hit of their type. Kingambit
-        // holds a Chople on 42% of measured sets precisely to survive one
-        // Fighting move, and that was not being modelled at all.
         if !defender.itemSpent,
            let berry = Combatant.resistBerries[defender.item],
-           berry == moveType, effectiveness > 1 {
+           berry == type, effectiveness > 1 {
             modifier *= 0.5
             notes.append("\(defender.item) halves it, then is consumed")
         }
-        // Chilan halves any Normal-type hit, super-effective or not.
-        if !defender.itemSpent, defender.item == "Chilan Berry", moveType == .normal {
+        if !defender.itemSpent, defender.item == "Chilan Berry", type == .normal {
             modifier *= 0.5
             notes.append("Chilan Berry halves it, then is consumed")
         }
-
         if defender.wideOpen {
             modifier *= 2
             notes.append("Glaive Rush: target is Wide Open, damage doubled")
         }
-
-        // Friend Guard: a quarter off everything aimed at its partner, which
-        // is the whole of a support slot that does nothing else.
         if field.friendGuarded { modifier *= 0.75 }
         if field.screen, !field.critical {
             modifier *= field.isDoubles ? 0.667 : 0.5
             notes.append("Screen: ×\(field.isDoubles ? "0.667" : "0.5")")
         }
+    }
 
-        // The type-boost items: a fifth more of one type, which is what a
-        // Charcoal on a Fire attacker is for. Read from a table rather than the
-        // text because the text says "increased by 20%" in one place and
-        // "increases damage inflicted by 20%" in another.
-        if let boosted = Combatant.typeBoostItems[attacker.item], boosted == moveType {
+    /// 10. What the attacker's item adds, and Supreme Overlord for the fallen.
+    /// The type-boost items are a fifth more of one type, which is what a
+    /// Charcoal on a Fire attacker is for -- read from a table rather than the
+    /// text, because the text says "increased by 20%" in one place and
+    /// "increases damage inflicted by 20%" in another.
+    private static func offensiveModifier(_ modifier: inout Double, type: PokeType,
+                                          effectiveness: Double, attacker: Combatant,
+                                          notes: inout [String]) {
+        if let boosted = Combatant.typeBoostItems[attacker.item], boosted == type {
             modifier *= 1.2
-            notes.append("\(attacker.item): +20% \(moveType.rawValue)")
+            notes.append("\(attacker.item): +20% \(type.rawValue)")
         }
         if attacker.item == "Life Orb" {
             modifier *= 1.3
             notes.append("Life Orb: +30% (10% recoil)")
         }
         if attacker.item == "Expert Belt", effectiveness > 1 { modifier *= 1.2 }
-
         if attacker.ability == "Supreme Overlord", attacker.fallenAllies > 0 {
             let boost = 1.0 + 0.1 * Double(min(5, attacker.fallenAllies))
             modifier *= boost
             notes.append("Supreme Overlord ×\(String(format: "%.1f", boost))")
         }
+    }
 
-        // -- multi-hit ---------------------------------------------------------
-        //
-        // The calculator was reading the printed power and stopping there, so
-        // Icicle Spear came out as a single 25 BP hit and Dragon Darts as 50.
-        // Each strike is its own calculation in the game; totalling them is
-        // close enough and is what the number on screen should mean.
+    /// 11. How many times it strikes. The calculator was reading the printed
+    /// power and stopping there, so Icicle Spear came out as a single 25 BP hit
+    /// and Dragon Darts as 50. Each strike is its own calculation in the game;
+    /// totalling them is close enough and is what the number on screen should
+    /// mean.
+    private static func strikes(of move: Move, by attacker: Combatant,
+                                notes: inout [String]) -> (count: Double, multiHit: Bool) {
         var strikes = 1.0
         var multiHit = false
         if let hits = move.drawbacks.hits {
@@ -712,18 +795,21 @@ enum DamageCalc {
                                     move.name, strikes))
             }
         }
+        return (strikes, multiHit)
+    }
 
-        // -- rolls -----------------------------------------------------------
+    /// 12. The sixteen rolls, and the one thing that caps them. From full HP a
+    /// Focus Sash cannot be knocked out in one hit, which makes "guaranteed
+    /// OHKO" wrong against the 87% of Whimsicott sets holding one; Sturdy
+    /// behaves the same way. A Sash stops one hit, not a move: anything that
+    /// strikes more than once breaks it on the first and knocks out with the
+    /// second, which is most of the reason those moves are worth running.
+    private static func rolled(base: Double, modifier: Double, strikes: Double, multiHit: Bool,
+                               attacker: Combatant, defender: Combatant,
+                               notes: inout [String]) -> [Int] {
         var damages = rolls.map { roll -> Int in
             max(1, Int(floor(floor(base * roll) * modifier) * strikes))
         }
-
-        // Focus Sash. From full HP it cannot be knocked out in one hit, which
-        // makes "guaranteed OHKO" wrong against the 87% of Whimsicott sets
-        // holding one. Sturdy behaves the same way.
-        // A Sash stops one hit, not a move. Anything that strikes more than
-        // once breaks it on the first and knocks out with the second, which is
-        // most of the reason those moves are worth running.
         let survivesAnything = ((defender.item == "Focus Sash" && !defender.itemSpent)
             || (defender.ability == "Sturdy" && !attacker.ignoresAbility)) && !multiHit
         if multiHit, defender.atFullHP,
@@ -740,13 +826,7 @@ enum DamageCalc {
             }
             damages = damages.map { min($0, cap) }
         }
-
-        return DamageResult(minDamage: damages.first ?? 0,
-                            maxDamage: damages.last ?? 0,
-                            targetHP: defender.maxHP,
-                            effectiveness: effectiveness,
-                            notes: notes,
-                            strikes: strikes)
+        return damages
     }
 
     /// `ignored` is a Mold Breaker on the other side: every type immunity an
