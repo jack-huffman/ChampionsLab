@@ -180,6 +180,8 @@ extension BattleFieldView {
                         .shadow(color: .black.opacity(0.8), radius: 2, y: 1)
                         .transition(.asymmetric(insertion: .offset(y: 14).combined(with: .opacity),
                                                 removal: .offset(y: -12).combined(with: .opacity)))
+                        // Fresh for every blow of a flurry, so each one arrives.
+                        .id(playback.hitNumber)
                 }
                 if let moved = playback.boosts[seat], !moved.isEmpty {
                     HStack(spacing: 3) {

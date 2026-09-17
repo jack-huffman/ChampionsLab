@@ -67,6 +67,13 @@ final class TurnPlayback: ObservableObject {
     @Published var boosts: [Seat: [StatChange]] = [:]
     /// Whose abilities went off as the step landed, named over the Pokemon.
     @Published var abilities: [Seat: [String]] = [:]
+    /// Partway through a flurry: what each Pokemon has taken so far, so the
+    /// health bar steps down blow by blow while the field is still held on
+    /// the moment before the move.
+    @Published var partial: [Seat: Int] = [:]
+    /// Counts each blow shown, so the number over the Pokemon comes in fresh
+    /// for every blow rather than editing itself in place.
+    @Published var hitNumber = 0
     /// Who took a hit on the last turn, so they can flinch on screen.
     @Published var struck: Set<Int> = []
     @Published var struckTheirs: Set<Int> = []
@@ -120,7 +127,7 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]; boosts = [:]; abilities = [:]
+        damage = [:]; boosts = [:]; abilities = [:]; partial = [:]
         struck = []; struckTheirs = []
         replay = []; at = 0; seen = 0; replayBoard = nil
     }
@@ -161,7 +168,7 @@ final class TurnPlayback: ObservableObject {
             guard !Task.isCancelled else { return }
             scene = nil
             stopTracks()
-            damage = [:]; boosts = [:]; abilities = [:]
+            damage = [:]; boosts = [:]; abilities = [:]; partial = [:]
             // The end of the turn: what the residuals took and gave -- a burn,
             // Leftovers, a Speed Boost -- shown over whoever it happened to,
             // one step at a time, since those steps have no move to play.
@@ -173,7 +180,7 @@ final class TurnPlayback: ObservableObject {
                 withAnimation(.easeOut(duration: 0.18)) { land(index, in: steps) }
                 try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1.6 * 1_000_000_000))
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:] }
+                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:]; partial = [:] }
             }
             // Rest on the last step rather than past it: the field shows the end
             // of the turn, and the stepper still works from there, which is how
@@ -207,7 +214,7 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]; boosts = [:]; abilities = [:]
+        damage = [:]; boosts = [:]; abilities = [:]; partial = [:]
         struck = []; struckTheirs = []
         seen = Swift.max(seen, index + 1)
         let steps = replay
@@ -218,7 +225,7 @@ final class TurnPlayback: ObservableObject {
             task = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1.6 * 1_000_000_000))
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:] }
+                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:]; partial = [:] }
                 task = nil
             }
             return
@@ -229,7 +236,7 @@ final class TurnPlayback: ObservableObject {
             guard !Task.isCancelled else { return }
             scene = nil
             stopTracks()
-            damage = [:]; boosts = [:]; abilities = [:]
+            damage = [:]; boosts = [:]; abilities = [:]; partial = [:]
             at = index
             task = nil
         }
@@ -286,7 +293,7 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]; boosts = [:]; abilities = [:]
+        damage = [:]; boosts = [:]; abilities = [:]; partial = [:]
         replay = []; at = 0; seen = 0; replayBoard = nil
     }
 
@@ -321,16 +328,50 @@ final class TurnPlayback: ObservableObject {
         let user = Seat(mine: action.byMine, slot: action.slot)
         reached.removeAll { $0 == user }
 
-        let staged = stage(action, order: order, user: user, reached: reached, singles: singles)
-        // Travel, then the blow: the step's own health is shown at the moment
-        // the move reaches, not when it was thrown.
-        try? await Task.sleep(nanoseconds: UInt64(staged.impact * 1_000_000_000))
-        guard !Task.isCancelled else { return }
-        at = index
-        seen = Swift.max(seen, index + 1)
-        // The blow lands: show what it took and what it moved, from the same
-        // differences the targets were worked out from.
-        withAnimation(.easeOut(duration: 0.18)) { land(index, in: steps) }
+        // A flurry is played blow by blow: the move's own picture once per
+        // blow, quicker, each with its own number, the health bar stepping
+        // down between them. One target, as every flurry in the game has.
+        let blows = action.hits
+        let staged: (impact: TimeInterval, total: TimeInterval)
+        if blows.count > 1, reached.count == 1, let target = reached.first {
+            let each = Swift.max(0.32, Swift.min(0.75, 1.9 / Double(blows.count)))
+            var soFar = 0
+            for (n, blow) in blows.enumerated() {
+                let one = stage(action, order: order + n, user: user, reached: reached,
+                                singles: singles, within: each)
+                try? await Task.sleep(nanoseconds: UInt64(one.impact * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                soFar += blow
+                withAnimation(.easeOut(duration: 0.15)) {
+                    damage = [target: blow]
+                    partial = [target: soFar]
+                    hitNumber += 1
+                }
+                try? await Task.sleep(nanoseconds: UInt64(Swift.max(0, one.total - one.impact) * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+            }
+            at = index
+            seen = Swift.max(seen, index + 1)
+            // The step's own record for everything else the move did; the
+            // number stays the last blow's, since the bar shows the whole.
+            withAnimation(.easeOut(duration: 0.18)) {
+                land(index, in: steps)
+                damage = [target: blows.last ?? 0]
+                partial = [:]
+            }
+            staged = (impact: 0, total: 0)
+        } else {
+            staged = stage(action, order: order, user: user, reached: reached, singles: singles)
+            // Travel, then the blow: the step's own health is shown at the moment
+            // the move reaches, not when it was thrown.
+            try? await Task.sleep(nanoseconds: UInt64(staged.impact * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            at = index
+            seen = Swift.max(seen, index + 1)
+            // The blow lands: show what it took and what it moved, from the same
+            // differences the targets were worked out from.
+            withAnimation(.easeOut(duration: 0.18)) { land(index, in: steps); hitNumber += 1 }
+        }
         // The rest of the move, and then it is over.
         try? await Task.sleep(
             nanoseconds: UInt64(max(0, staged.total - staged.impact) * 1_000_000_000))
@@ -341,7 +382,7 @@ final class TurnPlayback: ObservableObject {
         stopTracks()
         try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1_000_000_000))
         guard !Task.isCancelled else { return }
-        withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:] }
+        withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:]; partial = [:] }
         if !last {
             try? await Task.sleep(nanoseconds: UInt64(Self.betweenActions * 1_000_000_000))
         }
@@ -357,7 +398,7 @@ final class TurnPlayback: ObservableObject {
     /// nothing, and so does a move before the field has told the playback
     /// its stage.
     private func stage(_ action: Board.Action, order: Int, user: Seat, reached: [Seat],
-                       singles: Bool) -> (impact: TimeInterval, total: TimeInterval) {
+                       singles: Bool, within: TimeInterval = TurnPlayback.longestMove) -> (impact: TimeInterval, total: TimeInterval) {
         let table = Choreography.shared
         if !table.isEmpty, let geometry = stage, action.category != "Switch" {
             var targets = reached
@@ -382,9 +423,9 @@ final class TurnPlayback: ObservableObject {
             if let recipe {
                 var timeline = MoveTimeline.build(recipe, attacker: user, targets: targets,
                                                   sizes: table.sprites, stage: geometry)
-                if timeline.duration > Self.longestMove {
+                if timeline.duration > within {
                     timeline = MoveTimeline.build(recipe, attacker: user, targets: targets, sizes: table.sprites,
-                                                  stage: geometry, speed: timeline.duration / Self.longestMove)
+                                                  stage: geometry, speed: timeline.duration / within)
                 }
                 var ghosts: [Seat: NSImage] = [:]
                 for seat in [user] + targets {

@@ -523,6 +523,10 @@ struct Board {
         /// over the one being helped, not over a foe.
         var aimsAtUser = false
         var aimsAtAlly = false
+        /// Each blow of a multi-hit move as it landed, in order -- a Dual
+        /// Wingbeat's two, a Rock Blast's two to five -- so the field plays
+        /// each one. Empty for a move that strikes once.
+        var hits: [Int] = []
 
         /// The action behind a choice, read off the move it actually plays.
         /// A switch, a Protect and a pass each read as themselves.

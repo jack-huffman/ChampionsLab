@@ -812,6 +812,17 @@ enum Strikes {
                          ? String(format: "%d blows, each harder than the last.",
                                   move.hits?.last ?? 0)
                          : "\(Int(blows.rounded())) hits, \(oneBlow) each.")
+            // Each blow on its own, for the field to play one at a time: an
+            // even share each, or climbing for a move whose blows escalate.
+            let count = Int(blows.rounded())
+            let weights: [Double] = move.escalates ? (1...count).map(Double.init)
+                                                   : Array(repeating: 1, count: count)
+            let total = weights.reduce(0, +)
+            var split = weights.map { Int((Double(dealt) * $0 / total).rounded(.down)) }
+            split[split.count - 1] += dealt - split.reduce(0, +)
+            board.acting?.hits = split
+        } else {
+            board.acting?.hits = []
         }
         if bonded { board.detail("Parental Bond: a second blow at a quarter.") }
         return dealt
@@ -870,14 +881,30 @@ enum Strikes {
                              index: Int, hitMine: Bool, board: inout Board) -> Int {
         var landed = dealt
         var sashed = false
+        let sashReady = before.build.item == "Focus Sash" && !before.build.itemSpent
+            && before.hp == before.maxHP
         if before.enduring, dealt >= before.hp {
             landed = before.hp - 1
             board.detail("\(hitName) endured it.")
-        }
-        if before.build.item == "Focus Sash",
-           !before.build.itemSpent,
-           before.hp == before.maxHP,
-           dealt >= before.hp {
+        } else if let blows = board.acting?.hits, blows.count > 1 {
+            // A flurry lands one blow at a time. A Focus Sash holds the first
+            // blow that would have finished it, and the next blow lands on
+            // the one point it left -- which is the whole point of a flurry
+            // into a Sash. The blows are trimmed to what actually landed,
+            // since nothing strikes a fainted Pokemon.
+            var hp = before.hp
+            var landedBlows: [Int] = []
+            for blow in blows where hp > 0 {
+                if sashReady, !sashed, blow >= hp {
+                    landedBlows.append(hp - 1); hp = 1; sashed = true
+                } else {
+                    landedBlows.append(Swift.min(blow, hp)); hp -= Swift.min(blow, hp)
+                }
+            }
+            landed = before.hp - hp
+            board.acting?.hits = landedBlows
+            if sashed { board.detail("\(hitName) hung on with its Focus Sash, and the next blow landed.") }
+        } else if sashReady, dealt >= before.hp {
             landed = before.hp - 1
             sashed = true
         }
@@ -901,7 +928,9 @@ enum Strikes {
         } else {
             board.detail("\(hitName) took \(landed) (\(share)%).")
         }
-        if sashed { board.detail("\(hitName) hung on with its Focus Sash.") }
+        if sashed, (board.acting?.hits.count ?? 0) <= 1 {
+            board.detail("\(hitName) hung on with its Focus Sash.")
+        }
         return landed
     }
 

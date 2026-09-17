@@ -69,9 +69,17 @@ struct BattleFieldView: View {
 
     private func field(_ live: Board) -> some View {
         // Mid-replay the field shows the moment being described, not where the
-        // turn ended up.
-        let board = replay.indices.contains(at)
+        // turn ended up -- and partway through a flurry, the moment before it
+        // less what the blows so far have taken.
+        var board = replay.indices.contains(at)
             ? rewound(replayBoard ?? live, to: replay[at]) : live
+        for (seat, taken) in playback.partial {
+            if seat.mine, board.mine.indices.contains(seat.slot) {
+                board.mine[seat.slot].hp = max(0, board.mine[seat.slot].hp - taken)
+            } else if !seat.mine, board.theirs.indices.contains(seat.slot) {
+                board.theirs[seat.slot].hp = max(0, board.theirs[seat.slot].hp - taken)
+            }
+        }
         // Half the window is the field, half is what you are doing about it,
         // and the deck on the left is as tall as the readings on the right.
         // A turn should never need scrolling to play.
