@@ -35,8 +35,8 @@ struct TurnStepper: View {
             VStack(alignment: .leading, spacing: 8) {
                 header(played)
                 ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 5) {
+                    MaybeScroll {
+                        VStack(alignment: .leading, spacing: 5) {
                             ForEach(Array(shown.enumerated()), id: \.element.id) { index, step in
                                 row(step, index: index)
                             }

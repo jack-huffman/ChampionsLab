@@ -225,7 +225,7 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         render(BattleView(openTeams: (mine: playing.id.uuidString, theirs: against.id),
                           arriving: .versus),
                named: "battle-versus-dark",
-               size: CGSize(width: 1180, height: 860), dark: true)
+               size: CGSize(width: 1180, height: 1320), dark: true)
 
         // And the field itself, a turn in. Lead with something holding a
         // stone, so the Mega Evolve toggle shows.

@@ -296,6 +296,19 @@ struct VersusBanner: View {
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.white.opacity(0.72))
                 .lineLimit(1)
+            if onChoose != nil {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 8, weight: .bold))
+                    Text(side == nil ? "CHOOSE" : "CHANGE")
+                        .font(.system(size: 8, weight: .heavy)).kerning(0.8)
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(Capsule().fill(.white.opacity(0.16)))
+                .overlay(Capsule().strokeBorder(.white.opacity(0.45), lineWidth: 1))
+                .padding(.top, 5)
+            }
         }
         .frame(maxWidth: 300, alignment: leading ? .leading : .trailing)
         return Button { onChoose?(leading) } label: { block.contentShape(Rectangle()) }

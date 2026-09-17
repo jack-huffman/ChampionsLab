@@ -56,15 +56,19 @@ struct VersusPageView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .strokeBorder(.white.opacity(0.12), lineWidth: 1))
-                // The choosers hang off the corners the names sit in.
+                // The choosers hang off the corners the names sit in. The
+                // anchors are not clickable themselves: the names under them
+                // are the buttons.
                 .overlay(alignment: .topLeading) {
-                    Color.clear.frame(width: 300, height: 56).padding(18)
+                    Color.clear.frame(width: 300, height: 72).padding(18)
+                        .allowsHitTesting(false)
                         .popover(isPresented: $choosingMine, arrowEdge: .bottom) {
                             chooser(.mine)
                         }
                 }
                 .overlay(alignment: .topTrailing) {
-                    Color.clear.frame(width: 300, height: 56).padding(18)
+                    Color.clear.frame(width: 300, height: 72).padding(18)
+                        .allowsHitTesting(false)
                         .popover(isPresented: $choosingTheirs, arrowEdge: .bottom) {
                             chooser(.theirs)
                         }
