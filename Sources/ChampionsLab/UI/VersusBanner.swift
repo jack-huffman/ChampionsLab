@@ -1,6 +1,7 @@
 //  VersusBanner.swift
-//  The screen between choosing two teams and choosing four: both sixes face
-//  each other across a slanted divider, with what each side would bring.
+//  The lobby's centrepiece: both sixes face each other across a slanted
+//  divider, with what each side would bring. A side not chosen yet is an
+//  open slab asking to be, and a side that is can be clicked to change.
 
 import SwiftUI
 
@@ -113,13 +114,24 @@ struct VersusBanner: View {
         let tint: Color
     }
 
-    let mine: Side
-    let theirs: Side
+    /// Either side may still be open: the lobby starts with nobody chosen.
+    let mine: Side?
+    let theirs: Side?
     /// The grid's verdict on the whole matchup, −100…100, and in words.
     let score: Int
     let verdict: String
+    /// The colours the slabs wear before a side is chosen.
+    var mineTint: Color = Palette.accent
+    var theirsTint: Color = Palette.bad
+    /// What an open side asks for.
+    var emptyMine = "Choose your team"
+    var emptyTheirs = "Choose an opponent"
+    /// Clicking a side -- open or chosen -- to choose it; `true` for yours.
+    var onChoose: ((Bool) -> Void)? = nil
 
     private let angle: CGFloat = 25 * .pi / 180
+    private var leftTint: Color { mine?.tint ?? mineTint }
+    private var rightTint: Color { theirs?.tint ?? theirsTint }
 
     var body: some View {
         GeometryReader { geo in
@@ -127,11 +139,14 @@ struct VersusBanner: View {
             let lean = tan(angle) * h / 2
             ZStack {
                 Color(red: 0.05, green: 0.06, blue: 0.09)
+                // An open slab is the same colour, unlit: chosen, it comes on.
                 Slab(lean: lean, left: true)
-                    .fill(LinearGradient(colors: [mine.tint.opacity(0.62), mine.tint.opacity(0.08)],
+                    .fill(LinearGradient(colors: [leftTint.opacity(mine == nil ? 0.22 : 0.62),
+                                                  leftTint.opacity(mine == nil ? 0.04 : 0.08)],
                                          startPoint: .topLeading, endPoint: .bottomTrailing))
                 Slab(lean: lean, left: false)
-                    .fill(LinearGradient(colors: [theirs.tint.opacity(0.08), theirs.tint.opacity(0.62)],
+                    .fill(LinearGradient(colors: [rightTint.opacity(theirs == nil ? 0.04 : 0.08),
+                                                  rightTint.opacity(theirs == nil ? 0.22 : 0.62)],
                                          startPoint: .topLeading, endPoint: .bottomTrailing))
                 SlantLines(lean: lean, spacing: 44)
                     .stroke(.white.opacity(0.05), lineWidth: 1)
@@ -143,17 +158,27 @@ struct VersusBanner: View {
                 .stroke(.white.opacity(0.92), lineWidth: 3)
                 .shadow(color: .white.opacity(0.55), radius: 12)
 
-                formation(mine, in: geo.size, lean: lean, left: true)
-                formation(theirs, in: geo.size, lean: lean, left: false)
+                if let mine {
+                    formation(mine, in: geo.size, lean: lean, left: true)
+                } else {
+                    openSide(emptyMine, tint: leftTint, mine: true)
+                        .position(x: w / 4 + lean / 2, y: h * 0.55)
+                }
+                if let theirs {
+                    formation(theirs, in: geo.size, lean: lean, left: false)
+                } else {
+                    openSide(emptyTheirs, tint: rightTint, mine: false)
+                        .position(x: w * 3 / 4 - lean / 2, y: h * 0.55)
+                }
 
                 // Names in the top corners, the verdict between them: the
                 // bottom centre is where the front ranks' last sprites sit.
                 HStack(alignment: .top) {
-                    nameBlock(mine, leading: true)
+                    nameBlock(mine, title: "YOUR TEAM", tint: leftTint, leading: true)
                     Spacer()
-                    verdictChip.padding(.top, 4)
+                    if mine != nil, theirs != nil { verdictChip.padding(.top, 4) }
                     Spacer()
-                    nameBlock(theirs, leading: false)
+                    nameBlock(theirs, title: "THEIR TEAM", tint: rightTint, leading: false)
                 }
                 .padding(18)
                 .frame(maxHeight: .infinity, alignment: .top)
@@ -246,20 +271,65 @@ struct VersusBanner: View {
         }
     }
 
-    private func nameBlock(_ side: Side, leading: Bool) -> some View {
-        VStack(alignment: leading ? .leading : .trailing, spacing: 1) {
-            Text(side.title).font(.system(size: 9, weight: .heavy)).kerning(1.4)
-                .foregroundStyle(.white.opacity(0.62))
-            Text(side.name.uppercased())
+    /// The side's name in its corner. Where a side can be chosen, the block
+    /// is the button for it, and says so with a chevron.
+    private func nameBlock(_ side: Side?, title: String, tint: Color, leading: Bool) -> some View {
+        let block = VStack(alignment: leading ? .leading : .trailing, spacing: 1) {
+            HStack(spacing: 5) {
+                if !leading, onChoose != nil {
+                    Image(systemName: "chevron.down").font(.system(size: 8, weight: .heavy))
+                        .foregroundStyle(.white.opacity(0.62))
+                }
+                Text(side?.title ?? title).font(.system(size: 9, weight: .heavy)).kerning(1.4)
+                    .foregroundStyle(.white.opacity(0.62))
+                if leading, onChoose != nil {
+                    Image(systemName: "chevron.down").font(.system(size: 8, weight: .heavy))
+                        .foregroundStyle(.white.opacity(0.62))
+                }
+            }
+            Text((side?.name ?? (leading ? emptyMine : emptyTheirs)).uppercased())
                 .font(.system(size: 22, weight: .black)).italic()
-                .foregroundStyle(.white)
+                .foregroundStyle(.white.opacity(side == nil ? 0.5 : 1))
                 .lineLimit(1).minimumScaleFactor(0.6)
                 .shadow(color: .black.opacity(0.6), radius: 4, y: 2)
-            Text(side.tag).font(.system(size: 10, weight: .medium))
+            Text(side?.tag ?? (onChoose == nil ? " " : "click to choose"))
+                .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.white.opacity(0.72))
                 .lineLimit(1)
         }
         .frame(maxWidth: 300, alignment: leading ? .leading : .trailing)
+        return Button { onChoose?(leading) } label: { block.contentShape(Rectangle()) }
+            .buttonStyle(.plain)
+            .disabled(onChoose == nil)
+            .help(onChoose == nil ? "" : (leading ? "Choose one of your saved teams." : "Choose an opponent: a meta archetype, a tournament team, or another of yours."))
+    }
+
+    /// An open side: the slab's own call to be filled, in the middle of it.
+    private func openSide(_ ask: String, tint: Color, mine: Bool) -> some View {
+        Button { onChoose?(mine) } label: {
+            VStack(spacing: 10) {
+                Image(systemName: mine ? "person.3.fill" : "eye.fill")
+                    .font(.system(size: 34, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .shadow(color: tint.opacity(0.8), radius: 14)
+                Text(ask.uppercased())
+                    .font(.system(size: 15, weight: .black)).italic().kerning(1.2)
+                    .foregroundStyle(.white)
+                Text(mine ? "one of your saved teams" : "a meta archetype, a tournament team, or another of yours")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 220)
+            }
+            .padding(.horizontal, 26).padding(.vertical, 22)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.white.opacity(0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(.white.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [7, 5])))
+            .shadow(color: tint.opacity(0.35), radius: 20)
+        }
+        .buttonStyle(.plain)
+        .disabled(onChoose == nil)
     }
 
     private var badge: some View {

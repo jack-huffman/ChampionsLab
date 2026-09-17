@@ -1,10 +1,12 @@
 //  BattleView.swift
 //  Playing the matchup out, with both sides' reasoning on screen beside it.
 //
-//  A game starts at Team Preview, not at turn one: you see six and theirs, and
-//  you choose four and an order before anything happens. That choice is most of
-//  the game and it is made with less information than any later one, so it gets
-//  its own screen rather than being assumed away.
+//  The screen opens on the lobby: the last two teams looked at, facing each
+//  other, a click from starting -- or an open side asking for one. Then Team
+//  Preview, not turn one: you see six and theirs, and you choose four and an
+//  order before anything happens. That choice is most of the game and it is
+//  made with less information than any later one, so it gets its own screen
+//  rather than being assumed away.
 //
 //  Then the field, laid out as a field: yours on the left, theirs on the right,
 //  both pairs facing. Each side carries its own analysis — what you should be
@@ -20,7 +22,7 @@ struct BattleView: View {
     @EnvironmentObject private var store: Store
     @Environment(\.snapshotMode) private var snapshotMode
 
-    enum Stage { case setup, versus, preview, battle }
+    enum Stage { case versus, preview, battle }
 
     /// The game itself, and the turn being shown. The pre-game flow is the
     /// view's own state; everything from the first board onward lives on these
@@ -57,11 +59,15 @@ struct BattleView: View {
     private var at: Int { get { playback.at } nonmutating set { playback.at = newValue } }
     private var replayBoard: Board? { get { playback.replayBoard } nonmutating set { playback.replayBoard = newValue } }
 
-    @State private var stage: Stage = .setup
+    @State private var stage: Stage = .versus
     @State private var myTeamID = ""
     @State private var opponentID = ""
-    @State private var opponentSearch = ""
+    /// The matchup last looked at, so the lobby opens ready.
+    @AppStorage("battleLobbyMine") private var rememberedMine = ""
+    @AppStorage("battleLobbyTheirs") private var rememberedTheirs = ""
     @State private var startHover = false
+    /// Asking whether to stop the game in progress.
+    @State private var stopping = false
     /// Which lobby is being worked out; an older one's answer is dropped.
     @State private var lobbyTicket = 0
     /// The start of the game, being shown: the flash, the leads coming out,
@@ -129,8 +135,7 @@ struct BattleView: View {
             _stage = State(initialValue: stage)
             // A snapshot never runs the step that works the two sixes out, so
             // it is done here, against the shared store the sprites also use.
-            if stage != .setup,
-               let mine = shared.teams.first(where: { $0.id.uuidString == openTeams.mine }),
+            if let mine = shared.teams.first(where: { $0.id.uuidString == openTeams.mine }),
                let theirs = shared.data.metaTeams.first(where: { $0.id == openTeams.theirs })
                    .map({ shared.opponentTeam($0) })
                    ?? shared.teams.first(where: { $0.id.uuidString == openTeams.theirs }) {
@@ -159,16 +164,12 @@ struct BattleView: View {
             Divider()
             Group {
                 switch stage {
-                case .setup:
-                    TeamPickingView(myTeamID: myTeamID, opponentID: opponentID,
-                                    opponentSearch: $opponentSearch,
-                                    onChooseMine: { choose(mine: $0) },
-                                    onChooseTheirs: { choose(theirs: $0) },
-                                    singles: singles)
                 case .versus:
                     VersusPageView(myTeam: myTeam, theirTeam: theirTeam, lobby: lobby,
-                                   opponentID: opponentID, singles: singles,
-                                   startHover: $startHover) {
+                                   myTeamID: myTeamID, opponentID: opponentID, singles: singles,
+                                   startHover: $startHover,
+                                   onChooseMine: { choose(mine: $0) },
+                                   onChooseTheirs: { choose(theirs: $0) }) {
                         bringing = []; focused = nil
                         stage = .preview
                     }
@@ -186,6 +187,34 @@ struct BattleView: View {
             TurnExplainer(review: entry, rules: store.rulebook) { explaining = nil }
                 .environmentObject(store)
         }
+        .onAppear(perform: recallLastMatchup)
+        .confirmationDialog("Stop this game?", isPresented: $stopping, titleVisibility: .visible) {
+            Button("Stop the game", role: .destructive) { stopGame() }
+            Button("Keep playing", role: .cancel) {}
+        } message: {
+            Text("The board and the turn log go. The two teams stay chosen, so another game is a click away.")
+        }
+    }
+
+    /// The lobby opens on the last matchup looked at, so a battle is a click
+    /// away. A snapshot opens on what it was handed and remembers nothing.
+    private func recallLastMatchup() {
+        guard !snapshotMode else { return }
+        if myTeamID.isEmpty { myTeamID = rememberedMine }
+        if opponentID.isEmpty { opponentID = rememberedTheirs }
+        // A team since deleted, or a list since withdrawn.
+        if myTeam == nil { myTeamID = "" }
+        if theirTeam == nil { opponentID = "" }
+        if stage == .versus, myTeam != nil, theirTeam != nil, lobby.verdict == nil { enterVersus() }
+    }
+
+    /// The game ends here, by choice: the board and its log go, the two
+    /// teams stay chosen, and the lobby is where it lands.
+    private func stopGame() {
+        session.endGame()
+        opening = false; startFlash = false; shown = []; callout = nil
+        bringing = []; focused = nil
+        stage = .versus
     }
 
     // MARK: Choosing the teams
@@ -201,9 +230,7 @@ struct BattleView: View {
 
             Divider().frame(height: 18)
 
-            crumb("Teams", .setup, symbol: "person.3", enabled: true)
-            crumbArrow
-            crumb("Versus", .versus, symbol: "bolt.fill", enabled: ready)
+            crumb("Lobby", .versus, symbol: "bolt.fill", enabled: true)
             crumbArrow
             crumb("Team Preview", .preview, symbol: "list.number", enabled: ready)
             crumbArrow
@@ -212,6 +239,16 @@ struct BattleView: View {
             Spacer()
             if stage == .battle {
                 Text("Turn \(turn)").font(.system(size: 11)).foregroundStyle(.secondary)
+                // A game over needs no asking; one in progress does.
+                Button {
+                    if finished != nil { stopGame() } else { stopping = true }
+                } label: {
+                    Label(finished == nil ? "Stop game" : "Leave game", systemImage: "xmark.octagon.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .controlSize(.small)
+                .tint(Palette.bad)
+                .help("End this game and go back to the lobby. The teams stay chosen.")
             }
         }
         .padding(12)
@@ -243,8 +280,6 @@ struct BattleView: View {
     /// has not been done yet; going back never loses anything.
     private func go(to target: Stage) {
         switch target {
-        case .setup:
-            stage = .setup
         case .versus:
             if lobby.verdict == nil { enterVersus() } else { stage = .versus }
         case .preview:
@@ -255,9 +290,14 @@ struct BattleView: View {
         }
     }
 
+    /// The format changed under the lobby: the game, if any, is off, and the
+    /// two sixes are read again for the new one.
     private func reset() {
-        stage = .setup; bringing = []; focused = nil; board = nil; finished = nil
-        log = []; mySide = []; theirSide = []; lobby = Lobby()
+        session.endGame()
+        opening = false; startFlash = false; shown = []; callout = nil
+        bringing = []; focused = nil; lobby = Lobby()
+        stage = .versus
+        if myTeam != nil, theirTeam != nil { enterVersus() }
     }
 
     // MARK: Choosing the teams
@@ -322,13 +362,15 @@ struct BattleView: View {
 
     private func choose(mine id: String) {
         myTeamID = id
-        lobby = Lobby(); board = nil
+        rememberedMine = id
+        lobby = Lobby(); session.endGame()
         if theirTeam != nil { enterVersus() }
     }
 
     private func choose(theirs id: String) {
         opponentID = id
-        lobby = Lobby(); board = nil
+        rememberedTheirs = id
+        lobby = Lobby(); session.endGame()
         if myTeam != nil { enterVersus() }
     }
 

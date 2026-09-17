@@ -599,6 +599,22 @@ final class BattleSession: ObservableObject {
         restore(entry.board, log: entry.log, turn: entry.turn)
     }
 
+    /// The game is over, by a result or by choice: everything that was this
+    /// game goes, and a search still running for it is dropped when it lands.
+    /// The teams and the lobby are the screen's and stay.
+    func endGame() {
+        thinkTicket += 1
+        playback.reset()
+        board = nil; log = []; turn = 1
+        leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
+        thinking = false; thought = nil; solved = nil; searchNote = ""
+        mySide = []; theirSide = []; watching = false
+        playing = false; finished = nil; history = []; review = []; grade = nil
+        explaining = nil; pendingReview = nil
+        sending = []; chosenSends = []; pausedTurn = nil
+        panel = .engine
+    }
+
     func restore(_ board: Board, log: [String], turn: Int) {
         // Whatever was being played belongs to a turn that no longer happened.
         playback.reset()

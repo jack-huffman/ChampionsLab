@@ -203,8 +203,8 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
                           previewing: chosen),
                named: "battle-preview-dark",
                size: CGSize(width: 1280, height: 860), dark: true)
-        // Choosing the teams, with yours chosen and theirs still open.
-        render(BattleView(openTeams: (mine: playing.id.uuidString, theirs: ""), arriving: .setup),
+        // The lobby, with yours chosen and theirs still open.
+        render(BattleView(openTeams: (mine: playing.id.uuidString, theirs: ""), arriving: .versus),
                named: "battle-setup-dark",
                size: CGSize(width: 1180, height: 760), dark: true)
         // And the two sixes facing each other.

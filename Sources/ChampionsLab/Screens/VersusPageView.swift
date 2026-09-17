@@ -1,10 +1,13 @@
 //  VersusPageView.swift
-//  The two sixes against each other, before anyone has picked a four.
+//  The lobby: where the battle screen opens, and where a game starts from.
 //
-//  What you would bring, what they would, what each side has reason to fear,
-//  and the verdict across the top. Everything it shows is worked out by the
-//  battle screen as the Lobby; this only draws it, and the one thing it can do
-//  -- start -- goes back up.
+//  The two sixes against each other, before anyone has picked a four -- or
+//  either side still open, asking for a team. A side is chosen by clicking
+//  it: yours from your saved teams, theirs from the published lists or your
+//  other teams. Once both are in, what you would bring, what they would, what
+//  each side has reason to fear, and the verdict across the top. Everything
+//  it shows is worked out by the battle screen as the Lobby; this draws it,
+//  and the things it can do -- choose a side, start -- go back up.
 
 import SwiftUI
 
@@ -14,10 +17,16 @@ struct VersusPageView: View {
     let myTeam: Team?
     let theirTeam: Team?
     let lobby: BattleView.Lobby
+    let myTeamID: String
     let opponentID: String
     let singles: Bool
     @Binding var startHover: Bool
+    let onChooseMine: (String) -> Void
+    let onChooseTheirs: (String) -> Void
     let onStart: () -> Void
+    /// Which side's chooser is open, under that side's name.
+    @State private var choosingMine = false
+    @State private var choosingTheirs = false
 
     private var format: String { singles ? "singles" : "doubles" }
     private var bringCount: Int { singles ? 3 : 4 }
@@ -25,19 +34,37 @@ struct VersusPageView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            if let mine = myTeam, let theirs = theirTeam {
-                VersusBanner(mine: bannerSide(mine, plan: lobby.myPlan, title: "YOUR TEAM",
-                                              tag: "\(mine.slots.count) Pokémon · \(format)",
-                                              tint: Palette.accent),
-                             theirs: bannerSide(theirs, plan: lobby.theirPlan, title: "THEIR TEAM",
-                                                tag: theirTag, tint: Palette.bad),
-                             score: lobby.verdict?.score ?? 0,
-                             verdict: edgeWords(lobby.verdict?.score ?? 0))
-                    .frame(height: 400)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(.white.opacity(0.12), lineWidth: 1))
+            VersusBanner(mine: myTeam.map { mine in
+                             bannerSide(mine, plan: lobby.myPlan, title: "YOUR TEAM",
+                                        tag: "\(mine.slots.count) Pokémon · \(format)",
+                                        tint: Palette.accent) },
+                         theirs: theirTeam.map { theirs in
+                             bannerSide(theirs, plan: lobby.theirPlan, title: "THEIR TEAM",
+                                        tag: theirTag, tint: Palette.bad) },
+                         score: lobby.verdict?.score ?? 0,
+                         verdict: edgeWords(lobby.verdict?.score ?? 0),
+                         onChoose: { mine in
+                             if mine { choosingMine = true } else { choosingTheirs = true }
+                         })
+                .frame(height: 400)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(.white.opacity(0.12), lineWidth: 1))
+                // The choosers hang off the corners the names sit in.
+                .overlay(alignment: .topLeading) {
+                    Color.clear.frame(width: 300, height: 56).padding(18)
+                        .popover(isPresented: $choosingMine, arrowEdge: .bottom) {
+                            chooser(.mine)
+                        }
+                }
+                .overlay(alignment: .topTrailing) {
+                    Color.clear.frame(width: 300, height: 56).padding(18)
+                        .popover(isPresented: $choosingTheirs, arrowEdge: .bottom) {
+                            chooser(.theirs)
+                        }
+                }
 
+            if myTeam != nil, theirTeam != nil {
                 HStack(alignment: .top, spacing: 14) {
                     yourSideCard
                     theirSideCard
@@ -79,10 +106,33 @@ struct VersusPageView: View {
                     Spacer()
                 }
             } else {
-                EmptyHint(symbol: "bolt", title: "Choose both teams first")
+                lobbyHint
             }
         }
         .padding(20)
+    }
+
+    /// What the page is for, while a side is still open.
+    private var lobbyHint: some View {
+        VStack(spacing: 6) {
+            Text(myTeam == nil && theirTeam == nil ? "Pick a team for each side."
+                 : myTeam == nil ? "Pick your team." : "Pick an opponent.")
+                .font(.system(size: 14, weight: .semibold))
+            Text("Click a side of the banner to choose. The engine reads the matchup as soon as both are in, and the battle starts from here.")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 460)
+        }
+        .padding(.top, 8)
+    }
+
+    private func chooser(_ side: TeamChooser.Side) -> some View {
+        TeamChooser(side: side, myTeamID: myTeamID, opponentID: opponentID, singles: singles) { id in
+            choosingMine = false; choosingTheirs = false
+            if side == .mine { onChooseMine(id) } else { onChooseTheirs(id) }
+        }
+        .environmentObject(store)
+        .frame(width: 640, height: 600)
     }
 
     private func bannerSide(_ team: Team, plan: BringFour.Plan?, title: String, tag: String,
