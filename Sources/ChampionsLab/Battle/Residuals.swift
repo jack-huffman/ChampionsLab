@@ -80,7 +80,7 @@ enum Residuals {
                 }
                 // Shed Skin: one turn in three it shakes a condition off.
                 if who.build.ability == "Shed Skin", hp > 0, who.status != .none,
-                   rolling, Double.random(in: 0..<1, using: &TurnModel.dice) < 1.0 / 3.0 {
+                   rolling, Double.random(in: 0..<1, using: &Dice.source) < 1.0 / 3.0 {
                     if mine { board.mine[index].status = .none; board.mine[index].asleepFor = 0 }
                     else { board.theirs[index].status = .none; board.theirs[index].asleepFor = 0 }
                     board.note("\(name) shed its skin and shook it off.")
@@ -90,8 +90,8 @@ enum Residuals {
                 // it takes nothing.
                 if who.build.ability == "Moody", hp > 0, rolling {
                     let stats: [Stat] = [.attack, .defense, .spAttack, .spDefense, .speed]
-                    if let up = stats.randomElement(using: &TurnModel.dice),
-                       let down = stats.filter({ $0 != up }).randomElement(using: &TurnModel.dice) {
+                    if let up = stats.randomElement(using: &Dice.source),
+                       let down = stats.filter({ $0 != up }).randomElement(using: &Dice.source) {
                         StatChanges.change([up: 2], onMine: mine, slot: index, board: &board, because: "Moody")
                         StatChanges.change([down: -1], onMine: mine, slot: index, board: &board, because: "Moody")
                     }
@@ -120,7 +120,7 @@ enum Residuals {
                 if who.build.ability == "Harvest", who.build.itemSpent, hp > 0,
                    who.build.item.hasSuffix("Berry"),
                    board.field.weather == .sun
-                       || (rolling && Double.random(in: 0..<1, using: &TurnModel.dice) < 0.5) {
+                       || (rolling && Double.random(in: 0..<1, using: &Dice.source) < 0.5) {
                     if mine { board.mine[index].build.itemSpent = false }
                     else { board.theirs[index].build.itemSpent = false }
                     board.note("\(name) harvested another \(who.build.item).")
@@ -128,7 +128,7 @@ enum Residuals {
                 // Healer: three in ten that it clears up whatever its partner
                 // is carrying.
                 if who.build.ability == "Healer", hp > 0, rolling,
-                   Double.random(in: 0..<1, using: &TurnModel.dice) < 0.3 {
+                   Double.random(in: 0..<1, using: &Dice.source) < 0.3 {
                     let ally = index == 0 ? 1 : 0
                     let side = mine ? board.mine : board.theirs
                     if side.indices.contains(ally), ally < board.activeCount,

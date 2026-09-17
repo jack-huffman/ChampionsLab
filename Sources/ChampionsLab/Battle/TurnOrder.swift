@@ -166,7 +166,7 @@ enum TurnOrder {
         let odds = fighter.build.ability == "Quick Draw" ? 0.3
             : (fighter.build.item == "Quick Claw" ? 0.2 : 0)
         guard odds > 0 else { return false }
-        if rolling { return Double.random(in: 0..<1, using: &TurnModel.dice) < odds }
+        if rolling { return Double.random(in: 0..<1, using: &Dice.source) < odds }
         return board.rulings[Board.flip("quickclaw", mine, slot)] ?? false
     }
 

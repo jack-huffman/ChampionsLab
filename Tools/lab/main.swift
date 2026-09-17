@@ -39,7 +39,7 @@
 //  engine still plays a real game. Raise it with --budget when the question
 //  is about the engine itself.
 //
-//  On parallelism. `TurnModel.dice` and `branchedRolls` are global, so two
+//  On parallelism. `Dice.source` and `branchedRolls` are global, so two
 //  games cannot share a process. The lab shards across child processes
 //  instead: each runs a slice, writes its ledger as JSON, and the parent adds
 //  them up. That needs no change to the engine and uses every core.

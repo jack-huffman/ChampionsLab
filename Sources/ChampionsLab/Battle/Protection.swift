@@ -27,7 +27,7 @@ enum Protection {
         // is why a Gholdengo that has already protected is still not a free
         // Sucker Punch.
         let ruling = board.rulings[Board.flip("protect", byMine, slot)]
-        let works = rolling ? Double.random(in: 0..<1, using: &TurnModel.dice) < chance : (ruling ?? (chance >= 0.5))
+        let works = rolling ? Double.random(in: 0..<1, using: &Dice.source) < chance : (ruling ?? (chance >= 0.5))
         if works {
             if byMine { board.mine[slot].isProtected = true; board.mine[slot].protectStreak += 1 }
             else { board.theirs[slot].isProtected = true; board.theirs[slot].protectStreak += 1 }

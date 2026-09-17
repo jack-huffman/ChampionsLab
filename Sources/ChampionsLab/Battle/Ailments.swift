@@ -45,7 +45,7 @@ enum Ailments {
         }
         // Two to five turns of it. The search takes the shortest, so it never
         // counts on more than the game guarantees.
-        let turns = rolling ? Int.random(in: 2...5, using: &TurnModel.dice) : 2
+        let turns = rolling ? Int.random(in: 2...5, using: &Dice.source) : 2
         if onMine { board.mine[slot].confusedFor = turns } else { board.theirs[slot].confusedFor = turns }
         board.note("\(name) became confused" + (chance < 100 ? " — the \(chance)% came up." : "."))
     }
@@ -196,7 +196,7 @@ enum Ailments {
         }
         // It takes. Sleep lasts one to three turns in a played game; the search
         // takes two, the middle, so it never counts on the long one.
-        let nap = ailment == .sleep ? (rolling ? Int.random(in: 1...3, using: &TurnModel.dice) : 2) : 0
+        let nap = ailment == .sleep ? (rolling ? Int.random(in: 1...3, using: &Dice.source) : 2) : 0
         if onMine {
             board.mine[slot].status = ailment
             if ailment == .sleep { board.mine[slot].asleepFor = nap }

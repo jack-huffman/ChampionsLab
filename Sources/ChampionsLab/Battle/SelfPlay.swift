@@ -257,9 +257,9 @@ enum SelfPlay {
         // The battle's own dice, not just the engine's play sampling. Handing
         // both halves of a mirrored pair the same stream is what lets the
         // mirroring cancel the luck as well as the draw.
-        let wasDice = TurnModel.dice
-        TurnModel.dice = dice
-        defer { TurnModel.dice = wasDice }
+        let wasDice = Dice.source
+        Dice.source = dice
+        defer { Dice.source = wasDice }
 
         // Four of six, which is the format. Playing all six was giving every
         // team its whole roster every game — a different and much easier game
@@ -320,7 +320,7 @@ enum SelfPlay {
             // be played too, or there is nothing to compare the top against.
             let reach = bringSpread <= 0 ? plans.count
                                          : Swift.max(1, Swift.min(bringSpread, plans.count))
-            let at = reach == 1 ? 0 : Int.random(in: 0..<reach, using: &TurnModel.dice)
+            let at = reach == 1 ? 0 : Int.random(in: 0..<reach, using: &Dice.source)
             let plan = plans[at]
             var out = team
             out.slots = plan.bring.compactMap { form in
@@ -522,12 +522,12 @@ enum SelfPlay {
                 ledger.winner = .theirs; ledger.turns = turn; countSurvivors(); return ledger
             }
 
-            TurnModel.branchedRolls = forMine.branchedRolls
+            Dice.branchedRolls = forMine.branchedRolls
             let ours = choose(forMine.engine, on: board)
-            TurnModel.branchedRolls = forTheirs.branchedRolls
+            Dice.branchedRolls = forTheirs.branchedRolls
             let theirsPlay = choose(forTheirs.engine, on: board.flipped)
 
-            TurnModel.branchedRolls = forMine.branchedRolls
+            Dice.branchedRolls = forMine.branchedRolls
             board = TurnModel.resolve(board, mine: ours, theirs: theirsPlay, rolling: true)
             readSteps(board)
             board.fillGaps()
@@ -554,7 +554,7 @@ enum SelfPlay {
         guard !thought.plays.isEmpty else { return Play(left: .pass, right: .pass) }
         let total = thought.mix.reduce(0, +)
         guard total > 0 else { return thought.plays[0] }
-        var roll = Double.random(in: 0..<total, using: &TurnModel.dice)
+        var roll = Double.random(in: 0..<total, using: &Dice.source)
         for (index, weight) in thought.mix.enumerated() {
             roll -= weight
             if roll <= 0, thought.plays.indices.contains(index) { return thought.plays[index] }

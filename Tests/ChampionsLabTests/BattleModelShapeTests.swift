@@ -33,12 +33,13 @@ final class BattleModelShapeTests: XCTestCase {
         "SupportMoves": 1400,   // eighty-odd rules, one each
         "Ailments": 300,
         "StatChanges": 300,
-        "Switching": 400,
+        "Switching": 500,        // owns the Board's arrival methods as well
         "Residuals": 650,
         "Evaluation": 300,
         "Accuracy": 150,
         "Protection": 150,
         "MoveHistory": 150,
+        "Dice": 60,
     ]
 
     /// Functions allowed past the ordinary limit, with why.
@@ -65,6 +66,47 @@ final class BattleModelShapeTests: XCTestCase {
             XCTAssertLessThanOrEqual(count, budget,
                 "\(name).swift is \(count) lines against a budget of \(budget)")
         }
+    }
+
+    /// Who may depend on whom. Board and Dice are the floor and depend on
+    /// nothing; TurnModel is the roof and nothing depends on it; and the graph
+    /// between has no cycles, so every aspect can be read on its own.
+    func testTheAspectsFormADirectedAcyclicGraph() throws {
+        let names = Array(Self.aspects.keys) + ["Dice"]
+        var uses: [String: Set<String>] = [:]
+        for name in names {
+            let text = try String(contentsOf: battle.appendingPathComponent("\(name).swift"),
+                                  encoding: .utf8)
+            // Prose in comments mentions everything; only code counts.
+            let code = text.split(separator: "\n", omittingEmptySubsequences: false)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+                .joined(separator: "\n")
+            uses[name] = Set(names.filter { other in
+                other != name && code.range(of: "\\b\(other)\\.", options: .regularExpression) != nil
+            })
+        }
+        for (name, deps) in uses.sorted(by: { $0.key < $1.key }) {
+            print("  \(name) -> \(deps.sorted().joined(separator: ", "))")
+        }
+        XCTAssertTrue(uses["Board"]?.isEmpty ?? false,
+                      "Board is state and depends on nothing; it names \(uses["Board"] ?? [])")
+        XCTAssertTrue(uses["Dice"]?.isEmpty ?? false, "Dice depends on nothing")
+        let dependOnTurnModel = uses.filter { $0.value.contains("TurnModel") }.map(\.key).sorted()
+        XCTAssertTrue(dependOnTurnModel.isEmpty,
+                      "TurnModel is the orchestrator; nothing may depend on it: \(dependOnTurnModel)")
+        func reaches(_ from: String, _ target: String, _ seen: inout Set<String>) -> Bool {
+            for next in uses[from] ?? [] where !seen.contains(next) {
+                seen.insert(next)
+                if next == target || reaches(next, target, &seen) { return true }
+            }
+            return false
+        }
+        var cycles: [String] = []
+        for name in names {
+            var seen: Set<String> = []
+            if reaches(name, name, &seen) { cycles.append(name) }
+        }
+        XCTAssertTrue(cycles.isEmpty, "these aspects can reach themselves: \(cycles.sorted())")
     }
 
     func testNoFunctionGrowsPastTheLimitUnannounced() throws {

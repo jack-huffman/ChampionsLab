@@ -657,24 +657,6 @@ struct Board {
         (side ? mine : theirs).allSatisfy(\.fainted)
     }
 
-    /// Bring the next healthy Pokémon forward into an empty slot. Replacing a
-    /// fainted Pokémon is not a turn, it happens at the end of one.
-    /// `sides` says whose gaps to fill. A battle asks the player who comes in
-    /// rather than choosing for them, so the interface fills only the opponent
-    /// and then asks; a search fills both, because it has to keep going.
-    mutating func fillGaps(mine fillMine: Bool = true, theirs fillTheirs: Bool = true) {
-        for side in [true, false] where side ? fillMine : fillTheirs {
-            let count = side ? mine.count : theirs.count
-            for slot in 0..<min(activeCount, count) where (side ? mine : theirs)[slot].fainted {
-                let team = side ? mine : theirs
-                guard let next = (activeCount..<team.count).first(where: { !team[$0].fainted })
-                else { continue }
-                if side { mine.swapAt(slot, next) } else { theirs.swapAt(slot, next) }
-                landed(mine: side, slot: slot)
-            }
-        }
-    }
-
     /// What is lying on the floor when something walks in.
     ///
     /// Hazards are the reason a pivot costs something, and without them a
@@ -748,46 +730,6 @@ struct Board {
         if side { mine[slot] = who } else { theirs[slot] = who }
     }
 
-    /// A Pokémon has just reached the field: it is seen, it can Fake Out, and
-    /// whatever it does on arrival happens now.
-    mutating func landed(mine side: Bool, slot: Int) {
-        let before = field
-        takeHazards(mine: side, slot: slot)
-        if (side ? mine[slot] : theirs[slot]).fainted { return }
-        // Screen Cleaner takes down both sides' screens on the way in. Done
-        // here rather than in `entryAbility`, which is handed two teams and a
-        // field but never the screens.
-        if (side ? mine[slot] : theirs[slot]).build.ability == "Screen Cleaner",
-           myScreens.any || theirScreens.any {
-            myScreens.reflect = 0; myScreens.lightScreen = 0; myScreens.auroraVeil = 0
-            theirScreens.reflect = 0; theirScreens.lightScreen = 0; theirScreens.auroraVeil = 0
-            note("\((side ? mine[slot] : theirs[slot]).build.form.formLabel)'s Screen Cleaner swept the screens away.")
-        }
-        if side {
-            mine[slot].justArrived = true
-            mine[slot].arrivedThisTurn = true
-            mine[slot].seen = true
-            mine[slot].isProtected = false
-            mine[slot].lastMoveFailed = false
-            if let said = Switching.entryAbility(of: mine[slot].build.ability, team: &mine,
-                                                 slot: slot, opposing: &theirs, field: &field) {
-                note(said)
-            }
-        } else {
-            theirs[slot].justArrived = true
-            theirs[slot].arrivedThisTurn = true
-            theirs[slot].seen = true
-            theirs[slot].isProtected = false
-            theirs[slot].lastMoveFailed = false
-            if let said = Switching.entryAbility(of: theirs[slot].build.ability, team: &theirs,
-                                                 slot: slot, opposing: &mine, field: &field) {
-                note(said)
-            }
-        }
-        fieldSettled(from: before)
-        terrainSeeds()
-    }
-
     /// The Seeds: a stage of Defence or Special Defence, once, when the
     /// terrain they answer to is on the field.
     mutating func terrainSeeds() {
@@ -836,56 +778,6 @@ struct Board {
         return order.map { ($0.mine, $0.slot) }
     }
 
-    /// Their pick for a gap: the benched one that takes least from whatever
-    /// of yours is standing, which is how the choice is made in `choices`.
-    func theirBestReplacement(for slot: Int, excluding taken: Set<Int>) -> Int? {
-        var best: (index: Int, worst: Double)?
-        for index in activeCount..<theirs.count where !theirs[index].fainted && !taken.contains(index) {
-            var worst = 0.0
-            for foe in mine.prefix(activeCount) where !foe.fainted {
-                for move in foe.moves where move.isDamaging {
-                    let result = DamageCalc.calculate(attacker: foe.build, defender: theirs[index].build,
-                                                      move: move, field: field)
-                    worst = Swift.max(worst, Double(result.maxDamage) / Double(theirs[index].maxHP))
-                }
-            }
-            if best == nil || worst < best!.worst { best = (index, worst) }
-        }
-        return best?.index
-    }
-
-    /// The end of a turn with something down on either side: both players
-    /// send in at once, and the arrivals happen in Speed order — so the faster
-    /// one's Intimidate never touches the slower one, and the slower one's
-    /// weather is the weather. Yours are what you chose; theirs choose for
-    /// themselves.
-    mutating func replaceFallen(mine picks: [(slot: Int, bench: Int)]) {
-        var arrivals: [(mine: Bool, slot: Int, bench: Int, speed: Int)] = []
-        for pick in picks where mine.indices.contains(pick.bench) && !mine[pick.bench].fainted {
-            arrivals.append((true, pick.slot, pick.bench, mine[pick.bench].build.speed(in: field)))
-        }
-        var taken: Set<Int> = []
-        for slot in 0..<min(activeCount, theirs.count) where theirs[slot].fainted {
-            guard let pick = theirBestReplacement(for: slot, excluding: taken)
-            else { continue }
-            taken.insert(pick)
-            arrivals.append((false, slot, pick, theirs[pick].build.speed(in: field)))
-        }
-        arrivals.sort { $0.speed > $1.speed || ($0.speed == $1.speed && $0.mine && !$1.mine) }
-        for arrival in arrivals {
-            if arrival.mine {
-                guard mine[arrival.slot].fainted else { continue }
-                mine.swapAt(arrival.slot, arrival.bench)
-                note("You sent in \(mine[arrival.slot].build.form.formLabel).")
-            } else {
-                guard theirs[arrival.slot].fainted else { continue }
-                theirs.swapAt(arrival.slot, arrival.bench)
-                note("They sent in \(theirs[arrival.slot].build.form.formLabel).")
-            }
-            landed(mine: arrival.mine, slot: arrival.slot)
-        }
-    }
-
     /// Slots on my side standing empty with somebody able to fill them.
     /// The slots you have to send something into — and never more of them than
     /// you have Pokémon to send.
@@ -904,13 +796,6 @@ struct Board {
             .prefix(ready))
     }
 
-    /// Bring one specific Pokémon in, which is the choice the game gives you.
-    mutating func sendIn(_ bench: Int, to slot: Int) {
-        guard mine.indices.contains(bench), mine.indices.contains(slot),
-              !mine[bench].fainted, mine[slot].fainted else { return }
-        mine.swapAt(slot, bench)
-        landed(mine: true, slot: slot)
-    }
 }
 
 extension Board {

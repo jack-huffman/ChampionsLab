@@ -80,7 +80,7 @@ func pair(_ flag: String, _ fallback: (Double, Double)) -> (Double, Double) {
 
     let games = Int(argument("--games") ?? "") ?? 100
     let budgets = pair("--budget", (0.3, 0.3))
-    let rolls = pair("--rolls", (Double(TurnModel.branchedRolls), Double(TurnModel.branchedRolls)))
+    let rolls = pair("--rolls", (Double(Dice.branchedRolls), Double(Dice.branchedRolls)))
     let seed = UInt64(argument("--seed") ?? "") ?? 20260915
 
     var a = Side(name: "A", engine: BattleEngine(rules: rules, budget: budgets.0),

@@ -66,7 +66,7 @@ enum Strikes {
                 && (actor.moves[pickedMove(choice)].type == "Fire"
                     || actor.moves[pickedMove(choice)].flags["defrosts"] == true)
             let thaws = thawsItself
-                || (rolling && Double.random(in: 0..<1, using: &TurnModel.dice) < 0.2)
+                || (rolling && Double.random(in: 0..<1, using: &Dice.source) < 0.2)
             if thaws {
                 if byMine { board.mine[slot].status = .none } else { board.theirs[slot].status = .none }
                 board.note("\(name) thawed out.")
@@ -77,7 +77,7 @@ enum Strikes {
                 return
             }
         }
-        if actor.status == .paralysis, rolling, Double.random(in: 0...1, using: &TurnModel.dice) < 0.25 {
+        if actor.status == .paralysis, rolling, Double.random(in: 0...1, using: &Dice.source) < 0.25 {
             board.note("\(name) is paralysed and cannot move.")
             MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
             MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
@@ -91,7 +91,7 @@ enum Strikes {
             if !far.indices.contains(loves) || far[loves].fainted {
                 if byMine { board.mine[slot].infatuatedWith = nil }
                 else { board.theirs[slot].infatuatedWith = nil }
-            } else if rolling, Double.random(in: 0..<1, using: &TurnModel.dice) < 0.5 {
+            } else if rolling, Double.random(in: 0..<1, using: &Dice.source) < 0.5 {
                 board.note("\(name) is immobilised by love.")
                 MoveHistory.dropCharge(byMine: byMine, slot: slot, board: &board)
                 MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
@@ -117,11 +117,11 @@ enum Strikes {
                 board.note("\(name) snapped out of its confusion.")
             } else {
                 board.note("\(name) is confused.")
-                if rolling, Double.random(in: 0..<1, using: &TurnModel.dice) < 1.0 / 3.0 {
+                if rolling, Double.random(in: 0..<1, using: &Dice.source) < 1.0 / 3.0 {
                     let attack = Double(actor.build.stagedStat(.attack))
                     let defence = Double(actor.build.stagedStat(.defense))
                     let base = (2.0 * 50 / 5 + 2) * 40 * attack / defence / 50 + 2
-                    let hurt = Swift.max(1, Int(base * Double.random(in: 0.85...1.0, using: &TurnModel.dice)))
+                    let hurt = Swift.max(1, Int(base * Double.random(in: 0.85...1.0, using: &Dice.source)))
                     if byMine { board.mine[slot].hp = Swift.max(0, board.mine[slot].hp - hurt) }
                     else { board.theirs[slot].hp = Swift.max(0, board.theirs[slot].hp - hurt) }
                     board.note("It hurt itself in its confusion for \(hurt).")
@@ -155,8 +155,16 @@ enum Strikes {
             }
             guard move.isDamaging else {
                 let before = board.story.count
-                SupportMoves.support(move, byMine: byMine, slot: slot, target: target,
-                        to: &board, rolling: rolling)
+                let followup = SupportMoves.support(move, byMine: byMine, slot: slot, target: target,
+                                                    to: &board, rolling: rolling)
+                // Instruct: the partner's last move, as an ordinary action, run
+                // here so the status moves never have to reach back into this
+                // pipeline. Before the failure check on purpose -- it always
+                // was, when the replay ran inline -- so a replayed move that
+                // had only "but" to say still marks the Instruct as failed.
+                if case .replay(let choice, let replayMine, let replaySlot)? = followup {
+                    apply(choice, byMine: replayMine, slot: replaySlot, to: &board, rolling: rolling)
+                }
                 // A support move that only had "but" to say for itself failed.
                 let failed = board.story.dropFirst(before).contains { $0.hasPrefix("But ") || $0.contains("but it failed") }
                 MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: failed)
@@ -438,7 +446,7 @@ enum Strikes {
                 // 85% can hit one of them and miss the other. The search's
                 // averages were always per target; only the dice were not.
                 if rolling, !move.neverMisses, move.accuracy > 0,
-                   Double.random(in: 0...100, using: &TurnModel.dice) > Accuracy.chanceToHit(move, attacker: actor,
+                   Double.random(in: 0...100, using: &Dice.source) > Accuracy.chanceToHit(move, attacker: actor,
                                                             defender: defending[index],
                                                             board: board) {
                     board.detail(aimed.count > 1 ? "\(hitName) avoided it." : "It missed.")
@@ -492,7 +500,7 @@ enum Strikes {
                 let armoured = ["Shell Armor", "Battle Armor"]
                     .contains(defending[index].build.ability) && !breaker
                 if rolling, rate > 0, !armoured,
-                   Double.random(in: 0..<100, using: &TurnModel.dice) < rate {
+                   Double.random(in: 0..<100, using: &Dice.source) < rate {
                     field.critical = true
                 }
                 board.lastWasCritical = field.critical
@@ -594,7 +602,7 @@ enum Strikes {
                 let whole: Int = rolling
                     ? Int.random(in: Swift.min(result.minDamage, result.maxDamage)
                                  ... Swift.max(result.minDamage, result.maxDamage),
-                                 using: &TurnModel.dice)
+                                 using: &Dice.source)
                     : Int((Double(result.minDamage + result.maxDamage) / 2 * accuracy).rounded())
                 let oneBlow: Int = result.strikes > 1
                     ? Swift.max(1, Int((Double(whole) / result.strikes).rounded()))
@@ -606,7 +614,7 @@ enum Strikes {
                 // A split dart is one blow each; both darts on one target is
                 // the move's own two.
                 var blows = move.blows(for: actor.build.ability, accuracy: accuracy,
-                                       rolling: rolling, using: &TurnModel.dice)
+                                       rolling: rolling, using: &Dice.source)
                 if move.smartTarget == true, board.activeCount > 1 {
                     blows = dartedTwice ? 2 : 1
                 }
@@ -630,7 +638,7 @@ enum Strikes {
                 // and nothing at all the rest of the time. It is worked out
                 // here rather than from power, because its listed power is 1.
                 if move.isOHKO {
-                    let lands = rolling ? Double.random(in: 0..<1, using: &TurnModel.dice) < 0.3 : false
+                    let lands = rolling ? Double.random(in: 0..<1, using: &Dice.source) < 0.3 : false
                     if defending[index].types.contains(.ice), move.id == "sheercold" {
                         board.detail("It does not affect \(hitName).")
                         continue
@@ -929,7 +937,7 @@ enum Strikes {
         // Stench: one hit in ten makes the target flinch, from either side of
         // the field, which is the whole of it.
         if attacker.build.ability == "Stench", !defender.fainted, rolling,
-           Double.random(in: 0..<1, using: &TurnModel.dice) < 0.1 {
+           Double.random(in: 0..<1, using: &Dice.source) < 0.1 {
             Ailments.flinch(onMine: hitMine, slot: hit, board: &board, because: "the stench")
         }
 
@@ -954,7 +962,7 @@ enum Strikes {
         // loses half its turns while it is still standing there.
         if defender.build.ability == "Cute Charm", !defender.fainted,
            attacker.infatuatedWith == nil, rolling,
-           Double.random(in: 0..<1, using: &TurnModel.dice) < 0.3 {
+           Double.random(in: 0..<1, using: &Dice.source) < 0.3 {
             if byMine { board.mine[slot].infatuatedWith = hit }
             else { board.theirs[slot].infatuatedWith = hit }
             board.note("\(attackerName) fell for \(defenderName)'s Cute Charm.")
@@ -1020,9 +1028,9 @@ enum Strikes {
             board.note("\(attackerName) is hurt by \(defenderName)'s \(defender.build.ability).")
         case "Effect Spore":
             // One in ten, and one of three things.
-            guard rolling, Double.random(in: 0..<1, using: &TurnModel.dice) < 0.3,
+            guard rolling, Double.random(in: 0..<1, using: &Dice.source) < 0.3,
                   attacker.status == .none, !attacker.types.contains(.grass) else { break }
-            let roll = Double.random(in: 0..<1, using: &TurnModel.dice)
+            let roll = Double.random(in: 0..<1, using: &Dice.source)
             let ailment: Ailment = roll < 0.34 ? .paralysis : roll < 0.67 ? .poison : .sleep
             if byMine { board.mine[slot].status = ailment; board.mine[slot].asleepFor = ailment == .sleep ? 2 : 0 }
             else { board.theirs[slot].status = ailment; board.theirs[slot].asleepFor = ailment == .sleep ? 2 : 0 }
@@ -1030,7 +1038,7 @@ enum Strikes {
         case "Flame Body", "Static", "Poison Point":
             // Three in ten. A search averages, so it does not apply these at
             // all rather than applying them to everybody.
-            guard rolling, Double.random(in: 0..<1, using: &TurnModel.dice) < 0.3, attacker.status == .none else { break }
+            guard rolling, Double.random(in: 0..<1, using: &Dice.source) < 0.3, attacker.status == .none else { break }
             let ailment: Ailment = defender.build.ability == "Flame Body" ? .burn
                 : defender.build.ability == "Static" ? .paralysis : .poison
             let immune = (ailment == .burn && attacker.build.form.pokeTypes.contains(.fire))
@@ -1045,7 +1053,7 @@ enum Strikes {
         }
 
         let poisonRoll: Bool
-        if rolling { poisonRoll = Double.random(in: 0..<1, using: &TurnModel.dice) < 0.3 }
+        if rolling { poisonRoll = Double.random(in: 0..<1, using: &Dice.source) < 0.3 }
         else { poisonRoll = board.rulings[Board.flip("poisontouch", byMine, slot)] ?? false }
         if attacker.build.ability == "Poison Touch", poisonRoll, !defender.fainted,
            defender.status == .none,
@@ -1150,7 +1158,7 @@ enum Strikes {
             // A played turn rolls. The search takes the branch it was handed,
             // and falls back to "only what is certain" when it was handed none.
             let happens: Bool
-            if rolling { happens = Double.random(in: 0..<100, using: &TurnModel.dice) < Double(chance) }
+            if rolling { happens = Double.random(in: 0..<100, using: &Dice.source) < Double(chance) }
             else if let ruled = board.rulings[Board.flip("secondary", byMine, slot)] { happens = ruled }
             else { happens = chance >= 100 }
             guard happens else { continue }

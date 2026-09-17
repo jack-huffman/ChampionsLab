@@ -348,7 +348,7 @@ enum MatchupTree {
                 var wins = 0, played = 0
                 for game in 0..<playouts {
                     if shouldStop() { break }
-                    TurnModel.dice = TeamLab.SplitMix(
+                    Dice.source = TeamLab.SplitMix(
                         seed: 0x5EED &+ UInt64(game) &* 0x9E37_79B9_7F4A_7C15)
                     if playOut(from: root, forcing: [play], engine: engine, limit: 40) == true {
                         wins += 1
@@ -370,7 +370,7 @@ enum MatchupTree {
                 var wins = 0, played = 0
                 for game in 0..<playouts {
                     if shouldStop() { break }
-                    TurnModel.dice = TeamLab.SplitMix(
+                    Dice.source = TeamLab.SplitMix(
                         seed: 0xBA5E &+ UInt64(game) &* 0x9E37_79B9_7F4A_7C15)
                     if playOut(from: root, forcing: [], engine: engine, limit: 40) == true {
                         wins += 1
@@ -422,7 +422,7 @@ enum MatchupTree {
         guard !thought.plays.isEmpty else { return Play(left: .pass, right: .pass) }
         let total = thought.mix.reduce(0, +)
         guard total > 0 else { return thought.plays[0] }
-        var roll = Double.random(in: 0..<total, using: &TurnModel.dice)
+        var roll = Double.random(in: 0..<total, using: &Dice.source)
         for (index, weight) in thought.mix.enumerated() {
             roll -= weight
             if roll <= 0, thought.plays.indices.contains(index) { return thought.plays[index] }
