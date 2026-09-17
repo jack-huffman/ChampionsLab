@@ -480,25 +480,78 @@ enum Strikes {
                                rolling: Bool) -> Int? {
         let defending = hitMine ? board.mine : board.theirs
         guard defending.indices.contains(index), !defending[index].fainted else { return nil }
-        let hitName = defending[index].build.form.formLabel
-        if defending[index].hidden {
-            board.note("\(hitName) is out of reach.")
-            return nil
+        // A snapshot from before the hit. The phases read it for what the
+        // target was -- its health for a Sash or an Emergency Exit, its status
+        // for a Merciless -- while writing what it becomes to the board.
+        let before = defending[index]
+        let hitName = before.build.form.formLabel
+        guard reaches(move, before: before, hitName: hitName, index: index, hitMine: hitMine,
+                      aim: aim, actor: actor, name: name, byMine: byMine, slot: slot,
+                      board: &board, rolling: rolling) else { return nil }
+        let (result, field) = calculate(move, before: before, hitName: hitName, index: index,
+                                        hitMine: hitMine, farScreens: farScreens, actor: actor,
+                                        byMine: byMine, slot: slot, board: &board, rolling: rolling)
+        if absorbed(result, before: before, hitName: hitName, index: index, hitMine: hitMine,
+                    actor: actor, board: &board) { return 0 }
+        if field.critical { board.detail("A critical hit!") }
+
+        // 3. What the far side brings to it. These are the calculator's
+        // own notes, so the commentary cannot drift from the maths.
+        for line in result.notes where worthSaying(line) {
+            board.detail(line)
         }
-        if defending[index].isProtected, move.isProtectable {
+        if actor.status.halvesPhysical, move.category == "Physical" {
+            board.detail("\(name) is burned, so it hits softer.")
+        }
+        if result.effectiveness == 0 {
+            board.detail("It does not affect \(hitName).")
+            return 0
+        }
+        let dealt = roll(move, result: result, before: before, aim: aim, actor: actor,
+                         board: &board, rolling: rolling)
+        if let knockout = oneHitKnockout(move, before: before, hitName: hitName, index: index,
+                                         hitMine: hitMine, board: &board, rolling: rolling) {
+            return knockout
+        }
+        if substituteTook(dealt, move: move, before: before, hitName: hitName, index: index,
+                          hitMine: hitMine, actor: actor, board: &board) { return 0 }
+        let landed = land(dealt, result: result, before: before, hitName: hitName, index: index,
+                          hitMine: hitMine, board: &board)
+        aftermath(move, result: result, before: before, hitName: hitName, index: index,
+                  hitMine: hitMine, actor: actor, name: name, byMine: byMine, slot: slot,
+                  board: &board, rolling: rolling)
+        return landed
+    }
+
+    // MARK: - One strike, in its phases
+
+    /// Whether the move reaches this target at all.
+    ///
+    /// Out of reach, protected (unless a Feint breaks it or an Unseen Fist
+    /// reaches through), turned away by an ability that refuses the whole kind
+    /// of move, a powder into a Grass type, or simply missed. Protean happens
+    /// here too: the user takes the move's type as it throws it.
+    private static func reaches(_ move: Move, before: Fighter, hitName: String, index: Int, hitMine: Bool,
+                                aim: Aim, actor: Fighter, name: String, byMine: Bool,
+                                slot: Int, board: inout Board, rolling: Bool) -> Bool {
+        if before.hidden {
+            board.note("\(hitName) is out of reach.")
+            return false
+        }
+        if before.isProtected, move.isProtectable {
             board.detail("\(hitName) protected itself.")
-            return nil
+            return false
         }
         // Feint: through the Protect, and the Protect is gone — so the
         // partner's move, coming after, lands on an open target.
-        if defending[index].isProtected, move.breaksProtect {
+        if before.isProtected, move.breaksProtect {
             if hitMine { board.mine[index].isProtected = false }
             else { board.theirs[index].isProtected = false }
             board.note("\(move.name) broke through \(hitName)'s protection.")
         }
         // Unseen Fist reaches through a Protect with anything that makes
         // contact; Piercing Drill does the same for a quarter damage.
-        if defending[index].isProtected, move.isProtectable, move.makesContact,
+        if before.isProtected, move.isProtectable, move.makesContact,
            ["Unseen Fist", "Piercing Drill"].contains(actor.build.ability) {
             if hitMine { board.mine[index].isProtected = false }
             else { board.theirs[index].isProtected = false }
@@ -521,26 +574,26 @@ enum Strikes {
             .contains(actor.build.ability)
         if !breaker {
             let refuses: String?
-            switch defending[index].build.ability {
+            switch before.build.ability {
             case "Soundproof"   where move.isSound:   refuses = "Soundproof"
             case "Bulletproof"  where move.isBullet:  refuses = "Bulletproof"
             case "Overcoat"     where move.isPowder:  refuses = "Overcoat"
             case "Wind Rider"   where move.isWind:    refuses = "Wind Rider"
             case "Dazzling", "Queenly Majesty", "Armor Tail":
-                refuses = move.priority > 0 ? defending[index].build.ability : nil
+                refuses = move.priority > 0 ? before.build.ability : nil
             default: refuses = nil
             }
             if let refuses {
                 board.note("\(hitName)'s \(refuses) turned it away.")
-                return nil
+                return false
             }
         }
         // A powder move does nothing to a Grass type, or to anything
         // wearing goggles.
-        if move.isPowder, defending[index].types.contains(.grass)
-            || defending[index].build.item == "Safety Goggles" {
+        if move.isPowder, before.types.contains(.grass)
+            || before.build.item == "Safety Goggles" {
             board.detail("It does not affect \(hitName).")
-            return nil
+            return false
         }
 
         // Accuracy is rolled for each one it reaches for: Muddy Water at
@@ -548,17 +601,27 @@ enum Strikes {
         // averages were always per target; only the dice were not.
         if rolling, !move.neverMisses, move.accuracy > 0,
            Double.random(in: 0...100, using: &Dice.source) > Accuracy.chanceToHit(move, attacker: actor,
-                                                    defender: defending[index],
+                                                    defender: before,
                                                     board: board) {
             board.detail(aim.aimed.count > 1 ? "\(hitName) avoided it." : "It missed.")
-            return nil
+            return false
         }
-        var defender = defending[index].build
-        defender.atFullHP = defending[index].hp == defending[index].maxHP
-        defender.status = defending[index].status
+        return true
+    }
+
+    /// The calculation, with everything the board knows that the calculator
+    /// cannot: who is standing next to whom, what has already acted, whether
+    /// a critical hit came up, whether a stored charge is being spent.
+    private static func calculate(_ move: Move, before: Fighter, hitName: String, index: Int, hitMine: Bool,
+                                  farScreens: Screens, actor: Fighter, byMine: Bool, slot: Int,
+                                  board: inout Board, rolling: Bool) -> (result: DamageResult, field: Field) {
+        let breaker = ["Mold Breaker", "Turboblaze", "Teravolt"].contains(actor.build.ability)
+        var defender = before.build
+        defender.atFullHP = before.hp == before.maxHP
+        defender.status = before.status
         var field = board.calcField
         field.helpingHand = actor.helped
-        field.targetJustArrived = defending[index].justArrived
+        field.targetJustArrived = before.justArrived
         // A Fairy Aura anywhere on the field powers up Fairy moves for
         // everybody, which is what makes it an aura.
         field.fairyAura = (board.mine + board.theirs)
@@ -591,21 +654,21 @@ enum Strikes {
         // Merciless always crits a poisoned target, which is the
         // entire reason a Toxapex threatens anything.
         if actor.build.ability == "Merciless",
-           [.poison, .badPoison].contains(defending[index].status) { stage = 3 }
+           [.poison, .badPoison].contains(before.status) { stage = 3 }
         let rate = stage <= 0 ? move.critRate
             : (stage == 1 ? Swift.max(move.critRate, 12.5)
                : stage == 2 ? Swift.max(move.critRate, 50) : 100)
         // Shell Armor and Battle Armor cannot be hit critically, which
         // is the whole of both of them. A Mold Breaker ignores that.
         let armoured = ["Shell Armor", "Battle Armor"]
-            .contains(defending[index].build.ability) && !breaker
+            .contains(before.build.ability) && !breaker
         if rolling, rate > 0, !armoured,
            Double.random(in: 0..<100, using: &Dice.source) < rate {
             field.critical = true
         }
         board.lastWasCritical = field.critical
         // A Fire move thaws whatever it hits.
-        if defending[index].status == .freeze,
+        if before.status == .freeze,
            DamageCalc.fieldForm(of: move, in: field).type == .fire {
             if hitMine { board.mine[index].status = .none }
             else { board.theirs[index].status = .none }
@@ -641,17 +704,26 @@ enum Strikes {
         attacker.fallenAllies = (byMine ? board.mine : board.theirs).filter(\.fainted).count
         let result = DamageCalc.calculate(attacker: attacker, defender: defender,
                                           move: move, field: field)
+        return (result, field)
+    }
 
+    /// An absorbed hit is not merely a hit that did nothing. The calculator
+    /// zeroes the damage; this pays the ability out -- a Water Absorb heals, a
+    /// Motor Drive gains a stage -- because it has the board to pay into.
+    private static func absorbed(_ result: DamageResult, before: Fighter, hitName: String,
+                                 index: Int, hitMine: Bool, actor: Fighter,
+                                 board: inout Board) -> Bool {
+        let breaker = ["Mold Breaker", "Turboblaze", "Teravolt"].contains(actor.build.ability)
         // An absorbed hit is not merely a hit that did nothing. The
         // calculator already zeroes the damage; what it cannot do is
         // pay the ability out, because it has no board to pay into.
         if result.effectiveness == 0, !breaker,
            result.notes.contains(where: { $0.contains("absorbed") }) {
-            let who = defending[index].build.ability
+            let who = before.build.ability
             let heals = ["Water Absorb", "Volt Absorb", "Dry Skin", "Earth Eater"]
             if heals.contains(who) {
-                let back = Swift.max(1, defending[index].maxHP / 4)
-                let gained = Swift.min(defending[index].maxHP - defending[index].hp, back)
+                let back = Swift.max(1, before.maxHP / 4)
+                let gained = Swift.min(before.maxHP - before.hp, back)
                 if gained > 0 {
                     if hitMine { board.mine[index].hp += gained }
                     else { board.theirs[index].hp += gained }
@@ -673,26 +745,18 @@ enum Strikes {
                     StatChanges.change(paid, onMine: hitMine, slot: index, board: &board, because: who)
                 }
             }
-            return 0
+            return true
         }
-        if field.critical { board.detail("A critical hit!") }
+        return false
+    }
 
-        // 3. What the far side brings to it. These are the calculator's
-        // own notes, so the commentary cannot drift from the maths.
-        for line in result.notes where worthSaying(line) {
-            board.detail(line)
-        }
-        if actor.status.halvesPhysical, move.category == "Physical" {
-            board.detail("\(name) is burned, so it hits softer.")
-        }
-        if result.effectiveness == 0 {
-            board.detail("It does not affect \(hitName).")
-            return 0
-        }
-
+    /// 4. The roll: one blow from the calculator's range, times how many blows
+    /// land, plus a Parental Bond's quarter.
+    private static func roll(_ move: Move, result: DamageResult, before: Fighter, aim: Aim,
+                             actor: Fighter, board: inout Board, rolling: Bool) -> Int {
         // 4. The roll.
         let accuracy = move.neverMisses || move.accuracy == 0
-            ? 1.0 : Accuracy.chanceToHit(move, attacker: actor, defender: defending[index],
+            ? 1.0 : Accuracy.chanceToHit(move, attacker: actor, defender: before,
                                 board: board) / 100
         // One blow, not the flurry. `calculate` already multiplies a
         // multi-hit move up by the strikes it assumes, because that is
@@ -733,53 +797,71 @@ enum Strikes {
                          : "\(Int(blows.rounded())) hits, \(oneBlow) each.")
         }
         if bonded { board.detail("Parental Bond: a second blow at a quarter.") }
+        return dealt
+    }
 
+    /// A one-hit knockout does exactly that, three times in ten, and nothing
+    /// the rest of the time. Nil for any move that is not one.
+    private static func oneHitKnockout(_ move: Move, before: Fighter, hitName: String, index: Int, hitMine: Bool,
+                                       board: inout Board, rolling: Bool) -> Int? {
         // A one-hit knockout does exactly that, three times in ten,
         // and nothing at all the rest of the time. It is worked out
         // here rather than from power, because its listed power is 1.
         if move.isOHKO {
             let lands = rolling ? Double.random(in: 0..<1, using: &Dice.source) < 0.3 : false
-            if defending[index].types.contains(.ice), move.id == "sheercold" {
+            if before.types.contains(.ice), move.id == "sheercold" {
                 board.detail("It does not affect \(hitName).")
                 return 0
             }
             if lands {
                 if hitMine { board.mine[index].hp = 0 } else { board.theirs[index].hp = 0 }
                 board.note("It is a one-hit knockout. \(hitName) fainted.")
-                return defending[index].hp
+                return before.hp
             } else {
                 board.note(rolling ? "But it missed."
                                    : "\(hitName) is looking at a one-hit knockout, three times in ten.")
             }
             return 0
         }
+        return nil
+    }
 
+    /// A Substitute takes the hit instead, and the Pokemon behind it takes
+    /// nothing at all. Sound and an Infiltrator go through it.
+    private static func substituteTook(_ dealt: Int, move: Move, before: Fighter, hitName: String, index: Int, hitMine: Bool,
+                                       actor: Fighter, board: inout Board) -> Bool {
         // A Substitute takes the hit instead, and the Pokémon behind
         // it takes nothing at all — not the damage, not the stat drop,
         // not the status. Sound moves and an Infiltrator go through it.
-        if defending[index].substitute > 0, !move.isSound,
+        if before.substitute > 0, !move.isSound,
            actor.build.ability != "Infiltrator" {
-            let shell = defending[index].substitute
+            let shell = before.substitute
             let absorbed = Swift.min(shell, dealt)
             if hitMine { board.mine[index].substitute = shell - absorbed }
             else { board.theirs[index].substitute = shell - absorbed }
             board.note(absorbed >= shell
                        ? "\(hitName)'s substitute broke."
                        : "\(hitName)'s substitute took \(absorbed).")
-            return 0
+            return true
         }
+        return false
+    }
 
+    /// The damage lands: an Endure or a Focus Sash holds it at one, a berry
+    /// that halved it is eaten, and the log says what it came to.
+    private static func land(_ dealt: Int, result: DamageResult, before: Fighter, hitName: String,
+                             index: Int, hitMine: Bool, board: inout Board) -> Int {
         var landed = dealt
         var sashed = false
-        if defending[index].enduring, dealt >= defending[index].hp {
-            landed = defending[index].hp - 1
+        if before.enduring, dealt >= before.hp {
+            landed = before.hp - 1
             board.detail("\(hitName) endured it.")
         }
-        if defending[index].build.item == "Focus Sash",
-           !defending[index].build.itemSpent,
-           defending[index].hp == defending[index].maxHP,
-           dealt >= defending[index].hp {
-            landed = defending[index].hp - 1
+        if before.build.item == "Focus Sash",
+           !before.build.itemSpent,
+           before.hp == before.maxHP,
+           dealt >= before.hp {
+            landed = before.hp - 1
             sashed = true
         }
         // A berry that halved the hit is a berry that has been eaten.
@@ -793,7 +875,7 @@ enum Strikes {
             if sashed { board.theirs[index].build.itemSpent = true }
             if ateBerry { board.theirs[index].build.itemSpent = true }
         }
-        let share = Int((Double(landed) / Double(Swift.max(1, defending[index].maxHP))
+        let share = Int((Double(landed) / Double(Swift.max(1, before.maxHP))
                          * 100).rounded())
         if result.effectiveness > 1 {
             board.detail("It is super effective. \(hitName) took \(landed) (\(share)%).")
@@ -803,12 +885,22 @@ enum Strikes {
             board.detail("\(hitName) took \(landed) (\(share)%).")
         }
         if sashed { board.detail("\(hitName) hung on with its Focus Sash.") }
+        return landed
+    }
 
+    /// 5. Afterwards: what the hit does beyond the damage, and what the
+    /// target does back -- contact abilities, an Emergency Exit, a Weakness
+    /// Policy, the move's drops and secondaries, and a knockout's Destiny
+    /// Bond or Moxie.
+    private static func aftermath(_ move: Move, result: DamageResult, before: Fighter,
+                                  hitName: String, index: Int, hitMine: Bool, actor: Fighter,
+                                  name: String, byMine: Bool, slot: Int, board: inout Board,
+                                  rolling: Bool) {
         // 5. Afterwards: what the move does beyond the damage, and what
         // the target's own ability does back.
         contact(move, byMine: byMine, hitMine: hitMine, slot: slot, hit: index,
-                wasAt: defending[index].hp, rolling: rolling, board: &board)
-        Switching.flee(ifNeeded: index, ofMine: hitMine, wasAt: defending[index].hp,
+                wasAt: before.hp, rolling: rolling, board: &board)
+        Switching.flee(ifNeeded: index, ofMine: hitMine, wasAt: before.hp,
              board: &board)
         // Fake Out used to flinch from here as well as through its
         // own secondary, which is how it carries the flinch in the
@@ -855,8 +947,8 @@ enum Strikes {
             default: break
             }
         }
-        return landed
     }
+
 
     /// 5. Afterwards: what the action cost and gave back, once every target has
     /// been struck.
