@@ -10,6 +10,8 @@ final class Store: ObservableObject {
 
     @Published private(set) var data: Dataset
     @Published var teams: [Team] = []
+    /// Games played to a result, newest first.
+    @Published var games: [GameRecord] = []
     /// What each team was measured to do, from the Simulate tab, keyed by team
     /// id. Loaded once and kept, so the picker can lean on a few hundred real
     /// games of *this* team rather than only on a scoring function.
@@ -50,6 +52,7 @@ final class Store: ObservableObject {
         }
         bundledUsage = data.usage
         teams = TeamStore.load()
+        games = GameStore.load()
         simulations = LabStore.load()
         teamWarning = TeamStore.loadWarning
         if let saved = UsageFeed.load() { apply(saved) }
@@ -429,6 +432,18 @@ final class Store: ObservableObject {
     func delete(_ team: Team) {
         teams.removeAll { $0.id == team.id }
         TeamStore.save(teams)
+    }
+
+    /// A game just finished goes to the top of the history.
+    func record(_ game: GameRecord) {
+        games.insert(game, at: 0)
+        games = Array(games.prefix(GameStore.keep))
+        GameStore.save(games)
+    }
+
+    func forget(_ game: GameRecord) {
+        games.removeAll { $0.id == game.id }
+        GameStore.save(games)
     }
 }
 

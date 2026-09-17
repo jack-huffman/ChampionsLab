@@ -122,13 +122,16 @@ struct BattleView: View {
         let shared = Store.shared
         let playbackObject = TurnPlayback()
         _playback = StateObject(wrappedValue: playbackObject)
-        _session = StateObject(wrappedValue: BattleSession(
+        let sessionObject = BattleSession(
             rules: shared.rulebook, playback: playbackObject,
             board: playing,
             log: playing.map { [BattleSession.opener] + $0.story } ?? logging,
             command: showing, review: reviewing,
             panel: !reviewing.isEmpty ? .review : (!logging.isEmpty ? .log : .engine),
-            thought: seeded?.0, solved: seeded?.1))
+            thought: seeded?.0, solved: seeded?.1)
+        // A turn on show is one that has been played, so the count is past it.
+        if !replaying.isEmpty { sessionObject.turn = 2 }
+        _session = StateObject(wrappedValue: sessionObject)
         if let openTeams {
             _myTeamID = State(initialValue: openTeams.mine)
             _opponentID = State(initialValue: openTeams.theirs)
@@ -193,6 +196,9 @@ struct BattleView: View {
                 .environmentObject(store)
         }
         .onAppear(perform: recallLastMatchup)
+        .onChange(of: session.finished) { result in
+            if result != nil { recordGame() }
+        }
         .confirmationDialog("Stop this game?", isPresented: $stopping, titleVisibility: .visible) {
             Button("Stop the game", role: .destructive) { stopGame() }
             Button("Keep playing", role: .cancel) {}
@@ -211,6 +217,22 @@ struct BattleView: View {
         if myTeam == nil { myTeamID = "" }
         if theirTeam == nil { opponentID = "" }
         if stage == .versus, myTeam != nil, theirTeam != nil, lobby.verdict == nil { enterVersus() }
+    }
+
+    /// A game played to a result goes into the history the lobby shows. A
+    /// snapshot plays nothing to a result and remembers nothing.
+    private func recordGame() {
+        guard !snapshotMode, let board = session.board, let mine = myTeam, let theirs = theirTeam else { return }
+        let review = session.review
+        store.record(GameRecord(
+            id: UUID(), played: Date(), format: format,
+            won: board.isOut(mine: false), turns: max(1, session.turn - 1),
+            myTeamID: myTeamID, myTeamName: mine.name,
+            myForms: board.mine.map(\.build.form.id),
+            theirID: opponentID, theirName: theirs.name,
+            theirForms: board.theirs.map(\.build.form.id),
+            leftOnTable: review.reduce(0) { $0 + $1.lost },
+            reviewedTurns: review.count))
     }
 
     /// The game ends here, by choice: the board and its log go, the two
@@ -244,19 +266,35 @@ struct BattleView: View {
             Spacer()
             if stage == .battle {
                 Text("Turn \(turn)").font(.system(size: 11)).foregroundStyle(.secondary)
-                // A game over needs no asking; one in progress does.
-                Button {
-                    if finished != nil { stopGame() } else { stopping = true }
-                } label: {
-                    Label(finished == nil ? "Stop game" : "Leave game", systemImage: "xmark.octagon.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                }
-                .controlSize(.small)
-                .tint(Palette.bad)
-                .help("End this game and go back to the lobby. The teams stay chosen.")
+                leaveButton
             }
         }
         .padding(12)
+    }
+
+    /// Out of the game. In progress it is a red stop that asks first; over,
+    /// it is the blue way on, and the result is already in the history.
+    @ViewBuilder
+    private var leaveButton: some View {
+        if finished == nil {
+            Button { stopping = true } label: {
+                Label("Stop game", systemImage: "xmark.octagon.fill")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .controlSize(.small)
+            .tint(Palette.bad)
+            .help("End this game and go back to the lobby. The teams stay chosen.")
+        } else {
+            Button { stopGame() } label: {
+                Label("Finish game", systemImage: "flag.checkered")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .controlSize(.small)
+            .buttonStyle(.borderedProminent)
+            .tint(Palette.accent)
+            .keyboardShortcut(.defaultAction)
+            .help("Back to the lobby. The game is in the history there.")
+        }
     }
 
     private var crumbArrow: some View {

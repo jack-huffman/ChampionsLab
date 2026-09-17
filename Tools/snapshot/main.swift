@@ -207,6 +207,20 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         render(BattleView(openTeams: (mine: playing.id.uuidString, theirs: ""), arriving: .versus),
                named: "battle-setup-dark",
                size: CGSize(width: 1180, height: 760), dark: true)
+        // Two games already played, so the lobby's history shows under the
+        // banner. Set on the store, not recorded: nothing is written to disk.
+        let myFour = playing.slots.prefix(4).compactMap { $0.battleForm(in: store.rulebook)?.id }
+        let theirFour = against.members.prefix(4).compactMap { store.form(named: $0.form)?.id }
+        store.games = [
+            GameRecord(id: UUID(), played: Date().addingTimeInterval(-3_600), format: "doubles",
+                       won: true, turns: 9, myTeamID: playing.id.uuidString, myTeamName: playing.name,
+                       myForms: myFour, theirID: against.id, theirName: against.name,
+                       theirForms: theirFour, leftOnTable: 0.41, reviewedTurns: 9),
+            GameRecord(id: UUID(), played: Date().addingTimeInterval(-90_000), format: "doubles",
+                       won: false, turns: 12, myTeamID: playing.id.uuidString, myTeamName: playing.name,
+                       myForms: Array(myFour.reversed()), theirID: against.id, theirName: against.name,
+                       theirForms: Array(theirFour.reversed()), leftOnTable: 1.87, reviewedTurns: 12),
+        ]
         // And the two sixes facing each other.
         render(BattleView(openTeams: (mine: playing.id.uuidString, theirs: against.id),
                           arriving: .versus),
@@ -255,11 +269,6 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         guarded.theirs[1].substitute = 40
         render(BattleView(playing: guarded), named: "battle-protect-dark",
                size: CGSize(width: 1180, height: 900), dark: true)
-        // The turn just played, stepped through.
-        if !board.steps.isEmpty {
-            render(BattleView(playing: board, replaying: board.steps), named: "battle-steps-dark",
-                   size: CGSize(width: 1280, height: 860), dark: true)
-        }
         render(BattleView(playing: board), named: "battle-dark",
                size: CGSize(width: 1280, height: 860), dark: true)
         // And the Fight grid, which is what most turns are spent looking at.
@@ -275,6 +284,11 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         let solvedTurn = marked.solve()
         let played = solvedTurn.myPlays.indices.contains(3) ? solvedTurn.myPlays[3] : solvedTurn.myPlays[0]
         let wanted = solvedTurn.lines.first
+        // A turn played out and stepped through: the field at its last step,
+        // every row of the turn on show.
+        let stepped = TurnModel.resolve(board, mine: played, theirs: solvedTurn.theirPlays[0])
+        render(BattleView(playing: stepped, replaying: stepped.steps), named: "battle-steps-dark",
+               size: CGSize(width: 1280, height: 860), dark: true)
         render(BattleView(playing: board, showing: .menu, reviewing: [
             BattleView.TurnReview(turn: 1, yours: marked.describe(played, mine: true),
                                   theirs: marked.describe(solvedTurn.theirPlays[0], mine: false),

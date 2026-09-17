@@ -33,6 +33,12 @@ struct VersusPageView: View {
     private var leadCount: Int { singles ? 1 : 2 }
 
     var body: some View {
+        MaybeScroll {
+            page
+        }
+    }
+
+    private var page: some View {
         VStack(spacing: 14) {
             VersusBanner(mine: myTeam.map { mine in
                              bannerSide(mine, plan: lobby.myPlan, title: "YOUR TEAM",
@@ -108,8 +114,140 @@ struct VersusPageView: View {
             } else {
                 lobbyHint
             }
+            if !store.games.isEmpty {
+                pastGames
+            }
         }
         .padding(20)
+    }
+
+    // MARK: Past games
+
+    /// The games played to a result, newest first. Each row is the banner in
+    /// miniature -- your four, theirs, the result -- and a click sets that
+    /// matchup up again.
+    private var pastGames: some View {
+        let games = Array(store.games.prefix(snapshotMode ? 4 : 40))
+        let won = store.games.filter(\.won).count
+        return Card {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionHeader(title: "Past games",
+                              subtitle: "\(won) won, \(store.games.count - won) lost. Click one to set the matchup up again.")
+                VStack(spacing: 6) {
+                    ForEach(games) { game in
+                        gameRow(game)
+                    }
+                }
+            }
+        }
+    }
+
+    private func gameRow(_ game: GameRecord) -> some View {
+        let mineSaved = store.teams.contains { $0.id.uuidString == game.myTeamID }
+        let theirsKnown = store.data.metaTeams.contains { $0.id == game.theirID }
+            || store.teams.contains { $0.id.uuidString == game.theirID }
+        let available = mineSaved && theirsKnown
+        let tint = game.won ? Palette.good : Palette.bad
+        return Button {
+            onChooseMine(game.myTeamID)
+            onChooseTheirs(game.theirID)
+        } label: {
+            HStack(spacing: 12) {
+                // The result, and when.
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(game.won ? "WIN" : "LOSS")
+                        .font(.system(size: 9, weight: .heavy)).kerning(0.8)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(Capsule().fill(tint))
+                    Text(game.played, format: .relative(presentation: .named))
+                        .font(.system(size: 9)).foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+                .frame(width: 84, alignment: .leading)
+
+                // Your four, the seam, their four: the banner in miniature.
+                four(game.myForms, name: game.myTeamName, tint: Palette.accent, leading: true)
+                Text("VS")
+                    .font(.system(size: 9, weight: .black)).italic()
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5).padding(.vertical, 1)
+                    .background(RoundedRectangle(cornerRadius: 3)
+                        .fill(Color(red: 0.07, green: 0.08, blue: 0.12)))
+                    .overlay(RoundedRectangle(cornerRadius: 3)
+                        .strokeBorder(.white.opacity(0.8), lineWidth: 1))
+                    .rotationEffect(.degrees(-25))
+                four(game.theirForms, name: game.theirName, tint: Palette.bad, leading: false)
+
+                Spacer(minLength: 8)
+
+                // How long, and what the review made of it.
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(game.turns) turn\(game.turns == 1 ? "" : "s")")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded)).monospacedDigit()
+                    if game.reviewedTurns > 0 {
+                        Text(game.leftOnTable < 0.05 ? "on the engine's line"
+                             : String(format: "%.2f left on the table", game.leftOnTable))
+                            .font(.system(size: 9, design: .rounded)).monospacedDigit()
+                            .foregroundStyle(game.leftOnTable < 0.05 ? Palette.good : .secondary)
+                    }
+                    if !available {
+                        Text(mineSaved ? "their list is gone" : "team no longer saved")
+                            .font(.system(size: 9)).foregroundStyle(Palette.warn)
+                    }
+                }
+                .frame(minWidth: 120, alignment: .trailing)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.quaternary)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                ZStack {
+                    Palette.surface
+                    // The banner's two colours meeting, faintly.
+                    LinearGradient(colors: [Palette.accent.opacity(0.16), Color.clear,
+                                            Palette.bad.opacity(0.16)],
+                                   startPoint: .leading, endPoint: .trailing)
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(tint.opacity(0.35), lineWidth: 1))
+            .opacity(available ? 1 : 0.6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!available)
+        .help(available ? "Set \(game.myTeamName) against \(game.theirName) again"
+              : "One of these teams is no longer here.")
+        .contextMenu {
+            Button("Forget this game", role: .destructive) { store.forget(game) }
+        }
+    }
+
+    /// One side's four, small, with its name under them.
+    private func four(_ ids: [String], name: String, tint: Color, leading: Bool) -> some View {
+        VStack(alignment: leading ? .leading : .trailing, spacing: 2) {
+            HStack(spacing: 1) {
+                ForEach(Array(ids.prefix(4).enumerated()), id: \.offset) { _, id in
+                    if let form = store.formsByID[id] {
+                        SpriteImage(form: form, side: 28)
+                            .help(form.formLabel)
+                    } else {
+                        Image(systemName: "questionmark.square.dashed")
+                            .frame(width: 28, height: 28)
+                            .foregroundStyle(.quaternary)
+                    }
+                }
+            }
+            Text(name)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+        }
+        .frame(minWidth: 120, alignment: leading ? .leading : .trailing)
     }
 
     /// What the page is for, while a side is still open.
