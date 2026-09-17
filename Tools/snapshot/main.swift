@@ -403,6 +403,20 @@ MainActor.assumeIsolated { renderAll() }
 
 /// Four seats, the way the arena lays them out.
 @MainActor
+/// A move's recipe placed on a demo arena, ready to draw at an instant.
+private func choreography(_ move: String, size: CGSize) -> TurnPlayback.Scene? {
+    let table = Choreography.shared
+    guard let recipe = table.recipe(forMove: move) else { return nil }
+    let stage = MoveTimeline.Stage(arena: size) { seat in
+        Seat.point(seat, w: size.width, h: size.height, singles: true)
+    }
+    let timeline = MoveTimeline.build(recipe, attacker: Seat(mine: true, slot: 0),
+                                      targets: [Seat(mine: false, slot: 0)],
+                                      sizes: table.sprites, stage: stage)
+    return TurnPlayback.Scene(timeline: timeline, startedAt: Date(), ghosts: [:])
+}
+
+@MainActor
 private func demoPlace(_ size: CGSize) -> (Seat) -> CGPoint {
     { seat in
         let x: CGFloat = seat.mine ? (seat.slot == 0 ? 0.17 : 0.35) : (seat.slot == 0 ? 0.65 : 0.83)
@@ -471,6 +485,16 @@ private struct EffectSheet: View {
                             BeamLayer(flourish: shot("Surf", category: "Special", type: "Water",
                                                      targets: both),
                                       progress: at, place: demoPlace(geo.size))
+                        }
+                    }
+                    .frame(height: 210)
+                }
+                ForEach([("Flamethrower", 0.35), ("Tackle", 0.45), ("Follow Me", 0.5)], id: \.0) { name, at in
+                    EffectCell("Choreography — \(name), \(String(format: "%.2fs", at))") {
+                        GeometryReader { geo in
+                            if let scene = choreography(name, size: geo.size) {
+                                ChoreographyLayer(scene: scene, at: at)
+                            }
                         }
                     }
                     .frame(height: 210)

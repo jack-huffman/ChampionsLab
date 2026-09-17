@@ -95,6 +95,17 @@ plan, the advisor, the refiner and the meta model all read it.
 `FieldOwnershipTests` fails the build when a setter's name is written by string
 anywhere else.
 
+**A move's animation is data.** `data/animations.json` is the Showdown
+client's choreography -- what flies, who leans, when -- translated by
+`Scripts/mkanimations.py` (`make animations`) into poses written as linear
+forms over the two Pokemon. `Choreography` reads it, `MoveTimeline` places a
+recipe on the arena on one clock, `EffectSprites` is our drawing of each of
+the client's primitives, and `TurnPlayback` stages one per action: primitives
+to the scene the arena draws, leans as card poses on the same clock, the
+condition's own animation when a Pokemon never got to act. Without the table
+the beam, the burst and the lunge play as before. The choreography is MIT;
+the drawings are ours.
+
 ## Practising
 
 The point of the battle screen is not to watch a game, it is to be told where

@@ -66,6 +66,34 @@ final class TurnPlayback: ObservableObject {
     /// behind, and the ring asking for orders, which waits until it is over.
     @Published private(set) var task: Task<Void, Never>?
 
+    /// A move's choreography on the arena, playing from `startedAt`.
+    struct Scene {
+        let timeline: MoveTimeline
+        let startedAt: Date
+        /// The Pokemon a recipe flies as its own sprite, by seat.
+        let ghosts: [Seat: NSImage]
+    }
+    /// Where a card is and how it looks while a recipe moves it.
+    struct CardPose: Equatable {
+        var offset = CGSize.zero
+        var scale: CGFloat = 1
+        var opacity = 1.0
+    }
+    @Published var scene: Scene?
+    @Published var cardPoses: [Seat: CardPose] = [:]
+    /// The whole field, jolted, while the ground shakes.
+    @Published var quake: CGSize = .zero
+    /// The arena as laid out, told to the playback by the field so a recipe
+    /// can be placed on it. Zero until the arena has appeared, and then the
+    /// old beam and burst play instead.
+    private(set) var arena = CGSize.zero
+    private var scheduled: [Task<Void, Never>] = []
+    /// The longest a move is allowed to take. A recipe past this is played
+    /// faster rather than cut short.
+    static let longestMove: TimeInterval = 2.2
+
+    func stage(_ size: CGSize) { arena = size }
+
     /// A turn's steps to walk, and the board they were recorded against.
     func show(_ recorded: Board, steps: [Board.Step]) {
         replay = steps
@@ -77,6 +105,9 @@ final class TurnPlayback: ObservableObject {
     /// turn taken back, or a new game, wants.
     func reset() {
         task?.cancel(); task = nil
+        for job in scheduled { job.cancel() }
+        scheduled = []
+        scene = nil; cardPoses = [:]; quake = .zero
         flourish = nil; lunging = nil; lungeBy = .zero; damage = [:]
         struck = []; struckTheirs = []
         replay = []; at = 0; replayBoard = nil
@@ -132,23 +163,10 @@ final class TurnPlayback: ObservableObject {
                 let user = Seat(mine: action.byMine, slot: action.slot)
                 reached.removeAll { $0 == user }
 
-                if action.stopped != nil {
-                    // The move never happened -- flinched, asleep, frozen,
-                    // paralysed -- so nothing flies and nobody charges. The
-                    // Pokemon recoils where it stands, and the stepper's line
-                    // says why. The damage still shows, for the one stop that
-                    // costs health: hurting itself in confusion.
-                    flourish = nil
-                    recoil(user)
-                } else {
-                    flourish = Flourish(id: order, action: action, targets: reached)
-                    flourishFrom = Date()
-                    leanIn(action: action, at: reached, singles: singles)
-                }
+                let staged = stage(action, order: order, user: user, reached: reached, singles: singles)
                 // Travel, then the blow: the step's own health is shown at the
                 // moment the move reaches, not when it was thrown.
-                let whole = Self.flourishSeconds
-                try? await Task.sleep(nanoseconds: UInt64(whole * Self.impactAt * 1_000_000_000))
+                try? await Task.sleep(nanoseconds: UInt64(staged.impact * 1_000_000_000))
                 guard !Task.isCancelled else { return }
                 at = index
                 // The blow lands: show what it took, from the same health diff
@@ -165,9 +183,9 @@ final class TurnPlayback: ObservableObject {
                     }
                 }
                 withAnimation(.easeOut(duration: 0.18)) { damage = took }
-                // The rest of the burst, and then the move is over.
+                // The rest of the move, and then it is over.
                 try? await Task.sleep(
-                    nanoseconds: UInt64(whole * (1 - Self.impactAt) * 1_000_000_000))
+                    nanoseconds: UInt64(max(0, staged.total - staged.impact) * 1_000_000_000))
                 guard !Task.isCancelled else { return }
                 // Take the beam away but leave the number: what is worth
                 // looking at after a move has landed is what it did. `lunging`
@@ -175,6 +193,7 @@ final class TurnPlayback: ObservableObject {
                 // mid-animation right about now, and clearing it here would
                 // snap the card back instead of letting it settle.
                 flourish = nil
+                scene = nil
                 try? await Task.sleep(
                     nanoseconds: UInt64(Self.dwellSeconds * 1_000_000_000))
                 guard !Task.isCancelled else { return }
@@ -186,7 +205,10 @@ final class TurnPlayback: ObservableObject {
             }
             guard !Task.isCancelled else { return }
             flourish = nil
+            scene = nil
             lunging = nil
+            withAnimation(.easeOut(duration: 0.25)) { cardPoses = [:] }
+            quake = .zero
             damage = [:]
             // Rest on the last step rather than past it: the field shows the end
             // of the turn, and the Back and Forward buttons still work from
@@ -208,6 +230,120 @@ final class TurnPlayback: ObservableObject {
             // first, and a cancelled task returns above this line rather than
             // nilling out its replacement.
             task = nil
+        }
+    }
+
+    /// The move on the arena, and when it lands and ends.
+    ///
+    /// With the table and a measured arena, the client's choreography: the
+    /// move's own recipe, or the client's fallback for that kind of move, or
+    /// -- when the Pokemon never got to act -- the condition's own animation,
+    /// a flinch drawn as the client draws one. The recipe's primitives go to
+    /// the scene the arena draws; its leans become card poses scheduled on
+    /// the same clock, so the cards keep animating with SwiftUI. Without
+    /// either, the beam, the burst and the lunge as before.
+    private func stage(_ action: Board.Action, order: Int, user: Seat, reached: [Seat],
+                       singles: Bool) -> (impact: TimeInterval, total: TimeInterval) {
+        let table = Choreography.shared
+        if !table.isEmpty, arena.width > 0, action.category != "Switch" {
+            var targets = reached
+            let recipe: Choreography.Resolved?
+            if let why = action.stopped {
+                targets = []
+                recipe = Self.stoppedAs[why].flatMap { table.status($0) }
+            } else {
+                if targets.isEmpty, let aimed = action.target {
+                    targets = [Seat(mine: !action.byMine, slot: aimed)]
+                }
+                recipe = table.recipe(forMove: action.move)
+                    ?? table.fallback(category: action.category, targetsSelf: targets.isEmpty)
+            }
+            if let recipe {
+                let size = arena
+                let geometry = MoveTimeline.Stage(arena: size) { seat in
+                    Seat.point(seat, w: size.width, h: size.height, singles: singles)
+                }
+                var timeline = MoveTimeline.build(recipe, attacker: user, targets: targets,
+                                                  sizes: table.sprites, stage: geometry)
+                if timeline.duration > Self.longestMove {
+                    timeline = MoveTimeline.build(recipe, attacker: user, targets: targets, sizes: table.sprites,
+                                                  stage: geometry, speed: timeline.duration / Self.longestMove)
+                }
+                var ghosts: [Seat: NSImage] = [:]
+                for seat in [user] + targets {
+                    guard let form = fighter(at: seat)?.build.form, let image = Store.shared.sprite(form) else { continue }
+                    ghosts[seat] = image
+                }
+                scene = Scene(timeline: timeline, startedAt: Date(), ghosts: ghosts)
+                schedule(timeline.leans)
+                schedule(timeline.shakes)
+                return (timeline.impact(near: targets.map(geometry.home), attacker: user),
+                        max(0.25, timeline.duration))
+            }
+        }
+        if action.stopped != nil {
+            flourish = nil
+            recoil(user)
+        } else {
+            flourish = Flourish(id: order, action: action, targets: reached)
+            flourishFrom = Date()
+            leanIn(action: action, at: reached, singles: singles)
+        }
+        return (Self.flourishSeconds * Self.impactAt, Self.flourishSeconds)
+    }
+
+    /// The client's animation for each reason a Pokemon did not get to act.
+    /// A reason with none -- disabled, tormented -- recoils as before.
+    private static let stoppedAs: [String: String] = [
+        "flinched": "flinch", "asleep": "slp", "frozen": "frz", "paralysed": "par",
+        "confused": "confusedselfhit", "in love": "attracted",
+    ]
+
+    private func fighter(at seat: Seat) -> Fighter? {
+        guard let board = replayBoard else { return nil }
+        let side = seat.mine ? board.mine : board.theirs
+        return side.indices.contains(seat.slot) ? side[seat.slot] : nil
+    }
+
+    /// Each lean as one animated change of the card's pose, at its moment on
+    /// the clock, with the curve the recipe asked for.
+    private func schedule(_ leans: [MoveTimeline.Lean]) {
+        for lean in leans {
+            scheduled.append(Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(max(0, lean.start) * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                withAnimation(Self.curve(lean.easing, over: max(0.02, lean.end - lean.start))) {
+                    cardPoses[lean.seat] = CardPose(offset: lean.offset, scale: lean.scale, opacity: lean.opacity)
+                }
+            })
+        }
+    }
+
+    /// The ground shaking: the field jolted a few points side to side.
+    private func schedule(_ shakes: [MoveTimeline.Shake]) {
+        for shake in shakes {
+            scheduled.append(Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(max(0, shake.start) * 1_000_000_000))
+                var elapsed: TimeInterval = 0
+                var sign: CGFloat = 1
+                while elapsed < shake.end - shake.start, !Task.isCancelled {
+                    withAnimation(.linear(duration: 0.05)) { quake = CGSize(width: 4 * sign, height: 2 * sign) }
+                    sign = -sign
+                    try? await Task.sleep(nanoseconds: 50_000_000)
+                    elapsed += 0.05
+                }
+                withAnimation(.easeOut(duration: 0.1)) { quake = .zero }
+            })
+        }
+    }
+
+    static func curve(_ easing: Choreography.Easing, over duration: TimeInterval) -> Animation {
+        switch easing {
+        case .linear: return .linear(duration: duration)
+        case .swing: return .easeInOut(duration: duration)
+        case .accel: return .easeIn(duration: duration)
+        case .decel: return .easeOut(duration: duration)
+        default: return .easeInOut(duration: duration)
         }
     }
 

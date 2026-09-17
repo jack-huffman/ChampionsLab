@@ -39,6 +39,8 @@ struct MoveTimeline: Sendable {
         let ending: Choreography.Ending?
         /// A left-handed slash drawn for the far side is mirrored for the near.
         let mirrored: Bool
+        /// Set when the recipe flies a Pokemon's own sprite: whose.
+        let ghostOf: Seat?
     }
     struct Lean: Identifiable, Sendable {
         let id: Int
@@ -149,7 +151,8 @@ struct MoveTimeline: Sendable {
                     from: place(from), to: place(to),
                     start: start, end: max(end, start), easing: step.easing ?? .linear, ending: step.ending,
                     mirrored: !seat(name == "defender" ? .defender : .attacker).mine
-                        && (name.hasPrefix("left") || name.hasPrefix("right"))))
+                        && (name.hasPrefix("left") || name.hasPrefix("right")),
+                    ghostOf: ghost ? seat(name == "defender" ? .defender : .attacker) : nil))
                 next += 1
                 timeline.duration = max(timeline.duration, end + (step.ending == nil ? 0 : 0.2))
             case .move:
@@ -231,6 +234,22 @@ struct MoveTimeline: Sendable {
                         xscale: CGFloat(pose.xscale ?? scale), yscale: CGFloat(pose.yscale ?? scale),
                         opacity: pose.opacity ?? opacityDefault)
         }
+    }
+
+    /// When the blow lands: the first primitive to arrive at a target, or the
+    /// first lean that carries the user somewhere, or -- for a recipe that
+    /// never goes near anyone -- a little past half way. The health bar drops
+    /// at this moment rather than when the move was thrown.
+    func impact(near targets: [CGPoint], attacker: Seat) -> TimeInterval {
+        var soonest: TimeInterval?
+        for sprite in sprites where sprite.ghostOf == nil
+            && targets.contains(where: { hypot(sprite.to.point.x - $0.x, sprite.to.point.y - $0.y) < 70 }) {
+            soonest = min(soonest ?? .infinity, sprite.end)
+        }
+        for lean in leans where lean.seat == attacker && hypot(lean.offset.width, lean.offset.height) > 40 {
+            soonest = min(soonest ?? .infinity, lean.end)
+        }
+        return min(duration, soonest ?? duration * 0.55)
     }
 
     // MARK: - Reading it at an instant

@@ -474,6 +474,9 @@ struct Board {
         /// "paralysed" -- and nil when it did. The playback reads it: a
         /// Pokemon that never got its move off does not lunge, it recoils.
         var stopped: String?
+        /// The far-side slot an attack was aimed at, so a move that missed or
+        /// was blocked still flies at the Pokemon it was meant for.
+        var target: Int?
 
         /// The action behind a choice, read off the move it actually plays.
         /// A switch, a Protect and a pass each read as themselves.
@@ -486,6 +489,7 @@ struct Board {
                 self.move = move?.name ?? ""
                 self.category = move?.category ?? "Other"
                 self.type = move?.type ?? ""
+                if case .attack(_, let aimed) = played { self.target = aimed }
             case .swap:
                 self.move = ""; self.category = "Switch"; self.type = ""
             case .pass:
