@@ -95,16 +95,24 @@ plan, the advisor, the refiner and the meta model all read it.
 `FieldOwnershipTests` fails the build when a setter's name is written by string
 anywhere else.
 
-**A move's animation is data.** `data/animations.json` is the Showdown
-client's choreography -- what flies, who leans, when -- translated by
+**The battle is Showdown's scene, and a move's animation is data.** The
+field draws the client's 640 by 360 stage fitted to the window -- your side
+at the front at depth 0, twice the size and seen from behind; theirs at the
+back at depth 200; a point's depth sliding it up and to the right and
+shrinking it, which is the client's `pos()` and the whole of its perspective
+(`MoveTimeline.Stage`, `BattleScene`). `data/animations.json` is the client's
+choreography -- what flies, who leans, when -- translated by
 `Scripts/mkanimations.py` (`make animations`) into poses written as linear
-forms over the two Pokemon. `Choreography` reads it, `MoveTimeline` places a
-recipe on the arena on one clock, `EffectSprites` is our drawing of each of
-the client's primitives, and `TurnPlayback` stages one per action: primitives
-to the scene the arena draws, leans as card poses on the same clock, the
-condition's own animation when a Pokemon never got to act. Without the table
-the beam, the burst and the lunge play as before. The choreography is MIT;
-the drawings are ours.
+forms over the two Pokemon, and because the stage is the client's, a recipe
+plays in its own coordinates untranslated. `Choreography` reads the table,
+`MoveTimeline` places a recipe on one clock, `EffectSprites` is our drawing of
+each primitive, `ChoreographyLayer` draws a frame, and `TurnPlayback` stages
+one recipe per action -- the move's, the client's fallback for its kind, or
+the condition's own when the Pokemon never got to act -- with leans riding
+the clock as geometry effects so the field's body is not evaluated per lean.
+Pixel sprites (`PixelSprites`, fetched on demand) are the scene's default;
+the statbar's card is a click away. The choreography is MIT; the drawings
+and the ground are ours.
 
 ## Practising
 
