@@ -31,7 +31,9 @@ struct BattleFieldView: View {
     /// How the Pokemon are drawn on their cards: the app's illustrations, or
     /// Showdown's pixel sprites. A setting, because it is a matter of taste
     /// and the pixel sprites are fetched the first time they are wanted.
-    @AppStorage("battleSpriteStyle") var spriteStyle = "pixel"
+    /// Art or pixel sprites, read from the defaults once and written back
+    /// when changed -- without @AppStorage, for the reason given in BattleView.
+    @State var spriteStyle = UserDefaults.standard.string(forKey: "battleSpriteStyle") ?? "pixel"
     @ObservedObject var pixels = PixelSprites.shared
 
     typealias TurnReview = BattleSession.TurnReview

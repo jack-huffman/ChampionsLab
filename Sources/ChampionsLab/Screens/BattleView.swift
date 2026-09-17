@@ -62,9 +62,18 @@ struct BattleView: View {
     @State private var stage: Stage = .versus
     @State private var myTeamID = ""
     @State private var opponentID = ""
-    /// The matchup last looked at, so the lobby opens ready.
-    @AppStorage("battleLobbyMine") private var rememberedMine = ""
-    @AppStorage("battleLobbyTheirs") private var rememberedTheirs = ""
+    /// The matchup last looked at, so the lobby opens ready. The defaults
+    /// read and written directly rather than through @AppStorage: while this
+    /// screen was showing, the sidebar's list lost every row, and
+    /// @AppStorage was one of two things it used that no other screen did.
+    private var rememberedMine: String {
+        get { UserDefaults.standard.string(forKey: "battleLobbyMine") ?? "" }
+        nonmutating set { UserDefaults.standard.set(newValue, forKey: "battleLobbyMine") }
+    }
+    private var rememberedTheirs: String {
+        get { UserDefaults.standard.string(forKey: "battleLobbyTheirs") ?? "" }
+        nonmutating set { UserDefaults.standard.set(newValue, forKey: "battleLobbyTheirs") }
+    }
     @State private var startHover = false
     /// Asking whether to stop the game in progress.
     @State private var stopping = false
@@ -199,12 +208,6 @@ struct BattleView: View {
         .onChange(of: session.finished) { result in
             if result != nil { recordGame() }
         }
-        .confirmationDialog("Stop this game?", isPresented: $stopping, titleVisibility: .visible) {
-            Button("Stop the game", role: .destructive) { stopGame() }
-            Button("Keep playing", role: .cancel) {}
-        } message: {
-            Text("The board and the turn log go. The two teams stay chosen, so another game is a click away.")
-        }
     }
 
     /// The lobby opens on the last matchup looked at, so a battle is a click
@@ -272,6 +275,29 @@ struct BattleView: View {
         .padding(12)
     }
 
+    /// Asked under the button, as the other screens ask things, rather than
+    /// in a confirmation dialog -- the other of the two things this screen
+    /// used that no other did while the sidebar lost its rows.
+    private var stopConfirmation: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Stop this game?").font(.system(size: 13, weight: .semibold))
+            Text("The board and the turn log go. The two teams stay chosen, so another game is a click away.")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Keep playing") { stopping = false }.controlSize(.small)
+                Button("Stop the game") { stopping = false; stopGame() }
+                    .controlSize(.small)
+                    .buttonStyle(.borderedProminent)
+                    .tint(Palette.bad)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(14)
+        .frame(width: 300)
+    }
+
     /// Out of the game. In progress it is a red stop that asks first; over,
     /// it is the blue way on, and the result is already in the history.
     @ViewBuilder
@@ -284,6 +310,7 @@ struct BattleView: View {
             .controlSize(.small)
             .tint(Palette.bad)
             .help("End this game and go back to the lobby. The teams stay chosen.")
+            .popover(isPresented: $stopping, arrowEdge: .bottom) { stopConfirmation }
         } else {
             Button { stopGame() } label: {
                 Label("Finish game", systemImage: "flag.checkered")

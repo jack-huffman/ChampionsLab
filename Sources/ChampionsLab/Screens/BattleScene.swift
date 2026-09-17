@@ -63,7 +63,10 @@ extension BattleFieldView {
         // the scene is laid out -- and again whenever that changes.
         .onAppear { playback.stage(stage) }
         .onChange(of: size) { new in playback.stage(stageFor(new, board: board)) }
-        .onChange(of: spriteStyle) { _ in playback.stage(stageFor(size, board: board)) }
+        .onChange(of: spriteStyle) { style in
+            UserDefaults.standard.set(style, forKey: "battleSpriteStyle")
+            playback.stage(stageFor(size, board: board))
+        }
         .onChange(of: board.activeCount) { _ in playback.stage(stageFor(size, board: board)) }
     }
 
