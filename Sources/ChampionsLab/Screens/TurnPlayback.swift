@@ -43,6 +43,12 @@ final class TurnPlayback: ObservableObject {
     /// The turn being walked through, and how far into it we are.
     @Published var replay: [Board.Step] = []
     @Published var at = 0
+    /// How many of the turn's steps have been shown: a row appears in the
+    /// stepper as its blow lands and stays once seen, however far back the
+    /// turn is then scrubbed.
+    @Published private(set) var seen = 0
+    /// Whether the turn was singles, for a step played again later.
+    private var singles = false
     /// The board the steps were recorded against, before anything fainted was
     /// replaced. Stepping through the finished board would map the health of a
     /// Pokemon that fainted onto the one that came in for it.
@@ -90,10 +96,12 @@ final class TurnPlayback: ObservableObject {
     func stage(_ laid: MoveTimeline.Stage) { stage = laid }
 
     /// A turn's steps to walk, and the board they were recorded against.
-    func show(_ recorded: Board, steps: [Board.Step]) {
+    /// `revealed` is for a screen that wants the whole turn on show at once.
+    func show(_ recorded: Board, steps: [Board.Step], revealed: Int = 0) {
         replay = steps
         replayBoard = recorded
-        at = 0
+        at = revealed > 0 ? revealed - 1 : 0
+        seen = revealed
     }
 
     /// Stop whatever is playing and clear everything it put on screen. What a
@@ -104,14 +112,14 @@ final class TurnPlayback: ObservableObject {
         stopTracks()
         damage = [:]
         struck = []; struckTheirs = []
-        replay = []; at = 0; replayBoard = nil
+        replay = []; at = 0; seen = 0; replayBoard = nil
     }
 
     /// Walk a turn's steps and show each move as it happened.
     ///
     /// The model records one step per action, carrying who acted and with
     /// what, and the health of everything at that moment. Whoever lost health
-    /// between one step and the one before it is who that move reached — which
+    /// between one step and the one before it is who that move reached -- which
     /// gets a spread move's two targets, a redirected move's real one, and a
     /// miss's none, without the model having to predict any of them.
     ///
@@ -124,88 +132,31 @@ final class TurnPlayback: ObservableObject {
               from: Int = 0) {
         task?.cancel()
         struck = []; struckTheirs = []
+        self.singles = singles
         let actions = steps.enumerated().dropFirst(from).compactMap { index, step -> (Int, Board.Step)? in
             step.action == nil ? nil : (index, step)
         }
         if from > 0 { at = Swift.max(0, from - 1) }
+        seen = Swift.max(seen, from)
         guard !actions.isEmpty else {
+            seen = steps.count
             flash(hitMine: hitMine, hitTheirs: hitTheirs)
             return
         }
         task = Task { @MainActor in
-            for (order, (index, step)) in actions.enumerated() {
-                guard !Task.isCancelled, let action = step.action else { return }
-                // Hold the field on the state before this action. `replay` and
-                // `at` already drive this for the scrubber; the playback just
-                // walks them.
-                at = Swift.max(0, index - 1)
-                // Health before this step: the step before it, or the health
-                // the turn started at for the first one.
-                let earlier = index > 0 ? steps[index - 1] : nil
-                var reached: [Seat] = []
-                for slot in step.myHP.indices where slot < 2 {
-                    let was = earlier?.myHP.indices.contains(slot) == true
-                        ? earlier!.myHP[slot] : step.myHP[slot]
-                    if step.myHP[slot] < was { reached.append(Seat(mine: true, slot: slot)) }
-                }
-                for slot in step.theirHP.indices where slot < 2 {
-                    let was = earlier?.theirHP.indices.contains(slot) == true
-                        ? earlier!.theirHP[slot] : step.theirHP[slot]
-                    if step.theirHP[slot] < was { reached.append(Seat(mine: false, slot: slot)) }
-                }
-                // A move never animates as reaching the Pokémon that used it,
-                // even when that Pokémon lost health doing it: recoil, a Life
-                // Orb and Belly Drum all come off the user, and a Flare Blitz
-                // that bursts on its own face reads as a bug.
-                let user = Seat(mine: action.byMine, slot: action.slot)
-                reached.removeAll { $0 == user }
-
-                let staged = stage(action, order: order, user: user, reached: reached, singles: singles)
-                // Travel, then the blow: the step's own health is shown at the
-                // moment the move reaches, not when it was thrown.
-                try? await Task.sleep(nanoseconds: UInt64(staged.impact * 1_000_000_000))
+            for (order, (index, _)) in actions.enumerated() {
                 guard !Task.isCancelled else { return }
-                at = index
-                // The blow lands: show what it took, from the same health diff
-                // the targets were worked out from.
-                var took: [Seat: Int] = [:]
-                if let earlier {
-                    for seat in reached {
-                        let before = seat.mine ? earlier.myHP : earlier.theirHP
-                        let after = seat.mine ? step.myHP : step.theirHP
-                        guard before.indices.contains(seat.slot),
-                              after.indices.contains(seat.slot) else { continue }
-                        let lost = before[seat.slot] - after[seat.slot]
-                        if lost > 0 { took[seat] = lost }
-                    }
-                }
-                withAnimation(.easeOut(duration: 0.18)) { damage = took }
-                // The rest of the move, and then it is over.
-                try? await Task.sleep(
-                    nanoseconds: UInt64(max(0, staged.total - staged.impact) * 1_000_000_000))
-                guard !Task.isCancelled else { return }
-                // Take the picture away but leave the number: what is worth
-                // looking at after a move has landed is what it did.
-                scene = nil
-                stopTracks()
-                try? await Task.sleep(
-                    nanoseconds: UInt64(Self.dwellSeconds * 1_000_000_000))
-                guard !Task.isCancelled else { return }
-                withAnimation(.easeIn(duration: 0.2)) { damage = [:] }
-                if order < actions.count - 1 {
-                    try? await Task.sleep(
-                        nanoseconds: UInt64(Self.betweenActions * 1_000_000_000))
-                }
+                await perform(index, order: order, in: steps, last: order == actions.count - 1)
             }
             guard !Task.isCancelled else { return }
             scene = nil
             stopTracks()
             damage = [:]
             // Rest on the last step rather than past it: the field shows the end
-            // of the turn, and the Back and Forward buttons still work from
-            // there, which is how a turn was reviewed before it was played out.
-            // Stepping forward off the end clears the replay, as it always did.
+            // of the turn, and the stepper still works from there, which is how
+            // a turn was reviewed before it was played out.
             at = Swift.max(0, replay.count - 1)
+            seen = replay.count
             flash(hitMine: hitMine, hitTheirs: hitTheirs)
             // The turn is over, so let go of the task.
             //
@@ -221,6 +172,110 @@ final class TurnPlayback: ObservableObject {
             // first, and a cancelled task returns above this line rather than
             // nilling out its replacement.
             task = nil
+        }
+    }
+
+    /// One step again, on a click in the stepper: whatever is playing stops,
+    /// the field rewinds to the moment before the step, the move plays as it
+    /// did, and the field rests on the step. A step with no action -- the
+    /// residuals -- has nothing to play, and the field simply shows it.
+    func replay(step index: Int) {
+        guard replay.indices.contains(index) else { return }
+        task?.cancel(); task = nil
+        scene = nil
+        stopTracks()
+        damage = [:]
+        struck = []; struckTheirs = []
+        seen = Swift.max(seen, index + 1)
+        guard replay[index].action != nil else { at = index; return }
+        at = Swift.max(0, index - 1)
+        let steps = replay
+        task = Task { @MainActor in
+            await perform(index, order: 0, in: steps, last: true)
+            guard !Task.isCancelled else { return }
+            scene = nil
+            stopTracks()
+            damage = [:]
+            at = index
+            task = nil
+        }
+    }
+
+    /// The stepper is put away: the turn is over and the field shows where
+    /// it ended up.
+    func finish() {
+        task?.cancel(); task = nil
+        scene = nil
+        stopTracks()
+        damage = [:]
+        replay = []; at = 0; seen = 0; replayBoard = nil
+    }
+
+    /// One action played: the field held on the moment before it, the move's
+    /// travel, the blow at `impactAt` with the numbers off whoever it reached,
+    /// then the dwell that paces a turn -- and, unless it is the last, the
+    /// beat before the next.
+    private func perform(_ index: Int, order: Int, in steps: [Board.Step], last: Bool) async {
+        let step = steps[index]
+        guard let action = step.action else { return }
+        // Hold the field on the state before this action. `replay` and `at`
+        // already drive this for the stepper; the playback just walks them.
+        at = Swift.max(0, index - 1)
+        // Health before this step: the step before it, or the health the turn
+        // started at for the first one.
+        let earlier = index > 0 ? steps[index - 1] : nil
+        var reached: [Seat] = []
+        for slot in step.myHP.indices where slot < 2 {
+            let was = earlier?.myHP.indices.contains(slot) == true
+                ? earlier!.myHP[slot] : step.myHP[slot]
+            if step.myHP[slot] < was { reached.append(Seat(mine: true, slot: slot)) }
+        }
+        for slot in step.theirHP.indices where slot < 2 {
+            let was = earlier?.theirHP.indices.contains(slot) == true
+                ? earlier!.theirHP[slot] : step.theirHP[slot]
+            if step.theirHP[slot] < was { reached.append(Seat(mine: false, slot: slot)) }
+        }
+        // A move never animates as reaching the Pokémon that used it, even
+        // when that Pokémon lost health doing it: recoil, a Life Orb and Belly
+        // Drum all come off the user, and a Flare Blitz that bursts on its own
+        // face reads as a bug.
+        let user = Seat(mine: action.byMine, slot: action.slot)
+        reached.removeAll { $0 == user }
+
+        let staged = stage(action, order: order, user: user, reached: reached, singles: singles)
+        // Travel, then the blow: the step's own health is shown at the moment
+        // the move reaches, not when it was thrown.
+        try? await Task.sleep(nanoseconds: UInt64(staged.impact * 1_000_000_000))
+        guard !Task.isCancelled else { return }
+        at = index
+        seen = Swift.max(seen, index + 1)
+        // The blow lands: show what it took, from the same health diff the
+        // targets were worked out from.
+        var took: [Seat: Int] = [:]
+        if let earlier {
+            for seat in reached {
+                let before = seat.mine ? earlier.myHP : earlier.theirHP
+                let after = seat.mine ? step.myHP : step.theirHP
+                guard before.indices.contains(seat.slot),
+                      after.indices.contains(seat.slot) else { continue }
+                let lost = before[seat.slot] - after[seat.slot]
+                if lost > 0 { took[seat] = lost }
+            }
+        }
+        withAnimation(.easeOut(duration: 0.18)) { damage = took }
+        // The rest of the move, and then it is over.
+        try? await Task.sleep(
+            nanoseconds: UInt64(max(0, staged.total - staged.impact) * 1_000_000_000))
+        guard !Task.isCancelled else { return }
+        // Take the picture away but leave the number: what is worth looking
+        // at after a move has landed is what it did.
+        scene = nil
+        stopTracks()
+        try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1_000_000_000))
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeIn(duration: 0.2)) { damage = [:] }
+        if !last {
+            try? await Task.sleep(nanoseconds: UInt64(Self.betweenActions * 1_000_000_000))
         }
     }
 

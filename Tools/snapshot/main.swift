@@ -255,6 +255,11 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         guarded.theirs[1].substitute = 40
         render(BattleView(playing: guarded), named: "battle-protect-dark",
                size: CGSize(width: 1180, height: 900), dark: true)
+        // The turn just played, stepped through.
+        if !board.steps.isEmpty {
+            render(BattleView(playing: board, replaying: board.steps), named: "battle-steps-dark",
+                   size: CGSize(width: 1280, height: 860), dark: true)
+        }
         render(BattleView(playing: board), named: "battle-dark",
                size: CGSize(width: 1280, height: 860), dark: true)
         // And the Fight grid, which is what most turns are spent looking at.

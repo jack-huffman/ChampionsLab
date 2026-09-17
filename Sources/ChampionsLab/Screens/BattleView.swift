@@ -113,6 +113,7 @@ struct BattleView: View {
          previewing: [String] = [],
          playing: Board? = nil,
          showing: Command = .menu,
+         replaying: [Board.Step] = [],
          reviewing: [TurnReview] = [],
          logging: [String] = [],
          thinking seeded: (BattleEngine.Result, TurnGame.Solution)? = nil) {
@@ -145,6 +146,10 @@ struct BattleView: View {
         }
         if !previewing.isEmpty { _bringing = State(initialValue: previewing) }
         if playing != nil { _stage = State(initialValue: .battle) }
+        // The turn just played, with every step on show, for the stepper.
+        if let playing, !replaying.isEmpty {
+            playbackObject.show(playing, steps: replaying, revealed: replaying.count)
+        }
     }
 
 
