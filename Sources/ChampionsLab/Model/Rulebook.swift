@@ -81,6 +81,26 @@ struct Rulebook: Sendable {
         return nil
     }
 
+    /// What a Mega is registered as: the Pokemon that holds the stone.
+    ///
+    /// A team list has no Mega on it. You bring a Charizard holding a
+    /// Charizardite Y and it Mega Evolves in the battle, so the builder
+    /// registers the base and the item, and `megaForm` reads the pair back.
+    /// Nil for anything that is not a Mega.
+    func registeredForm(of mega: Form) -> Form? {
+        guard mega.isMega else { return nil }
+        // The one that actually becomes it, which is the inverse of
+        // `megaForm` and handles the exception it makes: Floette's Mega
+        // belongs to the Eternal Flower alone, and a plain Floette holding a
+        // Floettite is a Floette holding a stone. The plain species is the
+        // fallback, for a Mega whose stone names nothing.
+        let stone = mega.megaTrigger
+        return forms.first { $0.dex == mega.dex && !$0.isMega
+                             && megaForm(for: $0, holding: stone)?.id == mega.id }
+            ?? forms.first { $0.dex == mega.dex && !$0.isMega && $0.suffix == "" }
+            ?? forms.first { $0.dex == mega.dex && !$0.isMega }
+    }
+
     // MARK: - What a move is worth
 
     func quality(of move: Move, ability: String = "", item: String = "") -> MoveQuality {

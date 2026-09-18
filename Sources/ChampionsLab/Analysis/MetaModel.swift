@@ -351,22 +351,35 @@ struct MetaModel {
             var team = Team(name: "\(seed.entry.name) core", format: format)
             var usedItems: Set<String> = []
             team.slots = picked.map { member in
-                var slot = TeamSlot(formID: member.form.id)
+                // The usage table names a Mega now and then -- Mega Salamence,
+                // Mega Aerodactyl -- and a team registers the Pokemon holding
+                // the stone rather than the Mega itself.
+                let registered = member.form.isMega
+                    ? (store.rulebook.registeredForm(of: member.form) ?? member.form)
+                    : member.form
+                var slot = TeamSlot(formID: registered.id)
                 // The ability and item the ladder actually runs.
-                slot.ability = member.entry.abilityUsage?.first?.name
-                    ?? member.form.abilities.first?.name ?? ""
+                // The ability it is registered with: a Salamence's
+                // Intimidate, not the Aerilate it becomes.
+                let own = Set(registered.abilities.map(\.name))
+                slot.ability = member.entry.abilityUsage?.first(where: { own.contains($0.name) })?.name
+                    ?? registered.abilities.first?.name ?? ""
                 let item = (member.entry.itemUsage ?? [])
                     .map(\.name).first { !usedItems.contains($0) }
                     ?? member.entry.commonItems.first { !usedItems.contains($0) }
                     ?? ""
                 slot.item = item
-                if !item.isEmpty { usedItems.insert(item) }
+                // A Mega's own stone, so it still becomes what the ladder ran.
+                if member.form.isMega, registered.id != member.form.id {
+                    slot.item = member.form.megaTrigger
+                }
+                if !slot.item.isEmpty { usedItems.insert(slot.item) }
                 slot.moves = (member.entry.moveUsage ?? []).prefix(4).compactMap { share in
-                    member.form.moves.first { store.move($0)?.name == share.name }
+                    registered.moves.first { store.move($0)?.name == share.name }
                 }
                 if slot.moves.isEmpty {
                     slot.moves = member.entry.keyMoves.prefix(4).compactMap { name in
-                        member.form.moves.first { store.move($0)?.name == name }
+                        registered.moves.first { store.move($0)?.name == name }
                     }
                 }
                 // The table knows nothing about this one, or nothing it can
@@ -375,10 +388,10 @@ struct MetaModel {
                 // that cannot move is not a team, and these are saved as
                 // yours now rather than only played against.
                 if slot.moves.isEmpty {
-                    slot.moves = Array(store.rulebook.moves(for: member.form)
-                        .sorted { store.rulebook.moveValue($0, for: member.form,
+                    slot.moves = Array(store.rulebook.moves(for: registered)
+                        .sorted { store.rulebook.moveValue($0, for: registered,
                                                            ability: slot.ability, item: slot.item)
-                                > store.rulebook.moveValue($1, for: member.form,
+                                > store.rulebook.moveValue($1, for: registered,
                                                            ability: slot.ability, item: slot.item) }
                         .prefix(4).map(\.id))
                 }
@@ -391,7 +404,7 @@ struct MetaModel {
                     slot.sp = measured.sp
                     slot.alignmentName = measured.alignment
                 } else {
-                    let physical = member.form.attack >= member.form.spAttack
+                    let physical = registered.attack >= registered.spAttack
                     var sp = Array(repeating: 0, count: 6)
                     sp[physical ? Stat.attack.rawValue : Stat.spAttack.rawValue] = 32
                     sp[Stat.speed.rawValue] = 32

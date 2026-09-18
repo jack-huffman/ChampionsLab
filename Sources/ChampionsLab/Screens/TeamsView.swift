@@ -819,6 +819,25 @@ struct FormPicker: View {
 
     @State private var query = ""
 
+    /// What a team can register: never a Mega.
+    ///
+    /// A Mega is not something you put on a team. You bring the Pokemon
+    /// holding its stone and it Mega Evolves in the battle, which is why a
+    /// slot's form and its item together decide what walks out. Offering
+    /// "Mega Charizard Y" in the picker invited a team that cannot exist --
+    /// and one whose stats, ability and typing were the Mega's from the
+    /// first turn. Searching for one still finds it: the base comes back
+    /// instead, which is the thing to pick.
+    private func registerable(_ forms: [Form]) -> [Form] {
+        var out: [Form] = []
+        for form in forms {
+            let registered = form.isMega ? store.rulebook.registeredForm(of: form) : form
+            guard let registered else { continue }
+            if !out.contains(where: { $0.id == registered.id }) { out.append(registered) }
+        }
+        return out
+    }
+
     private var results: [Form] {
         guard !query.isEmpty else {
             // Lead with the things people actually build around.
@@ -826,13 +845,13 @@ struct FormPicker: View {
             let rest = store.data.forms.filter { form in
                 !usage.contains { $0.id == form.id }
             }
-            return usage + rest
+            return registerable(usage + rest)
         }
         let needle = query.lowercased()
-        return store.data.forms.filter {
+        return registerable(store.data.forms.filter {
             $0.formLabel.lowercased().contains(needle)
                 || $0.types.contains { $0.lowercased().contains(needle) }
-        }
+        })
     }
 
     var body: some View {
