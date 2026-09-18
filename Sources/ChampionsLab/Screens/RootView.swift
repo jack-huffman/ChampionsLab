@@ -182,6 +182,7 @@ struct RootView: View {
         }
         .task {
             Updater.cleanUp()
+            lan.startIfVisible()
             await updater.checkIfDue()
         }
         .overlay(alignment: .top) {

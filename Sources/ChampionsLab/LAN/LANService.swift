@@ -68,8 +68,9 @@ final class LANService: ObservableObject {
             if status != .off { restartAdvertising() }
         }
     }
-    /// Whether the others can see you. Remembered; the screen turns it on
-    /// the first time it is opened.
+    /// Whether the others can see you. On unless you turn it off, and
+    /// remembered, so a request finds you from the moment the app opens,
+    /// whatever screen you are on.
     @Published var visible: Bool {
         didSet {
             UserDefaults.standard.set(visible, forKey: "lanVisible")
@@ -99,7 +100,14 @@ final class LANService: ObservableObject {
     private init() {
         displayName = UserDefaults.standard.string(forKey: "lanDisplayName")
             ?? Host.current().localizedName ?? "Trainer"
-        visible = UserDefaults.standard.object(forKey: "lanVisible") as? Bool ?? false
+        visible = UserDefaults.standard.object(forKey: "lanVisible") as? Bool ?? true
+    }
+
+    /// Onto the network at launch, if you are visible. The setting alone did
+    /// nothing until the switch was flipped, so the screen said you were on
+    /// the network while nobody could see you.
+    func startIfVisible() {
+        if visible, listener == nil { start() }
     }
 
     // MARK: - On and off the network

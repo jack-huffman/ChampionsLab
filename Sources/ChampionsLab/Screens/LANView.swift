@@ -2,9 +2,10 @@
 //  LAN Battles: the people running the app on your network, a request to
 //  one of them, and the room you share once they say yes.
 //
-//  The screen is the waiting room. You are visible while it is on and stay
-//  visible after you leave the screen, so a request finds you anywhere in
-//  the app -- it arrives as a banner over whatever you are doing. In the
+//  The screen is the waiting room. You are visible from the moment the app
+//  opens, whatever screen you are on, unless you turn it off here, so a
+//  request finds you anywhere in the app -- it arrives as a banner over
+//  whatever you are doing. In the
 //  room each of you chooses a team from your own saved ones; the other side
 //  sees it as Team Preview would, six forms and a name, and nothing else.
 
@@ -50,12 +51,6 @@ struct LANView: View {
                 }
             }
             .padding(20)
-        }
-        .onAppear {
-            // The first visit turns you on; after that it is your switch.
-            if !snapshotMode, !lan.visible, UserDefaults.standard.object(forKey: "lanVisible") == nil {
-                lan.visible = true
-            }
         }
     }
 
