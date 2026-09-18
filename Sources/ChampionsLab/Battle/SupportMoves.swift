@@ -57,14 +57,28 @@ enum SupportMoves {
         let rolling: Bool
         let team: [Fighter]
         let name: String
+
+        /// Aimed at the caster's own partner rather than across the field.
+        /// A Skill Swap, a Trick, a Guard Split are all things you do to your
+        /// own side as readily as to theirs, and the screen offers the
+        /// partner as a target; `Choice.allyTarget` is how that arrives.
+        var atAlly: Bool { target >= Choice.allyTarget }
+        /// Which side the move is aimed at.
+        var targetsMine: Bool { atAlly ? byMine : !byMine }
+        /// The slot on that side. An ally target names the partner, whose
+        /// slot is the other one.
+        var targetSlot: Int { atAlly ? (slot == 0 ? 1 : 0) : target }
     }
 
-    /// The opposing slot this move is aimed at, if it can be reached: not down,
-    /// not protecting, not behind a Substitute. Says why when it cannot.
+    /// The slot this move is aimed at, if it can be reached: not down, not
+    /// protecting, not behind a Substitute. Says why when it cannot. The
+    /// side is whichever the move was pointed at -- across the field
+    /// ordinarily, the caster's own partner for an ally target, which used
+    /// to fall through to the first opponent instead.
     static func reachableTarget(_ cast: Cast, board: inout Board) -> Int? {
-        let far = cast.byMine ? board.theirs : board.mine
-        let index = far.indices.contains(cast.target) && cast.target < board.activeCount
-            ? cast.target : 0
+        let far = cast.targetsMine ? board.mine : board.theirs
+        let index = far.indices.contains(cast.targetSlot) && cast.targetSlot < board.activeCount
+            ? cast.targetSlot : 0
         guard far.indices.contains(index), !far[index].fainted else { return nil }
         if far[index].isProtected {
             board.note("\(far[index].build.form.formLabel) protected itself.")
@@ -77,14 +91,15 @@ enum SupportMoves {
         return index
     }
 
+    /// The name of what the move is aimed at, on whichever side that is.
     static func farName(_ cast: Cast, _ index: Int, board: Board) -> String {
-        (cast.byMine ? board.theirs : board.mine)[index].build.form.formLabel
+        (cast.targetsMine ? board.mine : board.theirs)[index].build.form.formLabel
     }
 
-    /// Write a changed fighter back to whichever side it came from.
+    /// Write a changed fighter back to the side the move is aimed at.
     static func setFar(_ cast: Cast, _ index: Int, board: inout Board,
                        _ change: (inout Fighter) -> Void) {
-        if cast.byMine { change(&board.theirs[index]) } else { change(&board.mine[index]) }
+        if cast.targetsMine { change(&board.mine[index]) } else { change(&board.theirs[index]) }
     }
 
     static func setNear(_ cast: Cast, board: inout Board, _ change: (inout Fighter) -> Void) {
@@ -105,7 +120,7 @@ enum SupportMoves {
         // does not work on a Dark type — the one thing that keeps a
         // Whimsicott's Encore off a Kingambit — and a Good as Gold refuses
         // every status move there is.
-        if move.aim == .foe {
+        if move.aim == .foe, !cast.atAlly {
             let far = byMine ? board.theirs : board.mine
             let index = far.indices.contains(target) && target < board.activeCount ? target : 0
             if far.indices.contains(index), !far[index].fainted {
@@ -226,7 +241,6 @@ enum SupportMoves {
 
     private static func reachingAcross(_ cast: Cast, board: inout Board) -> Outcome? {
         let move = cast.move
-        let byMine = cast.byMine
         let slot = cast.slot
         let team = cast.team
         let name = cast.name
@@ -241,7 +255,7 @@ enum SupportMoves {
         // to hand something a Choice Scarf and take its berry.
         if move.name == "Trick" || move.name == "Switcheroo" {
             guard let index = reachableTarget(cast, board: &board) else { board.note("But it failed."); return .handled(nil) }
-            let far = byMine ? board.theirs : board.mine
+            let far = cast.targetsMine ? board.mine : board.theirs
             let theirs = far[index].build.item
             let ours = team[slot].build.item
             guard !(theirs.isEmpty && ours.isEmpty) else { board.note("But it failed."); return .handled(nil) }
@@ -260,7 +274,7 @@ enum SupportMoves {
         // Insomnia, which is how a sleep team gets turned off.
         if move.name == "Skill Swap" || move.name == "Worry Seed" {
             guard let index = reachableTarget(cast, board: &board) else { board.note("But it failed."); return .handled(nil) }
-            let far = byMine ? board.theirs : board.mine
+            let far = cast.targetsMine ? board.mine : board.theirs
             let had = far[index].build.ability
             if move.name == "Worry Seed" {
                 guard had != "Insomnia" else { board.note("But it failed."); return .handled(nil) }
@@ -293,7 +307,7 @@ enum SupportMoves {
         // trade one pair of them; Heart Swap trades all six.
         if ["Psych Up", "Guard Swap", "Power Swap", "Heart Swap"].contains(move.name) {
             guard let index = reachableTarget(cast, board: &board) else { board.note("But it failed."); return .handled(nil) }
-            let far = byMine ? board.theirs : board.mine
+            let far = cast.targetsMine ? board.mine : board.theirs
             var ourBoosts = team[slot].build.boosts
             var theirBoosts = far[index].build.boosts
             switch move.name {
@@ -323,7 +337,7 @@ enum SupportMoves {
         // something on its last legs drag a healthy attacker down with it.
         if move.name == "Pain Split" {
             guard let index = reachableTarget(cast, board: &board) else { board.note("But it failed."); return .handled(nil) }
-            let far = byMine ? board.theirs : board.mine
+            let far = cast.targetsMine ? board.mine : board.theirs
             let shared = (team[slot].hp + far[index].hp) / 2
             setNear(cast, board: &board) { $0.hp = Swift.min($0.maxHP, shared) }
             setFar(cast, index, board: &board) { $0.hp = Swift.min($0.maxHP, shared) }
@@ -337,7 +351,7 @@ enum SupportMoves {
             guard let index = reachableTarget(cast, board: &board) else { board.note("But it failed."); return .handled(nil) }
             let pair: [Stat] = move.name == "Guard Split" ? [.defense, .spDefense]
                                                           : [.attack, .spAttack]
-            let far = byMine ? board.theirs : board.mine
+            let far = cast.targetsMine ? board.mine : board.theirs
             for stat in pair {
                 let averaged = (team[slot].build.stat(stat) + far[index].build.stat(stat)) / 2
                 setNear(cast, board: &board) { $0.build.statOverride = ($0.build.statOverride ?? [:]).merging([stat.rawValue: averaged]) { _, new in new } }
@@ -806,7 +820,6 @@ enum SupportMoves {
     /// Its ability, its types, a stat, or its stages turned upside down.
     private static func rewriting(_ cast: Cast, board: inout Board) -> Outcome? {
         let move = cast.move
-        let byMine = cast.byMine
         let slot = cast.slot
         let team = cast.team
         let name = cast.name
@@ -814,7 +827,7 @@ enum SupportMoves {
         // the cheapest answer to a Belly Drum there is.
         if move.name == "Topsy-Turvy" {
             guard let index = reachableTarget(cast, board: &board) else { board.note("But it failed."); return .handled(nil) }
-            let far = byMine ? board.theirs : board.mine
+            let far = cast.targetsMine ? board.mine : board.theirs
             guard far[index].build.boosts.contains(where: { $0 != 0 }) else {
                 board.note("But it failed."); return .handled(nil)
             }
@@ -827,7 +840,7 @@ enum SupportMoves {
         // target's; Simple Beam makes it Simple; Gastro Acid takes it away.
         if ["Entrainment", "Role Play", "Simple Beam", "Gastro Acid"].contains(move.name) {
             guard let index = reachableTarget(cast, board: &board) else { board.note("But it failed."); return .handled(nil) }
-            let far = byMine ? board.theirs : board.mine
+            let far = cast.targetsMine ? board.mine : board.theirs
             switch move.name {
             case "Entrainment":
                 setFar(cast, index, board: &board) { $0.build.ability = team[slot].build.ability }
@@ -853,7 +866,7 @@ enum SupportMoves {
                 setFar(cast, index, board: &board) { $0.build.typeOverride = [.psychic] }
                 board.note("\(farName(cast, index, board: board)) became a Psychic type.")
             } else {
-                let far = byMine ? board.theirs : board.mine
+                let far = cast.targetsMine ? board.mine : board.theirs
                 let copied = far[index].types
                 setNear(cast, board: &board) { $0.build.typeOverride = copied }
                 board.note("\(name) took on \(farName(cast, index, board: board))'s typing.")
@@ -864,7 +877,7 @@ enum SupportMoves {
         // Speed Swap and Power Trick move a stat rather than a stage.
         if move.name == "Speed Swap" {
             guard let index = reachableTarget(cast, board: &board) else { board.note("But it failed."); return .handled(nil) }
-            let far = byMine ? board.theirs : board.mine
+            let far = cast.targetsMine ? board.mine : board.theirs
             let ours = team[slot].build.stat(.speed), theirs = far[index].build.stat(.speed)
             setNear(cast, board: &board) { $0.build.statOverride = ($0.build.statOverride ?? [:])
                 .merging([Stat.speed.rawValue: theirs]) { _, new in new } }
@@ -888,7 +901,7 @@ enum SupportMoves {
         if move.name == "Forest's Curse" || move.name == "Trick-or-Treat" {
             guard let index = reachableTarget(cast, board: &board) else { board.note("But it failed."); return .handled(nil) }
             let added: PokeType = move.name == "Forest's Curse" ? .grass : .ghost
-            let far = byMine ? board.theirs : board.mine
+            let far = cast.targetsMine ? board.mine : board.theirs
             guard !far[index].types.contains(added) else { board.note("But it failed."); return .handled(nil) }
             let now = far[index].types + [added]
             setFar(cast, index, board: &board) { $0.build.typeOverride = now }
