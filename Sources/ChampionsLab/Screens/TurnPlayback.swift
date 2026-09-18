@@ -134,7 +134,11 @@ final class TurnPlayback: ObservableObject {
         replay = steps
         replayBoard = recorded
         startBoard = before
-        at = revealed > 0 ? revealed - 1 : 0
+        // Before the turn's first step, not on it: step nought is the board
+        // *after* the first action, so resting there showed that action's
+        // damage -- and anything it knocked out -- from the moment the turn
+        // was handed over, before a single frame of it had played.
+        at = revealed > 0 ? revealed - 1 : -1
         seen = revealed
     }
 
@@ -181,7 +185,11 @@ final class TurnPlayback: ObservableObject {
         let actions = steps.enumerated().dropFirst(from).compactMap { index, step -> (Int, Board.Step)? in
             step.action == nil ? nil : (index, step)
         }
-        if from > 0 { at = Swift.max(0, from - 1) }
+        // Where the turn is picked up from, held there through the lead-in:
+        // minus one is the board the turn began on. This was only set when
+        // starting partway, so an ordinary turn spent its whole lead-in
+        // showing the first action's result.
+        at = from - 1
         seen = Swift.max(seen, from)
         guard !actions.isEmpty else {
             seen = steps.count

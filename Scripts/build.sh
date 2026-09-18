@@ -16,7 +16,18 @@
 set -euo pipefail
 
 SRC_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-DEST_DIR="${1:-${DEST:-$HOME/Applications}}"
+
+# `--native` builds for this machine only, which is what an iteration wants:
+# the universal build compiles everything a second time for the other
+# architecture and shares nothing with the release products the tests and
+# the snapshots have already built. A release ships universal, so
+# make-dmg.sh never passes it. Anything else is the destination.
+NATIVE=""
+PLACE=""
+for arg in "$@"; do
+	if [ "$arg" = "--native" ]; then NATIVE=1; else PLACE="$arg"; fi
+done
+DEST_DIR="${PLACE:-${DEST:-$HOME/Applications}}"
 APP="$DEST_DIR/ChampionsLab.app"
 VERSION="$(cat "$SRC_DIR/VERSION")"
 MIN_MACOS="13.0"
@@ -42,14 +53,21 @@ if [ ! -f "$SRC_DIR/AppIcon.icns" ]; then
 	rm -rf "$SRC_DIR/icon.iconset"
 fi
 
-echo "==> compiling (universal, macOS $MIN_MACOS+)"
 mkdir -p "$BUILD"
-# The package builds the binary: the library and the one-line executable
-# that imports it, for both architectures in one go. This script only
-# wraps the result in a bundle.
-( cd "$SRC_DIR" && swift build -c release --arch arm64 --arch x86_64 \
-	--product ChampionsLabApp 2>&1 | grep -E "error|warning: unre|Build complete" ) || true
-BINARY="$SRC_DIR/.build/apple/Products/Release/ChampionsLabApp"
+if [ -n "$NATIVE" ]; then
+	echo "==> compiling (this machine only, macOS $MIN_MACOS+)"
+	( cd "$SRC_DIR" && swift build -c release --product ChampionsLabApp 2>&1 \
+		| grep -E "error|warning: unre|Build complete" ) || true
+	BINARY="$(cd "$SRC_DIR" && swift build -c release --product ChampionsLabApp --show-bin-path)/ChampionsLabApp"
+else
+	echo "==> compiling (universal, macOS $MIN_MACOS+)"
+	# The package builds the binary: the library and the one-line executable
+	# that imports it, for both architectures in one go. This script only
+	# wraps the result in a bundle.
+	( cd "$SRC_DIR" && swift build -c release --arch arm64 --arch x86_64 \
+		--product ChampionsLabApp 2>&1 | grep -E "error|warning: unre|Build complete" ) || true
+	BINARY="$SRC_DIR/.build/apple/Products/Release/ChampionsLabApp"
+fi
 if [ ! -x "$BINARY" ]; then
 	echo "error: swift build did not produce $BINARY" >&2
 	exit 1

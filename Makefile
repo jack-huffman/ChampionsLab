@@ -25,7 +25,7 @@
 SHELL := /bin/bash
 NICE  := nice -n 15
 
-.PHONY: animations test warnings hitch coverage profile accuracy snapshot app dmg release data check clean delta full-sync duel replays reading
+.PHONY: animations test warnings hitch coverage profile accuracy snapshot app app-fast dmg release data check clean delta full-sync duel replays reading
 
 test:
 	$(NICE) swift test 2>&1 | tail -25
@@ -58,6 +58,12 @@ snapshot:
 
 app:
 	$(NICE) ./Scripts/build.sh
+
+# The same bundle for this machine only, which is what an iteration wants:
+# it shares its build with the tests and the snapshots instead of compiling
+# everything again for the other architecture.
+app-fast:
+	$(NICE) ./Scripts/build.sh --native
 
 dmg:
 	$(NICE) ./Scripts/make-dmg.sh

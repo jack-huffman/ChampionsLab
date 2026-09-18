@@ -7,6 +7,7 @@
 
 import AppKit
 import SwiftUI
+@testable import ChampionsLab
 
 // ImageRenderer cannot draw what the app draws, and it is worth knowing why
 // before reaching for a shot to debug a layout. Two things it will not do:

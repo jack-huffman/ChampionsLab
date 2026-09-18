@@ -35,7 +35,8 @@ struct TurnStepper: View {
         // partway for a pivot, which has not been counted yet.
         let played = session.pivoting ? session.turn : session.turn - 1
         // The row lit is the step playing, or the one the field rests on.
-        let lit = playback.focus ?? Swift.max(0, at)
+        // Minus one before the turn begins: nothing lit, nothing listed.
+        let lit = playback.focus ?? at
         let shown = Array(replay.prefix(max(playback.seen, lit + 1)))
         return Card {
             VStack(alignment: .leading, spacing: 8) {

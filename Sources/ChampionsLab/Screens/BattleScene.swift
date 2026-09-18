@@ -170,6 +170,23 @@ extension BattleFieldView {
             if falling { StatArrows(up: false, tint: Self.fallTint, side: side * 0.9).transition(.opacity) }
         }
         .frame(width: side, height: side)
+        // The game is over and this one is on the side that won: a crown,
+        // hovering, riding the same bob the Pokemon does.
+        .overlay(alignment: .top) {
+            if session.won(board) == seat.mine, !fighter.fainted {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: Swift.max(15, 14 * stage.k), weight: .black))
+                    .foregroundStyle(LinearGradient(
+                        colors: [Color(red: 1.0, green: 0.90, blue: 0.45),
+                                 Color(red: 0.96, green: 0.68, blue: 0.13)],
+                        startPoint: .top, endPoint: .bottom))
+                    .shadow(color: Color(red: 1.0, green: 0.82, blue: 0.25).opacity(0.9), radius: 12)
+                    .shadow(color: .black.opacity(0.55), radius: 2, y: 1)
+                    .offset(y: -side * 0.42 + bob * 1.6)
+                    .transition(.scale(scale: 0.3).combined(with: .opacity))
+                    .allowsHitTesting(false)
+            }
+        }
         .overlay(alignment: .top) {
             // What the step did to this one, stacked over it: the health
             // lost, the stages moved, the ability that went off.

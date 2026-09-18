@@ -100,14 +100,11 @@ struct BattleFieldView: View {
         // A turn should never need scrolling to play.
         return GeometryReader { geo in
             let gap: CGFloat = 12
-            let banner: CGFloat = finished == nil ? 0 : 40
-            let half = (geo.size.height - gap - (banner > 0 ? banner + gap : 0)) / 2
+            // No banner over the field when a game ends: the winning side
+            // wears a crown instead, which says the same thing where you are
+            // already looking.
+            let half = (geo.size.height - gap) / 2
             VStack(alignment: .leading, spacing: gap) {
-                if let finished {
-                    Card(padding: 10) { Label(finished, systemImage: "flag.checkered")
-                        .font(.system(size: 14, weight: .semibold)) }
-                        .frame(height: banner)
-                }
                 arena(board).frame(height: half)
                 HStack(alignment: .top, spacing: gap) {
                     Group {
@@ -176,7 +173,8 @@ struct BattleFieldView: View {
         let lost = review.reduce(0) { $0 + $1.lost }
         return Card {
             VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(title: "Game over", subtitle: finished ?? "")
+                SectionHeader(title: finished ?? "Game over",
+                              subtitle: "What the turns were worth, and where they went.")
                 if review.isEmpty {
                     Text("No turns to look back on.").font(.system(size: 11)).foregroundStyle(.tertiary)
                 } else if worst.isEmpty {

@@ -92,6 +92,14 @@ final class BattleSession: ObservableObject {
     /// second one on top of the first.
     @Published var playing = false
     @Published var finished: String?
+    /// Whose side won, once somebody has: the crown goes over them. Read off
+    /// the board rather than kept, so it cannot disagree with it.
+    func won(_ board: Board) -> Bool? {
+        guard finished != nil else { return nil }
+        if board.isOut(mine: false) { return true }
+        if board.isOut(mine: true) { return false }
+        return nil
+    }
     /// Every board so far, so a turn can be taken back and tried again.
     @Published var history: [(board: Board, log: [String], turn: Int)] = []
     /// Every turn of this game, marked. Read back in the Review panel.
@@ -525,7 +533,7 @@ final class BattleSession: ObservableObject {
             playing = true
             waitingOn = "Waiting for \(link?.theirName ?? "the other player")..."
         case .over(let won):
-            finished = won ? "They have nothing left. You win." : "You have nothing left. They win."
+            finished = won ? "You win." : "They win."
         }
     }
 
@@ -582,8 +590,8 @@ final class BattleSession: ObservableObject {
         thought = nil; self.solved = nil
         playback.play(recorded.steps, hitMine: hitMine, hitTheirs: hitTheirs,
                       singles: next.activeCount == 1, from: stepsPlayed)
-        if next.isOut(mine: false) { finished = "They have nothing left. You win." }
-        else if next.isOut(mine: true) { finished = "You have nothing left. They win." }
+        if next.isOut(mine: false) { finished = "You win." }
+        else if next.isOut(mine: true) { finished = "They win." }
         else { think() }
     }
 

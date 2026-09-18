@@ -1,3 +1,14 @@
+<p align="center">
+  <img src="data/sprites/006-my.png" height="72" alt="Mega Charizard Y">
+  <img src="data/sprites/727.png" height="72" alt="Incineroar">
+  <img src="data/sprites/445.png" height="72" alt="Garchomp">
+  <img src="data/sprites/983.png" height="72" alt="Kingambit">
+  <img src="data/sprites/547.png" height="72" alt="Whimsicott">
+  <img src="data/sprites/812.png" height="72" alt="Rillaboom">
+  <img src="data/sprites/903.png" height="72" alt="Sneasler">
+  <img src="data/sprites/902.png" height="72" alt="Basculegion">
+</p>
+
 # ChampionsLab
 
 A native macOS app for building Pokémon Champions teams in **Regulation Set M-C**
@@ -18,12 +29,35 @@ interface), `Sources/ChampionsLabApp` the one-line executable,
 executables, `Scripts/` the build and data scripts. `ARCHITECTURE.md` explains
 the layering and the invariants; `make` lists what to run.
 
-## Build
+## Install
+
+Download the latest **ChampionsLab-*.dmg* from
+[Releases](https://github.com/jack-huffman/ChampionsLab/releases/latest), open
+it, and drag the app to Applications. Universal (Apple silicon and Intel),
+macOS 13 or later, about 28 MB.
+
+The app is not signed by Apple, so the first launch needs one extra step:
+right-click it and choose **Open**, then **Open** again. After that it starts
+normally. macOS will also ask for permission to find devices on your local
+network the first time you open LAN Battles.
+
+It updates itself. The version sits in the sidebar's footer and checks the
+latest release once a day; when there is a newer one it says so, and one click
+downloads it, swaps the app and relaunches. Both players need the same version
+to battle over a network, which is the main reason it is there.
+
+<p align="center">
+  <img src="docs/battle.png" width="820" alt="A turn playing out on the battle field">
+</p>
+
+## Build from source
 
 ```sh
 ./Scripts/build.sh          # → ~/Applications/ChampionsLab.app   (or: make app)
+./Scripts/build.sh --native # this machine's architecture only, for iterating
 ./Scripts/build.sh /Applications    # or anywhere else
 ./Scripts/make-dmg.sh       # → build/ChampionsLab-<version>.dmg  (or: make dmg)
+./Scripts/release.sh 0.4.6  # version, image, tag, push, GitHub release
 ```
 
 Universal (arm64 + x86_64), macOS 13+. Bump `VERSION` to re-version. The icon is
@@ -79,6 +113,35 @@ clean checkout builds without network access.
   whether it is arithmetic or judgement.
 - **Database** — every legal form, all 902 moves, 246 items and 199 abilities,
   searchable and filterable.
+
+## Battling
+
+Play a matchup out against the app's own opponent, or against somebody else on
+your network. A game starts in the lobby: pick a six for each side -- one of
+yours against a meta archetype, a real tournament team, a team built from the
+ladder's usage, or another of your own -- and the engine reads the matchup
+before a move is made.
+
+<p align="center">
+  <img src="docs/lobby.png" width="820" alt="The lobby, with two sixes facing each other">
+</p>
+
+Then Team Preview, then the turns. Each turn plays out a beat at a time rather
+than landing at once: the move's own animation from Pokemon Showdown's
+choreography, the damage, then each thing the move caused as its own beat --
+the stages it moved with arrows over the Pokemon, the ability that answered,
+the status it left. The panel beside the field lists the turn as it happens and
+any step can be played again.
+
+<p align="center">
+  <img src="docs/turn.png" width="820" alt="A turn listed step by step beside the field">
+</p>
+
+**LAN Battles** finds other people running the app on your network. Ask one for
+a battle and they get it wherever they are in the app; both pick teams, both
+ready up, and the game runs on the host with each screen seeing only what it is
+entitled to -- a Pokemon's item, ability and moves stay hidden until the game
+itself reveals them. The engine's advice is a switch, off by default.
 
 ## Importing and exporting
 

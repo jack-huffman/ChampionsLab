@@ -51,9 +51,15 @@ NUM = r'[+-]?\d+(?:\.\d+)?'
 # ----------------------------------------------------------------- text ----
 
 def entries(text):
-    """Top-level `\tname: {` ... `\t},` blocks of a table."""
+    """Top-level `\tname: {` ... `\t},` blocks of a table.
+
+    The brace can be followed by a comment -- `blizzard: { // todo: better
+    blizzard anim` -- and five moves are written that way, so requiring a
+    newline after it dropped them: Blizzard, Diamond Storm, Drill Run, Petal
+    Dance and Sheer Cold all fell back to the generic effect for their kind.
+    """
     return {m.group(1): m.group(2)
-            for m in re.finditer(r'^\t([a-z0-9]+): \{\n(.*?)^\t\},', text, re.S | re.M)}
+            for m in re.finditer(r'^\t([a-z0-9]+): \{[^\n]*\n(.*?)^\t\},', text, re.S | re.M)}
 
 def section(text, header):
     i = text.index(header)
