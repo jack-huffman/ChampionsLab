@@ -28,7 +28,7 @@ struct MovePreview {
     /// glance and harder to click confidently.
     func reading(_ board: Board, fighter: Fighter, slot: Int,
                          choice: Choice, only: Int? = nil)
-        -> (text: String, mega: String?, tint: Color)? {
+        -> (text: String, mega: String?, tint: Color, power: Int?)? {
         guard case .attack(let index, let target) = choice,
               fighter.moves.indices.contains(index) else { return nil }
         let move = fighter.moves[index]
@@ -45,6 +45,8 @@ struct MovePreview {
                 : atAlly ? [slot == 0 ? 1 : 0] : [target])
         var low = 0, high = 0, best = 1.0
         var hp = 1, fullHP = 1
+        // The power it actually has against what it is aimed at.
+        var power: Int?
         for slot in aimed {
             guard side.indices.contains(slot), !side[slot].fainted
             else { continue }
@@ -58,11 +60,13 @@ struct MovePreview {
             attacker.fallenAllies = board.mine.filter(\.fainted).count
             let result = DamageCalc.calculate(attacker: attacker, defender: defender,
                                               move: move, field: field)
+            if result.power > 0, power == nil { power = Int(result.power.rounded()) }
             if result.maxDamage > high {
                 low = result.minDamage; high = result.maxDamage
                 best = result.effectiveness
                 hp = side[slot].hp
                 fullHP = side[slot].maxHP
+                if result.power > 0 { power = Int(result.power.rounded()) }
             }
         }
         guard high > 0, hp > 0 else { return nil }
@@ -105,6 +109,6 @@ struct MovePreview {
                 megaRead = "nothing to its Mega"
             }
         }
-        return (text, megaRead, tint)
+        return (text, megaRead, tint, power)
     }
 }

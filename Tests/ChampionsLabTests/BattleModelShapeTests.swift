@@ -37,7 +37,7 @@ final class BattleModelShapeTests: XCTestCase {
         "Board": 1400,          // the state; large because Fighter carries a lot
         "TurnModel": 400,       // the orchestrator, and nothing else
         "TurnOrder": 400,
-        "Strikes": 1500,        // the action pipeline, in its phases
+        "Strikes": 1560,        // the action pipeline, in its phases; a flurry is rolled blow by blow
         "SupportMoves": 1500,   // eighty-odd rules in fifteen sections, one each
         "Ailments": 300,
         "StatChanges": 300,

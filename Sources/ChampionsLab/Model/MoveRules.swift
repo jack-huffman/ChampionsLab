@@ -144,7 +144,20 @@ extension Move {
     /// one, two and three of the first rather than one each.
     func blows(for ability: String, accuracy: Double, rolling: Bool,
                using dice: inout RandomNumberGenerator) -> Double {
-        guard let hits, hits.count == 2, hits[1] > 1 else { return 1 }
+        blowWeights(for: ability, accuracy: accuracy, rolling: rolling, using: &dice)
+            .reduce(0, +)
+    }
+
+    /// The blows themselves, each worth what it is against the first: three
+    /// ones for a three-hit Rock Blast, one two three for a Triple Axel, a
+    /// single one for anything that hits once.
+    ///
+    /// `blows` is their sum, which is what a search wants. A played turn
+    /// wants them one at a time, because in the game each blow of a flurry
+    /// rolls its own damage and its own critical hit.
+    func blowWeights(for ability: String, accuracy: Double, rolling: Bool,
+                     using dice: inout RandomNumberGenerator) -> [Double] {
+        guard let hits, hits.count == 2, hits[1] > 1 else { return [1] }
         let fewest = hits[0], most = hits[1]
         let perBlow = multiaccuracy == true
 
@@ -167,26 +180,23 @@ extension Move {
         func worth(_ blow: Int) -> Double { escalates ? Double(blow) : 1 }
 
         guard perBlow else {
-            return (1...Swift.max(1, thrown)).reduce(0) { $0 + worth($1) }
+            return (1...Swift.max(1, thrown)).map(worth)
         }
         let chance = Swift.max(0, Swift.min(1, accuracy))
         guard rolling else {
             // Expected value. The caller applied one accuracy already, so the
             // first blow is certain here and each one after costs another.
-            var total = 0.0
-            for blow in 1...Swift.max(1, thrown) {
-                total += worth(blow) * pow(chance, Double(blow - 1))
-            }
-            return total
+            // Kept as one weight a blow, so the sum is what it always was.
+            return (1...Swift.max(1, thrown)).map { worth($0) * pow(chance, Double($0 - 1)) }
         }
         // A played turn: the first blow has already landed, and each one after
         // has to be rolled for. The attack ends at the first miss.
-        var total = worth(1)
+        var landed = [worth(1)]
         for blow in 2...Swift.max(2, thrown) where thrown >= blow {
             guard Double.random(in: 0..<1, using: &dice) < chance else { break }
-            total += worth(blow)
+            landed.append(worth(blow))
         }
-        return total
+        return landed
     }
 
     /// Guillotine, Fissure, Horn Drill, Sheer Cold. Their listed power is 1,

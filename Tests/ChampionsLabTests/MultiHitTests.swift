@@ -27,6 +27,7 @@ final class MultiHitTests: HarnessCase {
         check("two blows", blows.count == 2, "\(blows)")
         check("that add up to what landed", blows.reduce(0, +) == lost, "\(blows) vs \(lost)")
         check("and the log says so", out.story.contains { $0.contains("2 hits") })
+        check("each blow is its own number", blows.allSatisfy { $0 > 0 })
     }
 
     @MainActor func testRockBlastRollsTwoToFive() {
@@ -51,6 +52,54 @@ final class MultiHitTests: HarnessCase {
                                     theirs: Play(left: .pass, right: .pass), rolling: true)
         let blows = out.steps.first { $0.action?.move == "Earthquake" }?.action?.hits ?? [1]
         check("one blow, nothing to list", blows.isEmpty, "\(blows)")
+    }
+
+    @MainActor func testEveryBlowRollsItsOwnDamageAndItsOwnCrit() {
+        // Rolled, many times: if one roll were shared across the blows every
+        // blow of every use would match its neighbours.
+        var varied = 0, uses = 0, criticalLines = 0
+        for _ in 0..<300 {
+            let board = lineup()
+            let out = TurnModel.resolve(board,
+                                        mine: Play(left: .attack(move: at(board.mine[0], "Rock Blast"), target: 0), right: .pass),
+                                        theirs: Play(left: .pass, right: .pass), rolling: true)
+            guard let blows = out.steps.first(where: { $0.action?.move == "Rock Blast" })?.action?.hits,
+                  blows.count > 1 else { continue }
+            uses += 1
+            if Set(blows).count > 1 { varied += 1 }
+            if out.story.contains(where: { $0.contains("critical") }) { criticalLines += 1 }
+        }
+        check("a flurry was thrown", uses > 100, "\(uses)")
+        check("its blows differ from one another most of the time",
+              Double(varied) / Double(Swift.max(1, uses)) > 0.5, "\(varied) of \(uses)")
+        check("and a blow crits on its own now and then, at about a twentieth",
+              criticalLines > 0, "\(criticalLines) of \(uses)")
+    }
+
+    @MainActor func testTripleAxelIsThreeBlowsThatClimb() {
+        let mine = fighters([("Milotic", "Mystic Water", ["Triple Axel", "Scald"]),
+                             ("Garchomp", "Life Orb", ["Earthquake"]),
+                             ("Whimsicott", "Focus Sash", ["Tailwind"])])
+        let theirs = fighters([("Farigiraf", "Leftovers", ["Psychic"]),
+                               ("Garchomp", "Sitrus Berry", ["Earthquake"]),
+                               ("Milotic", "Leftovers", ["Scald"])])
+        var counts: Set<Int> = []
+        var climbed = 0, uses = 0
+        for _ in 0..<80 {
+            let board = Board(mine: mine, theirs: theirs, rules: store.rulebook)
+            let out = TurnModel.resolve(board,
+                                        mine: Play(left: .attack(move: at(board.mine[0], "Triple Axel"), target: 0), right: .pass),
+                                        theirs: Play(left: .pass, right: .pass), rolling: true)
+            guard let blows = out.steps.first(where: { $0.action?.move == "Triple Axel" })?.action?.hits,
+                  !blows.isEmpty else { continue }
+            uses += 1
+            counts.insert(blows.count)
+            if blows.count == 3, blows[0] < blows[1], blows[1] < blows[2] { climbed += 1 }
+        }
+        check("it was used", uses > 40, "\(uses)")
+        check("never more than three blows", counts.allSatisfy { $0 <= 3 }, "\(counts.sorted())")
+        check("three of them when none missed", counts.contains(3), "\(counts.sorted())")
+        check("and each harder than the last", climbed > 0, "\(climbed) of \(uses)")
     }
 
     @MainActor func testAFlurryGoesThroughAFocusSash() {

@@ -507,9 +507,9 @@ enum Strikes {
         guard reaches(move, before: before, hitName: hitName, index: index, hitMine: hitMine,
                       aim: aim, actor: actor, name: name, byMine: byMine, slot: slot,
                       board: &board, rolling: rolling) else { return nil }
-        let (result, field) = calculate(move, before: before, hitName: hitName, index: index,
-                                        hitMine: hitMine, farScreens: farScreens, actor: actor,
-                                        byMine: byMine, slot: slot, board: &board, rolling: rolling)
+        let (result, field, inputs) = calculate(move, before: before, hitName: hitName, index: index,
+                                                hitMine: hitMine, farScreens: farScreens, actor: actor,
+                                                byMine: byMine, slot: slot, board: &board, rolling: rolling)
         if absorbed(result, before: before, hitName: hitName, index: index, hitMine: hitMine,
                     actor: actor, board: &board) { return 0 }
         if field.critical { board.detail("A critical hit!") }
@@ -526,8 +526,8 @@ enum Strikes {
             board.detail("It does not affect \(hitName).")
             return 0
         }
-        let dealt = roll(move, result: result, before: before, aim: aim, actor: actor,
-                         board: &board, rolling: rolling)
+        let dealt = roll(move, result: result, inputs: inputs, before: before, aim: aim,
+                         actor: actor, board: &board, rolling: rolling)
         if let knockout = oneHitKnockout(move, before: before, hitName: hitName, index: index,
                                          hitMine: hitMine, board: &board, rolling: rolling) {
             return knockout
@@ -631,9 +631,24 @@ enum Strikes {
     /// The calculation, with everything the board knows that the calculator
     /// cannot: who is standing next to whom, what has already acted, whether
     /// a critical hit came up, whether a stored charge is being spent.
+    /// What a blow is worked out from. `DamageCalc.calculate` is pure, so
+    /// another blow of the same attack -- or a critical one where the first
+    /// was not -- is worked out from these without paying again for the
+    /// side effects of setting them up.
+    struct BlowInputs {
+        let attacker: Combatant
+        let defender: Combatant
+        let field: Field
+        /// The move's critical rate for this attacker, as a percentage, and
+        /// whether the target's armour refuses one outright.
+        let critRate: Double
+        let armoured: Bool
+    }
+
     private static func calculate(_ move: Move, before: Fighter, hitName: String, index: Int, hitMine: Bool,
                                   farScreens: Screens, actor: Fighter, byMine: Bool, slot: Int,
-                                  board: inout Board, rolling: Bool) -> (result: DamageResult, field: Field) {
+                                  board: inout Board, rolling: Bool)
+        -> (result: DamageResult, field: Field, inputs: BlowInputs) {
         let breaker = ["Mold Breaker", "Turboblaze", "Teravolt"].contains(actor.build.ability)
         var defender = before.build
         defender.atFullHP = before.hp == before.maxHP
@@ -723,7 +738,9 @@ enum Strikes {
         attacker.fallenAllies = (byMine ? board.mine : board.theirs).filter(\.fainted).count
         let result = DamageCalc.calculate(attacker: attacker, defender: defender,
                                           move: move, field: field)
-        return (result, field)
+        return (result, field,
+                BlowInputs(attacker: attacker, defender: defender, field: field,
+                           critRate: rate, armoured: armoured))
     }
 
     /// An absorbed hit is not merely a hit that did nothing. The calculator
@@ -771,7 +788,8 @@ enum Strikes {
 
     /// 4. The roll: one blow from the calculator's range, times how many blows
     /// land, plus a Parental Bond's quarter.
-    private static func roll(_ move: Move, result: DamageResult, before: Fighter, aim: Aim,
+    private static func roll(_ move: Move, result: DamageResult, inputs: BlowInputs,
+                             before: Fighter, aim: Aim,
                              actor: Fighter, board: inout Board, rolling: Bool) -> Int {
         // 4. The roll.
         let accuracy = move.neverMisses || move.accuracy == 0
@@ -779,50 +797,80 @@ enum Strikes {
                                 board: board) / 100
         // One blow, not the flurry. `calculate` already multiplies a
         // multi-hit move up by the strikes it assumes, because that is
-        // what the calculator screen should show — so taking its total
+        // what the calculator screen should show -- so taking its total
         // as a single blow and multiplying by the blows again squared
         // the move. Bullet Seed was doing three times three.
-        let whole: Int = rolling
-            ? Int.random(in: Swift.min(result.minDamage, result.maxDamage)
-                         ... Swift.max(result.minDamage, result.maxDamage),
-                         using: &Dice.source)
-            : Int((Double(result.minDamage + result.maxDamage) / 2 * accuracy).rounded())
-        let oneBlow: Int = result.strikes > 1
-            ? Swift.max(1, Int((Double(whole) / result.strikes).rounded()))
-            : whole
+        func oneBlow(of from: DamageResult) -> Int {
+            let whole: Int = rolling
+                ? Int.random(in: Swift.min(from.minDamage, from.maxDamage)
+                             ... Swift.max(from.minDamage, from.maxDamage),
+                             using: &Dice.source)
+                : Int((Double(from.minDamage + from.maxDamage) / 2 * accuracy).rounded())
+            return from.strikes > 1
+                ? Swift.max(1, Int((Double(whole) / from.strikes).rounded()))
+                : whole
+        }
+        let first = oneBlow(of: result)
 
-        // How many times it lands. Parental Bond adds a second blow at
-        // a quarter, which is the ability rather than the move, so the
-        // two are counted together and the log says which is which.
-        // A split dart is one blow each; both darts on one target is
-        // the move's own two.
-        var blows = move.blows(for: actor.build.ability, accuracy: accuracy,
-                               rolling: rolling, using: &Dice.source)
+        // What lands, blow by blow, each worth what it is against the first:
+        // one each for an ordinary flurry, one two three for a Triple Axel.
+        // A split dart is one blow each; both darts on one target is the
+        // move's own two.
+        var weights = move.blowWeights(for: actor.build.ability, accuracy: accuracy,
+                                       rolling: rolling, using: &Dice.source)
         if move.smartTarget == true, board.activeCount > 1 {
-            blows = aim.dartedTwice ? 2 : 1
+            weights = aim.dartedTwice ? [1, 1] : [1]
         }
         // Parental Bond adds its own second blow, but not to a move
         // that already throws several and not to Dragon Darts, which
         // the reference marks as refusing it outright.
         let bonded = actor.build.ability == "Parental Bond"
-            && move.isDamaging && !move.isSpread && blows == 1
+            && move.isDamaging && !move.isSpread && weights.count == 1
             && move.smartTarget != true
-        let dealt = Int((Double(oneBlow) * blows).rounded())
-                + (bonded ? Swift.max(1, oneBlow / 4) : 0)
-        if blows > 1 {
+
+        // A played flurry is rolled the way the game rolls one: every blow
+        // its own damage and its own critical hit. The first blow is the
+        // calculation already in hand, whose crit has been rolled and told;
+        // the rest are worked out again from the same two combatants, which
+        // costs nothing but arithmetic. A search keeps the average instead,
+        // so its numbers and its speed are what they were.
+        var split: [Int] = []
+        var laterCriticals = 0
+        if rolling, weights.count > 1 {
+            split.append(Swift.max(1, Int((Double(first) * weights[0]).rounded())))
+            for weight in weights.dropFirst() {
+                var field = inputs.field
+                field.critical = !inputs.armoured && inputs.critRate > 0
+                    && Double.random(in: 0..<100, using: &Dice.source) < inputs.critRate
+                if field.critical { laterCriticals += 1 }
+                let again = DamageCalc.calculate(attacker: inputs.attacker, defender: inputs.defender,
+                                                 move: move, field: field)
+                split.append(Swift.max(1, Int((Double(oneBlow(of: again)) * weight).rounded())))
+            }
+        }
+
+        let dealt = split.isEmpty
+            ? Int((Double(first) * weights.reduce(0, +)).rounded())
+                + (bonded ? Swift.max(1, first / 4) : 0)
+            : split.reduce(0, +)
+        if weights.count > 1 {
             board.detail(move.escalates
-                         ? String(format: "%d blows, each harder than the last.",
-                                  move.hits?.last ?? 0)
-                         : "\(Int(blows.rounded())) hits, \(oneBlow) each.")
-            // Each blow on its own, for the field to play one at a time: an
-            // even share each, or climbing for a move whose blows escalate.
-            let count = Int(blows.rounded())
-            let weights: [Double] = move.escalates ? (1...count).map(Double.init)
-                                                   : Array(repeating: 1, count: count)
-            let total = weights.reduce(0, +)
-            var split = weights.map { Int((Double(dealt) * $0 / total).rounded(.down)) }
-            split[split.count - 1] += dealt - split.reduce(0, +)
-            board.acting?.hits = split
+                         ? String(format: "%d blows, each harder than the last.", weights.count)
+                         : "\(weights.count) hits.")
+            if laterCriticals > 0 {
+                board.lastWasCritical = true
+                board.detail(laterCriticals == 1 ? "One of the blows was a critical hit."
+                             : "\(laterCriticals) of the blows were critical hits.")
+            }
+            // Each blow on its own, for the field to play one at a time.
+            if !split.isEmpty {
+                board.acting?.hits = split
+            } else {
+                let total = weights.reduce(0, +)
+                var shown = weights.map { Int((Double(dealt) * $0 / total).rounded(.down)) }
+                shown[shown.count - 1] += dealt - shown.reduce(0, +)
+                board.acting?.hits = shown
+            }
         } else {
             board.acting?.hits = []
         }
@@ -1080,7 +1128,7 @@ enum Strikes {
         let interesting = ["halves", "consumed", "Screen", "immune", "absorbed",
                            "Thick Fat", "Weakness Policy", "Wide Open", "Sturdy",
                            "Focus Sash", "at full HP", "Terrain", "Snow", "Aura Guard",
-                           "Supreme Overlord", "Helping Hand", "Spread"]
+                           "Supreme Overlord", "Last Respects", "Helping Hand", "Spread"]
         return interesting.contains { note.contains($0) }
     }
 

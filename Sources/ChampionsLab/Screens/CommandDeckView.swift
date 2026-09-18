@@ -398,7 +398,7 @@ struct CommandDeckView: View {
         // What it does to each of them, on the tile, before anything is
         // clicked. The point of a practice board is seeing the numbers — and
         // a target it cannot touch is said so, not left off.
-        let perTarget: [(name: String, text: String, mega: String?, tint: Color)] =
+        let perTarget: [(name: String, text: String, mega: String?, tint: Color, power: Int?)] =
             (aim == .foe || aim == .spread) && move.isDamaging
             ? Seat.farSlotsLeftToRight(board).compactMap { target in
                 guard !board.theirs[target].fainted else { return nil }
@@ -406,9 +406,13 @@ struct CommandDeckView: View {
                 guard let read = MovePreview(session: session, store: store).reading(board, fighter: fighter, slot: slot,
                                          choice: .attack(move: index, target: target),
                                          only: target)
-                else { return (name, "no effect", nil, Palette.dim) }
-                return (name, read.text, read.mega, read.tint)
+                else { return (name, "no effect", nil, Palette.dim, nil) }
+                return (name, read.text, read.mega, read.tint, read.power)
             } : []
+        // What the move is worth right now rather than on the page: Last
+        // Respects counts the fallen, Grass Knot the target's weight, Gyro
+        // Ball the two Speeds -- and the page prints the weight moves as 1.
+        let livePower = perTarget.compactMap(\.power).first ?? form.power
         return Button {
             guard usable else { return }
             if aim == .foe || aim == .party {
@@ -449,7 +453,7 @@ struct CommandDeckView: View {
                     Text(type.rawValue.uppercased())
                         .font(.system(size: 9, weight: .heavy)).kerning(0.6)
                         .opacity(0.9)
-                    Text(form.power > 0 ? "\(form.power) power" : move.category == "Other" ? "status" : "—")
+                    Text(livePower > 0 ? "\(livePower) power" : move.category == "Other" ? "status" : "—")
                         .font(.system(size: 10, design: .rounded)).monospacedDigit()
                         .opacity(0.85)
                     if form.note != nil {

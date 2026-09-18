@@ -71,8 +71,8 @@ struct BattleFieldView: View {
         // Mid-replay the field shows the moment being described, not where the
         // turn ended up -- and partway through a flurry, the moment before it
         // less what the blows so far have taken.
-        var board = replay.indices.contains(at)
-            ? rewound(replayBoard ?? live, to: replay[at]) : live
+        var board = at < 0 ? (playback.startBoard ?? replayBoard ?? live)
+            : replay.indices.contains(at) ? rewound(replayBoard ?? live, to: replay[at]) : live
         for (seat, taken) in playback.partial {
             if seat.mine, board.mine.indices.contains(seat.slot) {
                 board.mine[seat.slot].hp = max(0, board.mine[seat.slot].hp - taken)

@@ -223,6 +223,11 @@ struct DamageResult {
     let targetHP: Int
     let effectiveness: Double
     let notes: [String]
+    /// The power the move actually had, read off the board rather than the
+    /// page: Last Respects counting the fallen, Grass Knot the weight, Gyro
+    /// Ball the two Speeds. Nought when nothing was worked out -- a status
+    /// move, an immunity -- and the page's number is the one to show.
+    var power: Double = 0
     /// How many strikes are already included in the totals above.
     ///
     /// One for an ordinary move. For a multi-hit move the numbers here are the
@@ -336,6 +341,10 @@ enum DamageCalc {
 
         var working = theMove(move, by: attacker, in: field)
         variablePower(&working, move: move, attacker: attacker, defender: defender)
+        // What the move is worth off the board, before anything the attacker
+        // is holding or born with adds to it: the number a player means when
+        // they ask what this move's power is right now.
+        let boardPower = working.power
         abilityPower(&working, move: move, attacker: attacker, field: field)
         itemAndFieldPower(&working, move: move, attacker: attacker, defender: defender, field: field)
         let type = working.type
@@ -374,6 +383,7 @@ enum DamageCalc {
                             targetHP: defender.maxHP,
                             effectiveness: effective,
                             notes: working.notes,
+                            power: boardPower,
                             strikes: hits.count)
     }
 
@@ -400,7 +410,7 @@ enum DamageCalc {
                                   : "Klutz: the item does nothing"
         return DamageResult(minDamage: result.minDamage, maxDamage: result.maxDamage,
                             targetHP: result.targetHP, effectiveness: result.effectiveness,
-                            notes: result.notes + [why])
+                            notes: result.notes + [why], power: result.power)
     }
 
     /// 1. What the move is: its type and power under this field, and after the

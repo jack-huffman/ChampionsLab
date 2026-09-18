@@ -45,7 +45,9 @@ final class TurnPlayback: ObservableObject {
     /// move arrives rather than before it has been thrown.
     static let impactAt: Double = 0.55
 
-    /// The turn being walked through, and how far into it we are.
+    /// The turn being walked through, and how far into it we are. Minus one
+    /// is the board as the turn began, before its first step: a move that
+    /// knocks something out otherwise had it on the floor from the start.
     @Published var replay: [Board.Step] = []
     @Published var at = 0
     /// How many of the turn's steps have been shown: a row appears in the
@@ -266,7 +268,7 @@ final class TurnPlayback: ObservableObject {
             }
             return
         }
-        at = Swift.max(0, index - 1)
+        at = index - 1
         focus = index
         task = Task { @MainActor in
             await perform(index, order: 0, in: steps, last: true)
@@ -475,7 +477,7 @@ final class TurnPlayback: ObservableObject {
         // Hold the field on the state before this action. `replay` and `at`
         // already drive this for the stepper; the playback just walks them.
         // The step itself is the one playing, and its row comes on now.
-        at = Swift.max(0, index - 1)
+        at = index - 1
         focus = index
         seen = Swift.max(seen, index + 1)
         // Health before this step: the step before it, or the board the turn

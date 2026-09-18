@@ -35,7 +35,7 @@ struct TurnStepper: View {
         // partway for a pivot, which has not been counted yet.
         let played = session.pivoting ? session.turn : session.turn - 1
         // The row lit is the step playing, or the one the field rests on.
-        let lit = playback.focus ?? at
+        let lit = playback.focus ?? Swift.max(0, at)
         let shown = Array(replay.prefix(max(playback.seen, lit + 1)))
         return Card {
             VStack(alignment: .leading, spacing: 8) {
@@ -81,7 +81,7 @@ struct TurnStepper: View {
         HStack(spacing: 10) {
             Text("TURN \(played)")
                 .font(.system(size: 13, weight: .heavy)).kerning(0.8)
-            Text("step \(at + 1) of \(replay.count)")
+            Text("step \(Swift.max(0, at) + 1) of \(replay.count)")
                 .font(.system(size: 10, weight: .semibold, design: .rounded)).monospacedDigit()
                 .padding(.horizontal, 8).padding(.vertical, 3)
                 .background(Capsule().fill(Palette.accent.opacity(0.16)))
@@ -96,15 +96,15 @@ struct TurnStepper: View {
             }
             Spacer()
             if live { EmptyView() } else {
-            Button { playback.replay(step: at - 1) } label: {
+            Button { playback.replay(step: Swift.max(0, at) - 1) } label: {
                 Image(systemName: "chevron.left")
             }
-            .controlSize(.small).disabled(at == 0)
+            .controlSize(.small).disabled(at <= 0)
             .help("The step before, played again")
-            Button { playback.replay(step: at + 1) } label: {
+            Button { playback.replay(step: Swift.max(0, at) + 1) } label: {
                 Image(systemName: "chevron.right")
             }
-            .controlSize(.small).disabled(at + 1 >= replay.count)
+            .controlSize(.small).disabled(Swift.max(0, at) + 1 >= replay.count)
             .help("The next step")
             Button(session.sending.isEmpty ? "Done" : "Who comes in") { playback.finish() }
                 .controlSize(.small)
