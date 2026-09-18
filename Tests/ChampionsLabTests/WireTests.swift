@@ -8,7 +8,7 @@ import XCTest
 final class WireTests: HarnessCase {
     func testMessagesRoundTrip() throws {
         let said: [Wire.Message] = [
-            .hello(name: "Jack", version: Wire.version),
+            .hello(name: "Jack", version: Wire.version, app: "0.4.0"),
             .invite(name: "Jack"),
             .accept(name: "Sam"),
             .format(singles: true),

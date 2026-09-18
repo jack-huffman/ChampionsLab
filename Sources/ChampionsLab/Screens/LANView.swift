@@ -85,6 +85,9 @@ struct LANView: View {
                     Circle().fill(statusColour).frame(width: 7, height: 7)
                     Text(statusLine).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
+                Text("Version \(Updater.current). Both players need the same version; the sidebar's footer checks for a newer one.")
+                    .font(.system(size: 10)).foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(width: 320, alignment: .topLeading)
@@ -174,6 +177,12 @@ struct LANView: View {
     private func roomCard(_ room: LANService.Room) -> some View {
         Card {
             VStack(alignment: .leading, spacing: 12) {
+                if let theirs = lan.theirApp, theirs != Updater.current {
+                    Label("\(room.theirName) is on version \(theirs); you are on \(Updater.current). Update both before playing.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.warn)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 HStack {
                     SectionHeader(title: "Battle with \(room.theirName)",
                                   subtitle: room.hosting ? "You asked, so you set the format. Each of you chooses a team; the other sees its six, as Team Preview would."

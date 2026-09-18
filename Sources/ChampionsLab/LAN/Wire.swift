@@ -13,7 +13,7 @@ import Foundation
 enum Wire {
     /// Bumped when a message changes shape. Two apps that disagree do not
     /// battle; they say so.
-    static let version = 1
+    static let version = 2
 
     /// A team as the other side may see it at Team Preview.
     struct Six: Codable, Equatable, Sendable {
@@ -23,8 +23,9 @@ enum Wire {
     }
 
     enum Message: Codable, Equatable, Sendable {
-        /// First thing said on a connection, by whoever opened it.
-        case hello(name: String, version: Int)
+        /// First thing said on a connection, by whoever opened it: the
+        /// protocol's version, which must agree, and the app's, which is shown.
+        case hello(name: String, version: Int, app: String)
         /// A request to battle, and the answer to one.
         case invite(name: String)
         case accept(name: String)

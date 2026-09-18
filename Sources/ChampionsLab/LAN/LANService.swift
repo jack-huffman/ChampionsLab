@@ -90,6 +90,8 @@ final class LANService: ObservableObject {
     private var connection: NWConnection?
     private var inbox = Data()
     private var theirName = ""
+    /// The version of the app the other side runs, off its hello.
+    @Published private(set) var theirApp: String?
     private let queue = DispatchQueue(label: "ChampionsLab.LAN")
     /// Tells our own advertisement apart from everyone else's.
     private let peerID = UUID().uuidString
@@ -183,7 +185,7 @@ final class LANService: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 if ready {
-                    self.send(.hello(name: self.displayName, version: Wire.version))
+                    self.send(.hello(name: self.displayName, version: Wire.version, app: Updater.current))
                     self.send(.invite(name: self.displayName))
                 } else if let failure {
                     self.lost("Could not reach \(peer.name): \(failure)")
@@ -298,11 +300,15 @@ final class LANService: ObservableObject {
 
     private func handle(_ message: Wire.Message) {
         switch message {
-        case .hello(let name, let version):
+        case .hello(let name, let version, let app):
             theirName = name
+            theirApp = app
             if version != Wire.version {
                 send(.decline)
-                lost("\(name) is running a different version of the app.")
+                lost("\(name) is running version \(app) of the app, and you are on \(Updater.current). Both need the latest.")
+            } else {
+                // Answered in kind, so both sides know the other's version.
+                if stage == .idle { send(.hello(name: displayName, version: Wire.version, app: Updater.current)) }
             }
         case .invite(let name):
             guard stage == .idle else { send(.decline); return }
@@ -357,6 +363,7 @@ final class LANService: ObservableObject {
         inbox = Data()
         room = nil
         battle = nil
+        theirApp = nil
         stage = .idle
     }
 }

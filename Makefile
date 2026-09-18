@@ -13,7 +13,8 @@
 #   make full-sync  re-fetch every page
 #   make snapshot   render every screen to build/shots/*.png
 #   make app        build ChampionsLab.app into ~/Applications
-#   make dmg        a signed disk image
+#   make dmg        a disk image
+#   make release    a GitHub release the app updates itself from
 #   make data       regenerate data/champions.json and the sprite set
 #   make check      everything a change should pass before it is committed
 #
@@ -24,7 +25,7 @@
 SHELL := /bin/bash
 NICE  := nice -n 15
 
-.PHONY: animations test warnings hitch coverage profile accuracy snapshot app dmg data check clean delta full-sync duel replays reading
+.PHONY: animations test warnings hitch coverage profile accuracy snapshot app dmg release data check clean delta full-sync duel replays reading
 
 test:
 	$(NICE) swift test 2>&1 | tail -25
@@ -60,6 +61,12 @@ app:
 
 dmg:
 	$(NICE) ./Scripts/make-dmg.sh
+
+# A release the app updates itself from: the image, the tag, the push, the
+# GitHub release.   make release            the version in VERSION
+#                   make release V=0.4.1    set the version first
+release:
+	./Scripts/release.sh $(V)
 
 # Two engines, one game, played to the end, many times over. The only check
 # here that measures playing strength rather than whether a rule fires.

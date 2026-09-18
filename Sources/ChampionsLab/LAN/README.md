@@ -58,6 +58,11 @@ host with real dice and dealt to both screens as a snapshot each may see,
 replacements and pivots asked of whoever decides -- the engine switch, and
 the result into both players' histories.
 
+Both apps must be the same version: the hello carries the protocol
+version, which must agree, and the app's, which the room shows when the two
+differ. `Updater` (in Data/) checks the repository's latest release and
+swaps the app for it, so both machines can get there with a click.
+
 Known simplifications, to refine: the other side's health crosses as the
 number rather than the percentage the game shows; the opening's arrivals
 come as one snapshot rather than one at a time; and the engine's advice

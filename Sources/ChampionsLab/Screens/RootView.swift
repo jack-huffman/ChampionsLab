@@ -98,7 +98,10 @@ struct RootView: View {
     @EnvironmentObject private var store: Store
     @ObservedObject private var lab = SimulationService.shared
     @ObservedObject private var lan = LANService.shared
+    @ObservedObject private var updater = Updater.shared
     @State private var section: Section = .overview
+    /// The newer version's banner, put away for this launch.
+    @State private var updateDismissed = false
 
     private var groups: [(String, [Section])] {
         var seen: [String] = []
@@ -168,6 +171,19 @@ struct RootView: View {
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: lan.stage)
+        // A newer version says so once, wherever you are.
+        .overlay(alignment: .topTrailing) {
+            if case .available(let release) = updater.phase, !updateDismissed, lan.stage != .invited("") {
+                UpdateBanner(release: release,
+                             update: { Task { await updater.install(release) } },
+                             later: { updateDismissed = true })
+                    .padding(.top, lanBannerShowing ? 70 : 0)
+            }
+        }
+        .task {
+            Updater.cleanUp()
+            await updater.checkIfDue()
+        }
         .overlay(alignment: .top) {
             if let error = store.loadError {
                 Text("Dataset failed to load: \(error)")
@@ -179,6 +195,11 @@ struct RootView: View {
                     .padding(.top, 8)
             }
         }
+    }
+
+    private var lanBannerShowing: Bool {
+        if case .invited = lan.stage { return section != .lan }
+        return false
     }
 
     private var sidebarFooter: some View {
@@ -217,6 +238,7 @@ struct RootView: View {
             Text("Data \(store.data.generated) · \(store.data.forms.count) forms")
                 .font(.system(size: 10))
                 .foregroundStyle(.tertiary)
+            UpdateLine()
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
