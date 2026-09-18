@@ -76,7 +76,9 @@ struct VersusPageView: View {
                 }
 
             if myTeam != nil, theirTeam != nil {
-                HStack(alignment: .top, spacing: 14) {
+                // The two readings end at the same depth, and the row keeps
+                // that depth while the next matchup is being worked out.
+                EqualCards(spacing: 14, floor: 232) {
                     yourSideCard
                     theirSideCard
                 }
@@ -326,7 +328,7 @@ struct VersusPageView: View {
     }
 
     private var yourSideCard: some View {
-        Card {
+        Card(stretches: true) {
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(title: "Your side", subtitle: "What the engine would bring, and why")
                 if let plan = lobby.myPlan, let mine = myTeam {
@@ -350,7 +352,7 @@ struct VersusPageView: View {
     }
 
     private var theirSideCard: some View {
-        Card {
+        Card(stretches: true) {
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(title: "Through their eyes",
                               subtitle: "What they see when they look at your six")

@@ -88,12 +88,21 @@ extension NSAppearance {
 struct Card<Content: View>: View {
     var padding: CGFloat = 16
     var height: CGFloat? = nil
+    /// Fill the height the row offers rather than hugging the content, and
+    /// tell the row how tall the content wants to be. Cards side by side
+    /// otherwise end at different depths, and the page moves under you as
+    /// their content changes.
+    var stretches = false
     @ViewBuilder var content: Content
 
     var body: some View {
         content
             .padding(padding)
-            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height,
+            .background(stretches ? AnyView(GeometryReader { geo in
+                Color.clear.preference(key: CardRowHeight.self, value: geo.size.height)
+            }) : AnyView(Color.clear))
+            .frame(maxWidth: .infinity, minHeight: height,
+                   maxHeight: stretches ? .infinity : height,
                    alignment: .topLeading)
             .background(Palette.surface)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -101,6 +110,34 @@ struct Card<Content: View>: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(Palette.hairline, lineWidth: 1)
             )
+    }
+}
+
+/// How tall the tallest card in a row wants to be.
+struct CardRowHeight: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = Swift.max(value, nextValue())
+    }
+}
+
+/// Cards side by side that end at the same depth, whatever is in them.
+///
+/// Each card reports the height its own content wants; the row takes the
+/// tallest, never less than `floor`, and gives that height to all of them.
+/// The floor is what stops the row collapsing while the reading behind it is
+/// still being worked out, which is what made the page jump when a matchup
+/// was picked: empty cards, then full ones a moment later.
+struct EqualCards<Content: View>: View {
+    var spacing: CGFloat = 14
+    var floor: CGFloat = 200
+    @ViewBuilder var content: Content
+    @State private var tallest: CGFloat = 0
+
+    var body: some View {
+        HStack(alignment: .top, spacing: spacing) { content }
+            .frame(height: Swift.max(tallest, floor), alignment: .top)
+            .onPreferenceChange(CardRowHeight.self) { tallest = $0 }
     }
 }
 
