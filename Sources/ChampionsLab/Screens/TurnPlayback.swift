@@ -31,9 +31,14 @@ final class TurnPlayback: ObservableObject {
     static let flourishSeconds: Double = 0.40
     /// How long the damage sits there once the move has finished, which is
     /// what actually paces a turn.
-    static let dwellSeconds: Double = 0.52
+    static let dwellSeconds: Double = 0.9
     /// A beat between one action and the next, so four decisions read as four.
-    static let betweenActions: Double = 0.20
+    static let betweenActions: Double = 1.0
+    /// Before the first action: a moment to see the board as the turn begins.
+    /// Longer over a link, where both players have just locked in and neither
+    /// pressed the button that starts the picture.
+    static let leadIn: Double = 1.0
+    static let leadInOverLink: Double = 3.0
     /// How far through a move the blow actually lands. The beam is travelling
     /// before this and bursting after it, and the board is held at the state
     /// *before* the move until this moment -- so the health bar drops as the
@@ -167,7 +172,7 @@ final class TurnPlayback: ObservableObject {
     /// `from` starts partway: a turn that stopped for a pivot has already
     /// played its first steps, and only the rest are new.
     func play(_ steps: [Board.Step], hitMine: Set<Int>, hitTheirs: Set<Int>, singles: Bool,
-              from: Int = 0) {
+              from: Int = 0, leadIn: TimeInterval = leadIn) {
         task?.cancel()
         struck = []; struckTheirs = []
         self.singles = singles
@@ -182,6 +187,8 @@ final class TurnPlayback: ObservableObject {
             return
         }
         task = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(leadIn * 1_000_000_000))
+            guard !Task.isCancelled else { return }
             for (order, (index, _)) in actions.enumerated() {
                 guard !Task.isCancelled else { return }
                 await perform(index, order: order, in: steps, last: order == actions.count - 1)
@@ -423,12 +430,23 @@ final class TurnPlayback: ObservableObject {
     /// Stages moved and abilities fired outside a turn -- the leads coming
     /// out, an Intimidate landing and the Defiant answering it -- shown a
     /// cause at a time over the Pokemon.
-    func flash(_ steps: [Board.Step]) {
+    /// Everything these steps caused, held off the field until each is
+    /// shown: the opening's arrivals, so an Intimidate's drop is not on the
+    /// board before the Intimidate has come out.
+    func withhold(_ steps: [Board.Step]) {
+        var withheld = Withheld()
+        for phase in steps.flatMap({ self.phases(of: $0) }) { withheld.add(phase) }
+        pending = withheld
+    }
+
+    func flash(_ steps: [Board.Step], withheld already: Bool = false) {
         let phases = steps.flatMap { self.phases(of: $0) }
         guard !phases.isEmpty else { return }
-        var withheld = Withheld()
-        for phase in phases { withheld.add(phase) }
-        pending = withheld
+        if !already {
+            var withheld = pending
+            for phase in phases { withheld.add(phase) }
+            pending = withheld
+        }
         Task { @MainActor in
             await show(phases, firstDelay: 0)
             try? await Task.sleep(nanoseconds: 1_200_000_000)

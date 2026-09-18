@@ -19,6 +19,11 @@ struct TeamPreviewView: View {
     @Binding var bringing: [String]
     @Binding var focused: String?
     let onBegin: () -> Void
+    /// A game between two people: the button says Ready, the page waits for
+    /// the other player once you are, and says when they are.
+    var beginLabel = "START THE BATTLE"
+    var waiting: String? = nil
+    var link: LANLink? = nil
 
     private var bringCount: Int { singles ? 3 : 4 }
     private var leadCount: Int { singles ? 1 : 2 }
@@ -101,22 +106,33 @@ struct TeamPreviewView: View {
                         Spacer()
                         previewButton("Suggest", symbol: "wand.and.stars") { autoPick() }
                         previewButton("Clear", symbol: "xmark") { bringing = []; focused = nil }
-                        Button { onBegin() } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "flag.2.crossed.fill")
-                                Text("START THE BATTLE").font(.system(size: 13, weight: .heavy)).kerning(1.2)
+                        if let link { ReadyLine(link: link) }
+                        if let waiting {
+                            HStack(spacing: 8) {
+                                ProgressView().controlSize(.small)
+                                Text(waiting).font(.system(size: 12, weight: .semibold))
                             }
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 22).padding(.vertical, 11)
-                            .background(LinearGradient(colors: [Palette.accent, Palette.bad],
-                                                       startPoint: .leading, endPoint: .trailing))
-                            .clipShape(Capsule())
-                            .opacity(bringing.count < bringCount ? 0.4 : 1)
-                            .shadow(color: Palette.accent.opacity(bringing.count < bringCount ? 0 : 0.45), radius: 10, y: 4)
+                            .padding(.horizontal, 18).padding(.vertical, 11)
+                            .background(Capsule().fill(Palette.accent.opacity(0.35)))
+                        } else {
+                            Button { onBegin() } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "flag.2.crossed.fill")
+                                    Text(beginLabel).font(.system(size: 13, weight: .heavy)).kerning(1.2)
+                                }
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 22).padding(.vertical, 11)
+                                .background(LinearGradient(colors: [Palette.accent, Palette.bad],
+                                                           startPoint: .leading, endPoint: .trailing))
+                                .clipShape(Capsule())
+                                .opacity(bringing.count < bringCount ? 0.4 : 1)
+                                .shadow(color: Palette.accent.opacity(bringing.count < bringCount ? 0 : 0.45), radius: 10, y: 4)
+                            }
+                            .buttonStyle(.plain)
+                            .keyboardShortcut(.defaultAction)
+                            .disabled(bringing.count < bringCount)
                         }
-                        .buttonStyle(.plain)
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(bringing.count < bringCount)
                     }
                 }
                 .padding(22)
@@ -322,5 +338,17 @@ struct TeamPreviewView: View {
         bringing = plan.bring.compactMap { form in
             mine.slots.first { $0.battleForm(in: store.rulebook)?.id == form.id }?.formID
         }
+    }
+}
+
+/// Whether the other player has their four, in a game between two people.
+struct ReadyLine: View {
+    @ObservedObject var link: LANLink
+
+    var body: some View {
+        Label(link.theirReady ? "\(link.theirName) is ready" : "\(link.theirName) is choosing...",
+              systemImage: link.theirReady ? "checkmark.circle.fill" : "hourglass")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(link.theirReady ? Palette.good : .secondary)
     }
 }

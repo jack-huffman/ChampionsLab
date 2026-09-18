@@ -45,9 +45,19 @@ final class LANLinkTests: HarnessCase {
         guestScreen.link = guest; guest.attach(guestScreen)
 
         guest.chose(bringing: guestTeam.slots.map(\.formID))
+        pump()
+        check("the host knows the guest is ready", host.theirReady && !guest.theirReady)
         host.chose(bringing: hostTeam.slots.map(\.formID))
         pump()
+        check("and the guest knows the host is", guest.theirReady)
         check("both screens have a board", hostScreen.board != nil && guestScreen.board != nil)
+        check("both have an opening to play", hostScreen.intro != nil && guestScreen.intro != nil
+              && hostScreen.intro?.count == guestScreen.intro?.count, "\(hostScreen.intro?.count ?? -1) \(guestScreen.intro?.count ?? -1)")
+        check("the arrivals are steps of their own",
+              hostScreen.intro?.allSatisfy { $0.action?.category == "Switch" } == true)
+        check("and nobody is asked until it has played", hostScreen.playing && guestScreen.playing)
+        hostScreen.introFinished()
+        guestScreen.introFinished()
         check("the host sees its own team whole", hostScreen.board?.mine[0].build.item == "Sitrus Berry")
         check("and the guest's as shown", hostScreen.board?.theirs[0].build.item.isEmpty == true)
         check("the guest sees its own team whole", guestScreen.board?.mine[0].build.item == "Black Glasses")

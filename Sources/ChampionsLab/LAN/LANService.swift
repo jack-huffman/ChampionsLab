@@ -349,7 +349,7 @@ final class LANService: ObservableObject {
             guard let room, !room.hosting, let myTeam = room.myTeam, let theirSix = room.theirSix else { return }
             battle = LANLink(role: .guest, theirName: room.theirName, singles: room.singles,
                              myTeam: myTeam, theirSix: theirSix) { [weak self] in self?.send($0) }
-        case .preview, .snapshot, .choice, .sendIn, .pivot:
+        case .preview, .snapshot, .choice, .sendIn, .pivot, .readyForBattle:
             battle?.handle(message)
         }
     }

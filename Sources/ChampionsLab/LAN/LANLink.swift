@@ -27,6 +27,8 @@ final class LANLink: ObservableObject {
     @Published var engineEnabled: Bool {
         didSet { UserDefaults.standard.set(engineEnabled, forKey: "lanEngine") }
     }
+    /// The other player has chosen their four at Team Preview.
+    @Published private(set) var theirReady = false
     /// The screen playing the game, once it is up.
     weak var session: BattleSession?
     /// The latest snapshot, held for a screen that is not up yet.
@@ -75,7 +77,7 @@ final class LANLink: ObservableObject {
     func chose(bringing: [String]) {
         switch role {
         case .guest: send(.preview(team: myTeam, bringing: bringing))
-        case .host: hostBringing = bringing; tryOpen()
+        case .host: hostBringing = bringing; send(.readyForBattle); tryOpen()
         }
     }
 
@@ -90,7 +92,12 @@ final class LANLink: ObservableObject {
         let wired = picks.map { Wire.Pick(slot: $0.slot, bench: $0.bench) }
         switch role {
         case .guest: send(.sendIn(rqid: rqid, picks: wired))
-        case .host: hostPicks = wired; tryReplace()
+        case .host:
+            if awaiting == nil, let board = truth, !board.gapsOfMine.isEmpty {
+                awaiting = (board.gapsOfMine, board.flipped.gapsOfMine)
+            }
+            hostPicks = wired
+            tryReplace()
         }
     }
 
@@ -109,7 +116,11 @@ final class LANLink: ObservableObject {
             guard role == .host else { return }
             guestTeam = team
             guestBringing = bringing
+            theirReady = true
             tryOpen()
+        case .readyForBattle:
+            guard role == .guest else { return }
+            theirReady = true
         case .snapshot(let snapshot):
             guard role == .guest else { return }
             rqid = snapshot.rqid
@@ -121,6 +132,11 @@ final class LANLink: ObservableObject {
             tryResolve()
         case .sendIn(let id, let picks):
             guard role == .host, id == rqid else { return }
+            if awaiting == nil, let board = truth, !board.flipped.gapsOfMine.isEmpty {
+                // Asked for orders with a gap still open: the send-in is taken
+                // late rather than lost.
+                awaiting = (board.gapsOfMine, board.flipped.gapsOfMine)
+            }
             guestPicks = picks
             tryReplace()
         case .pivot(let id, let bench):
@@ -144,10 +160,18 @@ final class LANLink: ObservableObject {
               let guestTeam, let guestBringing else { return }
         var board = Board.opening(mine: myTeam, bringing: mineBringing, theirs: guestTeam,
                                   theirBringing: guestBringing, rules: Store.shared.rulebook,
-                                  singles: singles, sendOut: true)
+                                  singles: singles, sendOut: false)
         // Either side's pivot stops the turn for whoever has the choice.
         board.asksBeforePivot = true
         board.asksTheirsBeforePivot = true
+        // The leads come out one at a time, each arrival a step of its own,
+        // so both screens can play the opening as a local game plays it:
+        // the flash, the leads, each ability going off with its line.
+        for entry in board.leadOrder {
+            board.beginStep(Board.Action(byMine: entry.mine, slot: entry.slot, move: "", category: "Switch", type: ""))
+            board.landed(mine: entry.mine, slot: entry.slot)
+            board.closeStep()
+        }
         truth = board
         turn = 1
         rqid = 1
@@ -183,9 +207,28 @@ final class LANLink: ObservableObject {
         self.awaiting = nil
         hostPicks = nil
         guestPicks = nil
-        turn += 1
         rqid += 1
-        deal(asking: .orders, guestAsking: .orders)
+        // An arrival can fall to hazards; a gap left is asked again, not
+        // played over.
+        askOrders()
+    }
+
+    /// Orders from both -- unless either side still has a gap with somebody
+    /// to fill it, in which case that is asked first.
+    private func askOrders() {
+        guard let board = truth else { return }
+        let hostGaps = board.gapsOfMine
+        let guestGaps = board.flipped.gapsOfMine
+        if hostGaps.isEmpty, guestGaps.isEmpty {
+            turn += 1
+            deal(asking: .orders, guestAsking: .orders)
+            return
+        }
+        awaiting = (hostGaps, guestGaps)
+        hostPicks = nil
+        guestPicks = nil
+        deal(asking: hostGaps.isEmpty ? .wait : .sendIn(hostGaps),
+             guestAsking: guestGaps.isEmpty ? .wait : .sendIn(guestGaps))
     }
 
     /// The turn is resolved, or resumed: what is asked of each side next.
@@ -202,18 +245,7 @@ final class LANLink: ObservableObject {
             deal(asking: .over(youWon: hostWon), guestAsking: .over(youWon: !hostWon))
             return
         }
-        let hostGaps = board.gapsOfMine
-        let guestGaps = board.flipped.gapsOfMine
-        if hostGaps.isEmpty, guestGaps.isEmpty {
-            turn += 1
-            deal(asking: .orders, guestAsking: .orders)
-            return
-        }
-        awaiting = (hostGaps, guestGaps)
-        hostPicks = nil
-        guestPicks = nil
-        deal(asking: hostGaps.isEmpty ? .wait : .sendIn(hostGaps),
-             guestAsking: guestGaps.isEmpty ? .wait : .sendIn(guestGaps))
+        askOrders()
     }
 
     /// Both snapshots off the one truth: the guest's from their chair with

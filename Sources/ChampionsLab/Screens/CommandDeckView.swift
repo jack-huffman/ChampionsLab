@@ -847,7 +847,9 @@ struct CommandDeckView: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "play.fill")
-                        Text("PLAY THE TURN").font(.system(size: 13, weight: .heavy)).kerning(1)
+                        // Over a link the button locks your moves in; the turn
+                        // plays once the other player has too.
+                        Text(session.link == nil ? "PLAY THE TURN" : "CONFIRM MOVES").font(.system(size: 13, weight: .heavy)).kerning(1)
                     }
                     .foregroundStyle(.white)
                     .padding(.horizontal, 22).padding(.vertical, 12)

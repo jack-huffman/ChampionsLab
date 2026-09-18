@@ -81,6 +81,9 @@ struct BattleView: View {
     @State private var startHover = false
     /// Asking whether to stop the game in progress.
     @State private var stopping = false
+    /// A game between two people: my four are chosen and sent, and the page
+    /// waits for the other player's.
+    @State private var readied = false
     /// Which lobby is being worked out; an older one's answer is dropped.
     @State private var lobbyTicket = 0
     /// The start of the game, being shown: the flash, the leads coming out,
@@ -217,7 +220,10 @@ struct BattleView: View {
                     }
                 case .preview:
                     TeamPreviewView(myTeam: myTeam, theirTeam: theirTeam, lobby: lobby, singles: singles,
-                                    bringing: $bringing, focused: $focused, onBegin: begin)
+                                    bringing: $bringing, focused: $focused, onBegin: begin,
+                                    beginLabel: link == nil ? "START THE BATTLE" : "READY FOR BATTLE",
+                                    waiting: readied ? "Ready. Waiting for \(link?.theirName ?? "the other player")..." : nil,
+                                    link: link)
                 case .battle:
                     BattleFieldView(session: session, playback: playback,
                                     opening: opening, startFlash: startFlash, shown: shown,
@@ -231,6 +237,10 @@ struct BattleView: View {
         }
         .onAppear {
             if let link { link.attach(session) } else { recallLastMatchup() }
+        }
+        // Both fours are in: the host built the game, and the opening plays.
+        .onReceive(session.$intro) { steps in
+            if let steps, link != nil { playOpening(steps) }
         }
         .onChange(of: session.finished) { result in
             if result != nil { recordGame() }
@@ -268,8 +278,45 @@ struct BattleView: View {
 
     /// The game ends here, by choice: the board and its log go, the two
     /// teams stay chosen, and the lobby is where it lands.
+    /// The opening of a game over the link, as a local one is shown: the
+    /// flash, the leads out one by one, then each arrival's step -- its line
+    /// called out over the field, its stages and abilities shown -- before
+    /// orders are asked. Everything the arrivals did is held off the field
+    /// until its beat.
+    private func playOpening(_ steps: [Board.Step]) {
+        guard let start = session.board else { session.introFinished(); return }
+        stage = .battle
+        readied = false
+        opening = true
+        shown = []
+        callout = nil
+        startFlash = true
+        playback.withhold(steps)
+        let arrivals = (0..<start.activeCount).flatMap { slot in ["m\(slot)", "t\(slot)"] }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_100_000_000)
+            withAnimation(.easeOut(duration: 0.35)) { startFlash = false }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            for key in arrivals {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.62)) { _ = shown.insert(key) }
+                try? await Task.sleep(nanoseconds: 380_000_000)
+            }
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            for step in steps {
+                let lines = step.text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+                withAnimation(.easeInOut(duration: 0.4)) { callout = lines.joined(separator: " ") }
+                playback.flash([step], withheld: true)
+                try? await Task.sleep(nanoseconds: 1_300_000_000)
+            }
+            withAnimation(.easeOut(duration: 0.3)) { callout = nil }
+            opening = false
+            session.introFinished()
+        }
+    }
+
     private func stopGame() {
         session.endGame()
+        readied = false
         opening = false; startFlash = false; shown = []; callout = nil
         bringing = []; focused = nil
         if link != nil {
@@ -497,14 +544,13 @@ struct BattleView: View {
         guard let mine = myTeam, let theirs = theirTeam else { return }
         guard bringing.count >= leadCount else { return }
         if let link {
-            // Over the link the host builds the game once both fours are in,
-            // and the opening comes back as the first snapshot.
-            stage = .battle
+            // Over the link, Ready: my four go to the host, and the page waits
+            // for the other player's. The host builds the game once both are
+            // in, and the opening comes back as the first snapshot.
             session.endGame()
             session.link = link
-            session.playing = true
-            session.waitingOn = "Waiting for \(link.theirName) to choose their \(bringCount)..."
             link.attach(session)
+            readied = true
             link.chose(bringing: bringing)
             return
         }

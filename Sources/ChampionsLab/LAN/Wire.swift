@@ -13,7 +13,7 @@ import Foundation
 enum Wire {
     /// Bumped when a message changes shape. Two apps that disagree do not
     /// battle; they say so.
-    static let version = 3
+    static let version = 4
 
     /// A team as the other side may see it at Team Preview.
     struct Six: Codable, Equatable, Sendable {
@@ -43,6 +43,9 @@ enum Wire {
         /// with a snapshot and what it asks of the guest. The guest answers
         /// each request by its number.
         case start
+        /// The host has its four and is ready; the guest's preview says the
+        /// same for it.
+        case readyForBattle
         case preview(team: Team, bringing: [String])
         case snapshot(Snapshot)
         case choice(rqid: Int, play: Play)

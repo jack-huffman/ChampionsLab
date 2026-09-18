@@ -129,6 +129,10 @@ final class BattleSession: ObservableObject {
     @Published var remotePivot = false
     /// How many steps of the current turn the field has already played.
     private var shownSteps = 0
+    /// The opening of a game over the link: the arrival steps, for the
+    /// battle screen to play as the intro before orders are asked.
+    @Published var intro: [Board.Step]?
+    private var introAsking: Wire.Asking?
     /// Which of the readings the side panel is showing.
     @Published var panel: Panel = .engine
 
@@ -450,6 +454,21 @@ final class BattleSession: ObservableObject {
     func receive(_ snapshot: Wire.Snapshot) {
         let view = Board(wired: snapshot.board)
         let before = board
+        // The opening: the leads about to come out. The screen plays it as it
+        // plays a local one -- the flash, the leads one by one, each arrival's
+        // ability with its line -- and what is asked waits until it has.
+        if board == nil, snapshot.turn == 1, snapshot.dealt == 0 {
+            board = view
+            log = [Self.opener] + view.story
+            shownSteps = view.steps.count
+            shownStory = view.story.count
+            turn = 1
+            playing = true
+            waitingOn = nil
+            introAsking = snapshot.asking
+            intro = view.steps
+            return
+        }
         // The host says how many of these steps it dealt already: nought at
         // the start of a turn, more when a turn stopped partway for a choice
         // or the arrivals for the fallen follow it. The screen plays from there.
@@ -478,13 +497,24 @@ final class BattleSession: ObservableObject {
             playback.play(view.steps,
                           hitMine: before.map { Self.hurt(mine: true, view, since: $0) } ?? [],
                           hitTheirs: before.map { Self.hurt(mine: false, view, since: $0) } ?? [],
-                          singles: view.activeCount == 1, from: from)
+                          singles: view.activeCount == 1, from: from, leadIn: TurnPlayback.leadInOverLink)
         } else {
             playback.reset()
         }
         shownSteps = view.steps.count
-        switch snapshot.asking {
+        ask(snapshot.asking)
+    }
+
+    /// What the host asks of this player next.
+    private func ask(_ asking: Wire.Asking) {
+        switch asking {
         case .orders:
+            // A fainted Pokemon of mine with somebody to send in is a send-in
+            // before it is anything else, whatever was asked.
+            if let gaps = board?.gapsOfMine, !gaps.isEmpty {
+                sending = gaps
+                return
+            }
             think()
         case .sendIn(let slots):
             sending = slots
@@ -497,6 +527,13 @@ final class BattleSession: ObservableObject {
         case .over(let won):
             finished = won ? "They have nothing left. You win." : "You have nothing left. They win."
         }
+    }
+
+    /// The battle screen has played the opening: now what the host asked.
+    func introFinished() {
+        intro = nil
+        playing = false
+        if let asking = introAsking { introAsking = nil; ask(asking) }
     }
     private var shownStory = 0
 
@@ -707,6 +744,7 @@ final class BattleSession: ObservableObject {
         explaining = nil; pendingReview = nil
         sending = []; chosenSends = []; pausedTurn = nil
         remotePivot = false; waitingOn = nil; shownSteps = 0; shownStory = 0
+        intro = nil; introAsking = nil
         panel = .engine
     }
 
