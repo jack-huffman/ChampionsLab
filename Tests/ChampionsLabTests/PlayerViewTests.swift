@@ -64,7 +64,7 @@ final class PlayerViewTests: HarnessCase {
 
     @MainActor func testABoardSurvivesTheWire() throws {
         let board = game().asTheOtherPlayerSeesIt()
-        let sent = try JSONEncoder().encode(Wire.Snapshot(rqid: 3, turn: 1, board: board.wired, asking: .orders))
+        let sent = try JSONEncoder().encode(Wire.Snapshot(rqid: 3, turn: 1, board: board.wired, dealt: 0, asking: .orders))
         let back = try JSONDecoder().decode(Wire.Snapshot.self, from: sent)
         let rebuilt = Board(wired: back.board)
         check("the request number", back.rqid == 3 && back.asking == .orders)
@@ -74,7 +74,7 @@ final class PlayerViewTests: HarnessCase {
               && rebuilt.field.weather == board.field.weather && rebuilt.story == board.story)
         check("the steps, without their ids", rebuilt.steps.count == board.steps.count
               && rebuilt.steps.map(\.text) == board.steps.map(\.text))
-        let framed = try Wire.frame(.snapshot(Wire.Snapshot(rqid: 3, turn: 1, board: board.wired, asking: .sendIn([1]))))
+        let framed = try Wire.frame(.snapshot(Wire.Snapshot(rqid: 3, turn: 1, board: board.wired, dealt: 2, asking: .sendIn([1]))))
         var buffer = framed
         check("and frames as a message", (try Wire.unframe(&buffer)).count == 1)
     }

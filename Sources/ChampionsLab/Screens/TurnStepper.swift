@@ -15,6 +15,10 @@ struct TurnStepper: View {
     @EnvironmentObject private var store: Store
     @ObservedObject var session: BattleSession
     @ObservedObject var playback: TurnPlayback
+    /// A game between two people is played in real time: the rows appear
+    /// as the turn plays and that is all -- no stepping back, no playing a
+    /// step again, no Done. The Review and Log panels keep the record.
+    var live = false
     private var replay: [Board.Step] { playback.replay }
     private var at: Int { playback.at }
 
@@ -91,6 +95,7 @@ struct TurnStepper: View {
                 .transition(.opacity)
             }
             Spacer()
+            if live { EmptyView() } else {
             Button { playback.replay(step: at - 1) } label: {
                 Image(systemName: "chevron.left")
             }
@@ -106,6 +111,7 @@ struct TurnStepper: View {
                 .keyboardShortcut(.defaultAction)
                 .help(session.sending.isEmpty ? "Back to giving orders"
                       : "On to choosing who comes in")
+            }
         }
     }
 
@@ -114,7 +120,7 @@ struct TurnStepper: View {
     private func row(_ step: Board.Step, index: Int, lit: Int) -> some View {
         let current = index == lit
         let moments = moments(of: step)
-        return Button { playback.replay(step: index) } label: {
+        return Button { if !live { playback.replay(step: index) } } label: {
             HStack(alignment: .top, spacing: 9) {
                 marker(step, current: current)
                 VStack(alignment: .leading, spacing: 4) {
@@ -143,7 +149,7 @@ struct TurnStepper: View {
                 Spacer(minLength: 0)
                 if current, playback.task != nil {
                     ProgressView().controlSize(.mini).padding(.top, 1)
-                } else if step.action != nil {
+                } else if step.action != nil, !live {
                     Image(systemName: "arrow.counterclockwise")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(current ? AnyShapeStyle(Palette.accent) : AnyShapeStyle(.quaternary))
@@ -159,8 +165,9 @@ struct TurnStepper: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(live)
         .id(step.id)
-        .help(step.action == nil ? "Show the field at this moment"
+        .help(live ? "" : step.action == nil ? "Show the field at this moment"
               : "Show the field at this moment and play the move again")
     }
 

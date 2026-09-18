@@ -13,7 +13,7 @@ import Foundation
 enum Wire {
     /// Bumped when a message changes shape. Two apps that disagree do not
     /// battle; they say so.
-    static let version = 2
+    static let version = 3
 
     /// A team as the other side may see it at Team Preview.
     struct Six: Codable, Equatable, Sendable {
@@ -72,8 +72,13 @@ enum Wire {
         let rqid: Int
         let turn: Int
         let board: Board.Wired
+        /// How many of the board's steps earlier snapshots of this same turn
+        /// already carried, so the screen plays from there: nought at the
+        /// start of a turn, the first half's count after a pivot's choice,
+        /// the turn's count when the arrivals for the fallen follow it.
+        let dealt: Int
         let asking: Asking
-        static func == (a: Snapshot, b: Snapshot) -> Bool { a.rqid == b.rqid && a.turn == b.turn && a.asking == b.asking }
+        static func == (a: Snapshot, b: Snapshot) -> Bool { a.rqid == b.rqid && a.turn == b.turn && a.dealt == b.dealt && a.asking == b.asking }
     }
 
     enum WireError: LocalizedError {

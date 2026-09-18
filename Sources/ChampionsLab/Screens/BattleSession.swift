@@ -450,16 +450,18 @@ final class BattleSession: ObservableObject {
     func receive(_ snapshot: Wire.Snapshot) {
         let view = Board(wired: snapshot.board)
         let before = board
-        let sameTurn = snapshot.turn == turn && board != nil
-        let from = sameTurn ? Swift.min(shownSteps, view.steps.count) : 0
-        if !sameTurn {
+        // The host says how many of these steps it dealt already: nought at
+        // the start of a turn, more when a turn stopped partway for a choice
+        // or the arrivals for the fallen follow it. The screen plays from there.
+        let from = Swift.min(snapshot.dealt, view.steps.count)
+        let newTurn = snapshot.dealt == 0 && (board == nil || !view.steps.isEmpty)
+        if newTurn {
             log.append(Self.dividerMark + "Turn \(Swift.max(1, snapshot.turn - 1))")
-            shownSteps = 0
+            shownStory = 0
         }
         // Only what has not been said: the story so far this turn less what
         // the log already has of it.
-        let said = sameTurn ? shownStory : 0
-        log.append(contentsOf: view.story.dropFirst(Swift.min(said, view.story.count)))
+        log.append(contentsOf: view.story.dropFirst(Swift.min(shownStory, view.story.count)))
         shownStory = view.story.count
         turn = snapshot.turn
         board = view

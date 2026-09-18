@@ -112,11 +112,16 @@ struct BattleFieldView: View {
                 HStack(alignment: .top, spacing: gap) {
                     Group {
                         if opening { openingCard }
+                        // A game between two people is played in real time:
+                        // the turn plays, with its rows appearing as it does,
+                        // then the orders or the decision. No stepping back;
+                        // the Review and Log panels keep the record.
+                        else if session.link != nil, !replay.isEmpty, playback.task != nil { TurnStepper(session: session, playback: playback, live: true) }
                         // A decision to make -- who comes in for a faint, who
                         // comes in for a pivot -- comes up on its own the
                         // moment the turn has finished playing.
                         else if !sending.isEmpty, finished == nil, playback.task == nil { ReplacementView(session: session, board: board) }
-                        else if !replay.isEmpty { TurnStepper(session: session, playback: playback) }
+                        else if !replay.isEmpty, session.link == nil { TurnStepper(session: session, playback: playback) }
                         else if !sending.isEmpty, finished == nil { ReplacementView(session: session, board: board) }
                         else if finished == nil { CommandDeckView(session: session, playback: playback, board: board) }
                         else { afterGame }
@@ -198,15 +203,19 @@ struct BattleFieldView: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer(minLength: 0)
-                            Button("Play it again") { session.rewind(to: entry.turn) }
-                                .controlSize(.small)
+                            if session.link == nil {
+                                Button("Play it again") { session.rewind(to: entry.turn) }
+                                    .controlSize(.small)
+                            }
                         }
                     }
                 }
                 HStack(spacing: 8) {
-                    Button("Back to Team Preview") { onBackToPreview() }.controlSize(.small)
-                    Button("Undo the last turn") { session.undo() }.controlSize(.small)
-                        .disabled(history.isEmpty)
+                    if session.link == nil {
+                        Button("Back to Team Preview") { onBackToPreview() }.controlSize(.small)
+                        Button("Undo the last turn") { session.undo() }.controlSize(.small)
+                            .disabled(history.isEmpty)
+                    }
                     Button("Every turn") { panel = .review }.controlSize(.small)
                         .disabled(review.isEmpty)
                 }

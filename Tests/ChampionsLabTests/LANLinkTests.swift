@@ -76,5 +76,7 @@ final class LANLinkTests: HarnessCase {
               guestScreen.board?.steps.contains { $0.action?.byMine == false && $0.action?.move == "Fake Out" } == true)
         check("both are asked again", !hostScreen.playing && !guestScreen.playing)
         check("the request numbers agree", host.rqid == guest.rqid)
+        check("the turn was dealt from its first step", guest.latest?.dealt == 0 && host.latest?.dealt == 0,
+              "\(guest.latest?.dealt ?? -1) \(host.latest?.dealt ?? -1)")
     }
 }

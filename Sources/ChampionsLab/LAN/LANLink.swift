@@ -47,6 +47,9 @@ final class LANLink: ObservableObject {
     private var hostPicks: [Wire.Pick]?
     private var guestPicks: [Wire.Pick]?
     private var awaiting: (host: [Int], guest: [Int])?
+    /// How many of the truth's steps the last snapshot carried. A new turn
+    /// starts the count over; a snapshot within a turn plays from here.
+    private var dealt = 0
 
     init(role: Role, theirName: String, singles: Bool, myTeam: Team, theirSix: Wire.Six,
          send: @escaping (Wire.Message) -> Void) {
@@ -148,6 +151,7 @@ final class LANLink: ObservableObject {
         truth = board
         turn = 1
         rqid = 1
+        dealt = 0
         deal(asking: .orders, guestAsking: .orders)
     }
 
@@ -156,6 +160,8 @@ final class LANLink: ObservableObject {
               let theirs = guestPlay, theirs.rqid == rqid else { return }
         hostPlay = nil
         guestPlay = nil
+        // A new turn: its record starts over, and so does what has been dealt.
+        dealt = 0
         truth = TurnModel.resolve(board, mine: mine.play, theirs: theirs.play, rolling: true)
         afterTurn()
     }
@@ -214,10 +220,12 @@ final class LANLink: ObservableObject {
     /// the host's side as shown, the host's the other way round.
     private func deal(asking: Wire.Asking, guestAsking: Wire.Asking) {
         guard let board = truth else { return }
+        let from = Swift.min(dealt, board.steps.count)
         send(.snapshot(Wire.Snapshot(rqid: rqid, turn: turn,
-                                     board: board.asTheOtherPlayerSeesIt().wired, asking: guestAsking)))
+                                     board: board.asTheOtherPlayerSeesIt().wired, dealt: from, asking: guestAsking)))
         let mine = Wire.Snapshot(rqid: rqid, turn: turn,
-                                 board: board.asThisPlayerSeesIt().wired, asking: asking)
+                                 board: board.asThisPlayerSeesIt().wired, dealt: from, asking: asking)
+        dealt = board.steps.count
         latest = mine
         session?.receive(mine)
     }
