@@ -45,5 +45,19 @@ git push origin HEAD
 git push origin "$TAG"
 
 echo "==> publishing the release"
-gh release create "$TAG" "$DMG" --title "ChampionsLab $VERSION" --notes "$NOTES"
-echo "released: $TAG with $DMG"
+# This machine's HTTPS drops large uploads over HTTP/2 ("bad record MAC"),
+# for git pushes and for the GitHub CLI alike, so the CLI is held to HTTP/1.1
+# and the upload is tried more than once. The release is made first, empty,
+# so a failed upload leaves something to retry against.
+export GODEBUG=http2client=0
+gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "ChampionsLab $VERSION" --notes "$NOTES"
+for attempt in 1 2 3 4; do
+	if gh release upload "$TAG" "$DMG" --clobber; then
+		echo "released: $TAG with $DMG"
+		exit 0
+	fi
+	echo "upload attempt $attempt failed; trying again" >&2
+	sleep 5
+done
+echo "error: the image could not be uploaded; the release $TAG exists without it. Try: gh release upload $TAG $DMG --clobber" >&2
+exit 1
