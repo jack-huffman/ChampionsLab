@@ -487,12 +487,12 @@ extension Board {
                 guard mine[arrival.slot].fainted else { continue }
                 Switching.depart(&mine, active: arrival.slot)
                 mine.swapAt(arrival.slot, arrival.bench)
-                note("You sent in \(mine[arrival.slot].build.form.formLabel).")
+                note("\(mine[arrival.slot].build.form.formLabel) was sent in.")
             } else {
                 guard theirs[arrival.slot].fainted else { continue }
                 Switching.depart(&theirs, active: arrival.slot)
                 theirs.swapAt(arrival.slot, arrival.bench)
-                note("They sent in \(theirs[arrival.slot].build.form.formLabel).")
+                note("\(theirs[arrival.slot].build.form.formLabel) was sent in.")
             }
             landed(mine: arrival.mine, slot: arrival.slot)
         }

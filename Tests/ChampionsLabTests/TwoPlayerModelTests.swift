@@ -46,7 +46,7 @@ final class TwoPlayerModelTests: HarnessCase {
         let bench3 = board.theirs[3].build.form.id
         board.replaceFallen(mine: [], theirs: [(slot: 0, bench: 3)])
         check("the one they chose came in", board.theirs[0].build.form.id == bench3, board.theirs[0].build.form.formLabel)
-        check("and it was told", board.story.contains { $0.contains("They sent in") })
+        check("and it was told", board.story.contains { $0.contains("was sent in") })
     }
 
     @MainActor func testTheirPivotWaitsWhenTheyAreAsked() {

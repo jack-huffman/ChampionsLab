@@ -174,8 +174,8 @@ print("\n== arriving ==")
     let mineIn = fallen.mine[0].build.form.formLabel, theirsIn = fallen.theirs[0].build.form.formLabel
     check("both sides send in at once", mineIn == "Kingambit" && !fallen.theirs[0].fainted,
           "\(mineIn) and \(theirsIn)")
-    let garchompFirst = fallen.story.firstIndex { $0.contains("They sent in") }! <
-                        fallen.story.firstIndex { $0.contains("You sent in") }!
+    let garchompFirst = fallen.story.firstIndex { $0.contains("\(theirsIn) was sent in") }! <
+                        fallen.story.firstIndex { $0.contains("\(mineIn) was sent in") }!
     check("the faster one arrives first", garchompFirst)
     // Garchomp arrived first, so its Intimidate never saw Kingambit; Kingambit
     // arrived second and its Intimidate hit Garchomp.

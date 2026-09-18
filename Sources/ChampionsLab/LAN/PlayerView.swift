@@ -28,7 +28,23 @@ extension Board {
         for index in out.theirs.indices {
             out.theirs[index] = out.theirs[index].asShown
         }
+        // `flipped` leaves the turn's record alone -- the engine flips boards
+        // thousands of times a search -- so the steps turn here, once.
         out.steps = steps.map(\.flipped)
+        return out
+    }
+
+    /// This board from this player's own chair, with the other side reduced
+    /// to what they have been shown -- the host's screen, which must not see
+    /// more of the guest than the guest sees of the host. The steps are
+    /// already from this chair and stay as they are.
+    func asThisPlayerSeesIt() -> Board {
+        var out = flipped.asTheySeeIt.flipped
+        out.theirWorth = [:]
+        out.theirBeats = [:]
+        for index in out.theirs.indices {
+            out.theirs[index] = out.theirs[index].asShown
+        }
         return out
     }
 

@@ -54,6 +54,10 @@ final class PlayerViewTests: HarnessCase {
               view.steps.count == out.steps.count && view.steps.contains { $0.action?.byMine == false && $0.action?.move == "U-turn" })
         // The bench they have not seen is their expected pair, not ours, so
         // only what has come out is compared.
+        let hostView = out.asThisPlayerSeesIt()
+        check("the host's own view keeps the host's chair in its steps",
+              hostView.steps.map { $0.action?.byMine } == out.steps.map { $0.action?.byMine }
+                && hostView.mine.map(\.build.form.id) == out.mine.map(\.build.form.id))
         check("health as it is, for what has been seen",
               zip(view.theirs, out.mine).filter { $1.seen }.allSatisfy { $0.hp == $1.hp })
     }

@@ -112,6 +112,10 @@ struct BattleFieldView: View {
                 HStack(alignment: .top, spacing: gap) {
                     Group {
                         if opening { openingCard }
+                        // A decision to make -- who comes in for a faint, who
+                        // comes in for a pivot -- comes up on its own the
+                        // moment the turn has finished playing.
+                        else if !sending.isEmpty, finished == nil, playback.task == nil { ReplacementView(session: session, board: board) }
                         else if !replay.isEmpty { TurnStepper(session: session, playback: playback) }
                         else if !sending.isEmpty, finished == nil { ReplacementView(session: session, board: board) }
                         else if finished == nil { CommandDeckView(session: session, playback: playback, board: board) }

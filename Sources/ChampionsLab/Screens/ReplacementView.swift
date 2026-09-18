@@ -73,7 +73,11 @@ struct ReplacementView: View {
                             session.board = next
                             sending = next.gapsOfMine
                             chosenSends = []
-                            if sending.isEmpty { session.think() }
+                            if sending.isEmpty {
+                                // The turn is answered; the field shows the new position.
+                                session.playback.finish()
+                                session.think()
+                            }
                         } label: {
                             HStack(spacing: 9) {
                                 SpriteImage(form: board.mine[option.index].build.form, side: 42)

@@ -217,7 +217,7 @@ final class LANLink: ObservableObject {
         send(.snapshot(Wire.Snapshot(rqid: rqid, turn: turn,
                                      board: board.asTheOtherPlayerSeesIt().wired, asking: guestAsking)))
         let mine = Wire.Snapshot(rqid: rqid, turn: turn,
-                                 board: board.flipped.asTheOtherPlayerSeesIt().wired, asking: asking)
+                                 board: board.asThisPlayerSeesIt().wired, asking: asking)
         latest = mine
         session?.receive(mine)
     }

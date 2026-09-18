@@ -439,6 +439,7 @@ final class BattleSession: ObservableObject {
         guard let link else { return }
         sending = []
         chosenSends = []
+        playback.finish()
         playing = true
         waitingOn = "Waiting for \(link.theirName)..."
         link.chose(replacements: picks)
