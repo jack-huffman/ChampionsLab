@@ -86,6 +86,11 @@ struct BattleView: View {
     @State private var readied = false
     /// Which lobby is being worked out; an older one's answer is dropped.
     @State private var lobbyTicket = 0
+    /// The two sixes as they stood when the lobby was worked out. A team
+    /// edited in the Builder leaves the lobby holding the Pokemon that used
+    /// to be on it -- the banner and the plans draw from those -- so the
+    /// screen notices and works it out again.
+    @State private var lobbyStamp = ""
     /// The start of the game, being shown: the flash, the leads coming out,
     /// their abilities going off. Nil once orders can be given.
     @State private var opening = false
@@ -200,6 +205,12 @@ struct BattleView: View {
         if opponentID.hasPrefix("ladder-") { return store.ladderOpponent(id: opponentID) }
         return store.teams.first { $0.id.uuidString == opponentID }
     }
+    /// What the two chosen sixes are made of, down to the sets. Anything
+    /// the lobby reads is in here, so a change means the lobby is stale.
+    private var matchupStamp: String {
+        (myTeam.map(LabStore.stamp) ?? "-") + "//" + (theirTeam.map(LabStore.stamp) ?? "-")
+    }
+
     private var bringCount: Int { singles ? 3 : 4 }
     private var leadCount: Int { singles ? 1 : 2 }
 
@@ -238,6 +249,12 @@ struct BattleView: View {
         .onAppear {
             if let link { link.attach(session) } else { recallLastMatchup() }
         }
+        // A team edited while the lobby is on screen.
+        .onChange(of: matchupStamp) { _ in
+            guard link == nil, board == nil, myTeam != nil, theirTeam != nil,
+                  lobbyStamp != matchupStamp else { return }
+            refreshLobby(clearing: true)
+        }
         // Both fours are in: the host built the game, and the opening plays.
         .onReceive(session.$intro) { steps in
             if let steps, link != nil { playOpening(steps) }
@@ -256,7 +273,12 @@ struct BattleView: View {
         // A team since deleted, or a list since withdrawn.
         if myTeam == nil { myTeamID = "" }
         if theirTeam == nil { opponentID = "" }
-        if stage == .versus, myTeam != nil, theirTeam != nil, lobby.verdict == nil { enterVersus() }
+        // Away in the Builder and back again, with a team changed while you
+        // were gone.
+        if myTeam != nil, theirTeam != nil, lobby.verdict == nil || lobbyStamp != matchupStamp {
+            refreshLobby(clearing: board != nil ? false : true)
+            if stage == .versus { stage = .versus }
+        }
     }
 
     /// A game played to a result goes into the history the lobby shows. A
@@ -504,11 +526,21 @@ struct BattleView: View {
     /// page is mostly sprites, and the part that needs the arithmetic can
     /// arrive a moment later.
     private func enterVersus() {
+        refreshLobby(clearing: true)
+        if myTeam != nil, theirTeam != nil { stage = .versus }
+    }
+
+    /// Work the two sixes out again. `clearing` throws away the game and the
+    /// four being brought, which is what choosing a team means; a team edited
+    /// under a lobby only needs the reading redone.
+    private func refreshLobby(clearing: Bool) {
         guard let mine = myTeam, let theirs = theirTeam else { return }
-        bringing = []; focused = nil; board = nil; finished = nil
-        log = []; mySide = []; theirSide = []
+        if clearing {
+            bringing = []; focused = nil; board = nil; finished = nil
+            log = []; mySide = []; theirSide = []
+        }
         lobby = Lobby()
-        stage = .versus
+        lobbyStamp = matchupStamp
         let rules = store.rulebook, singles = singles
         let ticket = lobbyTicket + 1
         lobbyTicket = ticket

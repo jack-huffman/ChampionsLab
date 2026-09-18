@@ -83,6 +83,7 @@ final class Store: ObservableObject {
         data = data.replacingUsage(with: snapshot.entries)
         liveUsage = snapshot
         usageVersion += 1
+        forgetWhatTheUsageTableDecided()
     }
 
     /// Back to whatever mkdata.py baked in.
@@ -91,6 +92,19 @@ final class Store: ObservableObject {
         data = data.replacingUsage(with: bundledUsage)
         liveUsage = nil
         usageVersion += 1
+        forgetWhatTheUsageTableDecided()
+    }
+
+    /// Everything kept rather than rebuilt that was worked out from the usage
+    /// table: the ladder's teams, what winning teams carry, the speed
+    /// benchmarks, the teams built from the meta lists. A fresh table left
+    /// all of it as it was, so the lobby went on offering the ladder that
+    /// had just been replaced.
+    private func forgetWhatTheUsageTableDecided() {
+        ladderCache = [:]
+        structureCache = [:]
+        speedCache = [:]
+        opponentCache = [:]
     }
 
     private static func loadDataset() throws -> Dataset {
