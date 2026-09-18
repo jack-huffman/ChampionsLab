@@ -503,15 +503,16 @@ struct BattleFieldView: View {
     /// view — this has been wrong in both directions now and is worth pinning.
     ///
     /// A Protect covers the turn it was used on and comes down at the end of
-    /// it, so `isProtected` is false by the time the board is handed back.
-    /// While the turn is being played out, though, the shield has to be on
-    /// screen or a move visibly bounces off nothing — and that is what
-    /// `protectedLast` is for. The moment playback ends it must stop counting,
-    /// or the shield stays drawn over a Pokémon that is open again.
+    /// it. The shield is drawn from the flag as it stands on the board being
+    /// shown: the live board once the turn is over, where it is down, or the
+    /// step being played, where it goes up the moment the Protect is used
+    /// and not before -- each step records who was behind one as it closed.
+    /// `protectedLast` no longer draws anything: it put the shield up from
+    /// the first step of the turn, before the Pokemon had moved.
     static func guarding(fainted: Bool, isProtected: Bool, protectedLast: Bool,
                          duringPlayback: Bool) -> Bool {
         guard !fainted else { return false }
-        return isProtected || (duringPlayback && protectedLast)
+        return isProtected
     }
     /// The card carried through its leans by the move's clock.
     func carried(_ seat: Seat) -> LeanEffect {
@@ -757,6 +758,7 @@ struct BattleFieldView: View {
             if index < step.myBoosts.count { out.mine[index].build.boosts = step.myBoosts[index] }
             if index < step.myStatus.count { out.mine[index].status = step.myStatus[index] }
             if index < step.myConfused.count { out.mine[index].confusedFor = step.myConfused[index] ? max(1, out.mine[index].confusedFor) : 0 }
+            if index < step.myProtected.count { out.mine[index].isProtected = step.myProtected[index] }
         }
         for index in out.theirs.indices where index < step.theirHP.count {
             out.theirs[index].hp = step.theirHP[index]
@@ -767,6 +769,7 @@ struct BattleFieldView: View {
             if index < step.theirBoosts.count { out.theirs[index].build.boosts = step.theirBoosts[index] }
             if index < step.theirStatus.count { out.theirs[index].status = step.theirStatus[index] }
             if index < step.theirConfused.count { out.theirs[index].confusedFor = step.theirConfused[index] ? max(1, out.theirs[index].confusedFor) : 0 }
+            if index < step.theirProtected.count { out.theirs[index].isProtected = step.theirProtected[index] }
         }
         out.field = step.field
         out.myTailwind = step.myTailwind

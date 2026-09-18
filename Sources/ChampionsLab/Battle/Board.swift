@@ -605,6 +605,11 @@ struct Board {
         var theirStatus: [Ailment] = []
         var myConfused: [Bool] = []
         var theirConfused: [Bool] = []
+        /// Whether each Pokemon was behind a Protect as the step closed, so
+        /// the shield goes up on the field when the Protect is used and not
+        /// from the first step of the turn.
+        var myProtected: [Bool] = []
+        var theirProtected: [Bool] = []
     }
 
     /// Turns of weather and terrain left. Five when something sets them; zero
@@ -801,7 +806,8 @@ struct Board {
                     myBoosts: mine.map(\.build.boosts), theirBoosts: theirs.map(\.build.boosts),
                     abilities: firing, events: events,
                     myStatus: mine.map(\.status), theirStatus: theirs.map(\.status),
-                    myConfused: mine.map(\.isConfused), theirConfused: theirs.map(\.isConfused))
+                    myConfused: mine.map(\.isConfused), theirConfused: theirs.map(\.isConfused),
+                    myProtected: mine.map(\.isProtected), theirProtected: theirs.map(\.isProtected))
     }
 
     /// Say what happened, and remember what the board looked like when it did.
@@ -1306,7 +1312,8 @@ extension Board.Step: Codable {
     /// Everything but the id, which is the step's own and fresh on each side.
     enum CodingKeys: String, CodingKey {
         case text, action, myHP, theirHP, myForms, theirForms, field, myTailwind, theirTailwind,
-             trickRoom, myBoosts, theirBoosts, abilities, events, myStatus, theirStatus, myConfused, theirConfused
+             trickRoom, myBoosts, theirBoosts, abilities, events, myStatus, theirStatus, myConfused, theirConfused,
+             myProtected, theirProtected
     }
 }
 extension Board.Step.Event: Codable {
@@ -1349,7 +1356,8 @@ extension Board.Step {
                              abilities: abilities.map { Firing(mine: !$0.mine, slot: $0.slot, name: $0.name) },
                              events: events.map(\.flipped),
                              myStatus: theirStatus, theirStatus: myStatus,
-                             myConfused: theirConfused, theirConfused: myConfused)
+                             myConfused: theirConfused, theirConfused: myConfused,
+                             myProtected: theirProtected, theirProtected: myProtected)
         out.action = action?.flipped
         return out
     }

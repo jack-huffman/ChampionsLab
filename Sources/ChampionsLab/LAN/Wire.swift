@@ -13,7 +13,7 @@ import Foundation
 enum Wire {
     /// Bumped when a message changes shape. Two apps that disagree do not
     /// battle; they say so.
-    static let version = 4
+    static let version = 5
 
     /// A team as the other side may see it at Team Preview.
     struct Six: Codable, Equatable, Sendable {

@@ -130,18 +130,6 @@ extension BattleFieldView {
                     .frame(width: side * 0.86, height: side * 0.26)
                     .offset(y: side * 0.36)
             }
-            if guarding(fighter) {
-                Circle()
-                    .fill(RadialGradient(colors: [Palette.accent.opacity(0.04), Palette.accent.opacity(0.28)],
-                                         center: .center, startRadius: side * 0.15, endRadius: side * 0.5))
-                    .overlay(Circle().strokeBorder(Palette.accent.opacity(0.75), lineWidth: 1.5))
-                    .frame(width: side * 0.98, height: side * 0.98)
-                    .transition(.scale.combined(with: .opacity))
-            } else if fighter.substitute > 0, !fighter.fainted {
-                Circle()
-                    .strokeBorder(Palette.dim.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
-                    .frame(width: side * 0.98, height: side * 0.98)
-            }
             let moved = playback.boosts[seat] ?? []
             let rising = moved.contains { $0.delta > 0 }, falling = moved.contains { $0.delta < 0 }
             // The game's own sign for a stage moving: the Pokemon lit in the
@@ -163,6 +151,21 @@ extension BattleFieldView {
                 .shadow(color: hit ? Palette.bad.opacity(0.6) : .clear, radius: 10)
                 .animation(.spring(response: 0.32, dampingFraction: 0.5), value: hit)
                 .animation(.easeOut(duration: 0.35), value: fighter.fainted)
+            // The shield, in front of the Pokemon it covers and thin enough to
+            // see it through; the substitute's ring the same.
+            if guarding(fighter) {
+                Circle()
+                    .fill(RadialGradient(colors: [Palette.accent.opacity(0.02), Palette.accent.opacity(0.22)],
+                                         center: .center, startRadius: side * 0.15, endRadius: side * 0.5))
+                    .overlay(Circle().strokeBorder(Palette.accent.opacity(0.8), lineWidth: 1.5))
+                    .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 0.5).padding(3))
+                    .frame(width: side * 0.98, height: side * 0.98)
+                    .transition(.scale.combined(with: .opacity))
+            } else if fighter.substitute > 0, !fighter.fainted {
+                Circle()
+                    .strokeBorder(Palette.dim.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                    .frame(width: side * 0.98, height: side * 0.98)
+            }
             if rising { StatArrows(up: true, tint: Self.riseTint, side: side * 0.9).transition(.opacity) }
             if falling { StatArrows(up: false, tint: Self.fallTint, side: side * 0.9).transition(.opacity) }
         }

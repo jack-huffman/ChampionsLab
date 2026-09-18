@@ -31,9 +31,9 @@ final class TurnPlayback: ObservableObject {
     static let flourishSeconds: Double = 0.40
     /// How long the damage sits there once the move has finished, which is
     /// what actually paces a turn.
-    static let dwellSeconds: Double = 0.9
+    static let dwellSeconds: Double = 0.75
     /// A beat between one action and the next, so four decisions read as four.
-    static let betweenActions: Double = 1.0
+    static let betweenActions: Double = 0.55
     /// Before the first action: a moment to see the board as the turn begins.
     /// Longer over a link, where both players have just locked in and neither
     /// pressed the button that starts the picture.
