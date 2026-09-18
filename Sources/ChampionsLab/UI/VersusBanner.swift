@@ -215,9 +215,9 @@ struct VersusBanner: View {
         return out
     }
 
-    /// The sprites in one layer and every name in a layer above them, so a
-    /// wing in the front rank can overlap the sprite above it but never the
-    /// name under that sprite.
+    /// Just the sprites, in their two ranks. The names used to sit in a
+    /// layer above them; the page is the two sixes looked at, and a caption
+    /// under each one was reading out what the picture already says.
     private func formation(_ side: Side, in size: CGSize, lean: CGFloat, left: Bool) -> some View {
         let placed = places(side, in: size, lean: lean, left: left)
         return ZStack {
@@ -227,27 +227,9 @@ struct VersusBanner: View {
                     .shadow(color: .black.opacity(0.65), radius: 4, y: 3)
                     .position(x: place.x, y: place.y)
             }
-            ForEach(Array(placed.enumerated()), id: \.offset) { _, place in
-                label(place.form, lead: place.lead)
-                    .position(x: place.x, y: place.y + place.side / 2 + (place.lead ? 16 : 8))
-            }
-            .zIndex(1)
         }
     }
 
-    private func label(_ form: Form, lead: Bool) -> some View {
-        VStack(spacing: 1) {
-            Text(form.formLabel)
-                .font(.system(size: lead ? 11 : 10, weight: lead ? .bold : .semibold))
-                .foregroundStyle(.white.opacity(lead ? 1 : 0.85))
-                .lineLimit(1)
-                .shadow(color: .black.opacity(0.9), radius: 3)
-                .shadow(color: .black.opacity(0.6), radius: 1)
-        }
-    }
-
-    /// The side's name in its corner. Where a side can be chosen, the block
-    /// is the button for it, and says so with a chevron.
     private func nameBlock(_ side: Side?, title: String, tint: Color, leading: Bool) -> some View {
         let block = VStack(alignment: leading ? .leading : .trailing, spacing: 1) {
             HStack(spacing: 5) {
