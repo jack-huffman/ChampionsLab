@@ -361,8 +361,13 @@ enum DamageCalc {
         var modifier = 1.0
         hitModifier(&modifier, move: move, type: type, attacker: attacker, field: field,
                     notes: &working.notes)
-        let effective = effectiveness(of: type, into: defender, ignored: attacker.ignoresAbility,
-                                      notes: &working.notes)
+        // Struggle is typeless: it is what is left when a Pokemon has nothing
+        // to throw, and a Ghost standing in front of it does not get to be
+        // immune to it. Printed Normal so it has something to draw, read as
+        // neither strong nor weak against anything.
+        let effective = MoveLegality.isStruggle(move) ? 1
+            : effectiveness(of: type, into: defender, ignored: attacker.ignoresAbility,
+                            notes: &working.notes)
         modifier *= effective
         if effective == 0 {
             return DamageResult(minDamage: 0, maxDamage: 0, targetHP: defender.maxHP,
@@ -685,7 +690,10 @@ enum DamageCalc {
         if field.critical {
             modifier *= attacker.ability == "Sniper" ? 2.25 : 1.5
         }
-        var stab = attacker.effectiveTypes.contains(type) ? 1.5 : 1.0
+        // The same-type bonus, which Struggle never gets: a Normal type is
+        // not throwing a Normal move, it is out of moves.
+        var stab = attacker.effectiveTypes.contains(type)
+            && !MoveLegality.isStruggle(move) ? 1.5 : 1.0
         if attacker.ability == "Adaptability", stab > 1 { stab = 2.0 }
         modifier *= stab
     }

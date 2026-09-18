@@ -262,6 +262,10 @@ enum Switching {
         team[active].drowsyFor = 0
         team[active].disabled = nil
         team[active].disabledFor = 0
+        // The seal is the Pokemon standing there, so it goes with it. Power
+        // Points deliberately do not: a pivot out and back is not a way to
+        // refill, and treating it as one would make the whole resource free.
+        team[active].imprisoning = false
         team[active].destinyBound = false
         team[active].octolocked = false
         team[active].build.typeOverride = nil

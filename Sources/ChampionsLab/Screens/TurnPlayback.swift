@@ -73,6 +73,9 @@ final class TurnPlayback: ObservableObject {
     /// number is the thing a player actually wants at that moment and the log
     /// is the last place to look for it.
     @Published var damage: [Seat: Int] = [:]
+    /// Who the damage beside them came to critically. Arrives with the number
+    /// and leaves with it, so the two are never out of step.
+    @Published var crits: Set<Seat> = []
     /// A stage that moved, and by how much.
     struct StatChange: Equatable {
         let stat: Int
@@ -172,7 +175,7 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
+        damage = [:]; crits = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
         struck = []; struckTheirs = []
         replay = []; at = 0; seen = 0; focus = nil; replayBoard = nil; startBoard = nil
     }
@@ -219,7 +222,7 @@ final class TurnPlayback: ObservableObject {
             guard !Task.isCancelled else { return }
             scene = nil
             stopTracks()
-            damage = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
+            damage = [:]; crits = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
             focus = nil
             // The end of the turn: what the residuals took and gave -- a burn,
             // Leftovers, a Speed Boost -- shown over whoever it happened to,
@@ -235,7 +238,7 @@ final class TurnPlayback: ObservableObject {
                 guard !Task.isCancelled else { return }
                 try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1.6 * 1_000_000_000))
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
+                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; crits = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
             }
             // Rest on the last step rather than past it: the field shows the end
             // of the turn, and the stepper still works from there, which is how
@@ -269,7 +272,7 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
+        damage = [:]; crits = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
         struck = []; struckTheirs = []
         seen = Swift.max(seen, index + 1)
         let steps = replay
@@ -284,7 +287,7 @@ final class TurnPlayback: ObservableObject {
                 guard !Task.isCancelled else { return }
                 try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1.6 * 1_000_000_000))
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
+                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; crits = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
                 task = nil
             }
             return
@@ -296,7 +299,7 @@ final class TurnPlayback: ObservableObject {
             guard !Task.isCancelled else { return }
             scene = nil
             stopTracks()
-            damage = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
+            damage = [:]; crits = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
             at = index
             focus = nil
             task = nil
@@ -426,6 +429,8 @@ final class TurnPlayback: ObservableObject {
             if !fired.isEmpty { phases = [Phase(cause: nil, boosts: [:], abilities: fired)] }
         }
         damage = took
+        crits = Set(step.criticals.filter { $0.slot < 2 }
+            .map { Seat(mine: $0.mine, slot: $0.slot) })
         var withheld = Withheld()
         for phase in phases { withheld.add(phase) }
         pending = withheld
@@ -485,7 +490,7 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
+        damage = [:]; crits = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
         replay = []; at = 0; seen = 0; focus = nil; replayBoard = nil; startBoard = nil
     }
 
@@ -586,7 +591,7 @@ final class TurnPlayback: ObservableObject {
         guard !Task.isCancelled else { return }
         try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1_000_000_000))
         guard !Task.isCancelled else { return }
-        withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
+        withAnimation(.easeIn(duration: 0.2)) { damage = [:]; crits = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
         if !last {
             try? await Task.sleep(nanoseconds: UInt64(Self.betweenActions * 1_000_000_000))
         }

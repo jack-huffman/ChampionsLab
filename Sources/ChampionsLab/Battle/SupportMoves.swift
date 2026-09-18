@@ -1319,6 +1319,21 @@ enum SupportMoves {
             if byMine { board.theirs[index].seededFrom = slot } else { board.mine[index].seededFrom = slot }
             board.note("\(who) was seeded.")
             return .handled(nil)
+        case "Imprison":
+            // Everything this one knows is sealed off across the field for as
+            // long as it stands there -- not the moves it uses, the moves it
+            // has. It fails outright when the other side knows none of them,
+            // which is what stops it being a free turn against a team it
+            // shares nothing with. Where it bites is the mirror: two Trick
+            // Rooms, two Protects, two Fake Outs, and only one side may click.
+            guard MoveLegality.imprisonWouldHold(byMine: byMine, slot: slot, board: board) else {
+                board.note("But it failed.")
+                return .handled(nil)
+            }
+            if byMine { board.mine[slot].imprisoning = true }
+            else { board.theirs[slot].imprisoning = true }
+            board.note("\(name) sealed away its opponents' moves.")
+            return .handled(nil)
         case "Taunt":
             let far = byMine ? board.theirs : board.mine
             let index = far.indices.contains(target) && target < board.activeCount ? target : 0

@@ -372,12 +372,40 @@ struct CommandDeckView: View {
     private func fightGrid(_ board: Board, slot: Int, fighter: Fighter,
                            aiming: Int? = nil) -> some View {
         let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
-        return LazyVGrid(columns: columns, spacing: 10) {
-            ForEach(Array(fighter.moves.prefix(4).enumerated()), id: \.offset) { index, move in
-                moveTile(board, slot: slot, index: index, move: move, fighter: fighter,
-                         aiming: aiming == index)
+        let cornered = !MoveLegality.anyUsable(byMine: true, slot: slot, board: board)
+        return VStack(alignment: .leading, spacing: 8) {
+            // Nothing left to click. Said plainly rather than left to be
+            // worked out from four greyed-out tiles.
+            if cornered {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10))
+                    Text("Nothing left to use — it will Struggle, for a quarter of its health.")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(Palette.warn)
+            }
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(Array(fighter.moves.prefix(4).enumerated()), id: \.offset) { index, move in
+                    moveTile(board, slot: slot, index: index, move: move, fighter: fighter,
+                             aiming: aiming == index)
+                }
             }
         }
+    }
+
+    /// Why a move cannot be clicked, in the few words that fit under it.
+    private func whyNot(_ refusal: MoveLegality.Refusal, move: Move,
+                        fighter: Fighter, fallen: [Int]) -> String? {
+        switch refusal {
+        case .spent: return "· no Power Points left"
+        case .sealed: return "· sealed away by an Imprison"
+        case .disabled: return "· disabled"
+        case .taunted: return "· still taunted"
+        case .none: break
+        }
+        if move.aim == .party, fallen.isEmpty { return "· nobody has fainted yet" }
+        if move.drawbacks.firstTurnOnly, !fighter.justArrived { return "· only on the turn it comes in" }
+        return nil
     }
 
     private func moveTile(_ board: Board, slot: Int, index: Int, move: Move,
@@ -393,8 +421,15 @@ struct CommandDeckView: View {
         let aim = move.aim
         // Revival Blessing has nobody to bring back until somebody has gone.
         let fallen = (board.activeCount..<board.mine.count).filter { board.mine[$0].fainted }
+        let refusal = MoveLegality.refusal(index, byMine: true, slot: slot, board: board)
         let usable = (!move.drawbacks.firstTurnOnly || fighter.justArrived)
             && !(move.aim == .party && fallen.isEmpty)
+            && !refusal.stops
+        let refused = whyNot(refusal, move: move, fighter: fighter, fallen: fallen)
+        // What is left of it. The number a long game turns on, and it had
+        // never been on the tile at all.
+        let ppNow = fighter.pp(at: index)
+        let ppLow = ppNow * 4 <= move.pp
         // What it does to each of them, on the tile, before anything is
         // clicked. The point of a practice board is seeing the numbers — and
         // a target it cannot touch is said so, not left off.
@@ -499,6 +534,21 @@ struct CommandDeckView: View {
                     Text(move.accuracyLabel == "—" ? "never misses" : "\(move.accuracyLabel)% acc")
                         .font(.system(size: 10, design: .rounded)).monospacedDigit()
                         .opacity(0.85)
+                    Group {
+                        if ppLow {
+                            Text("\(ppNow)/\(move.pp) pp")
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .monospacedDigit()
+                                .padding(.horizontal, 5).padding(.vertical, 1)
+                                .background(Palette.warn.opacity(0.65))
+                                .clipShape(Capsule())
+                        } else {
+                            Text("\(ppNow)/\(move.pp) pp")
+                                .font(.system(size: 10, design: .rounded)).monospacedDigit()
+                                .opacity(0.85)
+                        }
+                    }
+                    .help("Power Points left. Every use spends one, two against a Pressure, and a Pokémon with none left on anything Struggles.")
                     Spacer(minLength: 0)
                 }
                 // One line per target, each with room for a name and a
@@ -509,9 +559,8 @@ struct CommandDeckView: View {
                         HStack(spacing: 6) {
                             Image(systemName: aimSymbol(aim)).font(.system(size: 9))
                             Text(aimLabel(aim)).font(.system(size: 10)).lineLimit(1)
-                            if !usable {
-                                Text(aim == .party ? "· nobody has fainted yet"
-                                                   : "· only on the turn it comes in")
+                            if let refused {
+                                Text(refused)
                                     .font(.system(size: 10, weight: .semibold)).lineLimit(1)
                             }
                             Spacer(minLength: 0)

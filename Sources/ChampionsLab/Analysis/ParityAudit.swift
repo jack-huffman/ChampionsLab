@@ -141,9 +141,7 @@ struct ParityAudit: Sendable {
     /// Things the model does not carry, and will not, with the reason. Kept
     /// short and specific: each line is a decision, not an excuse.
     public static let notModelled: [String: String] = [
-        "Pressure": "Power Points are not tracked at all — a battle here is decided long before anything runs out of them.",
-        "Spite": "Power Points are not tracked at all.",
-        "Imprison": "Power Points are not tracked at all.",
+        "Spite": "Power Points are tracked now, but nothing takes four of them off the move a target last used.",
         "Sleep Talk": "Calls another move at random; the search cannot price a move that becomes a different move.",
         "Metronome": "Calls a move at random out of every move in the game.",
         "Assist": "Calls a move at random from the rest of the team.",
@@ -468,7 +466,11 @@ private struct Bench {
                 out += "/\(f.revealedMoves.sorted())/\(f.itemRevealed)/\(f.abilityRevealed)"
                 out += "/\(f.build.status.rawValue)"
                 out += "/\(f.perishIn)/\(f.drowsyFor)/\(f.disabled ?? -1)/\(f.disabledFor)"
-                out += "/\(f.destinyBound)/\(f.octolocked)/\(f.justArrived)|"
+                out += "/\(f.destinyBound)/\(f.octolocked)/\(f.justArrived)"
+                // Power Points and the seal over them: two positions alike in
+                // every other way are not the same position when one of them
+                // has run a move dry.
+                out += "/\(f.ppLeft)/\(f.imprisoning)|"
             }
         }
         out += "\(b.field.weather)\(b.field.terrain)\(b.myTailwind)\(b.theirTailwind)\(b.trickRoom)"

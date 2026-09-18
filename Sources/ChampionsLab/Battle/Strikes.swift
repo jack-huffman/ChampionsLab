@@ -48,13 +48,28 @@ enum Strikes {
             MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: !held)
         case .attack(let moveIndex, let target):
             guard actor.moves.indices.contains(moveIndex) else { return }
-            let move = actor.moves[moveIndex]
+            // Nothing it may throw: out of Power Points, sealed off by an
+            // Imprison, taunted with only status moves, or some of each. A
+            // cornered Pokemon Struggles, which is not one of its moves and
+            // never sits in its list -- the index it was given still points at
+            // something, and what comes out is Struggle regardless.
+            let cornered = !MoveLegality.anyUsable(byMine: byMine, slot: slot, board: board)
+            let move = cornered ? MoveLegality.struggle : actor.moves[moveIndex]
             MoveHistory.remember(byMine: byMine, slot: slot, move: moveIndex, target: target, board: &board)
-            // Taunted: nothing but attacks until it wears off.
-            if !move.isDamaging, actor.tauntedFor > 0 {
-                board.note("\(name) cannot use \(move.name) — it is still taunted.")
-                MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
-                return
+            if cornered {
+                board.note("\(name) has no moves left!")
+            } else {
+                // One move refused while others would go: the turn goes with
+                // it. The model refuses rather than the search quietly
+                // substituting a move nobody chose.
+                let refusal = MoveLegality.refusal(moveIndex, byMine: byMine, slot: slot, board: board)
+                if refusal.stops {
+                    board.note(MoveLegality.reason(refusal, who: name, move: move.name))
+                    MoveHistory.markFailed(byMine: byMine, slot: slot, board: &board, failed: true)
+                    return
+                }
+                // It moved, so it paid for it.
+                MoveLegality.spend(moveIndex, byMine: byMine, slot: slot, target: target, board: &board)
             }
             guard move.isDamaging else {
                 let before = board.story.count
@@ -512,7 +527,10 @@ enum Strikes {
                                                 byMine: byMine, slot: slot, board: &board, rolling: rolling)
         if absorbed(result, before: before, hitName: hitName, index: index, hitMine: hitMine,
                     actor: actor, board: &board) { return 0 }
-        if field.critical { board.detail("A critical hit!") }
+        if field.critical {
+            board.detail("A critical hit!")
+            board.critical(onMine: hitMine, slot: index, from: move.name)
+        }
 
         // 3. What the far side brings to it. These are the calculator's
         // own notes, so the commentary cannot drift from the maths.
@@ -680,18 +698,12 @@ enum Strikes {
         // one stage is an eighth, two is a half, three is certain.
         // A Leek is two stages of crit ratio, for the one Pokémon that
         // can hold it usefully.
-        var stage = actor.critStage
-        if actor.build.item == "Leek",
-           actor.build.form.species.contains("farfetch") { stage += 2 }
-        if actor.build.item == "Razor Claw" || actor.build.item == "Scope Lens" { stage += 1 }
-        if actor.build.ability == "Super Luck" { stage += 1 }
+        var stage = critStage(of: actor)
         // Merciless always crits a poisoned target, which is the
         // entire reason a Toxapex threatens anything.
         if actor.build.ability == "Merciless",
            [.poison, .badPoison].contains(before.status) { stage = 3 }
-        let rate = stage <= 0 ? move.critRate
-            : (stage == 1 ? Swift.max(move.critRate, 12.5)
-               : stage == 2 ? Swift.max(move.critRate, 50) : 100)
+        let rate = critRate(move, at: stage)
         // Shell Armor and Battle Armor cannot be hit critically, which
         // is the whole of both of them. A Mold Breaker ignores that.
         let armoured = ["Shell Armor", "Battle Armor"]
@@ -1391,6 +1403,13 @@ enum Strikes {
         let maxHP = team[slot].maxHP
         var lost = 0
 
+        // Struggle takes a quarter of full health whatever it dealt, and
+        // whether or not it dealt anything. Charged here with everything else
+        // the user pays, so a Magic Guard still walks away from it.
+        if MoveLegality.isStruggle(move) {
+            lost += Swift.max(1, Int(Double(maxHP) * MoveLegality.struggleCost))
+            board.note("\(name) is hurt by the recoil.")
+        }
         // Moves that end the user's game outright.
         if move.effect.contains("The user faints") {
             lost = team[slot].hp
@@ -1517,6 +1536,29 @@ enum Strikes {
     }
 
     /// The move index a choice picks, or -1 for anything that is not an attack.
+    /// The critical-hit stage a Pokemon is throwing at: the stages it has been
+    /// given by a Focus Energy or a Dragon Cheer, plus whatever it is carrying
+    /// or was born with. A Leek is two stages, and only for the one Pokemon
+    /// that can hold it usefully.
+    static func critStage(of actor: Fighter) -> Int {
+        var stage = actor.critStage
+        if actor.build.item == "Leek",
+           actor.build.form.species.contains("farfetch") { stage += 2 }
+        if actor.build.item == "Razor Claw" || actor.build.item == "Scope Lens" { stage += 1 }
+        if actor.build.ability == "Super Luck" { stage += 1 }
+        return stage
+    }
+
+    /// How often a move crits at that stage: its own rate at none, an eighth
+    /// at one, a half at two, and always at three. A move already better than
+    /// the stage it is at keeps its own rate, which is what makes a Focus
+    /// Energy on a Night Slash worth so much less than it looks.
+    static func critRate(_ move: Move, at stage: Int) -> Double {
+        stage <= 0 ? move.critRate
+            : (stage == 1 ? Swift.max(move.critRate, 12.5)
+               : stage == 2 ? Swift.max(move.critRate, 50) : 100)
+    }
+
     private static func pickedMove(_ choice: Choice) -> Int {
         if case .attack(let index, _) = choice { return index }
         if case .protectSelf(let index) = choice { return index }

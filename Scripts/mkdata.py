@@ -873,6 +873,7 @@ def main():
                                  if not t.get("tournament")] + tournaments
 
     assign_stones(roster, items)
+    name_unpublished_stones(roster, items)
     mark_attested(items, overlay["meta_teams"], overlay["usage"], roster)
     apply_showdown(moves)
     split_regional_forms(roster)
@@ -1189,6 +1190,14 @@ def apply_showdown(moves):
             print("      %s" % row)
 
 
+#: Items confirmed present in Champions by someone looking at the game, with
+#: nothing in the scrapes to show it. Each one is a claim by a person, which is
+#: why they are listed here by hand rather than inferred.
+CONFIRMED_IN_GAME = [
+    "Scope Lens",       # reported in game; raises the holder's critical-hit ratio
+]
+
+
 def mark_attested(items, meta_teams, usage, roster):
     """Flag which items have actually been seen in Pokemon Champions.
 
@@ -1219,6 +1228,14 @@ def mark_attested(items, meta_teams, usage, roster):
         seen.add(name)
         why.setdefault(name, reason)
 
+    # Seen in the game itself. Serebii publishes no Champions item list, the
+    # registered lists are a sample, and the ladder only reports what the
+    # measured sets happened to hold -- so an item can be in the game and reach
+    # none of the three. This is testimony rather than a scrape, and it is
+    # written down as exactly that so the claim can be weighed for what it is.
+    for name in CONFIRMED_IN_GAME:
+        note(name, "confirmed in the game")
+
     lists = 0
     for team in meta_teams:
         # Only lists somebody actually registered. Our own written archetypes
@@ -1240,6 +1257,9 @@ def mark_attested(items, meta_teams, usage, roster):
     # name. The stone certainly exists — the Mega cannot evolve without one —
     # so it must not be gated; only its name is unknown.
     note("Mega Stone", "the unnamed stone a Mega in this dex needs")
+    for form in roster:
+        if form.get("stone", "").startswith("Mega Stone ("):
+            note(form["stone"], "the unnamed stone a Mega in this dex needs")
 
     for item in items:
         item["attested"] = item["name"] in seen
@@ -1298,6 +1318,48 @@ def assign_stones(roster, items):
     print("    stones: %d Megas linked, %d using the generic entry" % (matched, len(unmatched)))
     if unmatched:
         print("      " + ", ".join(unmatched[:12]) + ("…" if len(unmatched) > 12 else ""))
+
+
+def name_unpublished_stones(roster, items):
+    """Give every Mega without a published stone a stone of its own.
+
+    Serebii names the stone for fifty-five of the eighty-one Megas and leaves
+    the rest blank. The app stood one generic "Mega Stone" in for all of them,
+    which works only while a species has exactly one Mega: the builder hands
+    back an item name and the rulebook has to say which Mega that triggers.
+    Raichu has two and only Raichunite Y is published, so Mega Raichu X could
+    be looked at and never registered -- the same for Mega Absol Z, whose
+    sibling holds the Absolite.
+
+    So each one gets a stone named after it. The name is a placeholder and says
+    so; what it is not is ambiguous. The generic entry stays in the list for
+    teams saved before this.
+    """
+    made = []
+    for form in roster:
+        if not (form["form_label"].startswith("Mega ")
+                and form["suffix"] in ("m", "mx", "my", "mz")):
+            continue
+        if form.get("stone"):
+            continue
+        name = "Mega Stone (" + form["form_label"] + ")"
+        form["stone"] = name
+        if any(i["name"] == name for i in items):
+            continue
+        items.append({
+            "name": name,
+            "slug": re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-"),
+            "effect": "This item, when held, allows for the Pokémon to Mega Evolve in battle. Serebii has not published this stone's name; it stands in for it so the Mega can be registered and brought.",
+            "short": "Mega Evolves " + form["form_label"] + ". Serebii has not published its name.",
+            "fling": 0,
+            "category": "Mega Stone",
+            "unpublished": True,
+        })
+        made.append(form["form_label"])
+    if made:
+        print("==> stones named for %d Megas Serebii leaves blank (%s)"
+              % (len(made), ", ".join(made[:6]) + ("..." if len(made) > 6 else "")))
+    return made
 
 
 PIKALYTICS_NAMES = {

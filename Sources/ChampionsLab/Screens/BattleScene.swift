@@ -191,6 +191,23 @@ extension BattleFieldView {
             // What the step did to this one, stacked over it: the health
             // lost, the stages moved, the ability that went off.
             VStack(spacing: 3) {
+                // Above the number it explains, and gone when it is.
+                if playback.crits.contains(seat), (damage[seat] ?? 0) > 0 {
+                    Text("CRITICAL")
+                        .font(.system(size: max(9, 8 * stage.k), weight: .black, design: .rounded))
+                        .kerning(0.9)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Capsule().fill(LinearGradient(
+                            colors: [Color(red: 1.0, green: 0.78, blue: 0.24),
+                                     Color(red: 0.94, green: 0.30, blue: 0.14)],
+                            startPoint: .top, endPoint: .bottom)))
+                        .shadow(color: Color(red: 1.0, green: 0.55, blue: 0.15).opacity(0.9), radius: 9)
+                        .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
+                        .transition(.asymmetric(insertion: .scale(scale: 0.4).combined(with: .opacity),
+                                                removal: .opacity))
+                        .id(playback.hitNumber)
+                }
                 if let lost = damage[seat], lost > 0 {
                     Text("-\(lost)")
                         .font(.system(size: max(15, 13 * stage.k), weight: .heavy, design: .rounded))

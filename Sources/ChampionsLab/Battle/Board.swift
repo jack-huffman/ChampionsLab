@@ -154,6 +154,17 @@ struct Fighter {
     /// much longer.
     var disabled: Int?
     var disabledFor = 0
+    /// Power Points left for each move, in the same order as `moves`.
+    ///
+    /// Spent when a move actually goes off, so a turn lost to sleep, a full
+    /// paralysis or a flinch costs nothing — and never given back by
+    /// switching out, which is what makes them the one resource a battle
+    /// really runs down. A Pokémon with none left anywhere Struggles.
+    var ppLeft: [Int] = []
+    /// Imprison: while this one stands there, nobody across the field may use
+    /// a move it knows itself. It seals what it has, not what it uses, so it
+    /// costs the other side the move for as long as this one is out.
+    var imprisoning = false
     /// Destiny Bond: if this faints before its next action, whatever did it
     /// goes too.
     var destinyBound = false
@@ -182,6 +193,19 @@ struct Fighter {
         return .attack(move: last, target: lastTarget)
     }
 
+    /// Power Points left on one move.
+    ///
+    /// A Fighter that arrived from somewhere carrying none — an older peer
+    /// across the network, a position built by hand — reads as full rather
+    /// than as empty. A battle in which nobody may move is a worse wrong
+    /// answer than one in which nothing ever runs out.
+    func pp(at index: Int) -> Int {
+        guard ppLeft.indices.contains(index) else {
+            return moves.indices.contains(index) ? moves[index].pp : 0
+        }
+        return ppLeft[index]
+    }
+
     /// The chance Protect works right now.
     var protectChance: Double { pow(1.0 / 3.0, Double(protectStreak)) }
 
@@ -191,6 +215,7 @@ struct Fighter {
     init(build: Combatant, moves: [Move], hp: Int? = nil, pendingMega: Form? = nil) {
         self.build = build
         self.moves = moves
+        self.ppLeft = moves.map(\.pp)
         self.maxHP = build.maxHP
         self.hp = hp ?? build.maxHP
         self.pendingMega = pendingMega
@@ -584,6 +609,11 @@ struct Board {
         /// the Intimidate that has landed and not the Swords Dance that has yet to.
         var myBoosts: [[Int]] = []
         var theirBoosts: [[Int]] = []
+        /// Who took a critical hit during the step, and what did it. The log
+        /// has said "A critical hit!" since the beginning and the field never
+        /// did — so the one number on screen that a crit changes had nothing
+        /// beside it to say why it was so large.
+        var criticals: [Firing] = []
         /// An ability that went off during the step, and whose.
         struct Firing: Equatable {
             let mine: Bool
@@ -769,6 +799,8 @@ struct Board {
     /// Not private: a private stored property would make the memberwise
     /// initialiser private too, and a board is rebuilt from the wire with it.
     var firing: [Step.Firing] = []
+    /// Critical hits landed since the last step closed, cleared with it.
+    var criticals: [Step.Firing] = []
     /// Everything that happened since the step began, in order.
     var events: [Step.Event] = []
     /// Where every stage and status stood when the step began. At the close,
@@ -808,7 +840,7 @@ struct Board {
 
     private mutating func snapshot(_ text: String) -> Step {
         reconcileEvents()
-        defer { firing = []; events = []; markStepStart() }
+        defer { firing = []; criticals = []; events = []; markStepStart() }
         return Step(text: text, action: acting,
                     myHP: mine.map(\.hp), theirHP: theirs.map(\.hp),
                     myForms: mine.map(\.build.form.id),
@@ -816,10 +848,17 @@ struct Board {
                     field: field, myTailwind: myTailwind,
                     theirTailwind: theirTailwind, trickRoom: trickRoom,
                     myBoosts: mine.map(\.build.boosts), theirBoosts: theirs.map(\.build.boosts),
-                    abilities: firing, events: events,
+                    criticals: criticals, abilities: firing, events: events,
                     myStatus: mine.map(\.status), theirStatus: theirs.map(\.status),
                     myConfused: mine.map(\.isConfused), theirConfused: theirs.map(\.isConfused),
                     myProtected: mine.map(\.isProtected), theirProtected: theirs.map(\.isProtected))
+    }
+
+    /// A critical hit landed on somebody, so the field can say so where the
+    /// damage lands rather than only in the log.
+    mutating func critical(onMine mine: Bool, slot: Int, from move: String) {
+        let hit = Step.Firing(mine: mine, slot: slot, name: move)
+        if !criticals.contains(hit) { criticals.append(hit) }
     }
 
     /// Say what happened, and remember what the board looked like when it did.

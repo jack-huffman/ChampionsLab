@@ -86,11 +86,18 @@ struct TurnGame {
             return Strikes.priorityBlockers.contains(foes[$0].build.ability)
                 || (board.field.terrain == .psychic && foes[$0].build.grounded)
         }
-        func allowed(_ move: Move) -> Bool {
+        // By index rather than by move: whether a move may be thrown is a
+        // fact about the slot it sits in -- what is left of its Power Points,
+        // whether an Imprison across the field has sealed it -- and not about
+        // the move printed there. A search that offers a move the model will
+        // refuse spends its width on a wasted turn.
+        func allowed(_ index: Int) -> Bool {
+            guard fighter.moves.indices.contains(index) else { return false }
+            let move = fighter.moves[index]
             if move.drawbacks.firstTurnOnly, !fighter.justArrived { return false }
             if priorityRefused, move.priority > 0,
                move.aim == .foe || move.aim == .spread { return false }
-            return true
+            return MoveLegality.usable(index, byMine: mine, slot: slot, board: board)
         }
 
         // Kept apart by kind rather than in one list, because the list has to
@@ -107,7 +114,7 @@ struct TurnGame {
         for target in 0..<min(2, foes.count) where !foes[target].fainted {
             var best: (index: Int, damage: Int)?
             for (index, move) in fighter.moves.enumerated()
-            where move.isDamaging && !move.isSpread && allowed(move) {
+            where move.isDamaging && !move.isSpread && allowed(index) {
                 let result = DamageCalc.calculate(attacker: fighter.build,
                                                   defender: foes[target].build,
                                                   move: move, field: board.field)
@@ -122,8 +129,8 @@ struct TurnGame {
         // A spread move is a different decision, not a better version of one —
         // and it is the move that covers a switch, since whatever comes in is
         // standing in it.
-        if let index = fighter.moves.firstIndex(where: {
-            $0.isDamaging && $0.isSpread && allowed($0) }) {
+        if let index = fighter.moves.indices.first(where: {
+            fighter.moves[$0].isDamaging && fighter.moves[$0].isSpread && allowed($0) }) {
             spread.append(.attack(move: index, target: 0))
         }
         // Protect, unless it was used last turn, when it mostly fails.
@@ -131,26 +138,28 @@ struct TurnGame {
         // considering at a third: the Sucker Punch it might still blank is
         // real. A third in a row, at a ninth, is not worth a slot.
         if fighter.protectChance >= 0.3,
-           let guard_ = fighter.moves.firstIndex(where: {
-               Move.protectMoves.contains($0.name) }) {
+           let guard_ = fighter.moves.indices.first(where: {
+               Move.protectMoves.contains(fighter.moves[$0].name) && allowed($0) }) {
             guarding.append(.protectSelf(move: guard_))
         }
         // Speed control, which is the whole turn on the teams that run it.
-        if let control = fighter.moves.firstIndex(where: {
-            ["Tailwind", "Trick Room"].contains($0.name) }) {
+        if let control = fighter.moves.indices.first(where: {
+            ["Tailwind", "Trick Room"].contains(fighter.moves[$0].name) && allowed($0) }) {
             let already = mine ? board.myTailwind : board.theirTailwind
             if already == 0 { setup.append(.attack(move: control, target: 0)) }
         }
         // Revival Blessing, once there is somebody to bring back. Each fallen
         // teammate is its own choice, since which one matters.
-        for (index, move) in fighter.moves.enumerated() where move.aim == .party {
+        for (index, move) in fighter.moves.enumerated()
+        where move.aim == .party && allowed(index) {
             for bench in 2..<team.count where team[bench].fainted {
                 setup.append(.attack(move: index, target: bench))
             }
         }
         // Fake Out, which only exists on the turn it comes in.
         if fighter.justArrived, !priorityRefused,
-           let fake = fighter.moves.firstIndex(where: { $0.name == "Fake Out" }),
+           let fake = fighter.moves.indices.first(where: {
+               fighter.moves[$0].name == "Fake Out" && allowed($0) }),
            !attacks.contains(where: { if case .attack(let m, _) = $0 { return m == fake }
                                       return false }) {
             setup.append(.attack(move: fake, target: 0))
@@ -191,6 +200,9 @@ struct TurnGame {
         take(setup)
         take(attacks, attacks.count)
 
+        // Nothing it may throw and nowhere to go: the one choice left is to
+        // Struggle, which the model substitutes for whatever index it is
+        // handed. Offering the first slot is how that gets asked for.
         if out.isEmpty { out.append(.attack(move: 0, target: 0)) }
         return out
     }
