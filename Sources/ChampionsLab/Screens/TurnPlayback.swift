@@ -44,9 +44,14 @@ final class TurnPlayback: ObservableObject {
     @Published var replay: [Board.Step] = []
     @Published var at = 0
     /// How many of the turn's steps have been shown: a row appears in the
-    /// stepper as its blow lands and stays once seen, however far back the
+    /// stepper as its move begins and stays once seen, however far back the
     /// turn is then scrubbed.
     @Published private(set) var seen = 0
+    /// The step whose move is playing right now. The field is held on the
+    /// moment before it until the blow lands, so `at` trails by one while a
+    /// move travels; the stepper lights this instead, so the row that was
+    /// clicked is the row that is lit.
+    @Published private(set) var focus: Int?
     /// Whether the turn was singles, for a step played again later.
     private var singles = false
     /// The board the steps were recorded against, before anything fainted was
@@ -129,7 +134,7 @@ final class TurnPlayback: ObservableObject {
         stopTracks()
         damage = [:]; boosts = [:]; abilities = [:]; partial = [:]
         struck = []; struckTheirs = []
-        replay = []; at = 0; seen = 0; replayBoard = nil
+        replay = []; at = 0; seen = 0; focus = nil; replayBoard = nil
     }
 
     /// Walk a turn's steps and show each move as it happened.
@@ -169,6 +174,7 @@ final class TurnPlayback: ObservableObject {
             scene = nil
             stopTracks()
             damage = [:]; boosts = [:]; abilities = [:]; partial = [:]
+            focus = nil
             // The end of the turn: what the residuals took and gave -- a burn,
             // Leftovers, a Speed Boost -- shown over whoever it happened to,
             // one step at a time, since those steps have no move to play.
@@ -218,6 +224,7 @@ final class TurnPlayback: ObservableObject {
         struck = []; struckTheirs = []
         seen = Swift.max(seen, index + 1)
         let steps = replay
+        focus = nil
         guard steps[index].action != nil else {
             // Nothing to play, but something to show: what the step took and gave.
             at = index
@@ -231,6 +238,7 @@ final class TurnPlayback: ObservableObject {
             return
         }
         at = Swift.max(0, index - 1)
+        focus = index
         task = Task { @MainActor in
             await perform(index, order: 0, in: steps, last: true)
             guard !Task.isCancelled else { return }
@@ -238,6 +246,7 @@ final class TurnPlayback: ObservableObject {
             stopTracks()
             damage = [:]; boosts = [:]; abilities = [:]; partial = [:]
             at = index
+            focus = nil
             task = nil
         }
     }
@@ -294,7 +303,7 @@ final class TurnPlayback: ObservableObject {
         scene = nil
         stopTracks()
         damage = [:]; boosts = [:]; abilities = [:]; partial = [:]
-        replay = []; at = 0; seen = 0; replayBoard = nil
+        replay = []; at = 0; seen = 0; focus = nil; replayBoard = nil
     }
 
     /// One action played: the field held on the moment before it, the move's
@@ -306,7 +315,10 @@ final class TurnPlayback: ObservableObject {
         guard let action = step.action else { return }
         // Hold the field on the state before this action. `replay` and `at`
         // already drive this for the stepper; the playback just walks them.
+        // The step itself is the one playing, and its row comes on now.
         at = Swift.max(0, index - 1)
+        focus = index
+        seen = Swift.max(seen, index + 1)
         // Health before this step: the step before it, or the health the turn
         // started at for the first one.
         let earlier = index > 0 ? steps[index - 1] : nil

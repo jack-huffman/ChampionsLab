@@ -30,7 +30,9 @@ struct TurnStepper: View {
         // The turn shown is the one that just played -- or the one stopped
         // partway for a pivot, which has not been counted yet.
         let played = session.pivoting ? session.turn : session.turn - 1
-        let shown = Array(replay.prefix(max(playback.seen, at + 1)))
+        // The row lit is the step playing, or the one the field rests on.
+        let lit = playback.focus ?? at
+        let shown = Array(replay.prefix(max(playback.seen, lit + 1)))
         return Card {
             VStack(alignment: .leading, spacing: 8) {
                 header(played)
@@ -38,7 +40,7 @@ struct TurnStepper: View {
                     MaybeScroll {
                         VStack(alignment: .leading, spacing: 5) {
                             ForEach(Array(shown.enumerated()), id: \.element.id) { index, step in
-                                row(step, index: index)
+                                row(step, index: index, lit: lit)
                             }
                         }
                         .padding(.bottom, 2)
@@ -49,6 +51,10 @@ struct TurnStepper: View {
                     }
                     .onChange(of: at) { current in
                         guard replay.indices.contains(current) else { return }
+                        withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(replay[current].id, anchor: .bottom) }
+                    }
+                    .onChange(of: playback.focus) { current in
+                        guard let current, replay.indices.contains(current) else { return }
                         withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(replay[current].id, anchor: .bottom) }
                     }
                 }
@@ -105,8 +111,8 @@ struct TurnStepper: View {
 
     /// One step: who acted, what happened, and why -- the log's own shape.
     /// The row being shown on the field is lit; clicking any row shows it.
-    private func row(_ step: Board.Step, index: Int) -> some View {
-        let current = index == at
+    private func row(_ step: Board.Step, index: Int, lit: Int) -> some View {
+        let current = index == lit
         let moments = moments(of: step)
         return Button { playback.replay(step: index) } label: {
             HStack(alignment: .top, spacing: 9) {
