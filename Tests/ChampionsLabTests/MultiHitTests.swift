@@ -20,7 +20,7 @@ final class MultiHitTests: HarnessCase {
         let board = lineup()
         let out = TurnModel.resolve(board,
                                     mine: Play(left: .attack(move: at(board.mine[0], "Dual Wingbeat"), target: 0), right: .pass),
-                                    theirs: Play(left: .pass, right: .pass), rolling: true)
+                                    theirs: Play(left: .pass, right: .pass), rolling: false)
         let step = out.steps.first { $0.action?.move == "Dual Wingbeat" }
         let blows = step?.action?.hits ?? []
         let lost = board.theirs[0].hp - out.theirs[0].hp
@@ -58,7 +58,7 @@ final class MultiHitTests: HarnessCase {
         board.mine[0].build.boosts[Stat.attack.rawValue] = 6
         let flurry = TurnModel.resolve(board,
                                        mine: Play(left: .attack(move: at(board.mine[0], "Dual Wingbeat"), target: 0), right: .pass),
-                                       theirs: Play(left: .pass, right: .pass), rolling: true)
+                                       theirs: Play(left: .pass, right: .pass), rolling: false)
         check("the Sash held the first blow and the second finished it",
               flurry.theirs[0].fainted, "\(flurry.theirs[0].hp)")
         check("the Sash was spent doing it", flurry.theirs[0].build.itemSpent)

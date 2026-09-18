@@ -52,6 +52,8 @@ final class LANService: ObservableObject {
         let hosting: Bool
         let theirName: String
         var singles = false
+        /// My team whole, kept here for the battle; only `mySix` crosses.
+        var myTeam: Team?
         var mySix: Wire.Six?
         var theirSix: Wire.Six?
         var iAmReady = false
@@ -78,6 +80,8 @@ final class LANService: ObservableObject {
     @Published private(set) var peers: [Peer] = []
     @Published private(set) var stage: Stage = .idle
     @Published private(set) var room: Room?
+    /// The battle under way, once the room has started one.
+    @Published private(set) var battle: LANLink?
     /// The last thing worth saying: a decline, a connection lost.
     @Published var note: String?
 
@@ -222,13 +226,23 @@ final class LANService: ObservableObject {
 
     // MARK: - The room
 
-    func chooseTeam(_ six: Wire.Six?) {
+    func chooseTeam(_ team: Team?, rules: Rulebook) {
         guard var room else { return }
+        let six = team.map { Wire.Six(name: $0.name, forms: $0.slots.compactMap { $0.form(in: rules)?.id }) }
+        room.myTeam = team
         room.mySix = six
         room.iAmReady = false
         self.room = room
         send(.six(six))
         send(.ready(false))
+    }
+
+    /// Both ready: the host says so, and both go to Team Preview.
+    func startBattle() {
+        guard let room, room.hosting, room.bothReady, let myTeam = room.myTeam, let theirSix = room.theirSix else { return }
+        send(.start)
+        battle = LANLink(role: .host, theirName: room.theirName, singles: room.singles,
+                         myTeam: myTeam, theirSix: theirSix) { [weak self] in self?.send($0) }
     }
 
     func setReady(_ ready: Bool) {
@@ -315,14 +329,18 @@ final class LANService: ObservableObject {
         case .ready(let ready):
             room?.theyAreReady = ready
         case .leave:
-            lost(stage == .room ? "\(theirName) left the room." : "\(theirName) withdrew.")
-        case .start, .preview, .snapshot, .choice, .sendIn, .pivot:
-            // The battle's messages, for the link once there is one.
-            break
+            lost(battle != nil ? "\(theirName) left the battle."
+                 : stage == .room ? "\(theirName) left the room." : "\(theirName) withdrew.")
+        case .start:
+            guard let room, !room.hosting, let myTeam = room.myTeam, let theirSix = room.theirSix else { return }
+            battle = LANLink(role: .guest, theirName: room.theirName, singles: room.singles,
+                             myTeam: myTeam, theirSix: theirSix) { [weak self] in self?.send($0) }
+        case .preview, .snapshot, .choice, .sendIn, .pivot:
+            battle?.handle(message)
         }
     }
 
-    private func send(_ message: Wire.Message) {
+    func send(_ message: Wire.Message) {
         guard let connection, let frame = try? Wire.frame(message) else { return }
         connection.send(content: frame, completion: .contentProcessed { _ in })
     }
@@ -338,6 +356,7 @@ final class LANService: ObservableObject {
         connection = nil
         inbox = Data()
         room = nil
+        battle = nil
         stage = .idle
     }
 }

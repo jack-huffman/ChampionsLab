@@ -119,7 +119,16 @@ final class BattleSession: ObservableObject {
         let stepsPlayed: Int
     }
     @Published var pausedTurn: PausedTurn?
-    var pivoting: Bool { pausedTurn != nil }
+    var pivoting: Bool { pausedTurn != nil || remotePivot }
+    /// A game between two people: the link carries what the engine and the
+    /// model would otherwise do here, and answers with snapshots.
+    var link: LANLink?
+    /// Waiting on the other player, and for what.
+    @Published var waitingOn: String?
+    /// The other side's turn stopped for our pivot, over the link.
+    @Published var remotePivot = false
+    /// How many steps of the current turn the field has already played.
+    private var shownSteps = 0
     /// Which of the readings the side panel is showing.
     @Published var panel: Panel = .engine
 
@@ -160,6 +169,9 @@ final class BattleSession: ObservableObject {
 
     func think() {
         guard let board else { return }
+        // In a game between two people the engine's advice is the player's
+        // to switch on; off, nothing is searched.
+        if let link, !link.engineEnabled { thinking = false; return }
         thinking = true
         thinkTicket += 1
         let ticket = thinkTicket
@@ -311,6 +323,13 @@ final class BattleSession: ObservableObject {
     /// happens off the main thread and the window keeps drawing while it does.
     func playTurn() {
         guard let current = board, let mine = ordersAsPlay(current), !playing else { return }
+        // Over the link, the orders go to the host and the turn comes back.
+        if let link {
+            playing = true
+            waitingOn = "Waiting for \(link.theirName) to choose..."
+            link.chose(play: mine)
+            return
+        }
         playing = true
         let playedTurn = turn
         Task { @MainActor in
@@ -399,12 +418,84 @@ final class BattleSession: ObservableObject {
     /// The chosen Pokemon comes in for the one that pivoted, and the turn
     /// finishes: the actions that were waiting, then the end of the turn.
     func resumeTurn(bench: Int) {
+        if let link, remotePivot {
+            remotePivot = false
+            sending = []
+            playing = true
+            waitingOn = "Waiting for \(link.theirName)..."
+            link.chose(pivotBench: bench)
+            return
+        }
         guard let paused = pausedTurn, let stopped = board, stopped.pendingPivot != nil else { return }
         pausedTurn = nil
         sending = []
         let next = TurnModel.resume(stopped, sendingIn: bench, rolling: true)
         conclude(next, before: paused.before, orders: paused.orders, stepsPlayed: paused.stepsPlayed)
     }
+
+    /// Replacements chosen for the fallen, over the link: they go to the
+    /// host, and the arrivals come back with the next snapshot.
+    func sendReplacements(_ picks: [(slot: Int, bench: Int)]) {
+        guard let link else { return }
+        sending = []
+        chosenSends = []
+        playing = true
+        waitingOn = "Waiting for \(link.theirName)..."
+        link.chose(replacements: picks)
+    }
+
+    /// A snapshot from the link: the board as this player may see it, the
+    /// turn's steps played from where the field left off, and what is asked.
+    func receive(_ snapshot: Wire.Snapshot) {
+        let view = Board(wired: snapshot.board)
+        let before = board
+        let sameTurn = snapshot.turn == turn && board != nil
+        let from = sameTurn ? Swift.min(shownSteps, view.steps.count) : 0
+        if !sameTurn {
+            log.append(Self.dividerMark + "Turn \(Swift.max(1, snapshot.turn - 1))")
+            shownSteps = 0
+        }
+        // Only what has not been said: the story so far this turn less what
+        // the log already has of it.
+        let said = sameTurn ? shownStory : 0
+        log.append(contentsOf: view.story.dropFirst(Swift.min(said, view.story.count)))
+        shownStory = view.story.count
+        turn = snapshot.turn
+        board = view
+        playing = false
+        waitingOn = nil
+        remotePivot = false
+        pausedTurn = nil
+        sending = []
+        chosenSends = []
+        leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
+        thought = nil; solved = nil
+        if !view.steps.isEmpty {
+            playback.show(view, steps: view.steps, revealed: from)
+            playback.play(view.steps,
+                          hitMine: before.map { Self.hurt(mine: true, view, since: $0) } ?? [],
+                          hitTheirs: before.map { Self.hurt(mine: false, view, since: $0) } ?? [],
+                          singles: view.activeCount == 1, from: from)
+        } else {
+            playback.reset()
+        }
+        shownSteps = view.steps.count
+        switch snapshot.asking {
+        case .orders:
+            think()
+        case .sendIn(let slots):
+            sending = slots
+        case .pivot(let slot):
+            sending = [slot]
+            remotePivot = true
+        case .wait:
+            playing = true
+            waitingOn = "Waiting for \(link?.theirName ?? "the other player")..."
+        case .over(let won):
+            finished = won ? "They have nothing left. You win." : "You have nothing left. They win."
+        }
+    }
+    private var shownStory = 0
 
     /// Everything a finished turn does: the review, the log, replacements
     /// for the fallen, and the steps played out on the field -- from the
@@ -612,6 +703,7 @@ final class BattleSession: ObservableObject {
         playing = false; finished = nil; history = []; review = []; grade = nil
         explaining = nil; pendingReview = nil
         sending = []; chosenSends = []; pausedTurn = nil
+        remotePivot = false; waitingOn = nil; shownSteps = 0; shownStory = 0
         panel = .engine
     }
 

@@ -18,6 +18,16 @@ struct LANView: View {
     @State private var choosing = false
 
     var body: some View {
+        if let battle = lan.battle {
+            // The game itself, on the battle screen, over the link.
+            BattleView(lan: battle)
+                .id(ObjectIdentifier(battle))
+        } else {
+            waitingRoom
+        }
+    }
+
+    private var waitingRoom: some View {
         MaybeScroll {
             VStack(alignment: .leading, spacing: 14) {
                 header
@@ -196,9 +206,20 @@ struct LANView: View {
                         .toggleStyle(.switch).controlSize(.small)
                         .disabled(room.mySix == nil)
                     Spacer()
-                    Text(room.bothReady ? "Both ready. Team Preview and the battle over the connection are the next step of this feature."
-                         : "When both are ready, the battle begins.")
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                    if room.bothReady, room.hosting {
+                        Button {
+                            lan.startBattle()
+                        } label: {
+                            Label("Start battle", systemImage: "flag.2.crossed.fill")
+                                .font(.system(size: 12, weight: .heavy))
+                        }
+                        .buttonStyle(.borderedProminent).tint(Palette.accent)
+                        .keyboardShortcut(.defaultAction)
+                    } else {
+                        Text(room.bothReady ? "Both ready. \(room.theirName) starts the battle."
+                             : "When both are ready, the host starts the battle: Team Preview, then the game.")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
                 }
             }
         }
@@ -235,8 +256,7 @@ struct LANView: View {
                             choosing = false
                             chosenTeamID = id
                             if let team = store.teams.first(where: { $0.id.uuidString == id }) {
-                                lan.chooseTeam(Wire.Six(name: team.name,
-                                                        forms: team.slots.compactMap { $0.form(in: store.rulebook)?.id }))
+                                lan.chooseTeam(team, rules: store.rulebook)
                             }
                         }
                         .environmentObject(store)

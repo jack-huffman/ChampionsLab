@@ -831,9 +831,16 @@ struct CommandDeckView: View {
                         .foregroundStyle(grade.hasPrefix("That is")
                                          ? AnyShapeStyle(Palette.good) : AnyShapeStyle(Palette.warn))
                 }
-                Toggle("Let the engine play me", isOn: $session.watching)
-                    .toggleStyle(.checkbox).controlSize(.small)
-                    .help("The engine gives your orders too, so you can watch a game out and see what it does.")
+                if session.link == nil {
+                    Toggle("Let the engine play me", isOn: $session.watching)
+                        .toggleStyle(.checkbox).controlSize(.small)
+                        .help("The engine gives your orders too, so you can watch a game out and see what it does.")
+                } else if let waiting = session.waitingOn, playing {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text(waiting).font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                }
                 Spacer()
                 Button {
                     session.playTurn()

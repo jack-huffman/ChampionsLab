@@ -202,7 +202,7 @@ struct BattleFieldView: View {
         Card(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 4) {
-                    ForEach(Panel.allCases, id: \.self) { choice in
+                    ForEach(Panel.allCases.filter { visible($0) }, id: \.self) { choice in
                         Button { panel = choice } label: {
                             Text(choice.rawValue)
                                 .font(.system(size: 11, weight: panel == choice ? .semibold : .medium))
@@ -746,6 +746,16 @@ struct BattleFieldView: View {
         out.trickRoom = step.trickRoom
         return out
     }
+    /// The engine's panels are for a game with the engine in it: against the
+    /// app's own opponent always, and over a link when the player has it on.
+    private func visible(_ panel: Panel) -> Bool {
+        guard let link = session.link else { return true }
+        switch panel {
+        case .engine, .theirs: return link.engineEnabled
+        case .review, .log: return true
+        }
+    }
+
     /// The weather, the terrain and the speed control, over the top of the
     /// field. Weather and terrain carry their clocks: they run out, and
     /// knowing when is a turn's plan.

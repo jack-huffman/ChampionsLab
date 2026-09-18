@@ -62,6 +62,10 @@ struct ReplacementView: View {
                             }
                             chosenSends.append((slot: slot, bench: option.index))
                             guard chosenSends.count >= sending.count else { return }
+                            if session.link != nil {
+                                session.sendReplacements(chosenSends)
+                                return
+                            }
                             var next = board
                             next.story = []
                             next.replaceFallen(mine: chosenSends)

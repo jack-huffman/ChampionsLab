@@ -59,6 +59,10 @@ struct BattleView: View {
     private var at: Int { get { playback.at } nonmutating set { playback.at = newValue } }
     private var replayBoard: Board? { get { playback.replayBoard } nonmutating set { playback.replayBoard = newValue } }
 
+    /// The other player, when this game is between two people. Nil against
+    /// the app's own opponent.
+    private let link: LANLink?
+
     @State private var stage: Stage = .versus
     @State private var myTeamID = ""
     @State private var opponentID = ""
@@ -156,6 +160,7 @@ struct BattleView: View {
                                                               singles: false, rules: shared.rulebook))
             }
         }
+        link = nil
         if !previewing.isEmpty { _bringing = State(initialValue: previewing) }
         if playing != nil { _stage = State(initialValue: .battle) }
         // The turn just played, with every step on show, for the stepper.
@@ -165,8 +170,27 @@ struct BattleView: View {
     }
 
 
-    private var myTeam: Team? { store.teams.first { $0.id.uuidString == myTeamID } }
+    /// A game between two people: straight to Team Preview against the six
+    /// they showed, with the session playing over the link.
+    init(lan link: LANLink) {
+        self.link = link
+        let shared = Store.shared
+        let playbackObject = TurnPlayback()
+        _playback = StateObject(wrappedValue: playbackObject)
+        let sessionObject = BattleSession(rules: shared.rulebook, playback: playbackObject)
+        sessionObject.link = link
+        _session = StateObject(wrappedValue: sessionObject)
+        _myTeamID = State(initialValue: link.myTeam.id.uuidString)
+        _stage = State(initialValue: .preview)
+        _singles = State(initialValue: link.singles)
+    }
+
+    private var myTeam: Team? {
+        if let link { return link.myTeam }
+        return store.teams.first { $0.id.uuidString == myTeamID }
+    }
     private var theirTeam: Team? {
+        if let link { return link.theirTeamShown }
         if let meta = store.data.metaTeams.first(where: { $0.id == opponentID }) {
             return store.opponentTeam(meta)
         }
@@ -205,7 +229,9 @@ struct BattleView: View {
             TurnExplainer(review: entry, rules: store.rulebook) { explaining = nil }
                 .environmentObject(store)
         }
-        .onAppear(perform: recallLastMatchup)
+        .onAppear {
+            if let link { link.attach(session) } else { recallLastMatchup() }
+        }
         .onChange(of: session.finished) { result in
             if result != nil { recordGame() }
         }
@@ -233,7 +259,8 @@ struct BattleView: View {
             won: board.isOut(mine: false), turns: max(1, session.turn - 1),
             myTeamID: myTeamID, myTeamName: mine.name,
             myForms: board.mine.map(\.build.form.id),
-            theirID: opponentID, theirName: theirs.name,
+            theirID: link.map { "lan:\($0.theirName)" } ?? opponentID,
+            theirName: link.map { "\(theirs.name) (\($0.theirName))" } ?? theirs.name,
             theirForms: board.theirs.map(\.build.form.id),
             leftOnTable: review.reduce(0) { $0 + $1.lost },
             reviewedTurns: review.count))
@@ -245,6 +272,11 @@ struct BattleView: View {
         session.endGame()
         opening = false; startFlash = false; shown = []; callout = nil
         bringing = []; focused = nil
+        if link != nil {
+            // Out of a game between two people is out of the room too.
+            LANService.shared.leaveRoom()
+            return
+        }
         stage = .versus
     }
 
@@ -253,16 +285,27 @@ struct BattleView: View {
     private var setupBar: some View {
         let ready = myTeam != nil && theirTeam != nil
         return HStack(spacing: 10) {
-            Picker("", selection: $singles) {
-                Text("Doubles").tag(false)
-                Text("Singles").tag(true)
-            }.pickerStyle(.segmented).labelsHidden().frame(width: 150)
-            .onChange(of: singles) { _ in reset() }
+            if let link {
+                // The other player's game: the format is the host's, and the
+                // engine is a switch.
+                Label("vs \(link.theirName)", systemImage: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(link.singles ? "Singles" : "Doubles").font(.system(size: 11)).foregroundStyle(.secondary)
+                Divider().frame(height: 18)
+                EngineSwitch(link: link, session: session)
+                Divider().frame(height: 18)
+            } else {
+                Picker("", selection: $singles) {
+                    Text("Doubles").tag(false)
+                    Text("Singles").tag(true)
+                }.pickerStyle(.segmented).labelsHidden().frame(width: 150)
+                .onChange(of: singles) { _ in reset() }
 
-            Divider().frame(height: 18)
+                Divider().frame(height: 18)
 
-            crumb("Lobby", .versus, symbol: "bolt.fill", enabled: true)
-            crumbArrow
+                crumb("Lobby", .versus, symbol: "bolt.fill", enabled: true)
+                crumbArrow
+            }
             crumb("Team Preview", .preview, symbol: "list.number", enabled: ready)
             crumbArrow
             crumb("Battle", .battle, symbol: "flag.2.crossed", enabled: board != nil)
@@ -453,6 +496,18 @@ struct BattleView: View {
     private func begin() {
         guard let mine = myTeam, let theirs = theirTeam else { return }
         guard bringing.count >= leadCount else { return }
+        if let link {
+            // Over the link the host builds the game once both fours are in,
+            // and the opening comes back as the first snapshot.
+            stage = .battle
+            session.endGame()
+            session.link = link
+            session.playing = true
+            session.waitingOn = "Waiting for \(link.theirName) to choose their \(bringCount)..."
+            link.attach(session)
+            link.chose(bringing: bringing)
+            return
+        }
         stage = .battle
         turn = 1
         finished = nil
@@ -553,3 +608,18 @@ struct BattleView: View {
 
 }
 
+/// The engine's advice, on or off, in a game between two people.
+struct EngineSwitch: View {
+    @ObservedObject var link: LANLink
+    @ObservedObject var session: BattleSession
+
+    var body: some View {
+        Toggle("Enable engine", isOn: $link.engineEnabled)
+            .toggleStyle(.switch).controlSize(.mini)
+            .font(.system(size: 11))
+            .help("The engine's reading of the position and its suggested line. It sees only what you see.")
+            .onChange(of: link.engineEnabled) { on in
+                if on { session.think() } else { session.thinking = false; session.mySide = []; session.theirSide = [] }
+            }
+    }
+}

@@ -47,14 +47,19 @@ it says can rest on information the player could not have.
 The screen is `Screens/LANView.swift`; a request to battle reaches the
 player anywhere in the app as `InviteBanner`, put up by `RootView`.
 
+| `PlayerView.swift` | The board as the other player may see it -- their side whole, this side as the game has shown it -- and the pieces of a board that cross the wire. |
+| `LANLink.swift` | One game from one chair: the host's truth and its turns, the guest's choices, and the snapshot each side is handed after every step of the game. |
+
 ## What is built, and what is next
 
-Built: finding each other, the request and its answer, and the room --
-the host's format, each side's team as the other may see it, each side
-ready.
+Built: finding each other, the request and its answer, the room, Team
+Preview over the connection, the game itself -- every turn resolved on the
+host with real dice and dealt to both screens as a snapshot each may see,
+replacements and pivots asked of whoever decides -- the engine switch, and
+the result into both players' histories.
 
-Next, in order: Team Preview over the connection (each side's four and
-their order, sent to the host); the opening and each turn as a public
-step stream plus a per-side request; replacements and pivots as requests
-to the side that decides; the engine toggle; the result into both
-players' histories.
+Known simplifications, to refine: the other side's health crosses as the
+number rather than the percentage the game shows; the opening's arrivals
+come as one snapshot rather than one at a time; and the engine's advice
+over a link reads the other side's known moves only, so it is thinner than
+against the app's own opponent.
