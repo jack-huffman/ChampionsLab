@@ -58,6 +58,10 @@ final class TurnPlayback: ObservableObject {
     /// replaced. Stepping through the finished board would map the health of a
     /// Pokemon that fainted onto the one that came in for it.
     @Published var replayBoard: Board?
+    /// The board the turn began on: what the first step is measured against.
+    /// Measured against the board the turn ended on, the first step showed
+    /// the inverse of everything that happened after it.
+    private(set) var startBoard: Board?
     /// What each Pokemon just lost, floating off it as the blow lands. The
     /// number is the thing a player actually wants at that moment and the log
     /// is the last place to look for it.
@@ -119,11 +123,23 @@ final class TurnPlayback: ObservableObject {
 
     /// A turn's steps to walk, and the board they were recorded against.
     /// `revealed` is for a screen that wants the whole turn on show at once.
-    func show(_ recorded: Board, steps: [Board.Step], revealed: Int = 0) {
+    func show(_ recorded: Board, steps: [Board.Step], before: Board? = nil, revealed: Int = 0) {
         replay = steps
         replayBoard = recorded
+        startBoard = before
         at = revealed > 0 ? revealed - 1 : 0
         seen = revealed
+    }
+
+    /// A Pokemon's health before a step: the step before it, or the board
+    /// the turn began on for the first, or the step's own if neither is known.
+    private func health(before index: Int, in steps: [Board.Step], mine: Bool, slot: Int) -> Int {
+        let step = steps[index]
+        let own = (mine ? step.myHP : step.theirHP)[safe: slot] ?? 0
+        if index > 0 {
+            return (mine ? steps[index - 1].myHP : steps[index - 1].theirHP)[safe: slot] ?? own
+        }
+        return (mine ? startBoard?.mine : startBoard?.theirs)?[safe: slot]?.hp ?? own
     }
 
     /// Stop whatever is playing and clear everything it put on screen. What a
@@ -132,9 +148,9 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]; boosts = [:]; abilities = [:]; partial = [:]
+        damage = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
         struck = []; struckTheirs = []
-        replay = []; at = 0; seen = 0; focus = nil; replayBoard = nil
+        replay = []; at = 0; seen = 0; focus = nil; replayBoard = nil; startBoard = nil
     }
 
     /// Walk a turn's steps and show each move as it happened.
@@ -173,7 +189,7 @@ final class TurnPlayback: ObservableObject {
             guard !Task.isCancelled else { return }
             scene = nil
             stopTracks()
-            damage = [:]; boosts = [:]; abilities = [:]; partial = [:]
+            damage = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
             focus = nil
             // The end of the turn: what the residuals took and gave -- a burn,
             // Leftovers, a Speed Boost -- shown over whoever it happened to,
@@ -183,10 +199,13 @@ final class TurnPlayback: ObservableObject {
                 guard !Task.isCancelled else { return }
                 at = index
                 seen = Swift.max(seen, index + 1)
-                withAnimation(.easeOut(duration: 0.18)) { land(index, in: steps) }
+                var rest: [Phase] = []
+                withAnimation(.easeOut(duration: 0.18)) { rest = land(index, in: steps) }
+                await show(rest, firstDelay: 0)
+                guard !Task.isCancelled else { return }
                 try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1.6 * 1_000_000_000))
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:]; partial = [:] }
+                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
             }
             // Rest on the last step rather than past it: the field shows the end
             // of the turn, and the stepper still works from there, which is how
@@ -220,7 +239,7 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]; boosts = [:]; abilities = [:]; partial = [:]
+        damage = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
         struck = []; struckTheirs = []
         seen = Swift.max(seen, index + 1)
         let steps = replay
@@ -228,11 +247,14 @@ final class TurnPlayback: ObservableObject {
         guard steps[index].action != nil else {
             // Nothing to play, but something to show: what the step took and gave.
             at = index
-            withAnimation(.easeOut(duration: 0.18)) { land(index, in: steps) }
+            var rest: [Phase] = []
+            withAnimation(.easeOut(duration: 0.18)) { rest = land(index, in: steps) }
             task = Task { @MainActor in
+                await show(rest, firstDelay: 0)
+                guard !Task.isCancelled else { return }
                 try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1.6 * 1_000_000_000))
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:]; partial = [:] }
+                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
                 task = nil
             }
             return
@@ -244,55 +266,174 @@ final class TurnPlayback: ObservableObject {
             guard !Task.isCancelled else { return }
             scene = nil
             stopTracks()
-            damage = [:]; boosts = [:]; abilities = [:]; partial = [:]
+            damage = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
             at = index
             focus = nil
             task = nil
         }
     }
 
-    /// What a step changed, shown over whoever it changed: health lost, stages
-    /// moved, abilities that went off. Health and stages are the difference
-    /// from the step before -- or from the board the turn started on, for the
-    /// first -- and the abilities are the step's own record.
-    private func land(_ index: Int, in steps: [Board.Step]) {
-        let step = steps[index]
-        let earlier = index > 0 ? steps[index - 1] : nil
-        var took: [Seat: Int] = [:]
-        var moved: [Seat: [StatChange]] = [:]
-        for mineSide in [true, false] {
-            let hp = mineSide ? step.myHP : step.theirHP
-            let stages = mineSide ? step.myBoosts : step.theirBoosts
-            for slot in hp.indices where slot < 2 {
-                let seat = Seat(mine: mineSide, slot: slot)
-                let hpBefore: Int? = earlier.map { mineSide ? $0.myHP : $0.theirHP }?[safe: slot]
-                    ?? (mineSide ? replayBoard?.mine : replayBoard?.theirs)?[safe: slot]?.hp
-                if let hpBefore, hp[slot] < hpBefore { took[seat] = hpBefore - hp[slot] }
-                let before: [Int]? = earlier.map { mineSide ? $0.myBoosts : $0.theirBoosts }?[safe: slot]
-                    ?? (mineSide ? replayBoard?.mine : replayBoard?.theirs)?[safe: slot]?.build.boosts
-                guard let before, stages.indices.contains(slot) else { continue }
-                let after = stages[slot]
-                let changes = after.indices.filter { $0 < before.count && after[$0] != before[$0] }
-                    .map { StatChange(stat: $0, delta: after[$0] - before[$0]) }
-                if !changes.isEmpty { moved[seat] = changes }
+    /// One cause and what it did: an Intimidate and the drops it took, then,
+    /// as a phase of its own, the Defiant that answered and the stages it
+    /// raised. A step with one cause is one phase.
+    struct Phase: Equatable {
+        var cause: String?
+        var boosts: [Seat: [StatChange]] = [:]
+        var abilities: [Seat: [String]] = [:]
+        var statuses: [Seat: Ailment] = [:]
+        var isEmpty: Bool { boosts.isEmpty && abilities.isEmpty && statuses.isEmpty }
+    }
+
+    /// What a step caused that the field has not shown yet. The board the
+    /// field draws already has it; the field takes it back off until the
+    /// beat that shows it, so a Close Combat's drops fall after the punches.
+    struct Withheld: Equatable {
+        var boosts: [Seat: [StatChange]] = [:]
+        var statuses: [Seat: Ailment] = [:]
+        var isEmpty: Bool { boosts.isEmpty && statuses.isEmpty }
+
+        mutating func add(_ phase: Phase) {
+            for (seat, changes) in phase.boosts { boosts[seat, default: []].append(contentsOf: changes) }
+            for (seat, ailment) in phase.statuses { statuses[seat] = ailment }
+        }
+        mutating func subtract(_ phase: Phase) {
+            for (seat, changes) in phase.boosts {
+                var left = boosts[seat] ?? []
+                for change in changes { if let at = left.firstIndex(of: change) { left.remove(at: at) } }
+                boosts[seat] = left.isEmpty ? nil : left
+            }
+            for seat in phase.statuses.keys { statuses[seat] = nil }
+        }
+    }
+    @Published private(set) var pending = Withheld()
+    /// The status just given, named over the Pokemon for its beat.
+    @Published private(set) var statusShown: [Seat: Ailment] = [:]
+
+    /// A step's events, in order, cut into phases: a stage moving for a new
+    /// cause starts a phase, and an ability firing goes with the phase it
+    /// caused -- the one named as its cause, or the one it opens.
+    func phases(of step: Board.Step) -> [Phase] {
+        var out: [Phase] = []
+        var current = Phase()
+        // The last ability that fired on its own account -- an Intimidate --
+        // is the cause of every stage that moves for no named reason after
+        // it, even across the answers in between.
+        var implied: Board.Step.Firing?
+        func close() { if !current.isEmpty { out.append(current) }; current = Phase() }
+        func attach(_ firing: Board.Step.Firing) {
+            let seat = Seat(mine: firing.mine, slot: firing.slot)
+            if !(current.abilities[seat] ?? []).contains(firing.name) {
+                current.abilities[seat, default: []].append(firing.name)
             }
         }
-        var fired: [Seat: [String]] = [:]
-        for firing in step.abilities where firing.slot < 2 {
-            fired[Seat(mine: firing.mine, slot: firing.slot), default: []].append(firing.name)
+        for event in step.events {
+            switch event {
+            case .stat(let mine, let slot, let stat, let delta, let cause):
+                guard slot < 2, delta != 0 else { continue }
+                let want = cause ?? implied?.name
+                if !current.isEmpty, current.cause != want {
+                    close()
+                    current.cause = want
+                    if cause == nil, let implied { attach(implied) }
+                } else if current.cause == nil {
+                    current.cause = want
+                }
+                current.boosts[Seat(mine: mine, slot: slot), default: []].append(StatChange(stat: stat, delta: delta))
+            case .status(let mine, let slot, let ailment):
+                // A status is a beat of its own.
+                guard slot < 2, ailment != .none else { continue }
+                close()
+                current.cause = ailment.rawValue
+                current.statuses[Seat(mine: mine, slot: slot)] = ailment
+                close()
+            case .ability(let firing):
+                guard firing.slot < 2 else { continue }
+                if current.cause == firing.name {
+                    // Named as the cause of what just moved: it goes with it.
+                    attach(firing)
+                } else if current.isEmpty || current.cause == nil {
+                    // Opens a phase, or explains stages that moved for no
+                    // named reason.
+                    current.cause = firing.name
+                    implied = firing
+                    attach(firing)
+                } else {
+                    close()
+                    current.cause = firing.name
+                    implied = firing
+                    attach(firing)
+                }
+            }
+        }
+        close()
+        return out
+    }
+
+    /// What a step took, shown over whoever it was taken from: the health
+    /// lost, as the difference from the step before -- or from the board the
+    /// turn started on, for the first. Everything else the step caused is
+    /// withheld and returned as phases, to be shown a beat at a time after.
+    @discardableResult
+    private func land(_ index: Int, in steps: [Board.Step]) -> [Phase] {
+        let step = steps[index]
+        var took: [Seat: Int] = [:]
+        for mineSide in [true, false] {
+            let hp = mineSide ? step.myHP : step.theirHP
+            for slot in hp.indices where slot < 2 {
+                let before = health(before: index, in: steps, mine: mineSide, slot: slot)
+                if hp[slot] < before { took[Seat(mine: mineSide, slot: slot)] = before - hp[slot] }
+            }
+        }
+        var phases = phases(of: step)
+        if phases.isEmpty {
+            // A step that moved nothing through the one door still names what
+            // fired.
+            var fired: [Seat: [String]] = [:]
+            for firing in step.abilities where firing.slot < 2 {
+                fired[Seat(mine: firing.mine, slot: firing.slot), default: []].append(firing.name)
+            }
+            if !fired.isEmpty { phases = [Phase(cause: nil, boosts: [:], abilities: fired)] }
         }
         damage = took
-        boosts = moved
-        abilities = fired
+        var withheld = Withheld()
+        for phase in phases { withheld.add(phase) }
+        pending = withheld
+        return phases
+    }
+
+    /// The beat between one cause and the next.
+    static let betweenPhases: TimeInterval = 0.8
+
+    /// The phases, each shown for a beat: the first after `firstDelay`, the
+    /// rest a beat apart. What a phase shows comes off what is withheld.
+    private func show(_ phases: [Phase], firstDelay: TimeInterval) async {
+        for (order, phase) in phases.enumerated() {
+            let wait = order == 0 ? firstDelay : Self.betweenPhases
+            if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.18)) {
+                boosts = phase.boosts
+                abilities = phase.abilities
+                statusShown = phase.statuses
+                pending.subtract(phase)
+            }
+        }
     }
 
     /// Stages moved and abilities fired outside a turn -- the leads coming
-    /// out, an Intimidate landing -- shown for a moment over the Pokemon.
-    func flash(boosts moved: [Seat: [StatChange]], abilities fired: [Seat: [String]]) {
-        withAnimation(.easeOut(duration: 0.18)) { boosts = moved; abilities = fired }
+    /// out, an Intimidate landing and the Defiant answering it -- shown a
+    /// cause at a time over the Pokemon.
+    func flash(_ steps: [Board.Step]) {
+        let phases = steps.flatMap { self.phases(of: $0) }
+        guard !phases.isEmpty else { return }
+        var withheld = Withheld()
+        for phase in phases { withheld.add(phase) }
+        pending = withheld
         Task { @MainActor in
+            await show(phases, firstDelay: 0)
             try? await Task.sleep(nanoseconds: 1_200_000_000)
-            withAnimation(.easeIn(duration: 0.2)) { boosts = [:]; abilities = [:] }
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.2)) { boosts = [:]; abilities = [:]; statusShown = [:]; pending = Withheld() }
         }
     }
 
@@ -302,8 +443,8 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]; boosts = [:]; abilities = [:]; partial = [:]
-        replay = []; at = 0; seen = 0; focus = nil; replayBoard = nil
+        damage = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
+        replay = []; at = 0; seen = 0; focus = nil; replayBoard = nil; startBoard = nil
     }
 
     /// One action played: the field held on the moment before it, the move's
@@ -319,19 +460,18 @@ final class TurnPlayback: ObservableObject {
         at = Swift.max(0, index - 1)
         focus = index
         seen = Swift.max(seen, index + 1)
-        // Health before this step: the step before it, or the health the turn
-        // started at for the first one.
-        let earlier = index > 0 ? steps[index - 1] : nil
+        // Health before this step: the step before it, or the board the turn
+        // began on for the first one.
         var reached: [Seat] = []
         for slot in step.myHP.indices where slot < 2 {
-            let was = earlier?.myHP.indices.contains(slot) == true
-                ? earlier!.myHP[slot] : step.myHP[slot]
-            if step.myHP[slot] < was { reached.append(Seat(mine: true, slot: slot)) }
+            if step.myHP[slot] < health(before: index, in: steps, mine: true, slot: slot) {
+                reached.append(Seat(mine: true, slot: slot))
+            }
         }
         for slot in step.theirHP.indices where slot < 2 {
-            let was = earlier?.theirHP.indices.contains(slot) == true
-                ? earlier!.theirHP[slot] : step.theirHP[slot]
-            if step.theirHP[slot] < was { reached.append(Seat(mine: false, slot: slot)) }
+            if step.theirHP[slot] < health(before: index, in: steps, mine: false, slot: slot) {
+                reached.append(Seat(mine: false, slot: slot))
+            }
         }
         // A move never animates as reaching the Pokémon that used it, even
         // when that Pokémon lost health doing it: recoil, a Life Orb and Belly
@@ -345,6 +485,8 @@ final class TurnPlayback: ObservableObject {
         // down between them. One target, as every flurry in the game has.
         let blows = action.hits
         let staged: (impact: TimeInterval, total: TimeInterval)
+        // What the move caused besides the blow, to show after it.
+        var caused: [Phase] = []
         if blows.count > 1, reached.count == 1, let target = reached.first {
             let each = Swift.max(0.32, Swift.min(0.75, 1.9 / Double(blows.count)))
             var soFar = 0
@@ -367,7 +509,7 @@ final class TurnPlayback: ObservableObject {
             // The step's own record for everything else the move did; the
             // number stays the last blow's, since the bar shows the whole.
             withAnimation(.easeOut(duration: 0.18)) {
-                land(index, in: steps)
+                caused = land(index, in: steps)
                 damage = [target: blows.last ?? 0]
                 partial = [:]
             }
@@ -381,20 +523,26 @@ final class TurnPlayback: ObservableObject {
             at = index
             seen = Swift.max(seen, index + 1)
             // The blow lands: show what it took and what it moved, from the same
-            // differences the targets were worked out from.
-            withAnimation(.easeOut(duration: 0.18)) { land(index, in: steps); hitNumber += 1 }
+            // differences the targets were worked out from -- then, a beat
+            // each, whatever else the step caused: the Defiant that answered
+            // an Intimidate, the Weakness Policy that went off.
+            withAnimation(.easeOut(duration: 0.18)) { caused = land(index, in: steps); hitNumber += 1 }
         }
         // The rest of the move, and then it is over.
         try? await Task.sleep(
             nanoseconds: UInt64(max(0, staged.total - staged.impact) * 1_000_000_000))
         guard !Task.isCancelled else { return }
         // Take the picture away but leave the number: what is worth looking
-        // at after a move has landed is what it did.
+        // at after a move has landed is what it did -- and then, a beat each,
+        // what it caused: the drops a Close Combat costs, the burn a Scald
+        // gave, the Defiant that answered.
         scene = nil
         stopTracks()
+        await show(caused, firstDelay: 0.3)
+        guard !Task.isCancelled else { return }
         try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1_000_000_000))
         guard !Task.isCancelled else { return }
-        withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:]; partial = [:] }
+        withAnimation(.easeIn(duration: 0.2)) { damage = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
         if !last {
             try? await Task.sleep(nanoseconds: UInt64(Self.betweenActions * 1_000_000_000))
         }

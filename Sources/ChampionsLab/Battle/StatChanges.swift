@@ -115,6 +115,7 @@ enum StatChanges {
             guard after != before else { continue }
             if onMine { board.mine[slot].build.boosts[stat.rawValue] = after }
             else { board.theirs[slot].build.boosts[stat.rawValue] = after }
+            board.recordStat(mine: onMine, slot: slot, stat: stat.rawValue, delta: after - before, cause: because)
             let word = abs(amount) >= 2 ? "\(stat.short) sharply" : stat.short
             if amount > 0 { rose.append(word) } else { fell.append(word) }
         }

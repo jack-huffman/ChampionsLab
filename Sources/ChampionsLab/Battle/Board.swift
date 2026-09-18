@@ -591,6 +591,16 @@ struct Board {
             let name: String
         }
         var abilities: [Firing] = []
+        /// What happened in the step, in order: an ability going off, a stage
+        /// moving. A drop and the ability that answers it are two events with
+        /// two causes, so the field can show them one after the other rather
+        /// than netted into one.
+        enum Event: Equatable {
+            case ability(Firing)
+            case stat(mine: Bool, slot: Int, stat: Int, delta: Int, cause: String?)
+            case status(mine: Bool, slot: Int, ailment: Ailment)
+        }
+        var events: [Event] = []
         var myStatus: [Ailment] = []
         var theirStatus: [Ailment] = []
         var myConfused: [Bool] = []
@@ -709,12 +719,60 @@ struct Board {
         acting = action
         gathering = []
         leftThisStep = false
+        markStepStart()
+    }
+
+    private mutating func markStepStart() {
+        stepStart = StepStart(mine: mine.map(\.build.boosts), theirs: theirs.map(\.build.boosts),
+                              myStatus: mine.map(\.status), theirStatus: theirs.map(\.status))
+    }
+
+    /// Whatever moved since the step began that no door recorded.
+    private mutating func reconcileEvents() {
+        guard let start = stepStart else { return }
+        for mineSide in [true, false] {
+            let team = mineSide ? mine : theirs
+            let was = mineSide ? start.mine : start.theirs
+            let wasStatus = mineSide ? start.myStatus : start.theirStatus
+            for slot in team.indices where slot < was.count {
+                for stat in team[slot].build.boosts.indices where stat < was[slot].count {
+                    let moved = team[slot].build.boosts[stat] - was[slot][stat]
+                    let recorded = events.reduce(0) { sum, event in
+                        if case .stat(let m, let s, let st, let delta, _) = event, m == mineSide, s == slot, st == stat {
+                            return sum + delta
+                        }
+                        return sum
+                    }
+                    if moved - recorded != 0 {
+                        events.append(.stat(mine: mineSide, slot: slot, stat: stat, delta: moved - recorded, cause: nil))
+                    }
+                }
+                if slot < wasStatus.count, team[slot].status != wasStatus[slot], team[slot].status != .none,
+                   !events.contains(.status(mine: mineSide, slot: slot, ailment: team[slot].status)) {
+                    events.append(.status(mine: mineSide, slot: slot, ailment: team[slot].status))
+                }
+            }
+        }
     }
 
     /// The abilities that have fired since the step began, off the notes.
     /// Not private: a private stored property would make the memberwise
     /// initialiser private too, and a board is rebuilt from the wire with it.
     var firing: [Step.Firing] = []
+    /// Everything that happened since the step began, in order.
+    var events: [Step.Event] = []
+    /// Where every stage and status stood when the step began. At the close,
+    /// whatever moved without going through `StatChanges.change` -- a Belly
+    /// Drum straight to six, a Haze, a switch resetting -- is put on the
+    /// record from the difference, so the field can never show a stage
+    /// moving the wrong way, or not at all, for want of a door.
+    struct StepStart: Equatable {
+        var mine: [[Int]]
+        var theirs: [[Int]]
+        var myStatus: [Ailment]
+        var theirStatus: [Ailment]
+    }
+    var stepStart: StepStart?
 
     /// The action being gathered never happened, and this is why. One door,
     /// so the playback learns it from the same place the log does.
@@ -732,7 +790,8 @@ struct Board {
     }
 
     private mutating func snapshot(_ text: String) -> Step {
-        defer { firing = [] }
+        reconcileEvents()
+        defer { firing = []; events = []; markStepStart() }
         return Step(text: text, action: acting,
                     myHP: mine.map(\.hp), theirHP: theirs.map(\.hp),
                     myForms: mine.map(\.build.form.id),
@@ -740,7 +799,7 @@ struct Board {
                     field: field, myTailwind: myTailwind,
                     theirTailwind: theirTailwind, trickRoom: trickRoom,
                     myBoosts: mine.map(\.build.boosts), theirBoosts: theirs.map(\.build.boosts),
-                    abilities: firing,
+                    abilities: firing, events: events,
                     myStatus: mine.map(\.status), theirStatus: theirs.map(\.status),
                     myConfused: mine.map(\.isConfused), theirConfused: theirs.map(\.isConfused))
     }
@@ -754,6 +813,7 @@ struct Board {
         story.append(text)
         let fired = abilitiesNamed(in: text)
         firing.append(contentsOf: fired.filter { !firing.contains($0) })
+        events.append(contentsOf: fired.filter { !events.contains(.ability($0)) }.map(Step.Event.ability))
         // Said in the open is shown to the other side.
         for hit in fired {
             if hit.mine { mine[hit.slot].abilityRevealed = true } else { theirs[hit.slot].abilityRevealed = true }
@@ -799,6 +859,16 @@ struct Board {
             }
         }
         return out
+    }
+
+    /// A stage moved, for the step's record of what happened in what order.
+    mutating func recordStat(mine side: Bool, slot: Int, stat: Int, delta: Int, cause: String?) {
+        events.append(.stat(mine: side, slot: slot, stat: stat, delta: delta, cause: cause))
+    }
+
+    /// A status given, for the same record.
+    mutating func recordStatus(mine side: Bool, slot: Int, ailment: Ailment) {
+        events.append(.status(mine: side, slot: slot, ailment: ailment))
     }
 
     /// A move declared is a move the other side has seen.
@@ -1236,7 +1306,20 @@ extension Board.Step: Codable {
     /// Everything but the id, which is the step's own and fresh on each side.
     enum CodingKeys: String, CodingKey {
         case text, action, myHP, theirHP, myForms, theirForms, field, myTailwind, theirTailwind,
-             trickRoom, myBoosts, theirBoosts, abilities, myStatus, theirStatus, myConfused, theirConfused
+             trickRoom, myBoosts, theirBoosts, abilities, events, myStatus, theirStatus, myConfused, theirConfused
+    }
+}
+extension Board.Step.Event: Codable {
+    /// The same event from the other chair.
+    var flipped: Board.Step.Event {
+        switch self {
+        case .ability(let firing):
+            return .ability(Board.Step.Firing(mine: !firing.mine, slot: firing.slot, name: firing.name))
+        case .stat(let mine, let slot, let stat, let delta, let cause):
+            return .stat(mine: !mine, slot: slot, stat: stat, delta: delta, cause: cause)
+        case .status(let mine, let slot, let ailment):
+            return .status(mine: !mine, slot: slot, ailment: ailment)
+        }
     }
 }
 
@@ -1264,6 +1347,7 @@ extension Board.Step {
                              trickRoom: trickRoom,
                              myBoosts: theirBoosts, theirBoosts: myBoosts,
                              abilities: abilities.map { Firing(mine: !$0.mine, slot: $0.slot, name: $0.name) },
+                             events: events.map(\.flipped),
                              myStatus: theirStatus, theirStatus: myStatus,
                              myConfused: theirConfused, theirConfused: myConfused)
         out.action = action?.flipped

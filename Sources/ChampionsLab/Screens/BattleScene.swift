@@ -198,6 +198,15 @@ extension BattleFieldView {
                     .transition(.asymmetric(insertion: .offset(y: 10).combined(with: .opacity),
                                             removal: .opacity))
                 }
+                if let status = playback.statusShown[seat] {
+                    Text(status.rawValue.prefix(1).uppercased() + status.rawValue.dropFirst())
+                        .font(.system(size: max(10, 9 * stage.k), weight: .heavy, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(statusTint(status)))
+                        .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
+                        .transition(.asymmetric(insertion: .scale(scale: 0.7).combined(with: .opacity), removal: .opacity))
+                }
                 if let fired = playback.abilities[seat], !fired.isEmpty {
                     ForEach(fired, id: \.self) { name in
                         HStack(spacing: 4) {

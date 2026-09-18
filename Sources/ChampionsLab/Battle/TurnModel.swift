@@ -148,9 +148,11 @@ enum TurnModel {
             if entry.mine {
                 Switching.megaEvolve(&out.mine, slot: entry.slot, opposing: &out.theirs,
                            field: &out.field)
+                Switching.intimidate(from: true, slot: entry.slot, board: &out)
             } else {
                 Switching.megaEvolve(&out.theirs, slot: entry.slot, opposing: &out.mine,
                            field: &out.field)
+                Switching.intimidate(from: false, slot: entry.slot, board: &out)
             }
             out.fieldSettled(from: before)
         }

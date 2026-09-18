@@ -80,47 +80,10 @@ enum Switching {
             team[slot].build.ability = taken.build.ability
             return "\(name)'s Trace copied \(taken.build.form.formLabel)'s \(taken.build.ability)."
         case "Intimidate":
-            var cut: [String] = [], shrugged: [String] = [], rallied: [String] = []
-            for index in opposing.indices.prefix(2) where !opposing[index].fainted {
-                let other = opposing[index].build.form.formLabel
-                switch opposing[index].build.ability {
-                case "Clear Body", "Hyper Cutter", "Inner Focus", "White Smoke",
-                     "Full Metal Body", "Own Tempo", "Oblivious", "Scrappy":
-                    shrugged.append(other)
-                case "Guard Dog", "Contrary":
-                    // Turns the drop into a raise.
-                    opposing[index].build.boosts[Stat.attack.rawValue] =
-                        Swift.min(6, opposing[index].build.boosts[Stat.attack.rawValue] + 1)
-                    rallied.append("\(other)'s \(opposing[index].build.ability) turned it into a raise")
-                case "Defiant":
-                    // The drop lands, then Defiant answers with two stages.
-                    opposing[index].build.boosts[Stat.attack.rawValue] =
-                        Swift.min(6, opposing[index].build.boosts[Stat.attack.rawValue] + 1)
-                    rallied.append("\(other)'s Defiant answered with two stages of Attack")
-                case "Competitive":
-                    opposing[index].build.boosts[Stat.attack.rawValue] =
-                        Swift.max(-6, opposing[index].build.boosts[Stat.attack.rawValue] - 1)
-                    opposing[index].build.boosts[Stat.spAttack.rawValue] =
-                        Swift.min(6, opposing[index].build.boosts[Stat.spAttack.rawValue] + 2)
-                    cut.append(other)
-                    rallied.append("\(other)'s Competitive answered with two stages of Special Attack")
-                default:
-                    opposing[index].build.boosts[Stat.attack.rawValue] =
-                        Swift.max(-6, opposing[index].build.boosts[Stat.attack.rawValue] - 1)
-                    cut.append(other)
-                }
-            }
-            var parts: [String] = []
-            if !cut.isEmpty { parts.append("cut \(cut.joined(separator: " and "))'s Attack") }
-            if !shrugged.isEmpty { parts.append("\(shrugged.joined(separator: " and ")) shrugged it off") }
-            parts += rallied
-            var herbs: [String] = []
-            for index in opposing.indices.prefix(2) {
-                if let herb = StatChanges.whiteHerb(&opposing[index]) { herbs.append(herb) }
-            }
-            guard !parts.isEmpty else { return nil }
-            return "\(name)'s Intimidate " + parts.joined(separator: "; ") + "."
-                + (herbs.isEmpty ? "" : " " + herbs.joined(separator: " "))
+            // On the board, not on a copy of the two teams, through the one
+            // door for a stage: `intimidate(from:slot:board:)`, which every
+            // arrival calls once the board is written back.
+            return nil
         case "Hospitality":
             // A quarter of the partner's health, the moment it walks in.
             let partner = slot == 0 ? 1 : 0
@@ -246,10 +209,52 @@ enum Switching {
         if side { board.mine = team; board.theirs = opposing } else { board.theirs = team; board.mine = opposing }
         board.field = field
         board.takeHazards(mine: side, slot: active)
+        intimidate(from: side, slot: active, board: &board)
         team = side ? board.mine : board.theirs
         opposing = side ? board.theirs : board.mine
         field = board.field
         return said
+    }
+
+    /// Intimidate, on the board rather than on a copy of the two teams, so
+    /// its drops go through StatChanges.change like every other stage: that
+    /// is where Contrary, Defiant, Competitive, Clear Body and White Herb
+    /// answer from, and it puts the drop and each answer on the step's
+    /// record as its own event, in order -- the drop, then the Defiant. What
+    /// only Intimidate meets lives here: the abilities that shrug it off,
+    /// and Guard Dog, which takes the raise instead.
+    static func intimidate(from side: Bool, slot: Int, board: inout Board) {
+        let team = side ? board.mine : board.theirs
+        guard team.indices.contains(slot), !team[slot].fainted,
+              team[slot].build.ability == "Intimidate" else { return }
+        let name = team[slot].build.form.formLabel
+        let opposing = side ? board.theirs : board.mine
+        var shrugged: [String] = [], targets: [Int] = [], guardDogs: [Int] = []
+        for index in opposing.indices.prefix(board.activeCount) where !opposing[index].fainted {
+            switch opposing[index].build.ability {
+            case "Hyper Cutter", "Inner Focus", "Own Tempo", "Oblivious", "Scrappy":
+                shrugged.append(opposing[index].build.form.formLabel)
+            case "Guard Dog":
+                guardDogs.append(index)
+            default:
+                targets.append(index)
+            }
+        }
+        guard !targets.isEmpty || !guardDogs.isEmpty || !shrugged.isEmpty else { return }
+        // Said first, so what follows is read as its doing.
+        board.note(shrugged.isEmpty ? "\(name)'s Intimidate."
+                   : "\(name)'s Intimidate; \(shrugged.joined(separator: " and ")) shrugged it off.")
+        for index in targets {
+            StatChanges.applyDrops([.attack: 1], toMine: !side, slot: index, board: &board)
+        }
+        for index in guardDogs {
+            StatChanges.change([.attack: 1], onMine: !side, slot: index, board: &board, because: "Guard Dog")
+        }
+        // A White Herb puts the drop back.
+        for index in opposing.indices.prefix(board.activeCount) {
+            let herb = side ? StatChanges.whiteHerb(&board.theirs[index]) : StatChanges.whiteHerb(&board.mine[index])
+            if let herb { board.note(herb) }
+        }
     }
 
     /// Emergency Exit and Wimp Out: dropping below half health sends the
@@ -395,6 +400,7 @@ extension Board {
                                                  slot: slot, opposing: &theirs, field: &field) {
                 note(said)
             }
+            Switching.intimidate(from: true, slot: slot, board: &self)
         } else {
             theirs[slot].justArrived = true
             theirs[slot].arrivedThisTurn = true
@@ -405,6 +411,7 @@ extension Board {
                                                  slot: slot, opposing: &mine, field: &field) {
                 note(said)
             }
+            Switching.intimidate(from: false, slot: slot, board: &self)
         }
         fieldSettled(from: before)
         terrainSeeds()

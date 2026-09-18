@@ -216,6 +216,7 @@ enum Ailments {
             board.theirs[slot].asleepFor = nap
             board.theirs[slot].frozenFor = frozen
         }
+        board.recordStatus(mine: onMine, slot: slot, ailment: ailment)
         board.note("\(name) was \(ailment.rawValue)" + (because.map { " — \($0)." } ?? "."))
         // Synchronize hands the condition straight back, whoever caused it.
         synchronize(ailment, from: onMine, slot: slot, onto: byMine, slot: bySlot, board: &board)

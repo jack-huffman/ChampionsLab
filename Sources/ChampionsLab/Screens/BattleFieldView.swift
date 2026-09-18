@@ -80,6 +80,21 @@ struct BattleFieldView: View {
                 board.theirs[seat.slot].hp = max(0, board.theirs[seat.slot].hp - taken)
             }
         }
+        // What the step caused that has not had its beat yet stays off the
+        // board: the stages it moved, the status it gave.
+        for (seat, changes) in playback.pending.boosts {
+            for change in changes where (0..<6).contains(change.stat) {
+                if seat.mine, board.mine.indices.contains(seat.slot) {
+                    board.mine[seat.slot].build.boosts[change.stat] = max(-6, min(6, board.mine[seat.slot].build.boosts[change.stat] - change.delta))
+                } else if !seat.mine, board.theirs.indices.contains(seat.slot) {
+                    board.theirs[seat.slot].build.boosts[change.stat] = max(-6, min(6, board.theirs[seat.slot].build.boosts[change.stat] - change.delta))
+                }
+            }
+        }
+        for seat in playback.pending.statuses.keys {
+            if seat.mine, board.mine.indices.contains(seat.slot) { board.mine[seat.slot].status = .none }
+            else if !seat.mine, board.theirs.indices.contains(seat.slot) { board.theirs[seat.slot].status = .none }
+        }
         // Half the window is the field, half is what you are doing about it,
         // and the deck on the left is as tall as the readings on the right.
         // A turn should never need scrolling to play.

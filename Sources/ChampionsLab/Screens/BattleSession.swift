@@ -402,7 +402,7 @@ final class BattleSession: ObservableObject {
         if let pivot = next.pendingPivot {
             pausedTurn = PausedTurn(before: current, orders: orders, stepsPlayed: next.steps.count)
             board = next
-            playback.show(next, steps: next.steps)
+            playback.show(next, steps: next.steps, before: current)
             sending = [pivot.slot]
             chosenSends = []
             leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
@@ -471,7 +471,7 @@ final class BattleSession: ObservableObject {
         leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
         thought = nil; solved = nil
         if !view.steps.isEmpty {
-            playback.show(view, steps: view.steps, revealed: from)
+            playback.show(view, steps: view.steps, before: before, revealed: from)
             playback.play(view.steps,
                           hitMine: before.map { Self.hurt(mine: true, view, since: $0) } ?? [],
                           hitTheirs: before.map { Self.hurt(mine: false, view, since: $0) } ?? [],
@@ -535,7 +535,7 @@ final class BattleSession: ObservableObject {
 
         board = next
         turn += 1
-        playback.show(recorded, steps: told.isEmpty ? [] : recorded.steps)
+        playback.show(recorded, steps: told.isEmpty ? [] : recorded.steps, before: current)
         sending = next.gapsOfMine
         chosenSends = []
         leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
