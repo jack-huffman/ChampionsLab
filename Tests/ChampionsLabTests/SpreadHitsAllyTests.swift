@@ -122,21 +122,28 @@ print("\n== and it is not scored as a knockout ==")
     /// does because of the partner.
     @MainActor func testTheEngineDeclinesAnEarthquakeThatKillsItsPartner() throws {
 print("\n== the engine declines it ==")
-        let theirs = fighters([("Rillaboom", "Life Orb", ["Wood Hammer", "Protect"]),
-                               ("Milotic", "Leftovers", ["Surf", "Protect"])])
+        // Nothing here recoils and nothing heals: recoil is a share of the
+        // damage actually dealt, so a move that overkills costs its user
+        // less, and a Sitrus fires when the partner is left alive -- both
+        // would move the two positions apart for reasons that have nothing
+        // to do with standing in the Earthquake.
+        let theirs = fighters([("Rillaboom", "Black Glasses", ["Knock Off", "Protect"]),
+                               ("Milotic", "Mystic Water", ["Surf", "Protect"])])
         // Dragon Claw is the out: nearly as much damage into one target, and
         // none of it on the partner. If the engine cannot find it, the cost is
         // priced but not felt.
         let mine = fighters([("Garchomp", "Life Orb", ["Earthquake", "Dragon Claw", "Protect"]),
-                             ("Incineroar", "Sitrus Berry", ["Flare Blitz", "Protect"])])
+                             ("Incineroar", "Black Glasses", ["Knock Off", "Protect"])])
         let engine = BattleEngine(rules: store.rulebook, nodes: BattleEngine.Nodes.oneAhead)
 
         func quakeShare(grounded: Bool) -> Double {
             var board = Board(mine: mine, theirs: theirs, rules: store.rulebook,
                               field: Field(isDoubles: true), alreadyEvolved: false)
-            // A partner one hit from fainting, so the Earthquake is a genuine
-            // cost rather than a rounding error.
-            board.mine[1].hp = board.mine[1].maxHP / 5
+            // A partner worth keeping. It used to stand at a fifth of its
+            // health, which made the test read the wrong thing: a Pokemon
+            // nearly dead is worth little, so killing it costs little, and
+            // what the engine was actually avoiding was the recoil its own
+            // partner's Flare Blitz would have paid.
             if !grounded { board.mine[1].build.ability = "Levitate" }
             let thought = engine.think(board)
             let quake = at(board.mine[0], "Earthquake")

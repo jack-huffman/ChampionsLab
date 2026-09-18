@@ -958,6 +958,11 @@ enum Strikes {
             landed = before.hp - 1
             sashed = true
         }
+        // Nothing takes more than it had. A roll of a hundred into a Pokemon
+        // on fifty takes fifty, and everything counted off what a move dealt
+        // follows from that: a Bitter Blade heals half of what it took, not
+        // half of what it rolled, and the log says what happened.
+        landed = Swift.min(landed, before.hp)
         // A berry that halved the hit is a berry that has been eaten.
         let ateBerry = result.notes.contains { $0.contains("then is consumed") }
         if hitMine {

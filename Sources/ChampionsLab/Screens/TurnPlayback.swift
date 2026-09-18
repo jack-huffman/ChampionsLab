@@ -153,6 +153,19 @@ final class TurnPlayback: ObservableObject {
         return (mine ? startBoard?.mine : startBoard?.theirs)?[safe: slot]?.hp ?? own
     }
 
+    /// Whether the same Pokemon stood in that slot before the step as stands
+    /// there after it. A switch swaps the slot, and the two of them have no
+    /// health in common: reading the difference as damage put a number over
+    /// the head of something that had just walked on.
+    private func sameFighter(before index: Int, in steps: [Board.Step], mine: Bool, slot: Int) -> Bool {
+        let now = (mine ? steps[index].myForms : steps[index].theirForms)[safe: slot]
+        let then: String? = index > 0
+            ? (mine ? steps[index - 1].myForms : steps[index - 1].theirForms)[safe: slot]
+            : (mine ? startBoard?.mine : startBoard?.theirs)?[safe: slot]?.build.form.id
+        guard let now, let then else { return true }
+        return now == then
+    }
+
     /// Stop whatever is playing and clear everything it put on screen. What a
     /// turn taken back, or a new game, wants.
     func reset() {
@@ -397,6 +410,7 @@ final class TurnPlayback: ObservableObject {
         for mineSide in [true, false] {
             let hp = mineSide ? step.myHP : step.theirHP
             for slot in hp.indices where slot < 2 {
+                guard sameFighter(before: index, in: steps, mine: mineSide, slot: slot) else { continue }
                 let before = health(before: index, in: steps, mine: mineSide, slot: slot)
                 if hp[slot] < before { took[Seat(mine: mineSide, slot: slot)] = before - hp[slot] }
             }
@@ -492,12 +506,14 @@ final class TurnPlayback: ObservableObject {
         // began on for the first one.
         var reached: [Seat] = []
         for slot in step.myHP.indices where slot < 2 {
-            if step.myHP[slot] < health(before: index, in: steps, mine: true, slot: slot) {
+            if sameFighter(before: index, in: steps, mine: true, slot: slot),
+               step.myHP[slot] < health(before: index, in: steps, mine: true, slot: slot) {
                 reached.append(Seat(mine: true, slot: slot))
             }
         }
         for slot in step.theirHP.indices where slot < 2 {
-            if step.theirHP[slot] < health(before: index, in: steps, mine: false, slot: slot) {
+            if sameFighter(before: index, in: steps, mine: false, slot: slot),
+               step.theirHP[slot] < health(before: index, in: steps, mine: false, slot: slot) {
                 reached.append(Seat(mine: false, slot: slot))
             }
         }

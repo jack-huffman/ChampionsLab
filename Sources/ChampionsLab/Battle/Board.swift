@@ -729,7 +729,8 @@ struct Board {
 
     private mutating func markStepStart() {
         stepStart = StepStart(mine: mine.map(\.build.boosts), theirs: theirs.map(\.build.boosts),
-                              myStatus: mine.map(\.status), theirStatus: theirs.map(\.status))
+                              myStatus: mine.map(\.status), theirStatus: theirs.map(\.status),
+                              myForms: mine.map(\.build.form.id), theirForms: theirs.map(\.build.form.id))
     }
 
     /// Whatever moved since the step began that no door recorded.
@@ -739,7 +740,11 @@ struct Board {
             let team = mineSide ? mine : theirs
             let was = mineSide ? start.mine : start.theirs
             let wasStatus = mineSide ? start.myStatus : start.theirStatus
+            let wasForm = mineSide ? start.myForms : start.theirForms
             for slot in team.indices where slot < was.count {
+                // Somebody else is standing there now: nothing about the two
+                // of them is a change that happened to either.
+                guard slot >= wasForm.count || wasForm[slot] == team[slot].build.form.id else { continue }
                 for stat in team[slot].build.boosts.indices where stat < was[slot].count {
                     let moved = team[slot].build.boosts[stat] - was[slot][stat]
                     let recorded = events.reduce(0) { sum, event in
@@ -776,6 +781,13 @@ struct Board {
         var theirs: [[Int]]
         var myStatus: [Ailment]
         var theirStatus: [Ailment]
+        /// Who stood in each slot. A slot that changed hands during the step
+        /// cannot be compared with itself: the stages and the status belong
+        /// to whoever was standing there, and reading the difference as
+        /// something that happened gave a Pokemon that had just switched in
+        /// the stat drop its predecessor was carrying.
+        var myForms: [String]
+        var theirForms: [String]
     }
     var stepStart: StepStart?
 
