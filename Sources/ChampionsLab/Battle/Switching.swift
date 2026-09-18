@@ -155,48 +155,7 @@ enum Switching {
         }
         guard team.indices.contains(active), team.indices.contains(bench),
               !team[bench].fainted else { return nil }
-        // Natural Cure: whatever it was carrying is left on the field.
-        if team[active].build.ability == "Natural Cure", !team[active].fainted,
-           team[active].status != .none {
-            team[active].status = .none
-            team[active].asleepFor = 0
-        }
-        // Regenerator heals a third on the way out, which is what makes a
-        // Regenerator pivot free where another Pokémon's costs it the chip.
-        if team[active].build.ability == "Regenerator", !team[active].fainted {
-            team[active].hp = Swift.min(team[active].maxHP,
-                                        team[active].hp + team[active].maxHP / 3)
-        }
-        // Everything the field did to it is left on the field. Stat stages
-        // especially: they were surviving a switch, so a Pokémon could set up,
-        // pivot out and come back later still at +2.
-        team[active].charging = nil
-        team[active].hidden = false
-        team[active].protectStreak = 0
-        team[active].confusedFor = 0
-        team[active].encoredFor = 0
-        team[active].tauntedFor = 0
-        team[active].seededFrom = nil
-        team[active].critStage = 0
-        team[active].lastMove = nil
-        team[active].build.boosts = Array(repeating: 0, count: 6)
-        team[active].substitute = 0
-        team[active].infatuatedWith = nil
-        team[active].tormented = false
-        team[active].cannotEscape = false
-        team[active].aquaRing = false
-        team[active].stockpile = 0
-        // The song does not follow to the bench, which is the whole counter to
-        // Perish Song and the reason it is not simply a win button. The rest
-        // go the same way: they were done to the Pokémon standing there.
-        team[active].perishIn = 0
-        team[active].drowsyFor = 0
-        team[active].disabled = nil
-        team[active].disabledFor = 0
-        team[active].destinyBound = false
-        team[active].octolocked = false
-        team[active].build.typeOverride = nil
-        team[active].build.statOverride = nil
+        depart(&team, active: active)
         team.swapAt(active, bench)
         team[active].justArrived = true
         team[active].arrivedThisTurn = true
@@ -257,6 +216,58 @@ enum Switching {
         }
     }
 
+    /// What leaving the field does, whatever the way off it: Natural Cure
+    /// drops the status, Regenerator heals a third, and everything the field
+    /// did to the Pokemon stays on the field -- stages above all. Every way
+    /// off the field calls this before the swap: a switch, a pivot, an
+    /// Emergency Exit, a send-in for the fallen. A pivot that skipped it kept
+    /// its +2 for the return and a Regenerator pivot healed nothing.
+    static func depart(_ team: inout [Fighter], active: Int) {
+        guard team.indices.contains(active) else { return }
+        // Natural Cure: whatever it was carrying is left on the field.
+        if team[active].build.ability == "Natural Cure", !team[active].fainted,
+           team[active].status != .none {
+            team[active].status = .none
+            team[active].asleepFor = 0
+        }
+        // Regenerator heals a third on the way out, which is what makes a
+        // Regenerator pivot free where another Pokémon's costs it the chip.
+        if team[active].build.ability == "Regenerator", !team[active].fainted {
+            team[active].hp = Swift.min(team[active].maxHP,
+                                        team[active].hp + team[active].maxHP / 3)
+        }
+        // Everything the field did to it is left on the field. Stat stages
+        // especially: they were surviving a switch, so a Pokémon could set up,
+        // pivot out and come back later still at +2.
+        team[active].charging = nil
+        team[active].hidden = false
+        team[active].protectStreak = 0
+        team[active].confusedFor = 0
+        team[active].encoredFor = 0
+        team[active].tauntedFor = 0
+        team[active].seededFrom = nil
+        team[active].critStage = 0
+        team[active].lastMove = nil
+        team[active].build.boosts = Array(repeating: 0, count: 6)
+        team[active].substitute = 0
+        team[active].infatuatedWith = nil
+        team[active].tormented = false
+        team[active].cannotEscape = false
+        team[active].aquaRing = false
+        team[active].stockpile = 0
+        // The song does not follow to the bench, which is the whole counter to
+        // Perish Song and the reason it is not simply a win button. The rest
+        // go the same way: they were done to the Pokémon standing there.
+        team[active].perishIn = 0
+        team[active].drowsyFor = 0
+        team[active].disabled = nil
+        team[active].disabledFor = 0
+        team[active].destinyBound = false
+        team[active].octolocked = false
+        team[active].build.typeOverride = nil
+        team[active].build.statOverride = nil
+    }
+
     /// Emergency Exit and Wimp Out: dropping below half health sends the
     /// Pokémon out to whoever is waiting, mid-turn, without asking.
     ///
@@ -274,6 +285,7 @@ enum Switching {
         guard let next = (board.activeCount..<team.count).first(where: { !team[$0].fainted })
         else { return }
         let name = team[slot].build.form.formLabel
+        if mine { depart(&board.mine, active: slot) } else { depart(&board.theirs, active: slot) }
         if mine { board.mine.swapAt(slot, next) } else { board.theirs.swapAt(slot, next) }
         let arrival = (mine ? board.mine : board.theirs)[slot].build.form.formLabel
         board.note("\(name)'s \(team[slot].build.ability) sent it out. \(arrival) came in.")
@@ -321,6 +333,7 @@ enum Switching {
         let team = byMine ? board.mine : board.theirs
         guard team.indices.contains(slot), team.indices.contains(bench), !team[bench].fainted else { return }
         let leaving = team[slot].build.form.formLabel
+        if byMine { depart(&board.mine, active: slot) } else { depart(&board.theirs, active: slot) }
         if byMine { board.mine.swapAt(slot, bench) } else { board.theirs.swapAt(slot, bench) }
         let arriving = (byMine ? board.mine : board.theirs)[slot].build.form.formLabel
         board.note(announcingLeaving ? "\(leaving) went out; \(arriving) came in."
@@ -369,6 +382,7 @@ extension Board {
                 let team = side ? mine : theirs
                 guard let next = (activeCount..<team.count).first(where: { !team[$0].fainted })
                 else { continue }
+                if side { Switching.depart(&mine, active: slot) } else { Switching.depart(&theirs, active: slot) }
                 if side { mine.swapAt(slot, next) } else { theirs.swapAt(slot, next) }
                 landed(mine: side, slot: slot)
             }
@@ -471,10 +485,12 @@ extension Board {
         for arrival in arrivals {
             if arrival.mine {
                 guard mine[arrival.slot].fainted else { continue }
+                Switching.depart(&mine, active: arrival.slot)
                 mine.swapAt(arrival.slot, arrival.bench)
                 note("You sent in \(mine[arrival.slot].build.form.formLabel).")
             } else {
                 guard theirs[arrival.slot].fainted else { continue }
+                Switching.depart(&theirs, active: arrival.slot)
                 theirs.swapAt(arrival.slot, arrival.bench)
                 note("They sent in \(theirs[arrival.slot].build.form.formLabel).")
             }
@@ -486,6 +502,7 @@ extension Board {
     mutating func sendIn(_ bench: Int, to slot: Int) {
         guard mine.indices.contains(bench), mine.indices.contains(slot),
               !mine[bench].fainted, mine[slot].fainted else { return }
+        Switching.depart(&mine, active: slot)
         mine.swapAt(slot, bench)
         landed(mine: true, slot: slot)
     }

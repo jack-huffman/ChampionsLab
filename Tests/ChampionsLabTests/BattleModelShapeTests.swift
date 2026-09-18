@@ -41,7 +41,7 @@ final class BattleModelShapeTests: XCTestCase {
         "SupportMoves": 1500,   // eighty-odd rules in fifteen sections, one each
         "Ailments": 300,
         "StatChanges": 300,
-        "Switching": 500,        // owns the Board's arrival methods as well
+        "Switching": 560,        // owns the Board's arrival methods as well, and every way off the field
         "Residuals": 650,
         "Evaluation": 300,
         "Accuracy": 150,
