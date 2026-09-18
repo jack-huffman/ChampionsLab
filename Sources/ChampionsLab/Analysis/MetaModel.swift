@@ -369,6 +369,19 @@ struct MetaModel {
                         member.form.moves.first { store.move($0)?.name == name }
                     }
                 }
+                // The table knows nothing about this one, or nothing it can
+                // legally learn: its own best four, the way a fighter built
+                // without a damaging move is given one. A team with a Pokemon
+                // that cannot move is not a team, and these are saved as
+                // yours now rather than only played against.
+                if slot.moves.isEmpty {
+                    slot.moves = Array(store.rulebook.moves(for: member.form)
+                        .sorted { store.rulebook.moveValue($0, for: member.form,
+                                                           ability: slot.ability, item: slot.item)
+                                > store.rulebook.moveValue($1, for: member.form,
+                                                           ability: slot.ability, item: slot.item) }
+                        .prefix(4).map(\.id))
+                }
                 // The spread the ladder actually runs, when the table has one;
                 // otherwise a representative one, into its better attacking
                 // stat and Speed, which is what most measured sets look like.

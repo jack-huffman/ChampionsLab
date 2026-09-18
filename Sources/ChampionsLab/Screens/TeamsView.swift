@@ -8,6 +8,8 @@ struct TeamsView: View {
     @State private var selected: UUID?
     @State private var draft: Team?
     @State private var importing = false
+    /// Asking where a new team should come from.
+    @State private var starting = false
 
     private var current: Binding<Team>? {
         guard let draft, draft.id == selected else { return nil }
@@ -36,6 +38,9 @@ struct TeamsView: View {
                           detail: "Teams are saved to Application Support and persist between launches.")
                     .frame(minWidth: 620)
             }
+        }
+        .sheet(isPresented: $starting) {
+            NewTeamSheet { keep($0) }.environmentObject(store)
         }
         .sheet(isPresented: $importing) {
             ImportSheet { imported in
@@ -137,8 +142,15 @@ struct TeamsView: View {
         )
     }
 
+    /// The button, and ⌘N: ask where the team comes from rather than always
+    /// making an empty one.
     private func newTeam() {
-        let team = Team(name: "Team \(store.teams.count + 1)")
+        starting = true
+    }
+
+    /// Whatever the sheet handed back -- an empty team or one off the
+    /// ladder -- saved and opened for editing.
+    private func keep(_ team: Team) {
         store.save(team)
         selected = team.id
         draft = team
