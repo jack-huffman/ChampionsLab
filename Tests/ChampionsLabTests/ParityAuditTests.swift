@@ -64,7 +64,9 @@ final class ParityAuditTests: HarnessCase {
                      "Decorate", "Aromatic Mist", "Clangorous Soul", "Heal Bell",
                      "Sticky Web", "Quash", "Recycle", "Stuff Cheeks", "Teatime",
                      "Forest's Curse", "Trick-or-Treat", "Ingrain", "Fairy Lock",
-                     "Magnetic Flux", "Chilly Reception"]
+                     "Magnetic Flux", "Chilly Reception",
+                     // The ones that need Power Points to exist at all.
+                     "Spite", "Imprison"]
         let silent = ParityAudit.movesThatDoNothing(names, rules: store.rulebook)
         print("  \(names.count - silent.count) of \(names.count) change the game")
         if !silent.isEmpty { print("  nothing happens for: \(silent.joined(separator: ", "))") }

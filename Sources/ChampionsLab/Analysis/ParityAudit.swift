@@ -141,7 +141,6 @@ struct ParityAudit: Sendable {
     /// Things the model does not carry, and will not, with the reason. Kept
     /// short and specific: each line is a decision, not an excuse.
     public static let notModelled: [String: String] = [
-        "Spite": "Power Points are tracked now, but nothing takes four of them off the move a target last used.",
         "Sleep Talk": "Calls another move at random; the search cannot price a move that becomes a different move.",
         "Metronome": "Calls a move at random out of every move in the game.",
         "Assist": "Calls a move at random from the rest of the team.",

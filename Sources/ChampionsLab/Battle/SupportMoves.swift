@@ -294,6 +294,30 @@ enum SupportMoves {
             return .handled(nil)
         }
 
+        // Spite takes four Power Points off whatever the target used last.
+        //
+        // It is the patient way to beat something you cannot break: a wall
+        // holding a Leftovers wins a stall war by outlasting you, and Spite
+        // answers by shortening the war rather than by trying to win it. It
+        // fails when the target has not moved yet, or when the move it used
+        // has already run dry -- there is nothing there to take.
+        if move.name == "Spite" {
+            guard let index = reachableTarget(cast, board: &board) else {
+                board.note("But it failed."); return .handled(nil)
+            }
+            let far = cast.targetsMine ? board.mine : board.theirs
+            guard let last = far[index].lastMove, far[index].moves.indices.contains(last),
+                  far[index].pp(at: last) > 0 else {
+                board.note("But it failed."); return .handled(nil)
+            }
+            let who = far[index].build.form.formLabel
+            let what = far[index].moves[last].name
+            let took = MoveLegality.drain(last, byMine: cast.targetsMine, slot: index,
+                                          amount: 4, board: &board)
+            board.note("\(who)'s \(what) lost \(took) Power Point\(took == 1 ? "" : "s").")
+            return .handled(nil)
+        }
+
         // Soak makes the target a pure Water type, which is how a Ground type
         // stops being immune to Thunderbolt.
         if move.name == "Soak" {

@@ -123,9 +123,32 @@ enum MoveLegality {
         let move = team[slot].moves[index]
         var cost = 1
         if pressured(move, target: target, byMine: byMine, board: board) { cost = 2 }
-        let left = Swift.max(0, team[slot].pp(at: index) - cost)
-        // A Fighter that arrived without its counts gets them here rather than
-        // silently keeping none.
+        put(Swift.max(0, team[slot].pp(at: index) - cost),
+            at: index, byMine: byMine, slot: slot, board: &board)
+    }
+
+    /// Take Power Points off somebody else's move, which is what Spite does.
+    ///
+    /// Returns what it actually took: less than asked for when there was less
+    /// than that left, and nothing when there was nothing, so the move can say
+    /// the true number and fail when there is none.
+    @discardableResult
+    static func drain(_ index: Int, byMine: Bool, slot: Int, amount: Int,
+                      board: inout Board) -> Int {
+        let team = byMine ? board.mine : board.theirs
+        guard team.indices.contains(slot), team[slot].moves.indices.contains(index) else { return 0 }
+        let had = team[slot].pp(at: index)
+        let took = Swift.min(Swift.max(0, amount), had)
+        guard took > 0 else { return 0 }
+        put(had - took, at: index, byMine: byMine, slot: slot, board: &board)
+        return took
+    }
+
+    /// Write one count. A Fighter that arrived without any -- an older peer
+    /// across the network -- is given its full ones here rather than silently
+    /// keeping none, which is why every write goes through this.
+    private static func put(_ left: Int, at index: Int, byMine: Bool, slot: Int,
+                            board: inout Board) {
         if byMine {
             if board.mine[slot].ppLeft.count != board.mine[slot].moves.count {
                 board.mine[slot].ppLeft = board.mine[slot].moves.map(\.pp)
