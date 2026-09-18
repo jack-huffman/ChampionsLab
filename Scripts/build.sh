@@ -108,7 +108,11 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 	<key>CFBundleShortVersionString</key>    <string>$VERSION</string>
 	<key>CFBundleVersion</key>               <string>$VERSION</string>
 	<key>LSMinimumSystemVersion</key>        <string>$MIN_MACOS</string>
-	<key>LSApplicationCategoryType</key>     <string>public.app-category.games</string>
+	<!-- Not a game, whatever it is about. Declaring one turned on macOS's
+	     Game Mode: a banner every time the window went fullscreen, and the
+	     system reprioritising the CPU and the GPU for something that spends
+	     its time on team lists and damage arithmetic. -->
+	<key>LSApplicationCategoryType</key>     <string>public.app-category.utilities</string>
 	<key>NSPrincipalClass</key>              <string>NSApplication</string>
 	<key>NSHighResolutionCapable</key>       <true/>
 	<key>NSLocalNetworkUsageDescription</key> <string>ChampionsLab finds other copies of the app on your network so you can battle the people running them.</string>
