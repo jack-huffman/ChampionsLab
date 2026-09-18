@@ -307,11 +307,8 @@ struct VersusPageView: View {
         } else {
             ordered = all
         }
-        let mine = team.id == myTeam?.id
         return VersusBanner.Side(title: title, name: team.name, tag: tag,
                                  forms: ordered.map { MegaGuess(store: store).registered($0, in: team) },
-                                 megas: mine ? MegaGuess(store: store).stoneHolders(team) : MegaGuess(store: store).possibleMegas(team),
-                                 megasUncertain: !mine,
                                  leadCount: plan == nil ? 0 : leadCount, tint: tint)
     }
 

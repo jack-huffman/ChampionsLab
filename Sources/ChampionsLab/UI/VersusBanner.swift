@@ -106,10 +106,6 @@ struct VersusBanner: View {
         /// The six as registered — a Charizard, not yet a Mega Charizard —
         /// leads first, the pair likeliest to be left home last.
         let forms: [Form]
-        /// Which of them hold a stone — or, on their side, could: their items
-        /// are not on show, so the mark there is a question.
-        var megas: Set<String> = []
-        var megasUncertain = false
         let leadCount: Int
         let tint: Color
     }
@@ -226,35 +222,20 @@ struct VersusBanner: View {
         let placed = places(side, in: size, lean: lean, left: left)
         return ZStack {
             ForEach(Array(placed.enumerated()), id: \.offset) { _, place in
-                ZStack(alignment: .topTrailing) {
-                    SpriteImage(form: place.form, side: place.side)
-                        .shadow(color: side.tint.opacity(0.75), radius: 14)
-                        .shadow(color: .black.opacity(0.65), radius: 4, y: 3)
-                    if side.megas.contains(place.form.id) {
-                        Text(side.megasUncertain ? "M?" : "M")
-                            .font(.system(size: side.megasUncertain ? 8 : 9, weight: .heavy))
-                            .frame(width: side.megasUncertain ? 22 : 17, height: 17)
-                            .background(Palette.warn.opacity(side.megasUncertain ? 0.7 : 1))
-                            .foregroundStyle(.white)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().strokeBorder(.white.opacity(side.megasUncertain ? 0.5 : 0),
-                                                            style: StrokeStyle(lineWidth: 1, dash: [2, 1.5])))
-                            .help(side.megasUncertain
-                                  ? "\(place.form.formLabel) has a Mega, and you cannot see what this one holds."
-                                  : "Holding its stone. It starts as itself and Mega Evolves when it uses a move.")
-                    }
-                }
-                .position(x: place.x, y: place.y)
+                SpriteImage(form: place.form, side: place.side)
+                    .shadow(color: side.tint.opacity(0.75), radius: 14)
+                    .shadow(color: .black.opacity(0.65), radius: 4, y: 3)
+                    .position(x: place.x, y: place.y)
             }
             ForEach(Array(placed.enumerated()), id: \.offset) { _, place in
-                label(place.form, lead: place.lead, tint: side.tint)
+                label(place.form, lead: place.lead)
                     .position(x: place.x, y: place.y + place.side / 2 + (place.lead ? 16 : 8))
             }
             .zIndex(1)
         }
     }
 
-    private func label(_ form: Form, lead: Bool, tint: Color) -> some View {
+    private func label(_ form: Form, lead: Bool) -> some View {
         VStack(spacing: 1) {
             Text(form.formLabel)
                 .font(.system(size: lead ? 11 : 10, weight: lead ? .bold : .semibold))
@@ -262,12 +243,6 @@ struct VersusBanner: View {
                 .lineLimit(1)
                 .shadow(color: .black.opacity(0.9), radius: 3)
                 .shadow(color: .black.opacity(0.6), radius: 1)
-            if lead {
-                Text("LEAD").font(.system(size: 8, weight: .heavy)).kerning(0.8)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 5).padding(.vertical, 1)
-                    .background(Capsule().fill(tint.opacity(0.9)))
-            }
         }
     }
 
