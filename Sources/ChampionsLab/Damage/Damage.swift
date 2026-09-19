@@ -70,7 +70,7 @@ struct Combatant {
     var item: String = ""
     var sp: [Int] = Array(repeating: 0, count: 6)
     var alignment: Alignment = .neutral
-    var boosts: [Int] = Array(repeating: 0, count: 6)
+    var boosts: [Int] = Array(repeating: 0, count: Stage.width)
     /// Drawn shiny. Nothing in this file reads it -- no stat, no roll, no
     /// type -- it rides along so the scene can draw the right colours for
     /// whatever is standing there, including a Mega it turned into.

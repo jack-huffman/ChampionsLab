@@ -24,10 +24,10 @@ extension Move {
         let secondaries: [Secondary]
         let healing: Healing?
         let drainShare: Double?
-        let targetDrops: [Stat: Int]
-        let targetBoosts: [Stat: Int]
-        let selfBoosts: [Stat: Int]
-        let selfDrops: [Stat: Int]
+        let targetDrops: [Stage: Int]
+        let targetBoosts: [Stage: Int]
+        let selfBoosts: [Stage: Int]
+        let selfDrops: [Stage: Int]
         let confuses: Bool
         let doublesAfterFailure: Bool
         let breaksProtect: Bool
@@ -90,10 +90,10 @@ extension Move {
     var secondary: Secondary? { rules.secondaries.first }
     var healing: Healing? { rules.healing }
     var drainShare: Double? { rules.drainShare }
-    var targetDrops: [Stat: Int] { rules.targetDrops }
-    var targetBoosts: [Stat: Int] { rules.targetBoosts }
-    var selfBoosts: [Stat: Int] { rules.selfBoosts }
-    var selfDrops: [Stat: Int] { rules.selfDrops }
+    var targetDrops: [Stage: Int] { rules.targetDrops }
+    var targetBoosts: [Stage: Int] { rules.targetBoosts }
+    var selfBoosts: [Stage: Int] { rules.selfBoosts }
+    var selfDrops: [Stage: Int] { rules.selfDrops }
     var confuses: Bool { rules.confuses }
     var doublesAfterFailure: Bool { rules.doublesAfterFailure }
     var breaksProtect: Bool { rules.breaksProtect }

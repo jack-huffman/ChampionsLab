@@ -154,13 +154,9 @@ struct ParityAudit: Sendable {
         "Frisk": "Reveals the opponent's held item, which the search can already see.",
         "Forewarn": "Reveals the opponent's strongest move, which the search can already see.",
         "Anticipation": "Warns that the opponent has something dangerous, which the search already knows.",
-        "Illuminate": "Stops the holder's accuracy being lowered, and accuracy stages are not modelled.",
-        "Supersweet Syrup": "Lowers the opposing side's evasion, and evasion stages are not modelled.",
         "Pickup": "Finds an item after the battle is over.",
-        "Cursed Body": "Disables a move by spending its Power Points, which are not tracked.",
         "Rivalry": "Turns on the two Pokémon's genders, which the dataset does not carry.",
         "Gluttony": "Brings a pinch berry forward to half health. Only the Sitrus is modelled, and it already fires there.",
-        "Minimize": "Two stages of evasion, and evasion stages are not modelled. What is left of the move — that Body Slam and its kin hit a minimised target twice as hard — is not worth carrying on its own.",
     ]
 
     // MARK: - Running it

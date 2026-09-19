@@ -386,14 +386,32 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     /// what speed control looks like outside Tailwind, and "Lowers the target's
     /// Attack and Sp. Atk stats by 1 stage" is Parting Shot. Read from the same
     /// sentence the boosts are, because it is written the same way.
-    internal var computedTargetDrops: [Stat: Int] {
+    /// What Serebii's word for a stage is, tidied.
+    ///
+    /// It writes "Attack stat by 1 stage" for the six and "accuracy by 1
+    /// stage" for the two that are not stats, so the word "stat" is optional
+    /// in the patterns and whatever it leaves behind is trimmed here. Both
+    /// spellings of the second one appear.
+    internal static func stageName(_ raw: String) -> String {
+        var name = raw.trimmingCharacters(in: .whitespaces)
+        for tail in [" stats", " stat"] where name.hasSuffix(tail) {
+            name = String(name.dropLast(tail.count)); break
+        }
+        switch name.lowercased() {
+        case "accuracy": return "Accuracy"
+        case "evasiveness", "evasion": return "Evasiveness"
+        default: return name
+        }
+    }
+
+    internal var computedTargetDrops: [Stage: Int] {
         guard let match = effect.range(
             // "targets'" and "the target's" both appear, and the apostrophe
             // falls in different places: a spread move lowers *targets'*
             // Speed, a single-target one lowers *the target's*. Missing the
             // second spelling quietly silenced Screech, Scary Face, Noble Roar
             // and every other single-target drop in the game.
-            of: #"Lowers (?:the )?targets?'?s? .+? stats? by \d+ stage"#,
+            of: #"Lowers (?:the )?targets?'?s? .+?(?: stats?)? by \d+ stage"#,
             options: .regularExpression) else { return [:] }
         let phrase = String(effect[match])
         guard let amount = phrase.range(of: #"\d+"#, options: [.regularExpression, .backwards])
@@ -401,17 +419,19 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
         let statsPart = phrase
             .replacingOccurrences(of: #"^Lowers (?:the )?targets?'?s? "#, with: "",
                                   options: .regularExpression)
-            .replacingOccurrences(of: #" stats? by \d+ stage"#, with: "",
+            .replacingOccurrences(of: #"(?: stats?)? by \d+ stage"#, with: "",
                                   options: .regularExpression)
-        var out: [Stat: Int] = [:]
+        var out: [Stage: Int] = [:]
         for piece in statsPart.components(separatedBy: CharacterSet(charactersIn: ","))
             .flatMap({ $0.components(separatedBy: " and ") }) {
-            switch piece.trimmingCharacters(in: .whitespaces) {
+            switch Move.stageName(piece) {
             case "Attack":  out[.attack] = amount
             case "Defense": out[.defense] = amount
             case "Sp. Atk": out[.spAttack] = amount
             case "Sp. Def": out[.spDefense] = amount
             case "Speed":   out[.speed] = amount
+            case "Accuracy":    out[.accuracy] = amount
+            case "Evasiveness": out[.evasion] = amount
             default: break
             }
         }
@@ -428,7 +448,7 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
         let skipsIn: Weather?
         /// Stages gained on the charging turn: Electro Shot and Meteor Beam
         /// raise Special Attack while they wind up.
-        let boosts: [Stat: Int]
+        let boosts: [Stage: Int]
     }
 
     internal var computedCharge: Charge? {
@@ -440,7 +460,7 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
         var skipsIn: Weather?
         if lower.contains("in rain the user does not gain") { skipsIn = .rain }
         if lower.contains("in harsh sunlight the user does not gain") { skipsIn = .sun }
-        var boosts: [Stat: Int] = [:]
+        var boosts: [Stage: Int] = [:]
         if let match = effect.range(of: #"The user's (.+?) stat is boosted by (\d+) stage"#,
                                     options: .regularExpression) {
             let phrase = String(effect[match])
@@ -480,14 +500,14 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
         enum Kind: Sendable {
             case status(Ailment)
             case flinch
-            case drops([Stat: Int])
+            case drops([Stage: Int])
             case confuse
             /// Charge Beam's Special Attack, Ancient Power's five stages, Meteor
             /// Mash's Attack: a secondary that pays the user rather than costing
             /// the target. The sentence parser had no way to say this.
-            case selfBoosts([Stat: Int])
-            case targetBoosts([Stat: Int])
-            case selfDrops([Stat: Int])
+            case selfBoosts([Stage: Int])
+            case targetBoosts([Stage: Int])
+            case selfDrops([Stage: Int])
         }
         let chance: Int
         let kind: Kind
@@ -508,10 +528,13 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
         let stats: [String: Int]?
 
         var parsed: Secondary? {
-            func table() -> [Stat: Int] {
-                var out: [Stat: Int] = [:]
+            func table() -> [Stage: Int] {
+                var out: [Stage: Int] = [:]
                 for (name, amount) in stats ?? [:] {
-                    if let stat = Stat.named(name) { out[stat] = amount }
+                    // Accuracy and evasion come through here too now. They
+                    // used to fall out at this line, which is where Mud-Slap
+                    // and Muddy Water and Night Daze lost half of what they do.
+                    if let stage = Stage.named(name) { out[stage] = amount }
                 }
                 return out
             }
@@ -571,7 +594,7 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
                 .replacingOccurrences(of: #" stats? by \d+ stage"#, with: "", options: .regularExpression)
             let stat: Stat? = ["Attack": .attack, "Defense": .defense, "Sp. Atk": .spAttack,
                                "Sp. Def": .spDefense, "Speed": .speed][statName]
-            if let stat { return Secondary(chance: chance, kind: .drops([stat: amount])) }
+            if let stat { return Secondary(chance: chance, kind: .drops([Stage(stat): amount])) }
             return nil   // accuracy and evasion are not stats this model keeps
         }
         // The certain ones: "Paralyzes the target." — but not Fake Out's
@@ -619,18 +642,19 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
 
     /// Swagger's two stages of Attack, Flatter's one of Special Attack: a
     /// raise handed to the target, which only makes sense with the confusion.
-    internal var computedTargetBoosts: [Stat: Int] {
-        guard let match = effect.range(of: #"Boosts the target's (.+?) stats? by (\d+) stage"#,
+    internal var computedTargetBoosts: [Stage: Int] {
+        guard let match = effect.range(of: #"Boosts the target's (.+?)(?: stats?)? by (\d+) stage"#,
                                        options: .regularExpression) else { return [:] }
         let phrase = String(effect[match])
         let amount = phrase.range(of: #"\d+"#, options: [.regularExpression, .backwards])
             .flatMap { Int(phrase[$0]) } ?? 1
-        let statName = phrase
+        let statName = Move.stageName(phrase
             .replacingOccurrences(of: "Boosts the target's ", with: "")
-            .replacingOccurrences(of: #" stats? by \d+ stage"#, with: "", options: .regularExpression)
-        let stat: Stat? = ["Attack": .attack, "Defense": .defense, "Sp. Atk": .spAttack,
-                           "Sp. Def": .spDefense, "Speed": .speed][statName]
-        return stat.map { [$0: amount] } ?? [:]
+            .replacingOccurrences(of: #"(?: stats?)? by \d+ stage"#, with: "", options: .regularExpression))
+        let stage: Stage? = ["Attack": .attack, "Defense": .defense, "Sp. Atk": .spAttack,
+                             "Sp. Def": .spDefense, "Speed": .speed,
+                             "Accuracy": .accuracy, "Evasiveness": .evasion][statName]
+        return stage.map { [$0: amount] } ?? [:]
     }
 
     /// Stomping Tantrum: twice the power after a turn the user's move missed,
@@ -639,21 +663,21 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
         effect.lowercased().contains("doubled if the user couldn't act or its move missed or failed")
     }
 
-    internal var computedSelfBoosts: [Stat: Int] { ownChanges(verb: "Boosts") }
+    internal var computedSelfBoosts: [Stage: Int] { ownChanges(verb: "Boosts") }
 
     /// What a move costs the user in stages: Close Combat's Defence and
     /// Special Defence, Overheat's two stages of Special Attack. Positive
     /// numbers, the way the drops on a target are.
-    internal var computedSelfDrops: [Stat: Int] { ownChanges(verb: "Lowers") }
+    internal var computedSelfDrops: [Stage: Int] { ownChanges(verb: "Lowers") }
 
-    internal func ownChanges(verb: String) -> [Stat: Int] {
+    internal func ownChanges(verb: String) -> [Stage: Int] {
         // Two word orders for the same sentence. Almost every move says
         // "Boosts the user's Attack stat by 1 stage"; Howl says "Boosts the
         // Attack stats of the user and its allies by 1 stage", and matching
         // only the first left it doing nothing at all.
-        let direct = effect.range(of: "\(verb) the user's .+? stats? by \\d+ stage",
+        let direct = effect.range(of: "\(verb) the user's .+?(?: stats?)? by \\d+ stage",
                                   options: .regularExpression)
-        let shared = effect.range(of: "\(verb) the .+? stats? of the user and its allies by \\d+ stage",
+        let shared = effect.range(of: "\(verb) the .+?(?: stats?)? of the user and its allies by \\d+ stage",
                                   options: .regularExpression)
         guard let match = direct ?? shared else { return [:] }
         let phrase = String(effect[match])
@@ -664,18 +688,25 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
             .flatMap({ Int(phrase[$0]) }) else { return [:] }
         let statsPart = phrase
             .replacingOccurrences(of: "\(verb) the user's ", with: "")
-            .replacingOccurrences(of: #" stats? by \d+ stage"#, with: "",
+            .replacingOccurrences(of: #"(?: stats?)? by \d+ stage"#, with: "",
                                   options: .regularExpression)
-        var out: [Stat: Int] = [:]
+        var out: [Stage: Int] = [:]
+        // Three ways of joining a list, and Coil uses the third: "Attack and
+        // Defense stats as well as its accuracy". Splitting only on commas and
+        // "and" left Coil raising two of its three stages.
         for piece in statsPart.components(separatedBy: CharacterSet(charactersIn: ","))
+            .flatMap({ $0.components(separatedBy: " as well as its ") })
+            .flatMap({ $0.components(separatedBy: " as well as ") })
             .flatMap({ $0.components(separatedBy: " and ") }) {
-            let name = piece.trimmingCharacters(in: .whitespaces)
+            let name = Move.stageName(piece)
             switch name {
             case "Attack":  out[.attack] = amount
             case "Defense": out[.defense] = amount
             case "Sp. Atk": out[.spAttack] = amount
             case "Sp. Def": out[.spDefense] = amount
             case "Speed":   out[.speed] = amount
+            case "Accuracy":    out[.accuracy] = amount
+            case "Evasiveness": out[.evasion] = amount
             default: break
             }
         }

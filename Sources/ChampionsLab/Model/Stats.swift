@@ -21,12 +21,8 @@ enum Stat: Int, CaseIterable, Identifiable, Codable {
 
     var id: Int { rawValue }
 
-    /// By the name the dataset uses.
-    ///
-    /// Returns nil for "accuracy" and "evasion", which are real stages in the
-    /// game and are not modelled here: stat stages are a six-slot array
-    /// throughout. Muddy Water, Night Daze, Mud-Slap and Sand Attack lose that
-    /// part of their effect, and the parity audit reports them.
+    /// By the name the dataset uses. Accuracy and evasion are not stats and
+    /// are not here; they are stages, and `Stage.named` knows them.
     static func named(_ name: String) -> Stat? {
         switch name {
         case "hp":        return .hp
@@ -60,6 +56,76 @@ enum Stat: Int, CaseIterable, Identifiable, Codable {
         case .speed:     return "Speed"
         }
     }
+}
+
+/// Something a battle can move up and down.
+///
+/// The six stats, and the two things that are stages without being stats.
+/// Accuracy and evasion have no base value, nothing is spent on them, nothing
+/// outside a battle has one and no card shows one — so they are not `Stat`,
+/// which is the type the builder, the spread planner and every readout are
+/// written in. But a Haze clears them, a Psych Up copies them, a Topsy-Turvy
+/// turns them over and a switch leaves them behind, exactly like the six. So
+/// they live in the same array, past the end of it, and the first six raw
+/// values are `Stat`'s own so that everything already indexing by a stat goes
+/// on working.
+///
+/// They were missing entirely before this. Twenty-three moves in the dex, five
+/// items and a handful of abilities had the part of them that touches accuracy
+/// quietly dropped on the floor: a Sand Attack did nothing at all, a Double
+/// Team did nothing at all, and Hone Claws was half a move.
+enum Stage: Int, CaseIterable, Identifiable, Hashable, Sendable {
+    case hp, attack, defense, spAttack, spDefense, speed, accuracy, evasion
+
+    var id: Int { rawValue }
+
+    init(_ stat: Stat) { self = Stage(rawValue: stat.rawValue) ?? .hp }
+
+    /// The stat this stage belongs to, or nil for the two that are only ever
+    /// stages.
+    var stat: Stat? { Stat(rawValue: rawValue) }
+
+    /// True for accuracy and evasion, whose stages are worth a third each
+    /// rather than a half.
+    var isAim: Bool { self == .accuracy || self == .evasion }
+
+    static func named(_ name: String) -> Stage? {
+        if let stat = Stat.named(name) { return Stage(stat) }
+        switch name {
+        case "accuracy": return .accuracy
+        case "evasion":  return .evasion
+        default:         return nil
+        }
+    }
+
+    var short: String {
+        switch self {
+        case .accuracy: return "Acc"
+        case .evasion:  return "Eva"
+        default:        return stat?.short ?? ""
+        }
+    }
+
+    var long: String {
+        switch self {
+        case .accuracy: return "accuracy"
+        case .evasion:  return "evasiveness"
+        default:        return stat?.long ?? ""
+        }
+    }
+
+    /// What a stage is worth as a multiplier. The six stats move in halves
+    /// from a base of two; accuracy and evasion move in thirds from a base of
+    /// three, which is why a −1 to accuracy is a smaller thing than a −1 to
+    /// Attack and why stacking them is worth so much less than it looks.
+    func multiplier(_ stage: Int) -> Double {
+        let base = isAim ? 3.0 : 2.0
+        let steps = Double(Swift.max(-6, Swift.min(6, stage)))
+        return steps >= 0 ? (base + steps) / base : base / (base - steps)
+    }
+
+    /// Every stage a battle keeps, which is the width of the array.
+    static let width = Stage.allCases.count
 }
 
 /// A nature by its Champions name. Serious is the only neutral one the game

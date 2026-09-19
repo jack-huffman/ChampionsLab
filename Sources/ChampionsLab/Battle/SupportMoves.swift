@@ -795,8 +795,8 @@ enum SupportMoves {
         // Haze wipes every stat change on both sides, which is the answer to
         // anything that has spent the game setting up.
         if move.name == "Haze" {
-            for index in board.mine.indices { board.mine[index].build.boosts = Array(repeating: 0, count: 6) }
-            for index in board.theirs.indices { board.theirs[index].build.boosts = Array(repeating: 0, count: 6) }
+            for index in board.mine.indices { board.mine[index].build.boosts = Array(repeating: 0, count: Stage.width) }
+            for index in board.theirs.indices { board.theirs[index].build.boosts = Array(repeating: 0, count: Stage.width) }
             board.note("A haze settled and every stat change went with it.")
             return .handled(nil)
         }
@@ -1025,8 +1025,8 @@ enum SupportMoves {
             guard board.activeCount > 1, own.indices.contains(partner), !own[partner].fainted else {
                 board.note("But there was no one to help."); return .handled(nil)
             }
-            let paid: [Stat: Int] = move.name == "Decorate" ? [.attack: 2, .spAttack: 2]
-                                                            : [.spDefense: 1]
+            let paid: [Stage: Int] = move.name == "Decorate" ? [.attack: 2, .spAttack: 2]
+                                                              : [.spDefense: 1]
             StatChanges.applySelf(paid, toMine: byMine, slot: partner, board: &board)
             return .handled(nil)
         }
@@ -1043,7 +1043,8 @@ enum SupportMoves {
 
         // Acupressure raises one stat, chosen at random, by two.
         if move.name == "Acupressure" {
-            let stats: [Stat] = [.attack, .defense, .spAttack, .spDefense, .speed]
+            let stats: [Stage] = [.attack, .defense, .spAttack, .spDefense, .speed,
+                                  .accuracy, .evasion]
             let picked = rolling ? (stats.randomElement(using: &Dice.source) ?? .attack) : .attack
             StatChanges.applySelf([picked: 2], toMine: byMine, slot: slot, board: &board)
             return .handled(nil)

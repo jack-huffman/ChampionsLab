@@ -72,13 +72,11 @@ enum Evaluation {
     private static func stages(_ fighter: Fighter) -> Double {
         let boosts = fighter.build.boosts
         guard boosts.count >= 6, boosts.contains(where: { $0 != 0 }) else { return 0 }
-        func multiplier(_ stage: Int) -> Double {
-            stage >= 0 ? Double(2 + stage) / 2 : 2 / Double(2 - stage)
-        }
-        func worth(_ stat: Stat, _ scale: Double) -> Double {
-            let stage = boosts[stat.rawValue]
+        func worth(_ which: Stage, _ scale: Double) -> Double {
+            guard boosts.indices.contains(which.rawValue) else { return 0 }
+            let stage = boosts[which.rawValue]
             guard stage != 0 else { return 0 }
-            return (multiplier(stage) - 1) * scale
+            return (which.multiplier(stage) - 1) * scale
         }
         // Whichever side it actually attacks from. The other is nearly idle:
         // a Special Attack drop on a Rillaboom costs it almost nothing.
@@ -91,6 +89,15 @@ enum Evaluation {
         // Speed only pays when it changes who goes first, which this cannot
         // see from here, so it is priced low and honestly.
         out += worth(.speed, 0.07)
+        // Accuracy and evasion, priced off the same multiplier as everything
+        // else. They move in thirds rather than halves, so the numbers here
+        // look larger than the stat ones and come out smaller -- which is the
+        // honest answer, and the reason nobody wins a game with Double Team.
+        // Evasion is worth about what a defensive stage is: a quarter of what
+        // comes in stops landing. Accuracy is worth less, because most of what
+        // a good team throws already lands.
+        out += worth(.evasion, 0.14)
+        out += worth(.accuracy, 0.06)
         return Swift.max(-0.9, Swift.min(0.9, out))
     }
 

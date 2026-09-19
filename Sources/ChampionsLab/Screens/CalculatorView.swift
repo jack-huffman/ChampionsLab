@@ -53,7 +53,7 @@ struct CalculatorView: View {
         var item = ""
         var sp = Array(repeating: 0, count: 6)
         var alignmentName = "Serious"
-        var boosts = Array(repeating: 0, count: 6)
+        var boosts = Array(repeating: 0, count: Stage.width)
         var wideOpen = false
         var moveID = ""
         var fallen = 0
@@ -354,7 +354,7 @@ private struct SideEditor: View {
                     Text("Apply").font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Reset") { side.boosts = Array(repeating: 0, count: 6) }
+                    Button("Reset") { side.boosts = Array(repeating: 0, count: Stage.width) }
                         .controlSize(.mini)
                         .disabled(side.boosts.allSatisfy { $0 == 0 })
                 }
@@ -375,7 +375,7 @@ private struct SideEditor: View {
         }
     }
 
-    private func chip(_ label: String, _ changes: [(Stat, Int)]) -> some View {
+    private func chip(_ label: String, _ changes: [(Stage, Int)]) -> some View {
         Button {
             for (stat, amount) in changes {
                 side.boosts[stat.rawValue] = max(-6, min(6, side.boosts[stat.rawValue] + amount))

@@ -20,6 +20,25 @@ enum Accuracy {
                             board: Board) -> Double {
         guard !move.neverMisses, move.accuracy > 0 else { return 100 }
         var chance = Double(move.accuracy)
+        // The stages, which are the reason Sand Attack and Double Team are
+        // moves at all. The game combines the two into one number and reads it
+        // off a table based on three rather than two, so a stage of accuracy
+        // is a third rather than a half -- which is why stacking them is worth
+        // much less than it looks and why nobody runs a Double Team team.
+        //
+        // A Keen Eye or an Unaware looks straight through the dodging half; a
+        // Mold Breaker does too, being a Mold Breaker.
+        let blindToEvasion = attacker.build.ability == "Keen Eye"
+            || attacker.build.ability == "Unaware"
+            || attacker.build.ability == "Mold Breaker"
+        func stage(_ which: Stage, of fighter: Fighter) -> Int {
+            let held = fighter.build.boosts
+            return held.indices.contains(which.rawValue) ? held[which.rawValue] : 0
+        }
+        let mine = stage(.accuracy, of: attacker)
+        let theirs = blindToEvasion ? 0 : stage(.evasion, of: defender)
+        let net = Swift.max(-6, Swift.min(6, mine - theirs))
+        if net != 0 { chance *= Stage.accuracy.multiplier(net) }
         // What the sky does to a move's accuracy. Hurricane and Thunder are
         // certain in rain and half-blind in sun, and a Blizzard does not miss
         // in snow — which is most of the reason a rain team runs Thunder and a

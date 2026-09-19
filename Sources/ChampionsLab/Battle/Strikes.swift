@@ -780,7 +780,7 @@ enum Strikes {
                     board.note("\(hitName)'s \(who) absorbed it.")
                 }
             } else {
-                let paid: [Stat: Int]
+                let paid: [Stage: Int]
                 switch who {
                 case "Sap Sipper":    paid = [.attack: 1]
                 case "Motor Drive":   paid = [.speed: 1]
@@ -1056,7 +1056,8 @@ enum Strikes {
                 let build = actor.build
                 let best = [Stat.attack, .defense, .spAttack, .spDefense, .speed]
                     .max { build.stat($0) < build.stat($1) } ?? .attack
-                StatChanges.change([best: 1], onMine: byMine, slot: slot, board: &board, because: "Beast Boost")
+                StatChanges.change([Stage(best): 1], onMine: byMine, slot: slot,
+                                   board: &board, because: "Beast Boost")
             default: break
             }
         }
@@ -1197,13 +1198,28 @@ enum Strikes {
             return
         }
 
+        // Cursed Body: three times in ten, whatever just hit it is shut off.
+        // It was on the list of things not modelled for want of Power Points,
+        // which is not quite why -- Disable is a clock, not a cost -- but the
+        // clock and the refusal both live in one place now, so it is a rule
+        // rather than a paragraph.
+        if !defender.fainted, defender.build.ability == "Cursed Body", move.isDamaging,
+           !["Mold Breaker", "Turboblaze", "Teravolt"].contains(attacker.build.ability),
+           attacker.disabled == nil, let index = attacker.lastMove,
+           attacker.moves.indices.contains(index),
+           rolling, Double.random(in: 0..<1, using: &Dice.source) < 0.3 {
+            if byMine { board.mine[slot].disabled = index; board.mine[slot].disabledFor = 4 }
+            else { board.theirs[slot].disabled = index; board.theirs[slot].disabledFor = 4 }
+            board.note("\(defenderName)'s Cursed Body disabled \(attackerName)'s \(move.name).")
+        }
+
         // Abilities that answer the kind of hit: Thermal Exchange takes Fire
         // and gives Attack, Justified the same for Dark, Rattled runs from
         // Bug, Ghost and Dark, Weak Armor trades Defence for Speed on any
         // physical hit, Berserk answers the hit that took it to half.
         if !defender.fainted {
             let hitType = DamageCalc.fieldForm(of: move, in: board.field).type
-            var answer: [Stat: Int] = [:]
+            var answer: [Stage: Int] = [:]
             switch defender.build.ability {
             case "Thermal Exchange" where hitType == .fire: answer = [.attack: 1]
             case "Justified" where hitType == .dark: answer = [.attack: 1]

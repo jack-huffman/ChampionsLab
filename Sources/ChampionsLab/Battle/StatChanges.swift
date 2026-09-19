@@ -23,7 +23,7 @@ enum StatChanges {
     /// Weakness Policy going off on the wrong one. The abilities that answer
     /// a drop from outside all live here: Clear Body refuses it, Contrary
     /// turns it round, Defiant and Competitive take it and hit back.
-    static func applyDrops(_ drops: [Stat: Int], toMine: Bool, slot: Int,
+    static func applyDrops(_ drops: [Stage: Int], toMine: Bool, slot: Int,
                                    board: inout Board) {
         guard !drops.isEmpty else { return }
         let team = toMine ? board.mine : board.theirs
@@ -59,7 +59,7 @@ enum StatChanges {
     /// Stat stages a Pokémon gives itself, up or down: Swords Dance, Close
     /// Combat's cost, Weakness Policy. Nothing refuses these except Contrary,
     /// which reverses them — the whole reason Contrary Close Combat exists.
-    static func applySelf(_ boosts: [Stat: Int], toMine: Bool, slot: Int,
+    static func applySelf(_ boosts: [Stage: Int], toMine: Bool, slot: Int,
                                   board: inout Board) {
         change(boosts, onMine: toMine, slot: slot, board: &board)
         opportunist(after: boosts, onMine: toMine, board: &board)
@@ -85,7 +85,7 @@ enum StatChanges {
     ///
     /// Called after a raise lands, and deliberately only for a raise on the
     /// far side — copying its own partner's would be a loop.
-    private static func opportunist(after raised: [Stat: Int], onMine: Bool,
+    private static func opportunist(after raised: [Stage: Int], onMine: Bool,
                                     board: inout Board) {
         let watchers = onMine ? board.theirs : board.mine
         let positive = raised.filter { $0.value > 0 }
@@ -98,7 +98,7 @@ enum StatChanges {
 
     /// Move a Pokémon's stages, through whatever its ability does to stage
     /// changes, and say what happened in one line.
-    static func change(_ deltas: [Stat: Int], onMine: Bool, slot: Int,
+    static func change(_ deltas: [Stage: Int], onMine: Bool, slot: Int,
                                board: inout Board, because: String? = nil) {
         guard !deltas.isEmpty else { return }
         let team = onMine ? board.mine : board.theirs
@@ -109,14 +109,24 @@ enum StatChanges {
         if ability == "Contrary" { applied = applied.mapValues { -$0 } }
         if ability == "Simple" { applied = applied.mapValues { $0 * 2 } }
         var rose: [String] = [], fell: [String] = []
-        for (stat, amount) in applied.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
-            let before = team[slot].build.boosts[stat.rawValue]
+        for (stage, amount) in applied.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+            // A Pokemon that arrived from somewhere narrower -- an older peer
+            // across the network, a position built before accuracy was a
+            // stage -- gets the room rather than a crash.
+            if team[slot].build.boosts.count < Stage.width {
+                let grown = team[slot].build.boosts
+                    + Array(repeating: 0, count: Stage.width - team[slot].build.boosts.count)
+                if onMine { board.mine[slot].build.boosts = grown }
+                else { board.theirs[slot].build.boosts = grown }
+            }
+            let side = onMine ? board.mine : board.theirs
+            let before = side[slot].build.boosts[stage.rawValue]
             let after = Swift.max(-6, Swift.min(6, before + amount))
             guard after != before else { continue }
-            if onMine { board.mine[slot].build.boosts[stat.rawValue] = after }
-            else { board.theirs[slot].build.boosts[stat.rawValue] = after }
-            board.recordStat(mine: onMine, slot: slot, stat: stat.rawValue, delta: after - before, cause: because)
-            let word = abs(amount) >= 2 ? "\(stat.short) sharply" : stat.short
+            if onMine { board.mine[slot].build.boosts[stage.rawValue] = after }
+            else { board.theirs[slot].build.boosts[stage.rawValue] = after }
+            board.recordStat(mine: onMine, slot: slot, stat: stage.rawValue, delta: after - before, cause: because)
+            let word = abs(amount) >= 2 ? "\(stage.short) sharply" : stage.short
             if amount > 0 { rose.append(word) } else { fell.append(word) }
         }
         guard !rose.isEmpty || !fell.isEmpty else { return }

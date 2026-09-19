@@ -94,7 +94,7 @@ print("\n== confusion ==")
     let confuseRay = store.data.moves.values.first { $0.name == "Confuse Ray" }!
     let swagger = store.data.moves.values.first { $0.name == "Swagger" }!
     check("confusing moves are read from the text",
-          confuseRay.confuses && swagger.confuses && swagger.targetBoosts[Stat.attack] == 2
+          confuseRay.confuses && swagger.confuses && swagger.targetBoosts[Stage.attack] == 2
             && store.data.moves.values.first { $0.name == "Water Pulse" }?.secondary?.chance == 20)
     var dazed = Board(mine: fighters([("Whimsicott", "Focus Sash", ["Confuse Ray", "Protect"]),
                                       ("Milotic", "Leftovers", ["Protect"])]),

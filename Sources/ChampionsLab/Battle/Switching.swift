@@ -55,7 +55,7 @@ enum Switching {
             var cleared: [String] = []
             for index in team.indices.prefix(2)
             where !team[index].fainted && team[index].build.boosts.contains(where: { $0 != 0 }) {
-                team[index].build.boosts = Array(repeating: 0, count: 6)
+                team[index].build.boosts = Array(repeating: 0, count: Stage.width)
                 cleared.append(team[index].build.form.formLabel)
             }
             guard !cleared.isEmpty else { return nil }
@@ -248,7 +248,7 @@ enum Switching {
         team[active].seededFrom = nil
         team[active].critStage = 0
         team[active].lastMove = nil
-        team[active].build.boosts = Array(repeating: 0, count: 6)
+        team[active].build.boosts = Array(repeating: 0, count: Stage.width)
         team[active].substitute = 0
         team[active].infatuatedWith = nil
         team[active].tormented = false

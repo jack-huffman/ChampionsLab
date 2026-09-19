@@ -37,7 +37,7 @@ final class BattleModelShapeTests: XCTestCase {
         "Board": 1450,          // the state; large because Fighter carries a lot, Power Points included
         "TurnModel": 400,       // the orchestrator, and nothing else
         "TurnOrder": 400,
-        "Strikes": 1600,        // the action pipeline, in its phases; a flurry is rolled blow by blow
+        "Strikes": 1640,        // the action pipeline, in its phases; a flurry is rolled blow by blow
         "MoveLegality": 220,    // the one door for whether a move may be thrown, and Struggle behind it
         "SupportMoves": 1500,   // eighty-odd rules in fifteen sections, one each
         "Ailments": 300,

@@ -133,7 +133,10 @@ enum Residuals {
             board.note("\(name) shed its skin and shook it off.")
         }
         if who.build.ability == "Moody", hp > 0, rolling {
-            let stats: [Stat] = [.attack, .defense, .spAttack, .spDefense, .speed]
+            // Every stage but health, accuracy and evasion among them, which
+            // is what makes a Moody Pokemon the nuisance it is.
+            let stats: [Stage] = [.attack, .defense, .spAttack, .spDefense, .speed,
+                                  .accuracy, .evasion]
             if let up = stats.randomElement(using: &Dice.source),
                let down = stats.filter({ $0 != up }).randomElement(using: &Dice.source) {
                 StatChanges.change([up: 2], onMine: mine, slot: index, board: &board, because: "Moody")

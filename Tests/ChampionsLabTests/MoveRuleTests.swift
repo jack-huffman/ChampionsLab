@@ -39,7 +39,7 @@ print("\n== two-turn moves ==")
     let electro = chargeBoard.mine[0].moves[eShot]
     print("  Electro Shot reads: hides \(electro.charge?.hides ?? false), skips in \(electro.charge?.skipsIn.map { "\($0)" } ?? "nothing"), boosts \(electro.charge?.boosts ?? [:])")
     check("Electro Shot is read as a two-turn move that boosts Sp. Atk and skips in rain",
-          electro.charge?.skipsIn == Weather.rain && electro.charge?.boosts[Stat.spAttack] == 1 && electro.charge?.hides == false)
+          electro.charge?.skipsIn == Weather.rain && electro.charge?.boosts[Stage.spAttack] == 1 && electro.charge?.hides == false)
     // One quiet turn: the charging Pokémon does what it is told, and nothing
     // on the other side interferes with the wind-up.
     func quiet(_ board: Board, _ left: Choice) -> Board {

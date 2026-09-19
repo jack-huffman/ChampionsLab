@@ -246,7 +246,7 @@ extension BattleFieldView {
                 if let moved = playback.boosts[seat], !moved.isEmpty {
                     HStack(spacing: 3) {
                         ForEach(moved, id: \.stat) { change in
-                            Text("\(Stat(rawValue: change.stat)?.short ?? "") \(change.delta > 0 ? "+" : "")\(change.delta)")
+                            Text("\(Stage(rawValue: change.stat)?.short ?? "") \(change.delta > 0 ? "+" : "")\(change.delta)")
                                 .font(.system(size: max(10, 9 * stage.k), weight: .heavy, design: .rounded))
                                 .monospacedDigit()
                                 .foregroundStyle(.white)
