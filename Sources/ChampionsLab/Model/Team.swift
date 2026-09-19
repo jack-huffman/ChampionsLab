@@ -48,6 +48,10 @@ struct TeamSlot: Codable, Identifiable, Hashable {
     var sp: [Int] = Array(repeating: 0, count: 6)
     var alignmentName: String = "Serious"
     var nickname: String = ""
+    /// Registered shiny. It changes nothing about the battle -- not a stat,
+    /// not a type, not a roll -- and that is the whole of it: it is the one
+    /// thing on a team list that is only yours.
+    var shiny: Bool = false
 
     var alignment: Alignment { Alignment.named(alignmentName) }
     var spUsed: Int { sp.reduce(0, +) }
@@ -72,6 +76,7 @@ struct TeamSlot: Codable, Identifiable, Hashable {
         sp = (0..<6).map { saved.indices.contains($0) ? saved[$0] : 0 }
         alignmentName = try c.decodeIfPresent(String.self, forKey: .alignmentName) ?? "Serious"
         nickname = try c.decodeIfPresent(String.self, forKey: .nickname) ?? ""
+        shiny = try c.decodeIfPresent(Bool.self, forKey: .shiny) ?? false
     }
 
     func form(in rules: Rulebook) -> Form? { rules.form(formID) }
@@ -96,9 +101,11 @@ struct TeamSlot: Codable, Identifiable, Hashable {
         // base one, which is the whole point of Mega Evolving.
         let mega = rules.megaForm(for: base, holding: item)
         let form = mega ?? base
-        return Combatant(form: form,
-                         ability: mega?.abilities.first?.name ?? ability,
-                         item: item, sp: sp, alignment: alignment)
+        var out = Combatant(form: form,
+                            ability: mega?.abilities.first?.name ?? ability,
+                            item: item, sp: sp, alignment: alignment)
+        out.shiny = shiny
+        return out
     }
 }
 

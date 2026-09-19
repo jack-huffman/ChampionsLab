@@ -157,12 +157,20 @@ enum TeamPaste {
             return
         }
 
+        // "Shiny: Yes", which every exporter writes and this one used to
+        // throw away along with the things the game really has no concept of.
+        if line.lowercased().hasPrefix("shiny:") {
+            let value = line.dropFirst("shiny:".count).trimmingCharacters(in: .whitespaces)
+            slot.shiny = ["yes", "true", "1"].contains(value.lowercased())
+            return
+        }
+
         // Lines Champions has no concept of. Tera Type appears in any paste
         // written for Scarlet/Violet; this game has no Terastallization, and IVs
         // do not exist either, so both are dropped without comment.
         if line.lowercased().hasPrefix("tera type:")
             || line.lowercased().hasPrefix("ivs:") || line.lowercased().hasPrefix("level:")
-            || line.lowercased().hasPrefix("shiny:") || line.lowercased().hasPrefix("happiness:")
+            || line.lowercased().hasPrefix("happiness:")
             || line.lowercased().hasPrefix("gigantamax:") || line.lowercased().hasPrefix("dynamax level:") {
             return
         }
@@ -286,6 +294,7 @@ enum TeamPaste {
             if !slot.item.isEmpty { head += " @ \(slot.item)" }
             block.append(head)
             if !slot.ability.isEmpty { block.append("Ability: \(slot.ability)") }
+            if slot.shiny { block.append("Shiny: Yes") }
             block.append("Level: \(ChampionsStats.level)")
 
             let spread = Stat.allCases.compactMap { stat -> String? in

@@ -327,7 +327,17 @@ final class Store: ObservableObject {
 
     // MARK: - Images
 
-    func sprite(_ form: Form) -> NSImage? { image(subdirectory: "sprites", name: form.icon) }
+    /// A form's art, shiny or not.
+    ///
+    /// The shiny set lives in its own directory rather than under a suffixed
+    /// name: the suffixes are taken, and Rotom (Fan) is already "479-s".
+    /// A form with no shiny render falls back to the ordinary one, which is
+    /// wrong in colour but right in every other way -- better than the
+    /// question mark that nothing at all would draw.
+    func sprite(_ form: Form, shiny: Bool = false) -> NSImage? {
+        if shiny, let art = image(subdirectory: "sprites/shiny", name: form.icon) { return art }
+        return image(subdirectory: "sprites", name: form.icon)
+    }
     func typeIcon(_ type: PokeType) -> NSImage? {
         image(subdirectory: "types", name: type.rawValue)
     }

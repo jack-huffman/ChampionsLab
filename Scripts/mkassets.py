@@ -5,7 +5,9 @@ PKHeX already carries clean, consistently-sized art for everything this app
 needs, so there is no reason to redraw it or to keep Serebii's 40px dex icons:
 
     hires/<dex>.png                 512x512 HOME renders, base forms
+    hires/shiny/<dex>.png           the same, shiny
     hires/forms/<id>.png            512x512 renders for alternate forms
+    hires/forms/shiny/<id>.png      the same, shiny
     hires/forms.json                PokeAPI slug -> form id
     types/square/type_icon_NN.png   18 type badges, 60x60
     img/items/bitem_N.png           item sprites, indexed by item ID
@@ -170,6 +172,7 @@ def copy_sprites(root):
     os.makedirs(dst, exist_ok=True)
 
     exact, fellback, missing = 0, [], []
+    shiny_made, shiny_missing = 0, []
     for form in forms:
         species = form["species"].replace("'", "").replace(".", "").replace(" ", "-")
         suffix = form["suffix"]
@@ -205,7 +208,35 @@ def copy_sprites(root):
         if os.path.exists(out):
             exact += 1
 
-    print("==> %d sprites at %dpx" % (exact, SPRITE_PX))
+        # The shiny of whichever render was chosen. PKHeX keeps the two in
+        # step -- the shiny of a form is under forms/shiny with the same id,
+        # the shiny of a species under shiny with the same number -- so the
+        # shiny follows the normal one rather than being looked up again and
+        # possibly landing on a different Pokemon. A form with no shiny render
+        # keeps none, and the app shows the ordinary art for it.
+        #
+        # In its own directory rather than under a suffixed name, because the
+        # suffixes are taken: Rotom (Fan) is already "479-s" and Gourgeist
+        # (Small) "711-s", so filing Rotom's shiny as "479-s.png" quietly
+        # overwrote Rotom (Fan). It did, once, and this is why there is a
+        # folder.
+        head, tail = os.path.split(src)
+        shiny_src = os.path.join(head, "shiny", tail)
+        if os.path.exists(shiny_src):
+            os.makedirs(os.path.join(dst, "shiny"), exist_ok=True)
+            shiny_out = os.path.join(dst, "shiny", "%s.png" % form["icon"])
+            subprocess.run(["sips", "-Z", str(SPRITE_PX), shiny_src, "--out", shiny_out],
+                           capture_output=True, check=False)
+            if os.path.exists(shiny_out):
+                shiny_made += 1
+        else:
+            shiny_missing.append(form["form_label"])
+
+    print("==> %d sprites at %dpx, %d of them with a shiny beside them"
+          % (exact, SPRITE_PX, shiny_made))
+    if shiny_missing:
+        print("    no shiny render for %d: %s"
+              % (len(shiny_missing), ", ".join(sorted(shiny_missing)[:8])))
     if fellback:
         print("    %d alternate forms using the base render: %s"
               % (len(fellback), ", ".join(sorted(set(fellback))[:8])))

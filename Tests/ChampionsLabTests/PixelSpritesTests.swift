@@ -26,5 +26,19 @@ final class PixelSpritesTests: HarnessCase {
         check("Mega Absol Z is Absol-Mega-Z", form("Mega Absol Z").showdown == "Absol-Mega-Z",
               form("Mega Absol Z").showdown ?? "nil")
         check("and its sprite is absol-megaz", PixelSprites.slug(form("Mega Absol Z")) == "absol-megaz")
+        // The hyphen that is part of a name rather than a join. Showdown files
+        // this one as kommoo, and asking for kommo-o got nothing at all.
+        check("Kommo-o is kommoo, not kommo-o",
+              PixelSprites.slug(form("Kommo-o")) == "kommoo",
+              PixelSprites.slug(form("Kommo-o")) ?? "nil")
+        // And every form's slug is one Showdown could actually have: a
+        // hyphen in it means a forme, and a forme means a suffix here.
+        for entry in store.data.forms where entry.showdown != nil {
+            guard let piece = PixelSprites.slug(entry) else { continue }
+            if piece.contains("-") {
+                check("\(entry.formLabel)'s slug \(piece) is a species and a forme",
+                      !entry.suffix.isEmpty, entry.suffix)
+            }
+        }
     }
 }

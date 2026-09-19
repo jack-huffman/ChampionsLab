@@ -426,9 +426,34 @@ struct SlotEditor: View {
         }
     }
 
+    /// The chip that registers one shiny.
+    ///
+    /// Filled when it is on and outlined when it is off, and labelled either
+    /// way, so the state is legible without reading the colour -- and the
+    /// sprite beside it changes at the same moment, which is the real answer.
+    private var shinyChip: some View {
+        Button { slot.shiny.toggle() } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "sparkles").font(.system(size: 10, weight: .bold))
+                Text("Shiny").font(.system(size: 10, weight: .semibold))
+            }
+            .padding(.horizontal, 8).frame(height: 21)
+            .background(Capsule().fill(slot.shiny
+                                       ? AnyShapeStyle(Palette.shiny)
+                                       : AnyShapeStyle(Palette.surfaceRaised)))
+            .foregroundStyle(slot.shiny ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+            .overlay(Capsule().strokeBorder(slot.shiny ? .clear : Palette.hairline, lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(slot.shiny
+              ? "Registered shiny. It changes nothing in a battle — click to make it ordinary."
+              : "Register this one shiny. Nothing about the battle changes; the colours do.")
+    }
+
     private func header(_ form: Form) -> some View {
         HStack(spacing: 12) {
-            SpriteImage(form: form, side: 46)
+            SpriteImage(form: form, side: 46, shiny: slot.shiny)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(form.formLabel).font(.system(size: 15, weight: .semibold))
@@ -460,6 +485,7 @@ struct SlotEditor: View {
                 }
             }
             Spacer()
+            if !locked { shinyChip }
             Button {
                 store.pendingCalculation = CalculatorPreload(slot: slot, rules: store.rulebook)
                 NotificationCenter.default.post(name: .openCalculator, object: nil)

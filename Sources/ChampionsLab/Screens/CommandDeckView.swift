@@ -67,7 +67,7 @@ struct CommandDeckView: View {
                     command = .menu
                 } label: {
                     HStack(spacing: 7) {
-                        SpriteImage(form: fighter.build.form, side: 28)
+                        SpriteImage(form: fighter.build.form, side: 28, shiny: fighter.build.shiny)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(fighter.build.form.formLabel)
                                 .font(.system(size: 11, weight: .semibold))
@@ -117,7 +117,7 @@ struct CommandDeckView: View {
             // Who is being commanded, and the two things that are true of it
             // whatever you pick.
             HStack(spacing: 10) {
-                SpriteImage(form: ahead.build.form, side: 44)
+                SpriteImage(form: ahead.build.form, side: 44, shiny: ahead.build.shiny)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text("What will \(ahead.build.form.formLabel) do?")
@@ -145,7 +145,7 @@ struct CommandDeckView: View {
                 Spacer()
                 if let mega = fighter.pendingMega,
                    !board.mine.contains(where: \.hasMegaEvolved) {
-                    megaToggle(slot: slot, becoming: mega)
+                    megaToggle(slot: slot, becoming: mega, shiny: fighter.build.shiny)
                 }
                 if command != .menu {
                     Button {
@@ -317,12 +317,12 @@ struct CommandDeckView: View {
     /// biggest decision on the screen. It used to read as a small grey capsule
     /// beside the Pokémon's name, quieter than the move buttons underneath it,
     /// and was easy to click past without noticing.
-    private func megaToggle(slot: Int, becoming: Form) -> some View {
+    private func megaToggle(slot: Int, becoming: Form, shiny: Bool) -> some View {
         let share = engineMegaShare(slot: slot)
         let on = megaSlot == slot
         return Button { megaSlot = on ? nil : slot } label: {
             HStack(spacing: 7) {
-                SpriteImage(form: becoming, side: 26)
+                SpriteImage(form: becoming, side: 26, shiny: shiny)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(on ? "Mega Evolving" : "Mega Evolve")
                         .font(.system(size: 12, weight: .bold))
@@ -708,7 +708,7 @@ struct CommandDeckView: View {
             command = .menu
         } label: {
             HStack(spacing: 12) {
-                SpriteImage(form: fighter.build.form, side: 56)
+                SpriteImage(form: fighter.build.form, side: 56, shiny: fighter.build.shiny)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(fighter.build.form.formLabel)
@@ -757,7 +757,8 @@ struct CommandDeckView: View {
                         command = .menu
                     } label: {
                         HStack(spacing: 10) {
-                            SpriteImage(form: fighter.build.form, side: 40).saturation(0.3)
+                            SpriteImage(form: fighter.build.form, side: 40, shiny: fighter.build.shiny)
+                                .saturation(0.3)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(fighter.build.form.formLabel)
                                     .font(.system(size: 12, weight: .semibold)).lineLimit(1)
@@ -806,7 +807,7 @@ struct CommandDeckView: View {
                         command = .menu
                     } label: {
                         HStack(spacing: 10) {
-                            SpriteImage(form: fighter.build.form, side: 44)
+                            SpriteImage(form: fighter.build.form, side: 44, shiny: fighter.build.shiny)
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 5) {
                                     Text(fighter.build.form.formLabel)

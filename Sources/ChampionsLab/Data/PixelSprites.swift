@@ -12,6 +12,10 @@
 //
 //  A Champions-only Mega has no animated sprite there; Showdown has drawn a
 //  still for each, and the still is what comes back for those.
+//
+//  Shiny is the same set under another name -- gen5ani-shiny and its three
+//  siblings -- and is fetched and kept the same way, under its own key so the
+//  two never overwrite each other in the cache.
 
 import AppKit
 import ImageIO
@@ -72,7 +76,21 @@ final class PixelSprites: ObservableObject {
         return id(name[..<dash]) + "-" + id(name[name.index(after: dash)...])
     }
 
-    nonisolated static func slug(_ form: Form) -> String? { form.showdown.flatMap(slug(showdownName:)) }
+    /// The same, for a form we actually have.
+    ///
+    /// The hyphen in a Showdown name usually separates the species from the
+    /// forme -- Ninetales-Alola, Charizard-Mega-Y -- but sometimes it is just
+    /// part of the species' name, and Kommo-o is the one in this dex. Showdown
+    /// files that as "kommoo"; splitting at the hyphen asks for "kommo-o",
+    /// which is not there, so Kommo-o silently had no pixel sprite at all. A
+    /// form with no suffix has no forme, so there is nothing to split off.
+    nonisolated static func slug(_ form: Form) -> String? {
+        guard let name = form.showdown else { return nil }
+        if form.suffix.isEmpty {
+            return slug(showdownName: name.replacingOccurrences(of: "-", with: ""))
+        }
+        return slug(showdownName: name)
+    }
 
     private var frames: [String: Frames] = [:]
     private var fetching: Set<String> = []
@@ -81,15 +99,15 @@ final class PixelSprites: ObservableObject {
     /// The sprite's frames, or nil while it is on its way or when there is
     /// none. Asking starts the fetch and the decode, both off the main
     /// thread; the object announces itself when they land.
-    func frames(for form: Form, back: Bool) -> Frames? {
+    func frames(for form: Form, back: Bool, shiny: Bool = false) -> Frames? {
         guard let slug = Self.slug(form) else { return nil }
-        let key = (back ? "back/" : "front/") + slug
+        let key = (back ? "back/" : "front/") + (shiny ? "shiny/" : "") + slug
         if let ready = frames[key] { return ready }
         guard !missing.contains(key), !fetching.contains(key) else { return nil }
         fetching.insert(key)
         Task.detached(priority: .userInitiated) { [weak self] in
             var data = Self.kept(key)
-            if data == nil { data = await Self.fetch(slug: slug, back: back, key: key) }
+            if data == nil { data = await Self.fetch(slug: slug, back: back, shiny: shiny, key: key) }
             let decoded = data.flatMap(Frames.decode)
             await MainActor.run { [weak self] in
                 guard let self else { return }
@@ -118,10 +136,16 @@ final class PixelSprites: ObservableObject {
     /// The animated sprite where there is one, the still where there is not,
     /// written to the cache on the way back. Bytes rather than an image, so it
     /// can cross back to the main actor.
-    private nonisolated static func fetch(slug: String, back: Bool, key: String) async -> Data? {
+    private nonisolated static func fetch(slug: String, back: Bool, shiny: Bool,
+                                          key: String) async -> Data? {
         let base = "https://play.pokemonshowdown.com/sprites/"
-        let tries = [(base + (back ? "gen5ani-back/" : "gen5ani/") + slug + ".gif", "gif"),
-                     (base + (back ? "gen5-back/" : "gen5/") + slug + ".png", "png")]
+        // Showdown files the shinies as the same four directories with
+        // "-shiny" on the end, and carries one for everything it carries a
+        // plain one for -- so a form that has an animation has a shiny
+        // animation, and one that only has a still has a shiny still.
+        let tail = shiny ? "-shiny/" : "/"
+        let tries = [(base + (back ? "gen5ani-back" : "gen5ani") + tail + slug + ".gif", "gif"),
+                     (base + (back ? "gen5-back" : "gen5") + tail + slug + ".png", "png")]
         for (address, ext) in tries {
             guard let url = URL(string: address),
                   let (data, response) = try? await URLSession.shared.data(from: url),

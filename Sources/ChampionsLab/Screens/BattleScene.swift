@@ -165,7 +165,8 @@ extension BattleFieldView {
                     .frame(width: side, height: side)
                     .transition(.opacity)
             }
-            fighterSprite(fighter.build.form, mine: seat.mine, side: side * 0.92)
+            fighterSprite(fighter.build.form, mine: seat.mine, side: side * 0.92,
+                          shiny: fighter.build.shiny)
                 .offset(y: fighter.fainted ? side * 0.12 : (pixel ? 0 : bob))
                 .opacity(fighter.fainted ? 0.2 : 1)
                 .saturation(fighter.fainted ? 0 : 1)
@@ -303,11 +304,12 @@ extension BattleFieldView {
     /// its front for theirs -- when that style is on and the sprite has
     /// arrived; the illustration otherwise, turned to face across the field
     /// on your side, and always in a still.
-    @ViewBuilder func fighterSprite(_ form: Form, mine: Bool, side: CGFloat) -> some View {
-        if usesPixelSprites, let frames = pixels.frames(for: form, back: mine) {
+    @ViewBuilder func fighterSprite(_ form: Form, mine: Bool, side: CGFloat,
+                                    shiny: Bool = false) -> some View {
+        if usesPixelSprites, let frames = pixels.frames(for: form, back: mine, shiny: shiny) {
             PixelSpriteView(frames: frames).frame(width: side, height: side)
         } else {
-            SpriteImage(form: form, side: side)
+            SpriteImage(form: form, side: side, shiny: shiny)
                 .scaleEffect(x: mine ? -1 : 1, y: 1)
         }
     }
@@ -354,7 +356,7 @@ extension BattleFieldView {
         let showing = Binding(get: { detail?.seat == seat }, set: { if !$0, detail?.seat == seat { detail = nil } })
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                SpriteImage(form: fighter.build.form, side: 22)
+                SpriteImage(form: fighter.build.form, side: 22, shiny: fighter.build.shiny)
                     .saturation(fighter.fainted ? 0 : 1)
                 Text(fighter.build.form.formLabel)
                     .font(.system(size: 11, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)

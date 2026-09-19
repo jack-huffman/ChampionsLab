@@ -71,6 +71,10 @@ struct Combatant {
     var sp: [Int] = Array(repeating: 0, count: 6)
     var alignment: Alignment = .neutral
     var boosts: [Int] = Array(repeating: 0, count: 6)
+    /// Drawn shiny. Nothing in this file reads it -- no stat, no roll, no
+    /// type -- it rides along so the scene can draw the right colours for
+    /// whatever is standing there, including a Mega it turned into.
+    var shiny: Bool = false
     /// Fainted allies, for Supreme Overlord and Last Respects.
     var fallenAllies = 0
     /// Left itself open by using Glaive Rush: until its next action, attacks

@@ -394,13 +394,24 @@ struct MoveTableHeader: View {
 
 // MARK: - Sprites
 
+extension Palette {
+    /// What marks something registered shiny. Amber rather than the accent,
+    /// so it is not mistaken for selection, and paired everywhere with a
+    /// label and a filled-against-outlined shape rather than carrying the
+    /// meaning on its own.
+    static let shiny = Color(red: 0.93, green: 0.65, blue: 0.16)
+}
+
 struct SpriteImage: View {
     let form: Form
     var side: CGFloat = 48
+    /// Drawn in its shiny colours. Defaulted off, so the sixty-odd places
+    /// that draw a sprite without an opinion keep the one they had.
+    var shiny: Bool = false
 
     var body: some View {
         Group {
-            if let sprite = Store.shared.sprite(form) {
+            if let sprite = Store.shared.sprite(form, shiny: shiny) {
                 Image(nsImage: sprite)
                     .resizable()
                     .interpolation(.medium)

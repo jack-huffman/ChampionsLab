@@ -637,7 +637,7 @@ struct BattleFieldView: View {
                         // screen two clicks away.
                         VStack(spacing: 2) {
                             ZStack {
-                                SpriteImage(form: fighter.build.form, side: 30)
+                                SpriteImage(form: fighter.build.form, side: 30, shiny: fighter.build.shiny)
                                     .opacity(fighter.fainted ? 0.25 : 1)
                                     .saturation(fighter.fainted ? 0 : 1)
                                 if fighter.fainted {
@@ -676,7 +676,8 @@ struct BattleFieldView: View {
                     ForEach(Array(board.theirBenchCandidates.prefix(4).enumerated()), id: \.offset) {
                         _, candidate in
                         HStack(spacing: 3) {
-                            SpriteImage(form: candidate.fighter.build.form, side: 16)
+                            SpriteImage(form: candidate.fighter.build.form, side: 16,
+                                            shiny: candidate.fighter.build.shiny)
                             Text(String(format: "%.0f%%", candidate.chance * 100))
                                 .font(.system(size: 9, weight: .semibold, design: .rounded))
                                 .monospacedDigit()
