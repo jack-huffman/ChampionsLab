@@ -21,11 +21,21 @@ final class StaleReadingTests: HarnessCase {
 
     @MainActor func testAFreshUsageTableRebuildsWhatItDecided() {
         let format = "doubles"
+        // From the bundled table, whatever ran before this. The store is one
+        // object shared by the whole suite and a case that swaps its usage
+        // table out changes what every later case reads: this one compares a
+        // before against an after, so a before taken from somebody else's
+        // table compares two things that were never the same.
+        store.revertToBundledUsage()
         let before = store.ladderTeams(format: format).map { $0.team.slots.map(\.formID) }
         check("the ladder has teams to offer", !before.isEmpty)
         let benchmarks = store.speedBenchmarks(format: format)
 
         // A table with one Pokemon on it, which cannot build the same ladder.
+        // Whatever this case does to the shared table, it puts it back --
+        // including on the way out of a failure, which is how one broken
+        // assertion here used to take unrelated cases down with it.
+        defer { store.revertToBundledUsage() }
         let entry = store.data.usage.first!
         let thin = UsageEntry(name: entry.name, tier: "S", usage: 90, projected: false,
                               formats: ["doubles"], role: entry.role,

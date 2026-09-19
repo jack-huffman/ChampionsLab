@@ -218,6 +218,15 @@ struct WeatherLayer: View {
 /// out upwards rather than covering it. Each one moves the way its terrain
 /// suggests: grass grows upward, electricity flickers, psychic energy turns
 /// over slowly, mist drifts.
+///
+/// The four are told apart by what they are made of before they are told
+/// apart by colour -- blades standing up, angular sparks, flat rings opening
+/// out, soft banks sliding sideways. A field you have to name by its hue is a
+/// field some people cannot read at all, and the shapes carry it on their own.
+/// The word for it sits at the top of the arena besides.
+///
+/// It used to draw at nine per cent over a near-black floor, which is to say
+/// it did not draw. What is here now is meant to be seen from across a room.
 struct TerrainLayer: View {
     let terrain: Terrain
     var strength: Double = 1
@@ -229,21 +238,34 @@ struct TerrainLayer: View {
         if terrain == .none || strength <= 0.01 {
             Color.clear
         } else if reduceMotion {
-            Rectangle().fill(tint.opacity(0.08 * strength)).allowsHitTesting(false)
+            Rectangle().fill(LinearGradient(
+                colors: [tint.opacity(0), tint.opacity(0.30 * strength)],
+                startPoint: .top, endPoint: .bottom))
+                .allowsHitTesting(false)
         } else {
             TimelineView(.animation(minimumInterval: 1.0 / 20.0,
                                     paused: active == .inactive)) { slice in
                 Canvas(opaque: false, rendersAsynchronously: false) { context, size in
                     let t = slice.date.timeIntervalSinceReferenceDate
                     let colour = tint
-                    // The ground itself: a band of colour that stops a third of
-                    // the way up, so it reads as a floor and not a filter.
+                    // The ground itself: a band of colour that stops short of
+                    // halfway up, so it reads as a floor and not a filter.
                     context.fill(
-                        Path(CGRect(x: 0, y: size.height * 0.62,
-                                    width: size.width, height: size.height * 0.38)),
+                        Path(CGRect(x: 0, y: size.height * 0.40,
+                                    width: size.width, height: size.height * 0.60)),
                         with: .linearGradient(
-                            Gradient(colors: [colour.opacity(0), colour.opacity(0.09)]),
-                            startPoint: CGPoint(x: 0, y: size.height * 0.62),
+                            Gradient(colors: [colour.opacity(0), colour.opacity(0.12),
+                                              colour.opacity(0.34)]),
+                            startPoint: CGPoint(x: 0, y: size.height * 0.40),
+                            endPoint: CGPoint(x: 0, y: size.height)))
+                    // And the near edge of it, brightest where the floor is
+                    // closest to the eye.
+                    context.fill(
+                        Path(CGRect(x: 0, y: size.height * 0.88,
+                                    width: size.width, height: size.height * 0.12)),
+                        with: .linearGradient(
+                            Gradient(colors: [colour.opacity(0), colour.opacity(0.22)]),
+                            startPoint: CGPoint(x: 0, y: size.height * 0.88),
                             endPoint: CGPoint(x: 0, y: size.height)))
                     switch terrain {
                     case .grassy:   grassy(&context, size, t, colour)
@@ -273,17 +295,17 @@ struct TerrainLayer: View {
     /// Blades drifting up off the floor and fading as they go.
     private func grassy(_ context: inout GraphicsContext, _ size: CGSize,
                         _ t: Double, _ colour: Color) {
-        for index in 0..<16 {
+        for index in 0..<30 {
             let rise = (t * (0.09 + scatter(index &+ 29) * 0.08)
                         + scatter(index)).truncatingRemainder(dividingBy: 1)
             let x = scatter(index &+ 500) * size.width
-            let y = size.height - rise * size.height * 0.45
-            let height = 4 + scatter(index &+ 71) * 7
+            let y = size.height - rise * size.height * 0.50
+            let height = 7 + scatter(index &+ 71) * 13
             var blade = Path()
             blade.move(to: CGPoint(x: x, y: y))
-            blade.addQuadCurve(to: CGPoint(x: x + 2.5, y: y - height),
-                               control: CGPoint(x: x + 4.5, y: y - height * 0.5))
-            context.stroke(blade, with: .color(colour.opacity((1 - rise) * 0.30)), lineWidth: 1.4)
+            blade.addQuadCurve(to: CGPoint(x: x + 3.5, y: y - height),
+                               control: CGPoint(x: x + 6.5, y: y - height * 0.5))
+            context.stroke(blade, with: .color(colour.opacity((1 - rise) * 0.75)), lineWidth: 2.1)
         }
     }
 
@@ -291,48 +313,48 @@ struct TerrainLayer: View {
     /// when it is in the floor rather than going anywhere.
     private func electric(_ context: inout GraphicsContext, _ size: CGSize,
                           _ t: Double, _ colour: Color) {
-        for index in 0..<12 {
+        for index in 0..<22 {
             let phase = sin(t * (1.8 + scatter(index &+ 43) * 2.4) + scatter(index) * 12)
-            guard phase > 0.55 else { continue }
+            guard phase > 0.40 else { continue }
             let x = scatter(index &+ 900) * size.width
-            let y = size.height * (0.66 + scatter(index &+ 17) * 0.32)
-            let length = 5 + scatter(index &+ 211) * 8
+            let y = size.height * (0.52 + scatter(index &+ 17) * 0.46)
+            let length = 9 + scatter(index &+ 211) * 14
             var bolt = Path()
             bolt.move(to: CGPoint(x: x, y: y - length / 2))
-            bolt.addLine(to: CGPoint(x: x + 2.5, y: y))
-            bolt.addLine(to: CGPoint(x: x - 1.5, y: y + length / 2))
-            context.stroke(bolt, with: .color(colour.opacity((phase - 0.55) * 1.0)), lineWidth: 1.3)
+            bolt.addLine(to: CGPoint(x: x + 4, y: y))
+            bolt.addLine(to: CGPoint(x: x - 2.5, y: y + length / 2))
+            context.stroke(bolt, with: .color(colour.opacity((phase - 0.40) * 1.6)), lineWidth: 2.3)
         }
     }
 
     /// Slow rings turning over, going nowhere.
     private func psychic(_ context: inout GraphicsContext, _ size: CGSize,
                          _ t: Double, _ colour: Color) {
-        for index in 0..<8 {
+        for index in 0..<14 {
             let grow = (t * 0.16 + scatter(index)).truncatingRemainder(dividingBy: 1)
             let x = scatter(index &+ 300) * size.width
-            let y = size.height * (0.70 + scatter(index &+ 91) * 0.26)
-            let radius = 4 + grow * 30
+            let y = size.height * (0.56 + scatter(index &+ 91) * 0.40)
+            let radius = 6 + grow * 46
             context.stroke(
                 Path(ellipseIn: CGRect(x: x - radius, y: y - radius * 0.35,
                                        width: radius * 2, height: radius * 0.7)),
-                with: .color(colour.opacity((1 - grow) * 0.42)), lineWidth: 1.4)
+                with: .color(colour.opacity((1 - grow) * 0.80)), lineWidth: 2.3)
         }
     }
 
     /// Soft blobs sliding sideways, overlapping into fog.
     private func misty(_ context: inout GraphicsContext, _ size: CGSize,
                        _ t: Double, _ colour: Color) {
-        for index in 0..<8 {
+        for index in 0..<11 {
             let slide = (t * (0.03 + scatter(index &+ 7) * 0.04)
                          + scatter(index)).truncatingRemainder(dividingBy: 1)
             let x = slide * (size.width + 160) - 80
-            let y = size.height * (0.68 + scatter(index &+ 133) * 0.30)
-            let radius = 16 + scatter(index &+ 57) * 30
+            let y = size.height * (0.56 + scatter(index &+ 133) * 0.42)
+            let radius = 22 + scatter(index &+ 57) * 42
             context.fill(
                 Path(ellipseIn: CGRect(x: x - radius, y: y - radius * 0.4,
                                        width: radius * 2, height: radius * 0.8)),
-                with: .color(colour.opacity(0.035 + scatter(index &+ 3) * 0.030)))
+                with: .color(colour.opacity(0.065 + scatter(index &+ 3) * 0.075)))
         }
     }
 }

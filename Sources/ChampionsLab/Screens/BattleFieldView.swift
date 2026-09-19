@@ -532,22 +532,31 @@ struct BattleFieldView: View {
     /// The field: weather and terrain behind, the scene in front, the sides'
     /// conditions across the top.
     private func arena(_ board: Board) -> some View {
+        // The air, which is the weather's, and the floor, which is the
+        // terrain's. They used to share one colour and the weather always won
+        // it, so a Grassy Terrain under rain had nothing on the field but a
+        // blue platform and a word at the top: the one thing standing on the
+        // terrain could see was the wrong colour for it.
+        let terrainTint: Color? = {
+            switch board.field.terrain {
+            case .grassy:   return Color(red: 0.36, green: 0.82, blue: 0.34)
+            case .electric: return Color(red: 0.98, green: 0.84, blue: 0.20)
+            case .psychic:  return Color(red: 0.92, green: 0.36, blue: 0.64)
+            case .misty:    return Color(red: 0.82, green: 0.55, blue: 0.94)
+            case .none:     return nil
+            }
+        }()
         let tint: Color = {
             switch board.field.weather {
             case .sun:  return Color(red: 0.95, green: 0.62, blue: 0.20)
             case .rain: return Color(red: 0.30, green: 0.55, blue: 0.90)
             case .sand: return Color(red: 0.80, green: 0.68, blue: 0.36)
             case .snow: return Color(red: 0.62, green: 0.82, blue: 0.92)
-            case .none:
-                switch board.field.terrain {
-                case .grassy:   return Color(red: 0.40, green: 0.74, blue: 0.38)
-                case .electric: return Color(red: 0.93, green: 0.82, blue: 0.25)
-                case .psychic:  return Color(red: 0.86, green: 0.38, blue: 0.60)
-                case .misty:    return Color(red: 0.80, green: 0.56, blue: 0.86)
-                case .none:     return Palette.accent
-                }
+            case .none: return terrainTint ?? Palette.accent
             }
         }()
+        // What the ground is made of now, whatever is falling on it.
+        let groundTint = terrainTint ?? tint
         return GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
             ZStack {
@@ -558,7 +567,8 @@ struct BattleFieldView: View {
                              strength: fade(board.terrainTurns))
                 WeatherLayer(weather: board.field.weather,
                              strength: fade(board.weatherTurns))
-                battleScene(board, size: geo.size, tint: tint)
+                battleScene(board, size: geo.size, tint: tint, ground: groundTint,
+                            terrain: board.field.terrain)
                 sideState(board, mine: true).position(x: w * 0.25, y: 18)
                 sideState(board, mine: false).position(x: w * 0.75, y: 18)
                 if startFlash {

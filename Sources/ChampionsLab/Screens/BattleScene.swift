@@ -44,10 +44,12 @@ extension BattleFieldView {
 
     // MARK: - The scene
 
-    @ViewBuilder func battleScene(_ board: Board, size: CGSize, tint: Color) -> some View {
+    @ViewBuilder func battleScene(_ board: Board, size: CGSize, tint: Color,
+                                  ground: Color? = nil,
+                                  terrain: Terrain = .none) -> some View {
         let stage = stageFor(size, board: board)
         ZStack {
-            sceneGround(stage: stage, tint: tint)
+            sceneGround(stage: stage, tint: tint, ground: ground ?? tint, terrain: terrain)
             ForEach(seatsInDrawOrder(board), id: \.self) { seat in
                 if let fighter = fighter(at: seat, in: board) {
                     scenePokemon(fighter, seat: seat, stage: stage, board: board)
@@ -73,13 +75,26 @@ extension BattleFieldView {
     /// The ground: a platform under each side, in perspective, in the field's
     /// colour, wide enough for both Pokemon standing on it. The client's
     /// backdrops are photographs it owns; this is ours.
-    func sceneGround(stage: MoveTimeline.Stage, tint: Color) -> some View {
+    func sceneGround(stage: MoveTimeline.Stage, tint: Color,
+                     ground: Color, terrain: Terrain = .none) -> some View {
+        // A platform with terrain on it is lit from within and ringed twice:
+        // the thick rim is what makes it read as a floor somebody has changed
+        // rather than the same floor in another colour, which matters when the
+        // colour is the part you cannot rely on.
+        let standing = terrain != .none
         func platform(centre: CGPoint, width: CGFloat, height: CGFloat, strength: Double) -> some View {
             Ellipse()
-                .fill(RadialGradient(colors: [tint.opacity(0.28 * strength), tint.opacity(0.10 * strength),
-                                              Palette.canvas.opacity(0.0)],
-                                     center: .center, startRadius: 0, endRadius: width / 2))
-                .overlay(Ellipse().strokeBorder(tint.opacity(0.22 * strength), lineWidth: 1))
+                .fill(RadialGradient(
+                    colors: [ground.opacity((standing ? 0.52 : 0.28) * strength),
+                             ground.opacity((standing ? 0.24 : 0.10) * strength),
+                             Palette.canvas.opacity(0.0)],
+                    center: .center, startRadius: 0, endRadius: width / 2))
+                .overlay(Ellipse().strokeBorder(
+                    ground.opacity((standing ? 0.85 : 0.22) * strength),
+                    lineWidth: standing ? 2.5 : 1))
+                .overlay(
+                    Ellipse().strokeBorder(ground.opacity(standing ? 0.30 * strength : 0),
+                                           lineWidth: 10).blur(radius: 7))
                 .frame(width: width, height: height)
                 .position(centre)
         }
@@ -97,6 +112,13 @@ extension BattleFieldView {
             // The horizon, faint, where the far platform sits.
             LinearGradient(colors: [tint.opacity(0.10), .clear, tint.opacity(0.05)],
                            startPoint: .top, endPoint: .bottom)
+            // The floor itself, under both platforms, so the change reaches
+            // the whole ground and not only the two discs.
+            if standing {
+                LinearGradient(colors: [.clear, ground.opacity(0.07), ground.opacity(0.14)],
+                               startPoint: .top, endPoint: .bottom)
+                    .blendMode(.plusLighter)
+            }
             platform(centre: far.centre, width: far.width, height: far.width * 0.18, strength: 0.8)
             platform(centre: near.centre, width: near.width, height: near.width * 0.16, strength: 1)
         }
