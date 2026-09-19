@@ -408,11 +408,21 @@ struct SpriteImage: View {
     /// Drawn in its shiny colours. Defaulted off, so the sixty-odd places
     /// that draw a sprite without an opinion keep the one they had.
     var shiny: Bool = false
+    /// Watched so that a render arriving from the network redraws whatever is
+    /// showing a placeholder for it.
+    @ObservedObject private var dex = DexArt.shared
 
     var body: some View {
         Group {
             if let sprite = Store.shared.sprite(form, shiny: shiny) {
                 Image(nsImage: sprite)
+                    .resizable()
+                    .interpolation(.medium)
+                    .aspectRatio(contentMode: .fit)
+            } else if !form.fromChampions, let fetched = dex.image(for: form, shiny: shiny) {
+                // Nothing on the Champions roster reaches here: its art is
+                // bundled. This is the wider roster, whose pictures are not.
+                Image(nsImage: fetched)
                     .resizable()
                     .interpolation(.medium)
                     .aspectRatio(contentMode: .fit)
@@ -435,6 +445,23 @@ struct ItemIcon: View {
             if !name.isEmpty, let icon = Store.shared.itemIcon(named: name) {
                 Image(nsImage: icon).resizable().interpolation(.medium)
                     .aspectRatio(contentMode: .fit)
+            } else if isMegaStone {
+                // A Mega Stone whose art nobody has, which is a different
+                // thing from an item nobody recognises: twenty-six of the
+                // Megas in this dex hold a stone Serebii has never named, and
+                // a dashed circle read as "no such item" rather than "this
+                // stone, whose picture is not published".
+                Image(systemName: "hexagon.fill")
+                    .font(.system(size: side * 0.62))
+                    .foregroundStyle(LinearGradient(
+                        colors: [Color(red: 0.86, green: 0.45, blue: 0.86),
+                                 Color(red: 0.42, green: 0.36, blue: 0.86)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .overlay(Image(systemName: "sparkle")
+                        .font(.system(size: side * 0.26, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .offset(x: side * 0.02, y: -side * 0.02))
+                    .help("A Mega Stone. Serebii has not published this one's name or its picture.")
             } else {
                 Image(systemName: "circle.dashed")
                     .font(.system(size: side * 0.6))
@@ -442,6 +469,13 @@ struct ItemIcon: View {
             }
         }
         .frame(width: side, height: side)
+    }
+
+    /// Whether the thing with no picture is a Mega Stone.
+    private var isMegaStone: Bool {
+        guard !name.isEmpty else { return false }
+        if name.hasPrefix("Mega Stone") { return true }
+        return Store.shared.item(named: name)?.category == "Mega Stone"
     }
 }
 

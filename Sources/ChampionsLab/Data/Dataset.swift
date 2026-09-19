@@ -46,7 +46,7 @@ final class Store: ObservableObject {
             // An empty dataset keeps the app launchable so the window can
             // explain what went wrong instead of dying on start.
             data = Dataset(regulation: .placeholder, rules: .placeholder, items: [],
-                           usage: [], metaTeams: [], predictions: [], notes: .placeholder, forms: [], moves: [:],
+                           usage: [], metaTeams: [], predictions: [], notes: .placeholder, forms: [], wider: [], moves: [:],
                            abilities: [:], generated: "—", sources: [], provenance: nil)
             loadError = "\(error)"
         }
@@ -142,8 +142,13 @@ final class Store: ObservableObject {
     /// The engine's frozen view of the data. Rebuilt if the dataset is.
     private(set) lazy var rulebook = Rulebook(dataset: data)
 
+    /// Forms by id, for turning an id back into a name. The wider roster is in
+    /// here for that reason and that reason only: a sandbox team's slot has to
+    /// render as "Abra" rather than as its id. Nothing that *analyses* the game
+    /// reads this -- they walk `data.forms`, which is Champions and only that.
     lazy var formsByID: [String: Form] = {
-        Dictionary(data.forms.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        Dictionary((data.forms + data.widerForms).map { ($0.id, $0) },
+                   uniquingKeysWith: { a, _ in a })
     }()
 
     func move(_ id: String) -> Move? { rulebook.move(id) }
@@ -314,7 +319,21 @@ final class Store: ObservableObject {
 
     private var moveOptionCache: [String: [LookupOption]] = [:]
 
-    func moveOptions(for form: Form) -> [LookupOption] {
+    /// Every move in the game, for a sandbox team. Not what this form can
+    /// learn -- the point of the mode is that it does not ask.
+    func everyMoveOption() -> [LookupOption] {
+        if let cached = moveOptionCache["*"] { return cached }
+        let options = data.moves.values.sorted { $0.name < $1.name }.map {
+            LookupOption(id: $0.id, name: $0.name,
+                         subtitle: "\($0.category) · \($0.power > 0 ? "\($0.power) BP" : "status")",
+                         type: PokeType(loose: $0.type))
+        }
+        moveOptionCache["*"] = options
+        return options
+    }
+
+    func moveOptions(for form: Form, unlimited: Bool = false) -> [LookupOption] {
+        if unlimited { return everyMoveOption() }
         if let cached = moveOptionCache[form.id] { return cached }
         let options = moves(for: form).map {
             LookupOption(id: $0.id, name: $0.name,

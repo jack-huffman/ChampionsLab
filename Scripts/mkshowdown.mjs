@@ -160,24 +160,65 @@ for (const move of Object.values(Moves)) {
 // Alolan Raichu had plain Raichu's thirty kilograms rather than its own
 // twenty-one, and four moves now work their power out from that.
 
+// And which of them this game actually has. Showdown's Champions mod carries
+// a formats table with a tier for every species: the ones in the game have a
+// real tier, and the nine hundred and seventy-odd that are not say "Illegal"
+// and are marked nonstandard besides. That is a published, maintained answer
+// to a question the app was previously answering only by what Serebii's
+// Champions pages happened to list -- so it is worth having both, and worth
+// knowing when they disagree.
+const { FormatsData: ChampionsFormats } = await import(
+  pathToFileURL(join(root, 'data/mods/champions/formats-data.ts')).href);
+
 const { Pokedex } = await import(pathToFileURL(join(root, 'data/pokedex.ts')).href);
 const forms = {};
+let legalCount = 0;
 for (const [id, p] of Object.entries(Pokedex)) {
   if (!p.baseStats) continue;
+  const rules = ChampionsFormats[id];
+  const legal = !!rules && rules.tier !== 'Illegal' && !rules.isNonstandard;
+  if (legal) legalCount += 1;
   forms[id] = {
     name: p.name,
+    num: p.num ?? null,
     abilities: Object.values(p.abilities ?? {}),
     weight: p.weightkg ?? null,
     types: p.types ?? [],
+    base_stats: p.baseStats ?? null,
+    base_species: p.baseSpecies ?? p.name,
+    forme: p.forme ?? null,
+    // What the Champions mod says about it.
+    legal,
+    tier: rules?.tier ?? null,
+    nonstandard: rules?.isNonstandard ?? null,
   };
 }
 
+// -------------------------------------------------------- learnsets ----
+//
+// What each of them can learn, for the ones this game does not have. The
+// Champions roster's learnsets come from Serebii's Champions pages, which are
+// the authority for the game; these are the main series' and are only ever
+// used for Pokemon Champions has not got, where there is no Champions answer
+// to be had. Move ids only, and only moves that exist in the table above --
+// a main-series move this game never implemented is not a move you can click.
+const { Learnsets } = await import(pathToFileURL(join(root, 'data/learnsets.ts')).href);
+const known = new Set(Object.keys(table));
+// The same squashing the move table is keyed by, so the two agree.
+const norm = (t) => t.toLowerCase().replace(/[^a-z0-9]/g, '');
+const learnsets = {};
+for (const [id, entry] of Object.entries(Learnsets)) {
+  const moves = Object.keys(entry.learnset ?? {}).filter((m) => known.has(norm(m)));
+  if (moves.length) learnsets[id] = moves.map(norm).sort();
+}
+
 const json = JSON.stringify({
-  source: 'pokemon-showdown data/moves.ts with data/mods/champions/moves.ts over it, and data/pokedex.ts',
+  source: 'pokemon-showdown data/moves.ts with data/mods/champions/moves.ts over it, data/pokedex.ts, and data/mods/champions/formats-data.ts for legality',
   generated: new Date().toISOString().slice(0, 10),
   moves: table,
   forms,
+  learnsets,
 }, null, 1);
 if (process.argv[3]) writeFileSync(process.argv[3], json + '\n');
 else process.stdout.write(json + '\n');
-process.stderr.write(`showdown: ${Object.keys(table).length} moves (${overridden} changed by the champions mod), ${Object.keys(forms).length} forms\n`);
+process.stderr.write(`showdown: ${Object.keys(table).length} moves (${overridden} changed by the champions mod), ${Object.keys(forms).length} forms, ${legalCount} of them legal in Champions, ${Object.keys(learnsets).length} learnsets\n`);

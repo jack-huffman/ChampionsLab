@@ -15,8 +15,20 @@ import Foundation
 
 struct Rulebook: Sendable {
     /// Every legal form, and the same by id.
+    ///
+    /// `forms` is the Champions roster and only that. Everything that reasons
+    /// about the game -- the usage table, the ladder, the matchup grid, the
+    /// spread planner, the sprites -- walks this list and is about this game.
     let forms: [Form]
+    /// The rest of the National Dex, which this game has not got, for the
+    /// sandbox. Never in `forms`, so nothing that analyses Champions has to
+    /// know it exists.
+    let wider: [Form]
+    /// Both of them, because a saved team has to resolve whatever it names.
+    /// A team built in the sandbox is still a file somebody opens later.
     let formsByID: [String: Form]
+    /// Everything there is, for a picker that has been told to show it all.
+    var everyForm: [Form] { forms + wider }
     /// Every move, by id.
     let moves: [String: Move]
     /// Measured usage, for the odds on what a Pokémon is holding.
@@ -31,7 +43,9 @@ struct Rulebook: Sendable {
 
     init(dataset: Dataset) {
         forms = dataset.forms
-        formsByID = Dictionary(dataset.forms.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        wider = dataset.widerForms
+        formsByID = Dictionary((dataset.forms + dataset.widerForms).map { ($0.id, $0) },
+                               uniquingKeysWith: { a, _ in a })
         moves = dataset.moves
         usage = dataset.usage
         formats = dataset.rules.formats
@@ -44,6 +58,7 @@ struct Rulebook: Sendable {
     private init(forms: [Form], moves: [String: Move], usage: [UsageEntry],
                  formats: [FormatRule]) {
         self.forms = forms
+        self.wider = []
         self.formsByID = Dictionary(forms.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         self.moves = moves
         self.usage = usage
@@ -55,6 +70,10 @@ struct Rulebook: Sendable {
     func move(_ id: String) -> Move? { moves[id] }
 
     func form(_ id: String) -> Form? { formsByID[id] }
+
+    /// Whether this regulation has it. The one question a team validator asks
+    /// that the sandbox is allowed to ignore.
+    func isLegal(_ form: Form) -> Bool { form.isLegal }
 
     /// Everything this form can learn, in a settled order.
     func moves(for form: Form) -> [Move] {

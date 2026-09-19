@@ -220,7 +220,7 @@ struct TeamEditor: View {
             get: { picking.map { SlotIndex(value: $0) } },
             set: { picking = $0?.value }
         )) { index in
-            FormPicker { form in
+            FormPicker(unlimited: team.unlimited) { form in
                 assign(form, at: index.value)
                 picking = nil
             }
@@ -263,6 +263,31 @@ struct TeamEditor: View {
             .frame(width: 110)
             .controlSize(.small)
             .disabled(team.locked)
+
+            // The sandbox. Filled when it is on and outlined when it is off,
+            // and labelled either way, so what it is does not depend on the
+            // colour -- and it says plainly that nothing built here is legal.
+            Button {
+                team.unlimited.toggle(); onSave()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "infinity").font(.system(size: 10, weight: .bold))
+                    Text("Unlimited").font(.system(size: 10, weight: .semibold))
+                }
+                .padding(.horizontal, 8).frame(height: 21)
+                .background(Capsule().fill(team.unlimited
+                                           ? AnyShapeStyle(Palette.warn)
+                                           : AnyShapeStyle(Palette.surfaceRaised)))
+                .foregroundStyle(team.unlimited ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+                .overlay(Capsule().strokeBorder(team.unlimited ? .clear : Palette.hairline,
+                                                lineWidth: 1))
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(team.locked)
+            .help(team.unlimited
+                  ? "A sandbox team: every Pokémon and every move, none of it legal in this regulation."
+                  : "Build with every Pokémon and every move there is. Nothing built this way is legal in Champions.")
 
             Spacer()
 
@@ -314,6 +339,7 @@ struct TeamEditor: View {
                     if index < team.slots.count {
                         SlotEditor(slot: $team.slots[index],
                                    locked: team.locked,
+                                   unlimited: team.unlimited,
                                    onRemove: { team.slots.remove(at: index); onSave() },
                                    onChange: onSave)
                     } else if !team.locked {
@@ -392,6 +418,8 @@ struct SlotEditor: View {
     @EnvironmentObject private var store: Store
     @Binding var slot: TeamSlot
     var locked: Bool = false
+    /// A sandbox team: every move on offer rather than the learnset.
+    var unlimited: Bool = false
     let onRemove: () -> Void
     let onChange: () -> Void
 
@@ -687,7 +715,8 @@ struct SlotEditor: View {
                 MoveStatHeader()
             }
             ForEach(0..<4, id: \.self) { index in
-                MoveSlotPicker(form: form, slot: $slot, index: index, onChange: onChange)
+                MoveSlotPicker(form: form, slot: $slot, index: index,
+                               onChange: onChange, unlimited: unlimited)
             }
         }
     }
@@ -700,6 +729,8 @@ struct MoveSlotPicker: View {
     @Binding var slot: TeamSlot
     let index: Int
     let onChange: () -> Void
+    /// A sandbox team offers every move there is rather than the learnset.
+    var unlimited: Bool = false
 
     private var selection: Binding<String> {
         Binding(
@@ -718,7 +749,8 @@ struct MoveSlotPicker: View {
         let move = index < slot.moves.count ? store.move(slot.moves[index]) : nil
         HStack(spacing: MoveColumn.spacing) {
             LookupField(kind: .move, placeholder: "Move \(index + 1)",
-                        options: store.moveOptions(for: form), selection: selection)
+                        options: store.moveOptions(for: form, unlimited: unlimited),
+                        selection: selection)
                 .frame(maxWidth: .infinity)
 
             MoveStats(move: move)
@@ -841,6 +873,9 @@ struct MoveInfoButton: View {
 struct FormPicker: View {
     @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
+    /// A sandbox team offers the whole National Dex rather than this
+    /// regulation's roster.
+    var unlimited: Bool = false
     let onPick: (Form) -> Void
 
     @State private var query = ""
@@ -864,17 +899,24 @@ struct FormPicker: View {
         return out
     }
 
+    /// What this team may pick from: the regulation's roster, or everything
+    /// there is. The wider list is the rest of the National Dex, carried
+    /// with main-series numbers because there are no Champions ones.
+    private var pool: [Form] {
+        unlimited ? store.rulebook.everyForm : store.data.forms
+    }
+
     private var results: [Form] {
         guard !query.isEmpty else {
             // Lead with the things people actually build around.
             let usage = store.data.usage.compactMap { store.form(named: $0.name) }
-            let rest = store.data.forms.filter { form in
+            let rest = pool.filter { form in
                 !usage.contains { $0.id == form.id }
             }
             return registerable(usage + rest)
         }
         let needle = query.lowercased()
-        return registerable(store.data.forms.filter {
+        return registerable(pool.filter {
             $0.formLabel.lowercased().contains(needle)
                 || $0.types.contains { $0.lowercased().contains(needle) }
         })

@@ -34,6 +34,23 @@ struct Form: Codable, Identifiable, Hashable, Sendable {
     /// The name Showdown files this form under -- "Charizard-Mega-Y" -- which
     /// is also how its sprites are named. Nil for a form it has never heard of.
     let showdown: String?
+    /// Whether this regulation actually has it.
+    ///
+    /// True for everything on the Champions roster, which is what the app is
+    /// about and where all its care goes. False for the rest of the National
+    /// Dex, which is carried so the sandbox has something to play with and so
+    /// the day a regulation adds something the roster is a data change rather
+    /// than a rebuild. Nil in a dex written before any of this, and read as
+    /// legal, because everything in such a file was.
+    let legal: Bool?
+    var isLegal: Bool { legal ?? true }
+    /// Where its numbers come from: "champions" for the roster, "main series"
+    /// for the rest. Worth saying on screen, because a main-series stat line
+    /// inside an app about Champions is a guess wearing a uniform.
+    let source: String?
+    var fromChampions: Bool { (source ?? "champions") == "champions" }
+    /// Showdown's Champions tier, where it has one.
+    let tier: String?
 
     /// `types` as the enum, worked out once when the dex is read.
     ///
@@ -48,7 +65,7 @@ struct Form: Codable, Identifiable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case dex, species, name, icon, suffix, types, stats, abilities, moves, stone, weight
-        case brought, led, showdown
+        case brought, led, showdown, legal, source, tier
         case formLabel = "form_label"
     }
 
@@ -69,6 +86,9 @@ struct Form: Codable, Identifiable, Hashable, Sendable {
         brought = try box.decodeIfPresent(Double.self, forKey: .brought)
         led = try box.decodeIfPresent(Double.self, forKey: .led)
         showdown = try box.decodeIfPresent(String.self, forKey: .showdown)
+        legal = try box.decodeIfPresent(Bool.self, forKey: .legal)
+        source = try box.decodeIfPresent(String.self, forKey: .source)
+        tier = try box.decodeIfPresent(String.self, forKey: .tier)
         pokeTypes = types.compactMap { PokeType(loose: $0) }
     }
 
@@ -970,6 +990,14 @@ struct Dataset: Codable {
     let predictions: [Prediction]
     let notes: MetaNotes
     let forms: [Form]
+    /// The rest of the National Dex, which this game has not got.
+    ///
+    /// Deliberately not folded into `forms`: every screen, every analysis,
+    /// every sprite and every test that walks the roster is about Champions
+    /// and stays about Champions. Nothing here has Champions numbers, because
+    /// there are none to have.
+    let wider: [Form]?
+    var widerForms: [Form] { wider ?? [] }
     let moves: [String: Move]
     let abilities: [String: AbilityEntry]
     let generated: String
@@ -1006,7 +1034,7 @@ struct Dataset: Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case regulation, rules, items, usage, notes, forms, moves, abilities
+        case regulation, rules, items, usage, notes, forms, wider, moves, abilities
         case generated, sources, provenance
         case metaTeams = "meta_teams"
         case predictions
@@ -1016,7 +1044,7 @@ struct Dataset: Codable {
     func replacingUsage(with table: [UsageEntry]) -> Dataset {
         Dataset(regulation: regulation, rules: rules, items: items, usage: table,
                 metaTeams: metaTeams, predictions: predictions, notes: notes,
-                forms: forms, moves: moves, abilities: abilities,
+                forms: forms, wider: wider, moves: moves, abilities: abilities,
                 generated: generated, sources: sources, provenance: provenance)
     }
 }

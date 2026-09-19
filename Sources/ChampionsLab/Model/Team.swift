@@ -124,6 +124,11 @@ struct Team: Codable, Identifiable, Hashable {
     var locked: Bool = true
     var created = Date()
     var modified = Date()
+    /// A sandbox team: every Pokémon and every move, whatever this regulation
+    /// has. Nothing here is legal and the app says so wherever it is shown —
+    /// it exists for the question "what would this even do", which is a
+    /// reasonable question and not one a legality check should refuse.
+    var unlimited: Bool = false
 
     var isDoubles: Bool { format == "doubles" }
 
@@ -145,12 +150,31 @@ struct Team: Codable, Identifiable, Hashable {
         locked = try c.decodeIfPresent(Bool.self, forKey: .locked) ?? true
         created = try c.decodeIfPresent(Date.self, forKey: .created) ?? Date()
         modified = try c.decodeIfPresent(Date.self, forKey: .modified) ?? Date()
+        unlimited = try c.decodeIfPresent(Bool.self, forKey: .unlimited) ?? false
     }
 
     /// Champions requires distinct species and distinct items. Both are easy to
     /// break while iterating, so surface them rather than letting the ladder do it.
     @MainActor func violations(in store: Store) -> [String] {
         var out: [String] = []
+
+        // What this regulation does not have. A sandbox team says so once and
+        // is left alone after that -- listing six illegal Pokemon on a team
+        // whose whole point is that they are illegal is noise, not a warning.
+        if unlimited {
+            out.append("Unlimited: a sandbox team. Nothing on it is legal in \(store.data.regulation.name), "
+                       + "and the Pokémon this game has not got carry main-series numbers.")
+        } else {
+            let outsiders = slots.compactMap { slot -> String? in
+                guard let form = slot.form(in: store.rulebook), !form.isLegal else { return nil }
+                return form.formLabel
+            }
+            if !outsiders.isEmpty {
+                out.append("\(outsiders.joined(separator: ", ")) "
+                           + (outsiders.count == 1 ? "is not in " : "are not in ")
+                           + "\(store.data.regulation.name). Mark the team Unlimited to build with it anyway.")
+            }
+        }
 
         // Species clause is by National Dex number, so Charizard and Mega
         // Charizard Y collide — they are the same Pokémon before and after it

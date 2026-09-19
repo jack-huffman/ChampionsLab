@@ -84,12 +84,29 @@ chmod +x "$APP/Contents/MacOS/ChampionsLab"
 cp "$SRC_DIR/data/champions.json" "$APP/Contents/Resources/champions.json"
 [ -f "$SRC_DIR/data/animations.json" ] && cp "$SRC_DIR/data/animations.json" "$APP/Contents/Resources/animations.json"
 # Subdirectories, so Bundle.url(forResource:subdirectory:) can find them.
+# Copied whole rather than by glob: the shiny art lives in sprites/shiny, and
+# a glob of *.png took the 350 ordinary renders and silently left all 350
+# shinies behind -- so shiny worked in development, where the app falls back to
+# the source tree, and not in the thing anybody installs.
 for set in sprites types items; do
 	if [ -d "$SRC_DIR/data/$set" ]; then
 		mkdir -p "$APP/Contents/Resources/$set"
-		cp "$SRC_DIR/data/$set"/*.png "$APP/Contents/Resources/$set/" 2>/dev/null || true
+		cp -R "$SRC_DIR/data/$set"/. "$APP/Contents/Resources/$set/" 2>/dev/null || true
 	fi
 done
+# And check that what went in is what was there. The glob that lost the shiny
+# art failed silently for a whole release; counting is cheap and a mismatch
+# here is always a bug in the copy above.
+for set in sprites types items; do
+	[ -d "$SRC_DIR/data/$set" ] || continue
+	have=$(find "$SRC_DIR/data/$set" -name '*.png' | wc -l | tr -d ' ')
+	got=$(find "$APP/Contents/Resources/$set" -name '*.png' | wc -l | tr -d ' ')
+	if [ "$have" != "$got" ]; then
+		echo "build: $set has $have images and only $got reached the app" >&2
+		exit 1
+	fi
+done
+
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 echo "==> Info.plist"

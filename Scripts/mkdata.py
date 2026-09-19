@@ -879,6 +879,22 @@ def main():
     split_regional_forms(roster)
     apply_brings(roster)
 
+    # The Champions roster says what it is, so nothing has to infer it from
+    # the absence of a flag.
+    showdown = {}
+    if os.path.exists(SHOWDOWN):
+        with open(SHOWDOWN, encoding="utf-8") as fh:
+            showdown = json.load(fh)
+    else:
+        print("    ! data/showdown.json missing — no wider roster and no tiers")
+    for form in roster:
+        ident = (form.get("showdown") or form["form_label"]).lower()
+        ident = "".join(c for c in ident if c.isalnum())
+        form["legal"] = True
+        form["source"] = "champions"
+        form["tier"] = showdown.get("forms", {}).get(ident, {}).get("tier")
+    wider = build_wider(roster, showdown, moves)
+
     out = {
         "regulation": overlay["regulation"],
         "rules": overlay["rules"],
@@ -888,9 +904,13 @@ def main():
         "predictions": overlay["predictions"],
         "notes": overlay["notes"],
         "forms": roster,
+        "wider": wider,
         "moves": moves,
         "abilities": abilities,
         "provenance": dict(PROVENANCE, forms=len(roster),
+                           wider_forms=len(wider),
+                           wider_source="pokemon-showdown data/pokedex.ts and data/learnsets.ts; "
+                                        "legality from data/mods/champions/formats-data.ts",
                            forms_weighed=sum(1 for f in roster if f.get("weight"))),
         "generated": time.strftime("%Y-%m-%d"),
         "sources": [
@@ -906,6 +926,7 @@ def main():
     print("==> wrote %s (%.1f MB)" % (OUT, os.path.getsize(OUT) / 1e6))
     print("    %d forms, %d moves, %d abilities, %d items"
           % (len(roster), len(moves), len(abilities), len(items)))
+    print("    and %d more the main series has and this game has not" % len(wider))
 
     # Serebii was still filling in the Champions dex when M-C went live, so say
     # plainly which of the new arrivals have not landed yet. Re-run to pick them
@@ -1196,6 +1217,75 @@ def apply_showdown(moves):
 CONFIRMED_IN_GAME = [
     "Scope Lens",       # reported in game; raises the holder's critical-hit ratio
 ]
+
+
+def build_wider(roster, showdown, moves):
+    """Everything Pokemon Champions has not got, from the main series.
+
+    The app is about one game and is careful to be right about it: the roster,
+    the stats and the learnsets all come from Serebii's *Champions* pages, and
+    where Champions disagrees with the main series the difference is recorded
+    rather than smoothed over. None of that is available for a Pokemon this
+    game does not have, and pretending otherwise would be the one thing this
+    dataset has never done.
+
+    So these are kept apart. `forms` is Champions and nothing else -- every
+    screen, every analysis, every sprite and every test that iterates it is
+    unchanged. `wider` is the rest of the National Dex with main-series
+    numbers, marked as such on every entry, for the sandbox mode and for the
+    day the regulation rotates and something here becomes legal.
+
+    Legality is Showdown's Champions mod rather than our own guess: it carries
+    a tier for every species and says "Illegal" for the ones this game has not
+    got, which is a published answer maintained by people who run the format.
+    """
+    have = {(f.get("showdown") or f["form_label"]).lower().replace("-", "").replace(" ", "")
+            for f in roster}
+    known_moves = set(moves)
+    order = ["hp", "atk", "def", "spa", "spd", "spe"]
+    out = []
+    for ident, entry in sorted(showdown.get("forms", {}).items()):
+        if ident in have:
+            continue
+        stats = entry.get("base_stats") or {}
+        if not stats or not entry.get("types"):
+            continue
+        # Showdown's dex carries the Create-A-Pokemon project's fan-made
+        # species, which have no National Dex number and are not Pokemon. They
+        # are filed with negative numbers, which is the tidiest way to tell.
+        if (entry.get("num") or 0) <= 0:
+            continue
+        learnable = [m for m in (showdown.get("learnsets", {}).get(ident) or [])
+                     if m in known_moves]
+        # Nothing it can throw is nothing to play with: it would Struggle every
+        # turn. Left out rather than offered and useless.
+        if not learnable:
+            continue
+        out.append({
+            "dex": entry.get("num") or 0,
+            "species": (entry.get("base_species") or entry["name"]).lower(),
+            "name": entry.get("base_species") or entry["name"],
+            # Prefixed so it can never collide with a Champions icon, and so
+            # nothing goes looking for a bundled sprite that was never made.
+            "icon": "sd-" + ident,
+            "suffix": "",
+            "types": entry.get("types") or [],
+            "stats": [int(stats.get(k, 0)) for k in order],
+            "abilities": [{"name": a, "desc": ""} for a in (entry.get("abilities") or [])],
+            "weight": entry.get("weight"),
+            "form_label": entry["name"],
+            "moves": learnable,
+            "stone": "",
+            "showdown": entry["name"],
+            "legal": False,
+            "tier": entry.get("tier"),
+            # Said on every single entry, because every screen that shows one
+            # needs to be able to say it.
+            "source": "main series",
+        })
+    print("==> wider roster: %d forms Champions has not got, from the main series"
+          % len(out))
+    return out
 
 
 def mark_attested(items, meta_teams, usage, roster):
