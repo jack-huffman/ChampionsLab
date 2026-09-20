@@ -24,6 +24,11 @@ struct TeamPreviewView: View {
     var beginLabel = "START THE BATTLE"
     var waiting: String? = nil
     var link: LANLink? = nil
+    /// Back to the versus screen, to pick a different matchup. Only in a game
+    /// against the engine: across the network the other player is already
+    /// waiting on this one, and walking back off the page would leave them
+    /// there.
+    var onBack: (() -> Void)? = nil
 
     private var bringCount: Int { singles ? 3 : 4 }
     private var leadCount: Int { singles ? 1 : 2 }
@@ -104,6 +109,9 @@ struct TeamPreviewView: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.white.opacity(bringing.isEmpty ? 0.55 : 0.9))
                         Spacer()
+                        if let onBack, link == nil {
+                            previewButton("Back", symbol: "chevron.left") { onBack() }
+                        }
                         previewButton("Suggest", symbol: "wand.and.stars") { autoPick() }
                         previewButton("Clear", symbol: "xmark") { bringing = []; focused = nil }
                         if let link { ReadyLine(link: link) }

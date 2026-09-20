@@ -299,6 +299,9 @@ enum Strikes {
                                     : "\(name) began charging \(move.name)."))
                 StatChanges.applySelf(charge.boosts, toMine: byMine, slot: slot, board: &board)
                 if !waived {
+                    // Said before the state is set, so the step that carries
+                    // the line also carries the flag.
+                    board.markCharging()
                     if byMine {
                         board.mine[slot].charging = moveIndex
                         board.mine[slot].chargingTarget = target
@@ -542,6 +545,7 @@ enum Strikes {
         }
         if result.effectiveness == 0 {
             board.detail("It does not affect \(hitName).")
+            board.untouchable(onMine: hitMine, slot: index, by: move.name)
             return 0
         }
         let dealt = roll(move, result: result, inputs: inputs, before: before, aim: aim,
@@ -630,6 +634,7 @@ enum Strikes {
         if move.isPowder, before.types.contains(.grass)
             || before.build.item == "Safety Goggles" {
             board.detail("It does not affect \(hitName).")
+            board.untouchable(onMine: hitMine, slot: index, by: move.name)
             return false
         }
 
@@ -901,6 +906,7 @@ enum Strikes {
             let lands = rolling ? Double.random(in: 0..<1, using: &Dice.source) < 0.3 : false
             if before.types.contains(.ice), move.id == "sheercold" {
                 board.detail("It does not affect \(hitName).")
+            board.untouchable(onMine: hitMine, slot: index, by: move.name)
                 return 0
             }
             if lands {

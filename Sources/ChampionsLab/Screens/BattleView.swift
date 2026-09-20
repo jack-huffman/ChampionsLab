@@ -242,7 +242,8 @@ struct BattleView: View {
                                     bringing: $bringing, focused: $focused, onBegin: begin,
                                     beginLabel: link == nil ? "START THE BATTLE" : "READY FOR BATTLE",
                                     waiting: readied ? "Ready. Waiting for \(link?.theirName ?? "the other player")..." : nil,
-                                    link: link)
+                                    link: link,
+                                    onBack: { bringing = []; focused = nil; stage = .versus })
                 case .battle:
                     BattleFieldView(session: session, playback: playback,
                                     opening: opening, startFlash: startFlash, shown: shown,

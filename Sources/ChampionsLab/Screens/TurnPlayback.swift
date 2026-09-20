@@ -76,6 +76,9 @@ final class TurnPlayback: ObservableObject {
     /// Who the damage beside them came to critically. Arrives with the number
     /// and leaves with it, so the two are never out of step.
     @Published var crits: Set<Seat> = []
+    /// Who a move did not touch at all. Shown where the damage would have
+    /// been, because the absence of a number is the thing being explained.
+    @Published var untouched: Set<Seat> = []
     /// Seats where somebody else is standing now. A slot whose Pokemon
     /// changed during the step is one that has just been switched -- the same
     /// test the damage numbers use to avoid putting one over the wrong
@@ -86,6 +89,12 @@ final class TurnPlayback: ObservableObject {
     /// the time a step reaches the screen, so the departing Pokemon exists
     /// nowhere else.
     @Published var departing: [Seat: String] = [:]
+    /// Seats where the same Pokemon became something else. Mega Evolution is
+    /// the one this format has, and it wants its own animation rather than
+    /// the one for somebody walking on.
+    @Published var transforming: Set<Seat> = []
+    /// Who is winding a move up rather than throwing it.
+    @Published var charging: Set<Seat> = []
     /// A stage that moved, and by how much.
     struct StatChange: Equatable {
         let stat: Int
@@ -171,12 +180,53 @@ final class TurnPlayback: ObservableObject {
     /// health in common: reading the difference as damage put a number over
     /// the head of something that had just walked on.
     private func sameFighter(before index: Int, in steps: [Board.Step], mine: Bool, slot: Int) -> Bool {
+        guard let (now, then) = forms(before: index, in: steps, mine: mine, slot: slot) else {
+            return true
+        }
+        if now == then { return true }
+        // A different form is not a different Pokemon. A Mega Evolution
+        // changes what is standing there without changing who, and so does an
+        // Aegislash drawing its blade -- and the field was throwing a Poke
+        // Ball at both of them, because it could only see that the form id
+        // had moved. The dex number is who; the form is what.
+        return sameSpecies(now, then)
+    }
+
+    /// The form in this slot at a step and at the one before it, or nil when
+    /// there is nothing to compare.
+    private func forms(before index: Int, in steps: [Board.Step],
+                       mine: Bool, slot: Int) -> (String, String)? {
         let now = (mine ? steps[index].myForms : steps[index].theirForms)[safe: slot]
         let then: String? = index > 0
             ? (mine ? steps[index - 1].myForms : steps[index - 1].theirForms)[safe: slot]
             : (mine ? startBoard?.mine : startBoard?.theirs)?[safe: slot]?.build.form.id
-        guard let now, let then else { return true }
-        return now == then
+        guard let now, let then else { return nil }
+        return (now, then)
+    }
+
+    /// Whether two form ids are the same Pokemon. A side cannot hold the same
+    /// species twice -- the species clause is by National Dex number -- so the
+    /// number is an identity within one side.
+    private func sameSpecies(_ one: String, _ other: String) -> Bool {
+        let book = Store.shared.rulebook
+        guard let a = book.form(one), let b = book.form(other) else { return false }
+        return a.dex == b.dex
+    }
+
+    /// Slots where the same Pokemon changed into something else during the
+    /// step: a Mega Evolution, or a form change mid-battle. Drawn as a
+    /// transformation rather than as an arrival.
+    private func transformed(at index: Int, in steps: [Board.Step]) -> Set<Seat> {
+        var out: Set<Seat> = []
+        for mineSide in [true, false] {
+            let held = mineSide ? steps[index].myForms : steps[index].theirForms
+            for slot in held.indices where slot < 2 {
+                guard let (now, then) = forms(before: index, in: steps, mine: mineSide, slot: slot),
+                      now != then, sameSpecies(now, then) else { continue }
+                out.insert(Seat(mine: mineSide, slot: slot))
+            }
+        }
+        return out
     }
 
     /// Stop whatever is playing and clear everything it put on screen. What a
@@ -185,7 +235,7 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]; crits = []; arriving = []; departing = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
+        damage = [:]; crits = []; untouched = []; charging = []; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
         struck = []; struckTheirs = []
         replay = []; at = 0; seen = 0; focus = nil; replayBoard = nil; startBoard = nil
     }
@@ -232,7 +282,7 @@ final class TurnPlayback: ObservableObject {
             guard !Task.isCancelled else { return }
             scene = nil
             stopTracks()
-            damage = [:]; crits = []; arriving = []; departing = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
+            damage = [:]; crits = []; untouched = []; charging = []; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
             focus = nil
             // The end of the turn: what the residuals took and gave -- a burn,
             // Leftovers, a Speed Boost -- shown over whoever it happened to,
@@ -248,7 +298,7 @@ final class TurnPlayback: ObservableObject {
                 guard !Task.isCancelled else { return }
                 try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1.6 * 1_000_000_000))
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; crits = []; arriving = []; departing = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
+                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; crits = []; untouched = []; charging = []; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
             }
             // Rest on the last step rather than past it: the field shows the end
             // of the turn, and the stepper still works from there, which is how
@@ -282,7 +332,7 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]; crits = []; arriving = []; departing = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
+        damage = [:]; crits = []; untouched = []; charging = []; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
         struck = []; struckTheirs = []
         seen = Swift.max(seen, index + 1)
         let steps = replay
@@ -297,7 +347,7 @@ final class TurnPlayback: ObservableObject {
                 guard !Task.isCancelled else { return }
                 try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1.6 * 1_000_000_000))
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; crits = []; arriving = []; departing = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
+                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; crits = []; untouched = []; charging = []; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
                 task = nil
             }
             return
@@ -309,7 +359,7 @@ final class TurnPlayback: ObservableObject {
             guard !Task.isCancelled else { return }
             scene = nil
             stopTracks()
-            damage = [:]; crits = []; arriving = []; departing = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
+            damage = [:]; crits = []; untouched = []; charging = []; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
             at = index
             focus = nil
             task = nil
@@ -441,6 +491,8 @@ final class TurnPlayback: ObservableObject {
         damage = took
         crits = Set(step.criticals.filter { $0.slot < 2 }
             .map { Seat(mine: $0.mine, slot: $0.slot) })
+        untouched = Set(step.untouched.filter { $0.slot < 2 }
+            .map { Seat(mine: $0.mine, slot: $0.slot) })
         var swapped: Set<Seat> = []
         var left: [Seat: String] = [:]
         for mineSide in [true, false] {
@@ -457,6 +509,12 @@ final class TurnPlayback: ObservableObject {
         }
         arriving = swapped
         departing = left
+        transforming = transformed(at: index, in: steps)
+        if let doing = step.action, doing.charging, doing.slot < 2 {
+            charging = [Seat(mine: doing.byMine, slot: doing.slot)]
+        } else {
+            charging = []
+        }
         var withheld = Withheld()
         for phase in phases { withheld.add(phase) }
         pending = withheld
@@ -516,7 +574,7 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]; crits = []; arriving = []; departing = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
+        damage = [:]; crits = []; untouched = []; charging = []; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
         replay = []; at = 0; seen = 0; focus = nil; replayBoard = nil; startBoard = nil
     }
 
@@ -617,7 +675,7 @@ final class TurnPlayback: ObservableObject {
         guard !Task.isCancelled else { return }
         try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1_000_000_000))
         guard !Task.isCancelled else { return }
-        withAnimation(.easeIn(duration: 0.2)) { damage = [:]; crits = []; arriving = []; departing = [:]; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
+        withAnimation(.easeIn(duration: 0.2)) { damage = [:]; crits = []; untouched = []; charging = []; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
         if !last {
             try? await Task.sleep(nanoseconds: UInt64(Self.betweenActions * 1_000_000_000))
         }
@@ -638,7 +696,15 @@ final class TurnPlayback: ObservableObject {
         if !table.isEmpty, let geometry = stage, action.category != "Switch" {
             var targets = reached
             let recipe: Choreography.Resolved?
-            if let why = action.stopped {
+            if action.charging {
+                // Nothing of the move itself: it has not happened. The field
+                // shows the wind-up instead, which is drawn rather than
+                // choreographed -- Showdown carries a prepareAnim for only
+                // eighteen moves and Sky Attack's is the user going faintly
+                // translucent, which is not worth a table.
+                targets = []
+                recipe = nil
+            } else if let why = action.stopped {
                 targets = []
                 recipe = Self.stoppedAs[why].flatMap { table.status($0) }
             } else {

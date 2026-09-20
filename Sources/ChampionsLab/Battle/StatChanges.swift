@@ -23,8 +23,12 @@ enum StatChanges {
     /// Weakness Policy going off on the wrong one. The abilities that answer
     /// a drop from outside all live here: Clear Body refuses it, Contrary
     /// turns it round, Defiant and Competitive take it and hit back.
+    /// `fromOpponent` is what Defiant and Competitive actually watch for:
+    /// they answer a stat lowered by the *other side*, and a partner's Charm
+    /// on a Contrary sweeper is not that. Everything else about a drop is the
+    /// same whoever aimed it.
     static func applyDrops(_ drops: [Stage: Int], toMine: Bool, slot: Int,
-                                   board: inout Board) {
+                                   board: inout Board, fromOpponent: Bool = true) {
         guard !drops.isEmpty else { return }
         let team = toMine ? board.mine : board.theirs
         guard team.indices.contains(slot), !team[slot].fainted else { return }
@@ -49,6 +53,7 @@ enum StatChanges {
         }
         let deltas = Dictionary(uniqueKeysWithValues: drops.map { ($0.key, -$0.value) })
         change(deltas, onMine: toMine, slot: slot, board: &board)
+        guard fromOpponent else { return }
         if ability == "Defiant" {
             change([.attack: 2], onMine: toMine, slot: slot, board: &board, because: "Defiant")
         } else if ability == "Competitive" {

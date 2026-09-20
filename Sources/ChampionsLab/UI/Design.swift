@@ -427,7 +427,7 @@ struct SpriteImage: View {
     var shiny: Bool = false
     /// Watched so that a render arriving from the network redraws whatever is
     /// showing a placeholder for it.
-    @ObservedObject private var dex = DexArt.shared
+    @ObservedObject private var art = ShowdownArt.shared
 
     var body: some View {
         Group {
@@ -436,7 +436,7 @@ struct SpriteImage: View {
                     .resizable()
                     .interpolation(.medium)
                     .aspectRatio(contentMode: .fit)
-            } else if !form.fromChampions, let fetched = dex.image(for: form, shiny: shiny) {
+            } else if !form.fromChampions, let fetched = art.image(for: form, shiny: shiny) {
                 // Nothing on the Champions roster reaches here: its art is
                 // bundled. This is the wider roster, whose pictures are not.
                 Image(nsImage: fetched)

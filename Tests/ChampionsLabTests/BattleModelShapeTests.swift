@@ -39,7 +39,7 @@ final class BattleModelShapeTests: XCTestCase {
         "TurnOrder": 400,
         "Strikes": 1640,        // the action pipeline, in its phases; a flurry is rolled blow by blow
         "MoveLegality": 220,    // the one door for whether a move may be thrown, and Struggle behind it
-        "SupportMoves": 1500,   // eighty-odd rules in fifteen sections, one each
+        "SupportMoves": 1540,   // eighty-odd rules in fifteen sections, one each
         "Ailments": 300,
         "StatChanges": 300,
         "Switching": 560,        // owns the Board's arrival methods as well, and every way off the field

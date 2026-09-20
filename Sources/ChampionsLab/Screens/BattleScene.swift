@@ -74,6 +74,20 @@ extension BattleFieldView {
                     }
                     .id("recall-\(key)-\(leftID)")
                 }
+                // Winding a move up, which is not throwing one.
+                if playback.charging.contains(seat) {
+                    ChargeGlow(centre: stage.project(home), side: side)
+                        .id("charge-\(key)-\(playback.hitNumber)")
+                }
+                // Becoming something else, which is not arriving: a Mega
+                // Evolution gets the light rather than the ball.
+                if playback.transforming.contains(seat),
+                   let fighter = fighter(at: seat, in: board), !fighter.fainted {
+                    MegaEvolveEffect(centre: stage.project(home), side: side) {
+                        BattleAudio.shared.cry(fighter.build.form)
+                    }
+                    .id("mega-\(key)-\(fighter.build.form.id)")
+                }
                 // And coming, once there is room for it.
                 let coming = opening ? shown.contains(key)
                                      : (playback.arriving.contains(seat)
@@ -251,6 +265,23 @@ extension BattleFieldView {
             // What the step did to this one, stacked over it: the health
             // lost, the stages moved, the ability that went off.
             VStack(spacing: 3) {
+                // Where the number would have been. A move that does nothing
+                // and a move that was never aimed here look the same on a
+                // field that says nothing, and one of them is a decision
+                // somebody got wrong.
+                if playback.untouched.contains(seat) {
+                    Text("IMMUNE")
+                        .font(.system(size: max(9, 8 * stage.k), weight: .black, design: .rounded))
+                        .kerning(0.9)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Capsule().fill(Color(red: 0.36, green: 0.42, blue: 0.52)))
+                        .overlay(Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
+                        .transition(.asymmetric(insertion: .scale(scale: 0.5).combined(with: .opacity),
+                                                removal: .opacity))
+                        .id(playback.hitNumber)
+                }
                 // Above the number it explains, and gone when it is.
                 if playback.crits.contains(seat), (damage[seat] ?? 0) > 0 {
                     Text("CRITICAL")

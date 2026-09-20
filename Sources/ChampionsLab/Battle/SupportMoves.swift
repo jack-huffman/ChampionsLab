@@ -1448,14 +1448,22 @@ enum SupportMoves {
         }
 
         // Anything that says it lowers a stat, or raises one of the user's.
+        //
+        // Aimed wherever it was aimed, which is not always across the field.
+        // Lowering your own partner's Attack is a real thing people do: a
+        // Charm on a Contrary Staraptor is two stages *up*, and the whole
+        // reason the tech exists. This read `byMine ? theirs : mine` and sent
+        // the drop at slot 100 of the wrong side, where there is nobody, so
+        // the move did nothing at all and said nothing about it.
         let drops = move.targetDrops
         if !drops.isEmpty {
-            let spread = move.isSpread
-            for index in (spread ? [0, 1] : [target]) {
-                let defending = byMine ? board.theirs : board.mine
-                guard defending.indices.contains(index), !defending[index].fainted,
-                      !defending[index].isProtected else { continue }
-                StatChanges.applyDrops(drops, toMine: !byMine, slot: index, board: &board)
+            let atMine = cast.targetsMine
+            let defending = atMine ? board.mine : board.theirs
+            for index in (move.isSpread ? [0, 1] : [cast.targetSlot]) {
+                guard defending.indices.contains(index), index < board.activeCount,
+                      !defending[index].fainted, !defending[index].isProtected else { continue }
+                StatChanges.applyDrops(drops, toMine: atMine, slot: index, board: &board,
+                                       fromOpponent: !cast.atAlly)
             }
             return .handled(nil)
         }

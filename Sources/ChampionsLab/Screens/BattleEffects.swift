@@ -389,13 +389,27 @@ struct PokeBall: View {
     /// Open: the top half hinges up and the inside glows.
     var open: Bool = false
 
+    @ObservedObject private var art = ShowdownArt.shared
+
     var body: some View {
         ZStack {
-            // The white half and the band stay put; the red lid hinges off
-            // them and lifts clear, which is why the two are drawn separately
-            // and only the bottom is clipped to the circle.
-            bottom
-            lid
+            if let real = art.effect("pokeball") {
+                // Showdown's own, which is what everybody already pictures.
+                // Fetched once and kept; until it lands, and if it never
+                // does, the drawn one below stands in.
+                Image(nsImage: real)
+                    .resizable()
+                    .interpolation(.medium)
+                    .frame(width: side, height: side)
+                    .rotation3DEffect(.degrees(open ? 140 : 0), axis: (x: 1, y: 0, z: 0),
+                                      anchor: .center, perspective: 0.4)
+            } else {
+                // The white half and the band stay put; the red lid hinges off
+                // them and lifts clear, which is why the two are drawn
+                // separately and only the bottom is clipped to the circle.
+                bottom
+                lid
+            }
         }
         .frame(width: side, height: side)
         .shadow(color: .black.opacity(0.5), radius: side * 0.12, y: side * 0.06)
@@ -474,6 +488,7 @@ struct SendOutEffect: View {
             if !gone {
                 PokeBall(side: ballSide, open: opened)
                     .rotationEffect(.degrees(flown ? 0 : (fromMine ? -220 : 220)))
+                    .scaleEffect(flown ? 1 : 0.55)
                     .position(flown ? centre : start)
                     .opacity(flown ? 1 : 0)
             }
@@ -492,10 +507,16 @@ struct SendOutEffect: View {
         .onAppear(perform: run)
     }
 
-    /// Where it is thrown from: low, behind, and off to the side it belongs to.
+    /// Where it is thrown from: below and behind, straight down the line the
+    /// Pokemon will stand on.
+    ///
+    /// No sideways component, which is Showdown's answer and was not mine:
+    /// starting it off to one side made the ball cross the field on the way
+    /// in, and on your own side that reads as a ball flying towards the
+    /// middle rather than one being thrown out in front of you. The depth is
+    /// carried by the scale instead, which is where it belongs.
     private var start: CGPoint {
-        CGPoint(x: centre.x + (fromMine ? -side * 1.5 : side * 1.5),
-                y: centre.y + side * 0.9)
+        CGPoint(x: centre.x, y: centre.y + side * 0.95)
     }
 
     private func run() {
@@ -601,5 +622,127 @@ struct RecallEffect: View {
             gone = true
             onDone()
         }
+    }
+}
+
+/// A Pokémon becoming something else: the light gathers in, and then it
+/// bursts.
+///
+/// Showdown's megaevo, which it plays for every transformation that does not
+/// have one of its own: the field flashes a purple Showdown has been using for
+/// this since Mega Evolution existed (#835BA5), an orb rushes inward over
+/// three tenths of a second, and then blooms outward and away over the next
+/// four. A cry goes with it.
+///
+/// It is deliberately not the ball. A Mega Evolution is the same Pokémon
+/// changing, and throwing a Poké Ball at one says it is a different Pokémon
+/// arriving — which is what this used to do, because the only thing the field
+/// could see was that the form had changed.
+struct MegaEvolveEffect: View {
+    let centre: CGPoint
+    let side: CGFloat
+    var onDone: () -> Void = {}
+
+    @State private var gathered = false
+    @State private var burst = false
+    @State private var over = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The colour Showdown uses for this, which is worth keeping: a player who
+    /// knows the client knows what it means before anything is written down.
+    private static let mega = Color(red: 0.51, green: 0.36, blue: 0.65)
+
+    var body: some View {
+        ZStack {
+            if !over {
+                // The field, dimmed and tinted.
+                Rectangle()
+                    .fill(Self.mega)
+                    .opacity(burst ? 0 : (gathered ? 0.45 : 0))
+                    .blendMode(.plusLighter)
+                    .ignoresSafeArea()
+                // The orb: in, then out.
+                Circle()
+                    .strokeBorder(LinearGradient(
+                        colors: [.white, Self.mega, Color(red: 0.62, green: 0.83, blue: 1)],
+                        startPoint: .top, endPoint: .bottom),
+                                  lineWidth: burst ? side * 0.05 : side * 0.22)
+                    .frame(width: orbSide, height: orbSide)
+                    .position(centre)
+                    .opacity(burst ? 0 : (gathered ? 1 : 0.25))
+                    .shadow(color: Self.mega.opacity(0.9), radius: side * 0.2)
+                // And the flash it leaves behind.
+                Circle()
+                    .fill(RadialGradient(colors: [.white, Self.mega.opacity(0.6), .clear],
+                                         center: .center, startRadius: 0, endRadius: side * 0.7))
+                    .frame(width: side * 1.5, height: side * 1.5)
+                    .position(centre)
+                    .blendMode(.plusLighter)
+                    .opacity(gathered && !burst ? 1 : 0)
+            }
+        }
+        .allowsHitTesting(false)
+        .onAppear(perform: run)
+    }
+
+    private var orbSide: CGFloat {
+        burst ? side * 3.4 : (gathered ? side * 0.55 : side * 2.2)
+    }
+
+    private func run() {
+        guard !reduceMotion else { over = true; onDone(); return }
+        withAnimation(.easeIn(duration: 0.30)) { gathered = true }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            withAnimation(.easeOut(duration: 0.42)) { burst = true }
+            onDone()
+            try? await Task.sleep(nanoseconds: 420_000_000)
+            over = true
+        }
+    }
+}
+
+/// A move being wound up rather than thrown: light gathering into the user.
+///
+/// Showdown carries a `prepareAnim` for eighteen moves and most of them are a
+/// shimmer — Sky Attack's is the user going faintly translucent — which is not
+/// worth a table of its own. This is one wind-up for all of them, and its job
+/// is only to be different from the move: a charging turn used to play the
+/// whole flight, on the turn nothing had left the ground.
+struct ChargeGlow: View {
+    let centre: CGPoint
+    let side: CGFloat
+
+    @State private var drawn = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<3, id: \.self) { ring in
+                Circle()
+                    .strokeBorder(LinearGradient(
+                        colors: [.white, Color(red: 1, green: 0.88, blue: 0.5)],
+                        startPoint: .top, endPoint: .bottom),
+                                  lineWidth: drawn ? side * 0.02 : side * 0.06)
+                    .frame(width: ringSide(ring), height: ringSide(ring))
+                    .position(centre)
+                    .opacity(drawn ? 0.9 : 0)
+                    .shadow(color: Color(red: 1, green: 0.85, blue: 0.4).opacity(0.8),
+                            radius: side * 0.12)
+            }
+        }
+        .allowsHitTesting(false)
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeIn(duration: 0.55)) { drawn = true }
+        }
+    }
+
+    /// Three rings closing in at slightly different sizes, so it reads as
+    /// gathering rather than as one circle shrinking.
+    private func ringSide(_ ring: Int) -> CGFloat {
+        let from = side * (1.9 + CGFloat(ring) * 0.35)
+        let to = side * (0.5 + CGFloat(ring) * 0.12)
+        return drawn ? to : from
     }
 }

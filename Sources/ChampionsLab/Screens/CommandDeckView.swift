@@ -115,9 +115,10 @@ struct CommandDeckView: View {
         let ahead = session.evolving(fighter, slot: slot, board: board)
         return VStack(alignment: .leading, spacing: 12) {
             // Who is being commanded, and the two things that are true of it
-            // whatever you pick.
+            // whatever you pick. No sprite: the Pokemon is named in the line
+            // and standing on the field above, so a third of it here was the
+            // same picture a third time.
             HStack(spacing: 10) {
-                SpriteImage(form: ahead.build.form, side: 44, shiny: ahead.build.shiny)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text("What will \(ahead.build.form.formLabel) do?")

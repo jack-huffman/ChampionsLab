@@ -558,6 +558,11 @@ struct Board {
         /// over the one being helped, not over a foe.
         var aimsAtUser = false
         var aimsAtAlly = false
+        /// Winding up rather than firing. The action is recorded before the
+        /// move resolves, so a Sky Attack on its charging turn reads as a Sky
+        /// Attack -- and the field played the whole flight, on the turn
+        /// nothing had left the ground yet.
+        var charging = false
         /// Each blow of a multi-hit move as it landed, in order -- a Dual
         /// Wingbeat's two, a Rock Blast's two to five -- so the field plays
         /// each one. Empty for a move that strikes once.
@@ -614,6 +619,11 @@ struct Board {
         /// did — so the one number on screen that a crit changes had nothing
         /// beside it to say why it was so large.
         var criticals: [Firing] = []
+        /// And who a move did not touch at all. The log has always said "It
+        /// does not affect Garchomp"; the field showed nothing, so a move
+        /// aimed at something immune to it looked the same as one that
+        /// fizzled for any other reason.
+        var untouched: [Firing] = []
         /// An ability that went off during the step, and whose.
         struct Firing: Equatable {
             let mine: Bool
@@ -801,6 +811,8 @@ struct Board {
     var firing: [Step.Firing] = []
     /// Critical hits landed since the last step closed, cleared with it.
     var criticals: [Step.Firing] = []
+    /// And who was untouched, for the same window.
+    var untouched: [Step.Firing] = []
     /// Everything that happened since the step began, in order.
     var events: [Step.Event] = []
     /// Where every stage and status stood when the step began. At the close,
@@ -829,6 +841,12 @@ struct Board {
         acting?.stopped = reason
     }
 
+    /// This action is a wind-up, not the move. It did not fail and nothing is
+    /// wrong with it, which is why it is not a `stopAction`.
+    mutating func markCharging() {
+        acting?.charging = true
+    }
+
     /// Close the step being gathered, if it said anything.
     mutating func closeStep() {
         if let lines = gathering, !lines.isEmpty {
@@ -840,7 +858,7 @@ struct Board {
 
     private mutating func snapshot(_ text: String) -> Step {
         reconcileEvents()
-        defer { firing = []; criticals = []; events = []; markStepStart() }
+        defer { firing = []; criticals = []; untouched = []; events = []; markStepStart() }
         return Step(text: text, action: acting,
                     myHP: mine.map(\.hp), theirHP: theirs.map(\.hp),
                     myForms: mine.map(\.build.form.id),
@@ -848,7 +866,8 @@ struct Board {
                     field: field, myTailwind: myTailwind,
                     theirTailwind: theirTailwind, trickRoom: trickRoom,
                     myBoosts: mine.map(\.build.boosts), theirBoosts: theirs.map(\.build.boosts),
-                    criticals: criticals, abilities: firing, events: events,
+                    criticals: criticals, untouched: untouched,
+                    abilities: firing, events: events,
                     myStatus: mine.map(\.status), theirStatus: theirs.map(\.status),
                     myConfused: mine.map(\.isConfused), theirConfused: theirs.map(\.isConfused),
                     myProtected: mine.map(\.isProtected), theirProtected: theirs.map(\.isProtected))
@@ -859,6 +878,13 @@ struct Board {
     mutating func critical(onMine mine: Bool, slot: Int, from move: String) {
         let hit = Step.Firing(mine: mine, slot: slot, name: move)
         if !criticals.contains(hit) { criticals.append(hit) }
+    }
+
+    /// A move did not touch somebody at all, so the field can say so over
+    /// them rather than only in the log.
+    mutating func untouchable(onMine mine: Bool, slot: Int, by move: String) {
+        let hit = Step.Firing(mine: mine, slot: slot, name: move)
+        if !untouched.contains(hit) { untouched.append(hit) }
     }
 
     /// Say what happened, and remember what the board looked like when it did.

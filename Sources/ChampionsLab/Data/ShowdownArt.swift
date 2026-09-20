@@ -1,5 +1,5 @@
-//  DexArt.swift
-//  Pictures for the Pokemon this game has not got.
+//  ShowdownArt.swift
+//  Pictures fetched from Showdown rather than drawn or bundled.
 //
 //  The Champions roster's art is bundled: PKHeX's 512px renders, downscaled,
 //  ordinary and shiny, 350 of each. The wider roster is nine hundred more, and
@@ -17,25 +17,42 @@
 import AppKit
 
 @MainActor
-final class DexArt: ObservableObject {
-    static let shared = DexArt()
+final class ShowdownArt: ObservableObject {
+    static let shared = ShowdownArt()
     static let credit = "Renders for Pokémon outside the Champions roster are Pokémon Showdown's, fetched the first time one is shown."
 
     private var images: [String: NSImage] = [:]
     private var fetching: Set<String> = []
     private var missing: Set<String> = []
 
+    /// One of the client's effect sprites, by the name the choreography uses.
+    ///
+    /// The effects layer draws Showdown's primitives as shapes rather than
+    /// shipping fifty-odd PNGs, and that is still the rule. The ball is the
+    /// exception because it is the exception: it is the one primitive drawn
+    /// large and alone, in the middle of the field, with nothing else moving —
+    /// and a hand-drawn approximation of something that recognisable reads as
+    /// wrong. One and a half kilobytes, fetched once.
+    func effect(_ name: String) -> NSImage? {
+        image(at: "fx/" + name + ".png", key: "fx/" + name)
+    }
+
     /// The render, or nil while it is on its way or when there is none.
     /// Asking starts the fetch; the object announces itself when it lands.
     func image(for form: Form, shiny: Bool) -> NSImage? {
         guard let slug = PixelSprites.slug(form) else { return nil }
-        let key = (shiny ? "dex-shiny/" : "dex/") + slug
+        return image(at: (shiny ? "sprites/dex-shiny/" : "sprites/dex/") + slug + ".png",
+                     key: (shiny ? "dex-shiny/" : "dex/") + slug)
+    }
+
+    /// Fetch-once-and-keep, by remote path and cache key.
+    private func image(at path: String, key: String) -> NSImage? {
         if let ready = images[key] { return ready }
         guard !missing.contains(key), !fetching.contains(key) else { return nil }
         fetching.insert(key)
         Task.detached(priority: .userInitiated) { [weak self] in
             var data = Self.kept(key)
-            if data == nil { data = await Self.fetch(key) }
+            if data == nil { data = await Self.fetch(path, key: key) }
             let image = data.flatMap { NSImage(data: $0) }
             await MainActor.run { [weak self] in
                 guard let self else { return }
@@ -49,7 +66,7 @@ final class DexArt: ObservableObject {
 
     private nonisolated static var folder: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("ChampionsLab/dex")
+            .appendingPathComponent("ChampionsLab/showdown")
     }
 
     private nonisolated static func kept(_ key: String) -> Data? {
@@ -58,8 +75,8 @@ final class DexArt: ObservableObject {
         return data
     }
 
-    private nonisolated static func fetch(_ key: String) async -> Data? {
-        guard let url = URL(string: "https://play.pokemonshowdown.com/sprites/" + key + ".png"),
+    private nonisolated static func fetch(_ path: String, key: String) async -> Data? {
+        guard let url = URL(string: "https://play.pokemonshowdown.com/" + path),
               let (data, response) = try? await URLSession.shared.data(from: url),
               (response as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty else { return nil }
         let destination = folder.appendingPathComponent(key + ".png")

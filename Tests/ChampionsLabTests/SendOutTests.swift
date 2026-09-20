@@ -57,6 +57,42 @@ final class SendOutTests: HarnessCase {
         check("nobody changed hands", after.steps.allSatisfy { $0.myForms.first == first })
     }
 
+    /// A Mega Evolution changes the form and not the Pokémon. The field tells
+    /// the two apart by the National Dex number, because a side cannot hold
+    /// one species twice — and before it did, it threw a Poké Ball at every
+    /// Salamence that Mega Evolved.
+    func testAMegaEvolutionIsTheSamePokemonInAnotherForm() {
+        var team = fighters([("Salamence", "Salamencite", ["Dragon Claw", "Protect"]),
+                             ("Rillaboom", "", ["Wood Hammer", "Protect"])])
+        team.slots[0].shiny = false
+        var board = Board(mine: team,
+                          theirs: fighters([("Milotic", "", ["Calm Mind", "Protect"]),
+                                            ("Farigiraf", "", ["Calm Mind", "Protect"])]),
+                          rules: store.rulebook, field: Field(isDoubles: true),
+                          alreadyEvolved: false)
+        let before = board.mine[0].build.form
+        Switching.megaEvolve(&board.mine, slot: 0, opposing: &board.theirs, field: &board.field)
+        let after = board.mine[0].build.form
+        check("the form changed", before.id != after.id, "\(before.id) → \(after.id)")
+        check("and it really is the Mega", after.isMega, after.formLabel)
+        check("but the Pokémon did not", before.dex == after.dex,
+              "\(before.dex) against \(after.dex)")
+    }
+
+    /// The other half of the same rule: somebody walking on really is somebody
+    /// else, and has a different number.
+    func testASwitchIsADifferentPokemonEntirely() {
+        let start = position()
+        let after = TurnModel.resolve(start,
+            mine: Play(left: .swap(to: 2), right: .attack(move: at(start.mine[1], "Protect"), target: 0)),
+            theirs: idle(start))
+        let before = start.mine[0].build.form
+        let now = after.mine[0].build.form
+        check("a different form", before.id != now.id)
+        check("and a different Pokémon", before.dex != now.dex,
+              "\(before.dex) against \(now.dex)")
+    }
+
     /// The ball is drawn, not loaded, so it has no art to go missing — but it
     /// does have to be built at whatever size the depth gives it.
     func testTheBallDrawsAtAnySize() {
