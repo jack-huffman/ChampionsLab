@@ -97,6 +97,10 @@ struct BattleView: View {
     @State private var startFlash = false
     /// Which fighters have come out so far, as "m0", "t1".
     @State private var shown: Set<String> = []
+    /// The ones whose ball has opened. Coming out is two moments -- the throw
+    /// and the arrival -- and the Pokemon appears on the second, which is what
+    /// makes the ball look like it brought something.
+    @State private var landed: Set<String> = []
     /// The line being called out over the field right now.
     @State private var callout: String?
 
@@ -238,6 +242,7 @@ struct BattleView: View {
                 case .battle:
                     BattleFieldView(session: session, playback: playback,
                                     opening: opening, startFlash: startFlash, shown: shown,
+                                    landed: landed,
                                     callout: callout, singles: singles) { stage = .preview }
                 }
             }
@@ -311,6 +316,7 @@ struct BattleView: View {
         readied = false
         opening = true
         shown = []
+        landed = []
         callout = nil
         startFlash = true
         playback.withhold(steps)
@@ -320,8 +326,12 @@ struct BattleView: View {
             withAnimation(.easeOut(duration: 0.35)) { startFlash = false }
             try? await Task.sleep(nanoseconds: 300_000_000)
             for key in arrivals {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.62)) { _ = shown.insert(key) }
-                try? await Task.sleep(nanoseconds: 380_000_000)
+                // The throw, then what was in it: the ball is in the air for
+                // three tenths of a second before it opens.
+                _ = shown.insert(key)
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.58)) { _ = landed.insert(key) }
+                try? await Task.sleep(nanoseconds: 300_000_000)
             }
             try? await Task.sleep(nanoseconds: 250_000_000)
             for step in steps {
@@ -339,7 +349,7 @@ struct BattleView: View {
     private func stopGame() {
         session.endGame()
         readied = false
-        opening = false; startFlash = false; shown = []; callout = nil
+        opening = false; startFlash = false; shown = []; landed = []; callout = nil
         bringing = []; focused = nil
         if link != nil {
             // Out of a game between two people is out of the room too.
@@ -477,7 +487,7 @@ struct BattleView: View {
     /// two sixes are read again for the new one.
     private func reset() {
         session.endGame()
-        opening = false; startFlash = false; shown = []; callout = nil
+        opening = false; startFlash = false; shown = []; landed = []; callout = nil
         bringing = []; focused = nil; lobby = Lobby()
         stage = .versus
         if myTeam != nil, theirTeam != nil { enterVersus() }
@@ -596,6 +606,7 @@ struct BattleView: View {
         board = nil
         opening = true
         shown = []
+        landed = []
         callout = nil
         // Their four is chosen against your six the way you chose yours, and
         // each side's back two go on the board as guesses: the game knows the
@@ -636,8 +647,12 @@ struct BattleView: View {
                 ["m\(slot)", "t\(slot)"]
             }
             for key in arrivals {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.62)) { _ = shown.insert(key) }
-                try? await Task.sleep(nanoseconds: 380_000_000)
+                // The throw, then what was in it: the ball is in the air for
+                // three tenths of a second before it opens.
+                _ = shown.insert(key)
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.58)) { _ = landed.insert(key) }
+                try? await Task.sleep(nanoseconds: 300_000_000)
             }
             try? await Task.sleep(nanoseconds: 250_000_000)
             var running = start

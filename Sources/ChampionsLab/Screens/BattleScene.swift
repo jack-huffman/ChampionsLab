@@ -55,6 +55,25 @@ extension BattleFieldView {
                     scenePokemon(fighter, seat: seat, stage: stage, board: board)
                 }
             }
+            // The balls, over the platforms and under everything that is said.
+            //
+            // Two things throw one: the opening, which is sequenced a seat at
+            // a time and says when each ball leaves the hand, and a switch
+            // mid-turn, which the playback notices by a slot changing hands.
+            ForEach(seatsInDrawOrder(board), id: \.self) { seat in
+                let key = "\(seat.mine ? "m" : "t")\(seat.slot)"
+                let coming = opening ? shown.contains(key) : playback.arriving.contains(seat)
+                if coming, let fighter = fighter(at: seat, in: board), !fighter.fainted {
+                    let home = stage.home(seat)
+                    let side = 96 * stage.scale(at: home.z, pixelSprite: usesPixelSprites)
+                    SendOutEffect(centre: stage.project(home), side: side, fromMine: seat.mine)
+                        .id("ball-\(key)-\(fighter.build.form.id)")
+                    if fighter.build.shiny, opening ? landed.contains(key) : true {
+                        ShinySparkle(centre: stage.project(home), side: side)
+                            .id("shine-\(key)-\(fighter.build.form.id)")
+                    }
+                }
+            }
             if let scene {
                 ChoreographyLayer(scene: scene)
             }
@@ -134,7 +153,7 @@ extension BattleFieldView {
         let at = stage.project(home)
         let pixel = usesPixelSprites
         let side = 96 * stage.scale(at: home.z, pixelSprite: pixel)
-        let out = !opening || shown.contains("\(seat.mine ? "m" : "t")\(seat.slot)")
+        let out = !opening || landed.contains("\(seat.mine ? "m" : "t")\(seat.slot)")
         let hit = seat.mine ? struck.contains(seat.slot) : struckTheirs.contains(seat.slot)
         let asked = seat.mine && session.awaitingOrders(board) == seat.slot && !fighter.fainted
         return ZStack {

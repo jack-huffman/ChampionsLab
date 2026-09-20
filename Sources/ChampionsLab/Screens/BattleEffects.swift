@@ -375,3 +375,175 @@ struct Seat: Hashable {
     }
 
 }
+
+// MARK: - Coming out, and going back in
+
+/// A Poké Ball, drawn rather than drawn from a file.
+///
+/// Showdown ships one as a sprite; this app ships no item art at battle size
+/// and the shape is four circles and a band, so it is drawn. It is the same
+/// ball whatever anybody is actually carrying — the game does not tell you
+/// what ball a Pokémon came from, and guessing would be inventing.
+struct PokeBall: View {
+    var side: CGFloat = 26
+    /// Open: the top half hinges up and the inside glows.
+    var open: Bool = false
+
+    var body: some View {
+        ZStack {
+            // The white half and the band stay put; the red lid hinges off
+            // them and lifts clear, which is why the two are drawn separately
+            // and only the bottom is clipped to the circle.
+            bottom
+            lid
+        }
+        .frame(width: side, height: side)
+        .shadow(color: .black.opacity(0.5), radius: side * 0.12, y: side * 0.06)
+    }
+
+    private var bottom: some View {
+        ZStack {
+            Circle()
+                .fill(LinearGradient(colors: [Color(red: 0.98, green: 0.98, blue: 0.98),
+                                              Color(red: 0.80, green: 0.80, blue: 0.82)],
+                                     startPoint: .top, endPoint: .bottom))
+            // What is inside, once the lid is off it.
+            if open {
+                Circle()
+                    .fill(RadialGradient(colors: [.white, Color(red: 1, green: 0.95, blue: 0.7)],
+                                         center: .top, startRadius: 0, endRadius: side * 0.6))
+                    .mask(alignment: .top) { Rectangle().frame(height: side * 0.5) }
+            }
+            Rectangle()
+                .fill(.black.opacity(0.85))
+                .frame(height: Swift.max(1.5, side * 0.09))
+            Circle()
+                .fill(.white)
+                .overlay(Circle().strokeBorder(.black.opacity(0.8), lineWidth: Swift.max(1, side * 0.045)))
+                .frame(width: side * 0.3, height: side * 0.3)
+                .opacity(open ? 0 : 1)
+        }
+        .frame(width: side, height: side)
+        .clipShape(Circle())
+        .overlay(Circle().strokeBorder(.black.opacity(0.55), lineWidth: Swift.max(1, side * 0.05)))
+    }
+
+    /// The top half, as a half-disc rather than a wedge: a full circle masked
+    /// to its top, so lifting it looks like a lid coming off and not like a
+    /// slice being cut out of a pie.
+    private var lid: some View {
+        Circle()
+            .fill(LinearGradient(colors: [Color(red: 0.95, green: 0.31, blue: 0.25),
+                                          Color(red: 0.78, green: 0.16, blue: 0.13)],
+                                 startPoint: .top, endPoint: .bottom))
+            .overlay(Circle().strokeBorder(.black.opacity(0.55), lineWidth: Swift.max(1, side * 0.05)))
+            .frame(width: side, height: side)
+            .mask(alignment: .top) { Rectangle().frame(height: side * 0.5) }
+            .rotationEffect(.degrees(open ? -26 : 0), anchor: .bottom)
+            .offset(y: open ? -side * 0.34 : 0)
+    }
+}
+
+/// A Pokémon arriving: the ball arcs in, opens, and lets it out.
+///
+/// The shape is Showdown's, because Showdown's is the one every player of this
+/// format already reads: the ball comes in low and behind on a thrown arc over
+/// about three tenths of a second, opens, and the Pokémon grows out of it and
+/// settles. The arc is the part that sells it — a ball that slides in a
+/// straight line looks like a bug.
+struct SendOutEffect: View {
+    /// Where the Pokémon stands, in the scene's own coordinates.
+    let centre: CGPoint
+    /// How big the Pokémon is there, so the ball is in proportion and the
+    /// thing keeps its scale with the depth.
+    let side: CGFloat
+    /// Thrown from the near side of the field, so the two sides throw from
+    /// opposite directions the way they face.
+    let fromMine: Bool
+    var onDone: () -> Void = {}
+
+    @State private var flown = false
+    @State private var opened = false
+    @State private var gone = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var ballSide: CGFloat { Swift.max(14, side * 0.34) }
+
+    var body: some View {
+        ZStack {
+            if !gone {
+                PokeBall(side: ballSide, open: opened)
+                    .rotationEffect(.degrees(flown ? 0 : (fromMine ? -220 : 220)))
+                    .position(flown ? centre : start)
+                    .opacity(flown ? 1 : 0)
+            }
+            if opened {
+                // The flash the Pokémon comes out of.
+                Circle()
+                    .fill(RadialGradient(colors: [.white, .white.opacity(0.75), .clear],
+                                         center: .center, startRadius: 0, endRadius: side * 0.55))
+                    .frame(width: side * 1.1, height: side * 1.1)
+                    .position(centre)
+                    .blendMode(.plusLighter)
+                    .opacity(gone ? 0 : 1)
+            }
+        }
+        .allowsHitTesting(false)
+        .onAppear(perform: run)
+    }
+
+    /// Where it is thrown from: low, behind, and off to the side it belongs to.
+    private var start: CGPoint {
+        CGPoint(x: centre.x + (fromMine ? -side * 1.5 : side * 1.5),
+                y: centre.y + side * 0.9)
+    }
+
+    private func run() {
+        guard !reduceMotion else { opened = true; gone = true; onDone(); return }
+        withAnimation(.timingCurve(0.2, 0.9, 0.35, 1, duration: 0.30)) { flown = true }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            withAnimation(.easeOut(duration: 0.12)) { opened = true }
+            onDone()
+            try? await Task.sleep(nanoseconds: 260_000_000)
+            withAnimation(.easeOut(duration: 0.22)) { gone = true }
+        }
+    }
+}
+
+/// The sparkle a shiny arrives in, which is the one moment the game gives you
+/// to notice. Showdown darkens the field and throws a handful of shines up
+/// off the Pokémon; this does the same with what it has.
+struct ShinySparkle: View {
+    let centre: CGPoint
+    let side: CGFloat
+    /// Held partway through, for a still that has to show what it looks like.
+    var frozen: Bool = false
+
+    @State private var up = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<7, id: \.self) { index in
+                let spread = (CGFloat(index) - 3) / 3
+                Image(systemName: "sparkle")
+                    .font(.system(size: Swift.max(7, side * (0.10 + 0.05 * abs(spread))), weight: .black))
+                    .foregroundStyle(.white)
+                    .shadow(color: Color(red: 1, green: 0.92, blue: 0.5), radius: 6)
+                    .position(x: centre.x + spread * side * 0.55,
+                              // Scattered to begin with as well as on the way
+                              // up, or seven of them leave in a rank.
+                              y: centre.y + side * (0.30 - 0.18 * abs(spread))
+                                 - (up ? side * (0.62 + 0.22 * abs(spread)) : 0))
+                    .opacity(up ? 0 : 1)
+                    .scaleEffect(up ? 1.5 : 0.4)
+            }
+        }
+        .allowsHitTesting(false)
+        .onAppear {
+            guard !reduceMotion, !frozen else { return }
+            withAnimation(.easeOut(duration: 0.75)) { up = true }
+        }
+    }
+}

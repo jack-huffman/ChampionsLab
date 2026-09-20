@@ -348,6 +348,7 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
     // is not a thing a still can catch, so this puts them on a grid instead.
     render(EffectSheet(), named: "battle-effects-dark", size: CGSize(width: 1100, height: 760), dark: true)
     render(WeatherSheet(), named: "battle-weather-dark", size: CGSize(width: 1100, height: 700), dark: true)
+    render(BallSheet(), named: "battle-ball-dark", size: CGSize(width: 900, height: 320), dark: true)
 
 
     // The Simulate tab, with a real run behind it. Small, because the shot is
@@ -501,6 +502,38 @@ private struct EffectSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(18)
+    }
+}
+
+private struct BallSheet: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Coming out of the ball")
+                .font(.system(size: 18, weight: .bold))
+            HStack(spacing: 40) {
+                ForEach([("closed", false), ("open", true)], id: \.0) { label, open in
+                    VStack(spacing: 8) {
+                        PokeBall(side: 96, open: open)
+                        Text(label).font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                }
+                VStack(spacing: 8) {
+                    PokeBall(side: 34)
+                    Text("as thrown").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                VStack(spacing: 8) {
+                    ZStack {
+                        Color.black.opacity(0.35)
+                        ShinySparkle(centre: CGPoint(x: 70, y: 70), side: 110, frozen: true)
+                    }
+                    .frame(width: 140, height: 140)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    Text("the shiny sparkle").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(24)
     }
 }
 

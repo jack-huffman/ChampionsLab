@@ -25,6 +25,9 @@ struct BattleFieldView: View {
     let opening: Bool
     let startFlash: Bool
     let shown: Set<String>
+    /// Whose ball has opened. The sprite waits for this rather than for
+    /// `shown`, which is only the throw.
+    var landed: Set<String> = []
     let callout: String?
     let singles: Bool
     let onBackToPreview: () -> Void
