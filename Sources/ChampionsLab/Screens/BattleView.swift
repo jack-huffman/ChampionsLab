@@ -105,6 +105,8 @@ struct BattleView: View {
     /// change under the player every time the view is rebuilt. Showdown picks
     /// its by the battle's id for the same reason.
     @State private var musicSeed = Int.random(in: 0..<10_000)
+    @State private var soundOpen = false
+    @ObservedObject private var audio = BattleAudio.shared
     /// The line being called out over the field right now.
     @State private var callout: String?
 
@@ -401,12 +403,67 @@ struct BattleView: View {
             crumb("Battle", .battle, symbol: "flag.2.crossed", enabled: board != nil)
 
             Spacer()
+            soundButton
             if stage == .battle {
                 Text("Turn \(turn)").font(.system(size: 11)).foregroundStyle(.secondary)
                 leaveButton
             }
         }
         .padding(12)
+    }
+
+    /// The sound, in the header where the rest of this screen's controls are.
+    ///
+    /// It began life in the panel tab bar as a menu, which was wrong twice
+    /// over: a tab bar is for choosing what to read, and a macOS menu will
+    /// accept a Slider and then draw it as a plain blue bar with Increment
+    /// and Decrement in a context menu behind it, which is not a volume
+    /// control by any reading. A popover is what this bar already uses to ask
+    /// a question, so it is what this asks with.
+    @ViewBuilder private var soundButton: some View {
+        Button { soundOpen = true } label: {
+            Image(systemName: audio.muted ? "speaker.slash.fill"
+                  : (audio.volume < 0.34 ? "speaker.fill"
+                     : audio.volume < 0.67 ? "speaker.wave.1.fill" : "speaker.wave.2.fill"))
+                .font(.system(size: 12))
+                .foregroundStyle(audio.muted ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
+                .frame(width: 22, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .help(audio.muted ? "Sound is off." : "Cries and battle music.")
+        .popover(isPresented: $soundOpen, arrowEdge: .bottom) { soundPanel }
+    }
+
+    private var soundPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Sound").font(.system(size: 13, weight: .semibold))
+            Toggle("Cries and music", isOn: Binding(get: { !audio.muted },
+                                                    set: { audio.muted = !$0 }))
+                .toggleStyle(.switch).controlSize(.mini)
+            HStack(spacing: 8) {
+                Image(systemName: "speaker.fill")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                Slider(value: $audio.volume, in: 0...1)
+                Image(systemName: "speaker.wave.3.fill")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                Text("\(Int(audio.volume * 100))%")
+                    .font(.system(size: 10, design: .rounded)).monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .frame(width: 34, alignment: .trailing)
+            }
+            .disabled(audio.muted)
+            Divider()
+            Toggle("Battle music", isOn: $audio.music)
+                .toggleStyle(.switch).controlSize(.mini)
+                .disabled(audio.muted)
+            Text("A cry when a Pokémon comes out, and one of fifteen tunes under the battle. "
+                 + BattleAudio.credit)
+                .font(.system(size: 10)).foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .frame(width: 290)
     }
 
     /// Asked under the button, as the other screens ask things, rather than
