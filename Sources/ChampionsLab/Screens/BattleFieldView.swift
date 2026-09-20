@@ -32,7 +32,13 @@ struct BattleFieldView: View {
     /// Seats whose outgoing Pokemon has finished being drawn back into its
     /// ball, so the one replacing it may come out. A switch is two animations
     /// in a row and not two at once.
-    @State var recalled: Set<Seat> = []
+    /// Which Pokemon has finished being drawn back into its ball, by seat.
+    ///
+    /// Keyed by who left rather than by the seat alone, so it clears itself:
+    /// a set of seats only ever grew, so the second switch at a slot found
+    /// itself already in it and played no recall at all for the rest of the
+    /// game.
+    @State var recalled: [Seat: String] = [:]
     let singles: Bool
     let onBackToPreview: () -> Void
     /// How the Pokemon are drawn on their cards: the app's illustrations, or

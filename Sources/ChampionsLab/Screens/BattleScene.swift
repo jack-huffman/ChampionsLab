@@ -66,11 +66,11 @@ extension BattleFieldView {
                 let side = 96 * stage.scale(at: home.z, pixelSprite: usesPixelSprites)
                 // Going: whoever was standing here before this step, drawn by
                 // the effect because the board has already given the slot away.
-                if let leftID = playback.departing[seat], !recalled.contains(seat),
+                if let leftID = playback.departing[seat], recalled[seat] != leftID,
                    let left = store.formsByID[leftID] {
                     RecallEffect(form: left, shiny: wasShiny(leftID, mine: seat.mine, board: board),
                                  centre: stage.project(home), side: side, mine: seat.mine) {
-                        _ = recalled.insert(seat)
+                        recalled[seat] = leftID
                     }
                     .id("recall-\(key)-\(leftID)")
                 }
@@ -91,7 +91,8 @@ extension BattleFieldView {
                 // And coming, once there is room for it.
                 let coming = opening ? shown.contains(key)
                                      : (playback.arriving.contains(seat)
-                                        && (playback.departing[seat] == nil || recalled.contains(seat)))
+                                        && (playback.departing[seat] == nil
+                                            || recalled[seat] == playback.departing[seat]))
                 if coming, let fighter = fighter(at: seat, in: board), !fighter.fainted {
                     SendOutEffect(centre: stage.project(home), side: side, fromMine: seat.mine) {
                         BattleAudio.shared.cry(fighter.build.form)
@@ -184,7 +185,8 @@ extension BattleFieldView {
         let side = 96 * stage.scale(at: home.z, pixelSprite: pixel)
         // Still being recalled: the slot belongs to whoever is coming in, but
         // the one going out is still on screen and this one waits its turn.
-        let waiting = playback.departing[seat] != nil && !recalled.contains(seat)
+        let waiting = playback.departing[seat] != nil
+            && recalled[seat] != playback.departing[seat]
         let out = (!opening || landed.contains("\(seat.mine ? "m" : "t")\(seat.slot)")) && !waiting
         let hit = seat.mine ? struck.contains(seat.slot) : struckTheirs.contains(seat.slot)
         let asked = seat.mine && session.awaitingOrders(board) == seat.slot && !fighter.fainted
@@ -243,6 +245,14 @@ extension BattleFieldView {
             if rising { StatArrows(up: true, tint: Self.riseTint, side: side * 0.9).transition(.opacity) }
             if falling { StatArrows(up: false, tint: Self.fallTint, side: side * 0.9).transition(.opacity) }
         }
+        // Hidden here rather than at the end, which is the whole of an
+        // Intimidate that nobody saw: the overlays below are attached after
+        // this, so what is being *said* about a Pokemon stays on screen while
+        // the Pokemon itself is still inside its ball. Putting the opacity on
+        // the outside took the ability's name and the stat arrows down with
+        // the sprite, and a switch-in takes the best part of a second.
+        .opacity(out ? 1 : 0)
+        .scaleEffect(out ? 1 : 0.2)
         .frame(width: side, height: side)
         // The game is over and this one is on the side that won: a crown,
         // hovering, riding the same bob the Pokemon does.
@@ -357,8 +367,6 @@ extension BattleFieldView {
             .allowsHitTesting(false)
         }
         .modifier(carried(seat))
-        .opacity(out ? 1 : 0)
-        .scaleEffect(out ? 1 : 0.2)
         .position(at)
         .allowsHitTesting(false)
     }
