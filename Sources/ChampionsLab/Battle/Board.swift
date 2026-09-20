@@ -614,6 +614,10 @@ struct Board {
         /// the Intimidate that has landed and not the Swords Dance that has yet to.
         var myBoosts: [[Int]] = []
         var theirBoosts: [[Int]] = []
+        /// Items that did something during the step, and whose. Drawn over
+        /// the Pokemon the way an ability is, because a Focus Sash deciding a
+        /// game is exactly as worth seeing as an Intimidate.
+        var items: [Firing] = []
         /// Who took a critical hit during the step, and what did it. The log
         /// has said "A critical hit!" since the beginning and the field never
         /// did — so the one number on screen that a crit changes had nothing
@@ -639,6 +643,7 @@ struct Board {
             case ability(Firing)
             case stat(mine: Bool, slot: Int, stat: Int, delta: Int, cause: String?)
             case status(mine: Bool, slot: Int, ailment: Ailment)
+            case item(Firing)
         }
         var events: [Event] = []
         var myStatus: [Ailment] = []
@@ -809,6 +814,8 @@ struct Board {
     /// Not private: a private stored property would make the memberwise
     /// initialiser private too, and a board is rebuilt from the wire with it.
     var firing: [Step.Firing] = []
+    /// Items that went off since the last step closed, cleared with it.
+    var itemsFired: [Step.Firing] = []
     /// Critical hits landed since the last step closed, cleared with it.
     var criticals: [Step.Firing] = []
     /// And who was untouched, for the same window.
@@ -858,7 +865,10 @@ struct Board {
 
     private mutating func snapshot(_ text: String) -> Step {
         reconcileEvents()
-        defer { firing = []; criticals = []; untouched = []; events = []; markStepStart() }
+        defer {
+            firing = []; itemsFired = []; criticals = []; untouched = []
+            events = []; markStepStart()
+        }
         return Step(text: text, action: acting,
                     myHP: mine.map(\.hp), theirHP: theirs.map(\.hp),
                     myForms: mine.map(\.build.form.id),
@@ -866,7 +876,7 @@ struct Board {
                     field: field, myTailwind: myTailwind,
                     theirTailwind: theirTailwind, trickRoom: trickRoom,
                     myBoosts: mine.map(\.build.boosts), theirBoosts: theirs.map(\.build.boosts),
-                    criticals: criticals, untouched: untouched,
+                    items: itemsFired, criticals: criticals, untouched: untouched,
                     abilities: firing, events: events,
                     myStatus: mine.map(\.status), theirStatus: theirs.map(\.status),
                     myConfused: mine.map(\.isConfused), theirConfused: theirs.map(\.isConfused),
@@ -903,6 +913,8 @@ struct Board {
         }
         for hit in itemsNamed(in: text) {
             if hit.mine { mine[hit.slot].itemRevealed = true } else { theirs[hit.slot].itemRevealed = true }
+            if !itemsFired.contains(hit) { itemsFired.append(hit) }
+            if !events.contains(.item(hit)) { events.append(.item(hit)) }
         }
         if gathering != nil {
             gathering?.append(text)
@@ -933,7 +945,15 @@ struct Board {
                 let name = what(team[slot])
                 guard !name.isEmpty, text.contains(name) else { continue }
                 let label = team[slot].build.form.formLabel
+                // Two ways a line says whose it is. Most name it in the
+                // possessive -- "Incineroar's Intimidate" -- but the items are
+                // written as sentences about somebody: "Garchomp hung on with
+                // its Focus Sash", "Garchomp is worn down by its Life Orb".
+                // Reading only the first shape left every item unattributed
+                // whenever two of them were on the field at once.
+                let opening = text.trimmingCharacters(in: .whitespaces)
                 let owned = text.contains("\(label)'s \(name)")
+                    || opening.hasPrefix("\(label) ") || opening.hasPrefix("\(label)'s ")
                 let others = (0..<Swift.min(activeCount, mine.count)).filter { what(mine[$0]) == name }.count
                     + (0..<Swift.min(activeCount, theirs.count)).filter { what(theirs[$0]) == name }.count
                 // How many Pokemon standing here answer to that name. Both
@@ -1409,7 +1429,7 @@ extension Board.Step: Codable {
     /// Everything but the id, which is the step's own and fresh on each side.
     enum CodingKeys: String, CodingKey {
         case text, action, myHP, theirHP, myForms, theirForms, field, myTailwind, theirTailwind,
-             trickRoom, myBoosts, theirBoosts, abilities, events, myStatus, theirStatus, myConfused, theirConfused,
+             trickRoom, myBoosts, theirBoosts, abilities, items, events, myStatus, theirStatus, myConfused, theirConfused,
              myProtected, theirProtected
     }
 }
@@ -1423,6 +1443,8 @@ extension Board.Step.Event: Codable {
             return .stat(mine: !mine, slot: slot, stat: stat, delta: delta, cause: cause)
         case .status(let mine, let slot, let ailment):
             return .status(mine: !mine, slot: slot, ailment: ailment)
+        case .item(let firing):
+            return .item(Board.Step.Firing(mine: !firing.mine, slot: firing.slot, name: firing.name))
         }
     }
 }

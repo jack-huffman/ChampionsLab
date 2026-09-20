@@ -345,6 +345,27 @@ extension BattleFieldView {
                         .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
                         .transition(.asymmetric(insertion: .scale(scale: 0.7).combined(with: .opacity), removal: .opacity))
                 }
+                // An item that did something, with its own picture on it.
+                // Abilities wear a wand; an item wears itself, which is the
+                // fastest way to tell the two apart at a glance.
+                if let used = playback.items[seat], !used.isEmpty {
+                    ForEach(used, id: \.self) { name in
+                        HStack(spacing: 4) {
+                            ItemIcon(name: name, side: max(11, 10 * stage.k))
+                            Text(name).font(.system(size: max(10, 9 * stage.k), weight: .bold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(Color(red: 0.13, green: 0.10, blue: 0.06).opacity(0.94)))
+                        .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .strokeBorder(Color(red: 0.93, green: 0.72, blue: 0.32).opacity(0.85),
+                                          lineWidth: 1))
+                        .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
+                    }
+                    .transition(.asymmetric(insertion: .scale(scale: 0.7).combined(with: .opacity),
+                                            removal: .opacity))
+                }
                 if let fired = playback.abilities[seat], !fired.isEmpty {
                     ForEach(fired, id: \.self) { name in
                         HStack(spacing: 4) {

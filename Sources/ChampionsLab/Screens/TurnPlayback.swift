@@ -105,6 +105,10 @@ final class TurnPlayback: ObservableObject {
     @Published var boosts: [Seat: [StatChange]] = [:]
     /// Whose abilities went off as the step landed, named over the Pokemon.
     @Published var abilities: [Seat: [String]] = [:]
+    /// And the items that went off, shown the same way. A Focus Sash deciding
+    /// a game is as worth seeing as an Intimidate, and it was only ever in the
+    /// log.
+    @Published var items: [Seat: [String]] = [:]
     /// Partway through a flurry: what each Pokemon has taken so far, so the
     /// health bar steps down blow by blow while the field is still held on
     /// the moment before the move.
@@ -235,7 +239,7 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]; crits = []; untouched = []; charging = []; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
+        damage = [:]; crits = []; untouched = []; charging = []; items = [:]; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
         struck = []; struckTheirs = []
         replay = []; at = 0; seen = 0; focus = nil; replayBoard = nil; startBoard = nil
     }
@@ -282,7 +286,7 @@ final class TurnPlayback: ObservableObject {
             guard !Task.isCancelled else { return }
             scene = nil
             stopTracks()
-            damage = [:]; crits = []; untouched = []; charging = []; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
+            damage = [:]; crits = []; untouched = []; charging = []; items = [:]; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
             focus = nil
             // The end of the turn: what the residuals took and gave -- a burn,
             // Leftovers, a Speed Boost -- shown over whoever it happened to,
@@ -298,7 +302,7 @@ final class TurnPlayback: ObservableObject {
                 guard !Task.isCancelled else { return }
                 try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1.6 * 1_000_000_000))
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; crits = []; untouched = []; charging = []; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
+                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; crits = []; untouched = []; charging = []; items = [:]; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
             }
             // Rest on the last step rather than past it: the field shows the end
             // of the turn, and the stepper still works from there, which is how
@@ -332,7 +336,7 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]; crits = []; untouched = []; charging = []; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
+        damage = [:]; crits = []; untouched = []; charging = []; items = [:]; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
         struck = []; struckTheirs = []
         seen = Swift.max(seen, index + 1)
         let steps = replay
@@ -347,7 +351,7 @@ final class TurnPlayback: ObservableObject {
                 guard !Task.isCancelled else { return }
                 try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1.6 * 1_000_000_000))
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; crits = []; untouched = []; charging = []; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
+                withAnimation(.easeIn(duration: 0.2)) { damage = [:]; crits = []; untouched = []; charging = []; items = [:]; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
                 task = nil
             }
             return
@@ -359,7 +363,7 @@ final class TurnPlayback: ObservableObject {
             guard !Task.isCancelled else { return }
             scene = nil
             stopTracks()
-            damage = [:]; crits = []; untouched = []; charging = []; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
+            damage = [:]; crits = []; untouched = []; charging = []; items = [:]; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
             at = index
             focus = nil
             task = nil
@@ -373,8 +377,9 @@ final class TurnPlayback: ObservableObject {
         var cause: String?
         var boosts: [Seat: [StatChange]] = [:]
         var abilities: [Seat: [String]] = [:]
+        var items: [Seat: [String]] = [:]
         var statuses: [Seat: Ailment] = [:]
-        var isEmpty: Bool { boosts.isEmpty && abilities.isEmpty && statuses.isEmpty }
+        var isEmpty: Bool { boosts.isEmpty && abilities.isEmpty && items.isEmpty && statuses.isEmpty }
     }
 
     /// What a step caused that the field has not shown yet. The board the
@@ -432,6 +437,15 @@ final class TurnPlayback: ObservableObject {
                     current.cause = want
                 }
                 current.boosts[Seat(mine: mine, slot: slot), default: []].append(StatChange(stat: stat, delta: delta))
+            case .item(let firing):
+                // Its own beat, the way an ability is: it is a separate thing
+                // happening to a separate Pokemon.
+                guard firing.slot < 2 else { continue }
+                close()
+                current.cause = firing.name
+                current.items[Seat(mine: firing.mine, slot: firing.slot), default: []]
+                    .append(firing.name)
+                close()
             case .status(let mine, let slot, let ailment):
                 // A status is a beat of its own.
                 guard slot < 2, ailment != .none else { continue }
@@ -534,6 +548,7 @@ final class TurnPlayback: ObservableObject {
             withAnimation(.easeOut(duration: 0.18)) {
                 boosts = phase.boosts
                 abilities = phase.abilities
+                items = phase.items
                 statusShown = phase.statuses
                 pending.subtract(phase)
             }
@@ -574,7 +589,7 @@ final class TurnPlayback: ObservableObject {
         task?.cancel(); task = nil
         scene = nil
         stopTracks()
-        damage = [:]; crits = []; untouched = []; charging = []; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
+        damage = [:]; crits = []; untouched = []; charging = []; items = [:]; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld()
         replay = []; at = 0; seen = 0; focus = nil; replayBoard = nil; startBoard = nil
     }
 
@@ -675,7 +690,7 @@ final class TurnPlayback: ObservableObject {
         guard !Task.isCancelled else { return }
         try? await Task.sleep(nanoseconds: UInt64(Self.dwellSeconds * 1_000_000_000))
         guard !Task.isCancelled else { return }
-        withAnimation(.easeIn(duration: 0.2)) { damage = [:]; crits = []; untouched = []; charging = []; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
+        withAnimation(.easeIn(duration: 0.2)) { damage = [:]; crits = []; untouched = []; charging = []; items = [:]; arriving = []; departing = [:]; transforming = []; boosts = [:]; abilities = [:]; partial = [:]; statusShown = [:]; pending = Withheld() }
         if !last {
             try? await Task.sleep(nanoseconds: UInt64(Self.betweenActions * 1_000_000_000))
         }
