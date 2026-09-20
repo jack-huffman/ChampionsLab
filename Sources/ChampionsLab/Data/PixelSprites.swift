@@ -10,8 +10,19 @@
 //  under Application Support. Until it arrives, and for a form with no sprite
 //  there at all, the card shows the illustration.
 //
-//  A Champions-only Mega has no animated sprite there; Showdown has drawn a
-//  still for each, and the still is what comes back for those.
+//  Showdown keeps several sets and they are not equally complete. The Gen 6
+//  one -- `ani` -- has 340 of this dex's 345 forms; the Gen 5 one the app
+//  used to ask for first has 219. That gap is a hundred and twenty-one
+//  Pokemon, most of Gen 8 and Gen 9 among them, quietly falling back to a
+//  still or to the illustration on a screen set to pixel sprites. It asks the
+//  bigger set first now and keeps the smaller one behind it, which costs
+//  nothing: measured against the whole dex, `ani` has everything `gen5ani`
+//  has and a hundred and twenty-one more.
+//
+//  What is left is five Megas this game invented -- Absol Z, Baxcalibur,
+//  Garchomp Z, Golisopod, Lucario Z -- which exist in no client because they
+//  exist in no other game. Showdown has drawn a still for each, and the still
+//  is what comes back for those.
 //
 //  Shiny is the same set under another name -- gen5ani-shiny and its three
 //  siblings -- and is fetched and kept the same way, under its own key so the
@@ -62,6 +73,13 @@ final class PixelSprites: ObservableObject {
     }
 
     static let shared = PixelSprites()
+
+    private init() {
+        // The old cache was filled when a smaller set of Showdown's was asked
+        // for first, and nothing in a cache remembers which shelf it came off.
+        // Swept once, here, because this is the only thing that knows.
+        Self.sweepTheOldCache()
+    }
     static let credit = "Pixel sprites on the battle screen, when that style is chosen, are Pokémon Showdown's, fetched the first time they are needed."
 
     /// What a form's file is called there: the species id, then the forme's
@@ -119,9 +137,24 @@ final class PixelSprites: ObservableObject {
         return nil
     }
 
+    /// Where a fetched sprite is kept.
+    ///
+    /// The name carries a number because what is kept is whatever the fetch
+    /// found first, and that changed: a cache filled when the Gen 5 set was
+    /// asked for first would go on serving the worse sprite for ever, since
+    /// nothing in a cache remembers which shelf it came off. A new directory
+    /// is the whole migration; the old one is swept up once.
     private nonisolated static var folder: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("ChampionsLab/sprites-ani")
+    }
+
+    /// The cache from before the Gen 6 set was preferred, removed once so it
+    /// is not left sitting there being nothing.
+    nonisolated static func sweepTheOldCache() {
+        let old = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ChampionsLab/sprites")
+        try? FileManager.default.removeItem(at: old)
     }
 
     /// Already on disk from an earlier fetch. Read off the main thread, like
@@ -144,7 +177,12 @@ final class PixelSprites: ObservableObject {
         // plain one for -- so a form that has an animation has a shiny
         // animation, and one that only has a still has a shiny still.
         let tail = shiny ? "-shiny/" : "/"
-        let tries = [(base + (back ? "gen5ani-back" : "gen5ani") + tail + slug + ".gif", "gif"),
+        // Biggest set first, then the older one, then a still. Each shape of
+        // the name is the directory with "-back" and "-shiny" stuck on it,
+        // which is Showdown's own convention and the reason this is three
+        // lines rather than twelve.
+        let tries = [(base + (back ? "ani-back" : "ani") + tail + slug + ".gif", "gif"),
+                     (base + (back ? "gen5ani-back" : "gen5ani") + tail + slug + ".gif", "gif"),
                      (base + (back ? "gen5-back" : "gen5") + tail + slug + ".png", "png")]
         for (address, ext) in tries {
             guard let url = URL(string: address),

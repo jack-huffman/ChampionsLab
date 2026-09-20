@@ -103,9 +103,9 @@ def status(url):
 
 
 def one(name):
-    """Whether Showdown has this sprite, animated or still."""
-    animated, still = name
-    for path in (animated, still):
+    """Whether Showdown has this sprite anywhere: the Gen 6 animated set, the
+    Gen 5 one behind it, or a still. The same order the app asks in."""
+    for path in name:
         code = status(BASE + path)
         if code == 200:
             return True
@@ -127,13 +127,14 @@ def check_showdown(roster, fresh):
         if not piece:
             continue
         named += 1
-        for kind, ani, still in (
-                ("front", "gen5ani/", "gen5/"),
-                ("front shiny", "gen5ani-shiny/", "gen5-shiny/"),
-                ("back", "gen5ani-back/", "gen5-back/"),
-                ("back shiny", "gen5ani-back-shiny/", "gen5-back-shiny/")):
-            wanted[(form["form_label"], piece, kind)] = (ani + piece + ".gif",
-                                                         still + piece + ".png")
+        for kind, dirs in (
+                ("front", ("ani/", "gen5ani/", "gen5/")),
+                ("front shiny", ("ani-shiny/", "gen5ani-shiny/", "gen5-shiny/")),
+                ("back", ("ani-back/", "gen5ani-back/", "gen5-back/")),
+                ("back shiny", ("ani-back-shiny/", "gen5ani-back-shiny/", "gen5-back-shiny/"))):
+            wanted[(form["form_label"], piece, kind)] = tuple(
+                d + piece + (".png" if d.startswith("gen5/") or d.startswith("gen5-") else ".gif")
+                for d in dirs)
     print("   %d of %d forms carry a Showdown name" % (named, len(roster)))
 
     todo = [k for k in wanted if "|".join(k[1:]) not in cache]

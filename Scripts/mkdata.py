@@ -1268,7 +1268,12 @@ def build_wider(roster, showdown, moves):
             # Prefixed so it can never collide with a Champions icon, and so
             # nothing goes looking for a bundled sprite that was never made.
             "icon": "sd-" + ident,
-            "suffix": "",
+            # Non-empty when the name really is a species and a forme, which
+            # is what tells the sprite lookup where to cut it. Chien-Pao and
+            # Chi-Yu have hyphens in their own names and no forme at all, and
+            # cutting those would ask Showdown for a file it does not have --
+            # the same mistake Kommo-o was already caught making.
+            "suffix": "".join(c for c in (entry.get("forme") or "").lower() if c.isalnum()),
             "types": entry.get("types") or [],
             "stats": [int(stats.get(k, 0)) for k in order],
             "abilities": [{"name": a, "desc": ""} for a in (entry.get("abilities") or [])],
