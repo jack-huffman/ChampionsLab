@@ -18,7 +18,7 @@
 import SwiftUI
 
 struct BattleFieldView: View {
-    @EnvironmentObject private var store: Store
+    @EnvironmentObject var store: Store
     @Environment(\.snapshotMode) var snapshotMode
     @ObservedObject var session: BattleSession
     @ObservedObject var playback: TurnPlayback
@@ -29,6 +29,10 @@ struct BattleFieldView: View {
     /// `shown`, which is only the throw.
     var landed: Set<String> = []
     let callout: String?
+    /// Seats whose outgoing Pokemon has finished being drawn back into its
+    /// ball, so the one replacing it may come out. A switch is two animations
+    /// in a row and not two at once.
+    @State var recalled: Set<Seat> = []
     let singles: Bool
     let onBackToPreview: () -> Void
     /// How the Pokemon are drawn on their cards: the app's illustrations, or
@@ -38,6 +42,40 @@ struct BattleFieldView: View {
     /// when changed -- without @AppStorage, for the reason given in BattleView.
     @State var spriteStyle = UserDefaults.standard.string(forKey: "battleSpriteStyle") ?? "pixel"
     @ObservedObject var pixels = PixelSprites.shared
+    @ObservedObject var audio = BattleAudio.shared
+
+    /// The sound: a speaker to silence it, and what is behind the speaker.
+    ///
+    /// A slider on the toolbar would be one more thing in a row that is
+    /// already busy, so the speaker is the control and the rest lives under
+    /// it. The icon says which state it is in by its shape -- crossed out or
+    /// not -- rather than by its colour.
+    @ViewBuilder private var soundControl: some View {
+        Menu {
+            Toggle("Sound", isOn: Binding(get: { !audio.muted },
+                                          set: { audio.muted = !$0 }))
+            Toggle("Battle music", isOn: $audio.music)
+                .disabled(audio.muted)
+            Divider()
+            HStack {
+                Image(systemName: "speaker.fill").font(.system(size: 9))
+                Slider(value: $audio.volume, in: 0...1)
+                Image(systemName: "speaker.wave.3.fill").font(.system(size: 9))
+            }
+            .frame(width: 160)
+            .disabled(audio.muted)
+            Text(BattleAudio.credit).font(.system(size: 9))
+        } label: {
+            Image(systemName: audio.muted ? "speaker.slash.fill"
+                  : (audio.volume < 0.34 ? "speaker.fill"
+                     : audio.volume < 0.67 ? "speaker.wave.1.fill" : "speaker.wave.2.fill"))
+                .font(.system(size: 11))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(audio.muted ? "Sound is off." : "Cries and battle music, from Pokémon Showdown.")
+    }
 
     typealias TurnReview = BattleSession.TurnReview
     typealias Panel = BattleSession.Panel
@@ -248,6 +286,7 @@ struct BattleFieldView: View {
                         Text(searchNote).font(.system(size: 9)).foregroundStyle(.quaternary)
                             .lineLimit(1)
                     }
+                    if !snapshotMode { soundControl }
                     if !snapshotMode {
                         Picker("Sprites", selection: $spriteStyle) {
                             Text("Art").tag("illustrated")

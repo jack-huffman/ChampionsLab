@@ -101,6 +101,10 @@ struct BattleView: View {
     /// and the arrival -- and the Pokemon appears on the second, which is what
     /// makes the ball look like it brought something.
     @State private var landed: Set<String> = []
+    /// Which tune this game gets, chosen once when it starts so it does not
+    /// change under the player every time the view is rebuilt. Showdown picks
+    /// its by the battle's id for the same reason.
+    @State private var musicSeed = Int.random(in: 0..<10_000)
     /// The line being called out over the field right now.
     @State private var callout: String?
 
@@ -265,8 +269,11 @@ struct BattleView: View {
             if let steps, link != nil { playOpening(steps) }
         }
         .onChange(of: session.finished) { result in
-            if result != nil { recordGame() }
+            // Showdown stops the music when a game ends rather than playing on
+            // over the result, and it is right to: the tune is the tension.
+            if result != nil { recordGame(); BattleAudio.shared.stopMusic() }
         }
+        .onDisappear { BattleAudio.shared.stopMusic() }
     }
 
     /// The lobby opens on the last matchup looked at, so a battle is a click
@@ -319,6 +326,8 @@ struct BattleView: View {
         landed = []
         callout = nil
         startFlash = true
+        musicSeed = Int.random(in: 0..<10_000)
+        BattleAudio.shared.startMusic(seed: musicSeed)
         playback.withhold(steps)
         let arrivals = (0..<start.activeCount).flatMap { slot in ["m\(slot)", "t\(slot)"] }
         Task { @MainActor in
@@ -349,6 +358,7 @@ struct BattleView: View {
     private func stopGame() {
         session.endGame()
         readied = false
+        BattleAudio.shared.stopMusic()
         opening = false; startFlash = false; shown = []; landed = []; callout = nil
         bringing = []; focused = nil
         if link != nil {
@@ -487,6 +497,7 @@ struct BattleView: View {
     /// two sixes are read again for the new one.
     private func reset() {
         session.endGame()
+        BattleAudio.shared.stopMusic()
         opening = false; startFlash = false; shown = []; landed = []; callout = nil
         bringing = []; focused = nil; lobby = Lobby()
         stage = .versus
@@ -608,6 +619,8 @@ struct BattleView: View {
         shown = []
         landed = []
         callout = nil
+        musicSeed = Int.random(in: 0..<10_000)
+        if !snapshotMode { BattleAudio.shared.startMusic(seed: musicSeed) }
         // Their four is chosen against your six the way you chose yours, and
         // each side's back two go on the board as guesses: the game knows the
         // truth so it can be played, and neither side's advice reads past what

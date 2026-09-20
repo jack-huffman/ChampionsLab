@@ -62,12 +62,27 @@ extension BattleFieldView {
             // mid-turn, which the playback notices by a slot changing hands.
             ForEach(seatsInDrawOrder(board), id: \.self) { seat in
                 let key = "\(seat.mine ? "m" : "t")\(seat.slot)"
-                let coming = opening ? shown.contains(key) : playback.arriving.contains(seat)
+                let home = stage.home(seat)
+                let side = 96 * stage.scale(at: home.z, pixelSprite: usesPixelSprites)
+                // Going: whoever was standing here before this step, drawn by
+                // the effect because the board has already given the slot away.
+                if let leftID = playback.departing[seat], !recalled.contains(seat),
+                   let left = store.formsByID[leftID] {
+                    RecallEffect(form: left, shiny: wasShiny(leftID, mine: seat.mine, board: board),
+                                 centre: stage.project(home), side: side, mine: seat.mine) {
+                        _ = recalled.insert(seat)
+                    }
+                    .id("recall-\(key)-\(leftID)")
+                }
+                // And coming, once there is room for it.
+                let coming = opening ? shown.contains(key)
+                                     : (playback.arriving.contains(seat)
+                                        && (playback.departing[seat] == nil || recalled.contains(seat)))
                 if coming, let fighter = fighter(at: seat, in: board), !fighter.fainted {
-                    let home = stage.home(seat)
-                    let side = 96 * stage.scale(at: home.z, pixelSprite: usesPixelSprites)
-                    SendOutEffect(centre: stage.project(home), side: side, fromMine: seat.mine)
-                        .id("ball-\(key)-\(fighter.build.form.id)")
+                    SendOutEffect(centre: stage.project(home), side: side, fromMine: seat.mine) {
+                        BattleAudio.shared.cry(fighter.build.form)
+                    }
+                    .id("ball-\(key)-\(fighter.build.form.id)")
                     if fighter.build.shiny, opening ? landed.contains(key) : true {
                         ShinySparkle(centre: stage.project(home), side: side)
                             .id("shine-\(key)-\(fighter.build.form.id)")
@@ -153,7 +168,10 @@ extension BattleFieldView {
         let at = stage.project(home)
         let pixel = usesPixelSprites
         let side = 96 * stage.scale(at: home.z, pixelSprite: pixel)
-        let out = !opening || landed.contains("\(seat.mine ? "m" : "t")\(seat.slot)")
+        // Still being recalled: the slot belongs to whoever is coming in, but
+        // the one going out is still on screen and this one waits its turn.
+        let waiting = playback.departing[seat] != nil && !recalled.contains(seat)
+        let out = (!opening || landed.contains("\(seat.mine ? "m" : "t")\(seat.slot)")) && !waiting
         let hit = seat.mine ? struck.contains(seat.slot) : struckTheirs.contains(seat.slot)
         let asked = seat.mine && session.awaitingOrders(board) == seat.slot && !fighter.fainted
         return ZStack {
@@ -312,6 +330,15 @@ extension BattleFieldView {
         .scaleEffect(out ? 1 : 0.2)
         .position(at)
         .allowsHitTesting(false)
+    }
+
+    /// Whether the one that just left was registered shiny. It is on the
+    /// bench now, so it is found by the form it is: the only way it would be
+    /// wrong is a team carrying the same Pokemon twice, which the species
+    /// clause forbids.
+    func wasShiny(_ formID: String, mine: Bool, board: Board) -> Bool {
+        (mine ? board.mine : board.theirs)
+            .first { $0.build.form.id == formID }?.build.shiny ?? false
     }
 
     /// The colours of a stage rising and falling, chosen to be told apart

@@ -547,3 +547,59 @@ struct ShinySparkle: View {
         }
     }
 }
+
+/// A Pokémon being recalled: it is drawn up into nothing and the ball drops
+/// away with it.
+///
+/// Showdown's animUnsummon, which is its summon read backwards and a little
+/// quicker: the Pokémon rises about half its own height, shrinking to nothing
+/// over four tenths of a second, and the ball appears where its head was and
+/// arcs back down and behind, fading. There is no cry for this one — Showdown
+/// plays one coming out and one going down, and not for a recall.
+///
+/// It draws the departing Pokémon itself, because by the time a step is on the
+/// board the slot already belongs to whoever replaced it.
+struct RecallEffect: View {
+    let form: Form
+    let shiny: Bool
+    let centre: CGPoint
+    let side: CGFloat
+    let mine: Bool
+    var onDone: () -> Void = {}
+
+    @State private var pulled = false
+    @State private var thrown = false
+    @State private var gone = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            if !gone {
+                SpriteImage(form: form, side: side, shiny: shiny)
+                    .scaleEffect(pulled ? 0.01 : 1, anchor: .top)
+                    .opacity(pulled ? 0 : 1)
+                    .position(x: centre.x, y: centre.y - (pulled ? side * 0.42 : 0))
+                PokeBall(side: Swift.max(14, side * 0.34), open: !thrown)
+                    .position(x: centre.x,
+                              y: centre.y - (thrown ? -side * 0.55 : side * 0.42))
+                    .scaleEffect(thrown ? 0.6 : 1)
+                    .opacity(pulled ? (thrown ? 0 : 1) : 0)
+                    .rotationEffect(.degrees(thrown ? (mine ? -160 : 160) : 0))
+            }
+        }
+        .allowsHitTesting(false)
+        .onAppear(perform: run)
+    }
+
+    private func run() {
+        guard !reduceMotion else { pulled = true; gone = true; onDone(); return }
+        withAnimation(.easeIn(duration: 0.34)) { pulled = true }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 340_000_000)
+            withAnimation(.timingCurve(0.4, 0, 0.9, 0.5, duration: 0.34)) { thrown = true }
+            try? await Task.sleep(nanoseconds: 340_000_000)
+            gone = true
+            onDone()
+        }
+    }
+}
