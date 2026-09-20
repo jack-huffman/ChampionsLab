@@ -932,11 +932,24 @@ struct Board {
             for slot in 0..<Swift.min(activeCount, team.count) {
                 let name = what(team[slot])
                 guard !name.isEmpty, text.contains(name) else { continue }
-                let owned = text.contains("\(team[slot].build.form.formLabel)'s \(name)")
+                let label = team[slot].build.form.formLabel
+                let owned = text.contains("\(label)'s \(name)")
                 let others = (0..<Swift.min(activeCount, mine.count)).filter { what(mine[$0]) == name }.count
                     + (0..<Swift.min(activeCount, theirs.count)).filter { what(theirs[$0]) == name }.count
+                // How many Pokemon standing here answer to that name. Both
+                // sides running the same good Pokemon is the ordinary case in
+                // this format, not a corner: with a Sneasler out on each side,
+                // "Sneasler's Unburden" names neither of them because it names
+                // both, and the field put the word over both their heads.
+                let sharing = (0..<Swift.min(activeCount, mine.count))
+                        .filter { mine[$0].build.form.formLabel == label }.count
+                    + (0..<Swift.min(activeCount, theirs.count))
+                        .filter { theirs[$0].build.form.formLabel == label }.count
                 let isActing = acting.map { $0.byMine == mineSide && $0.slot == slot } ?? false
-                if owned || others == 1 || isActing {
+                // Named unmistakably, or the only one who could have done it,
+                // or the one whose turn it is. Anything else is a guess, and a
+                // guess drawn over a Pokemon reads as a fact.
+                if (owned && sharing == 1) || others == 1 || isActing {
                     out.append(Step.Firing(mine: mineSide, slot: slot, name: name))
                 }
             }

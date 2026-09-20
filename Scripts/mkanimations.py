@@ -164,7 +164,11 @@ class Linear:
 
 def evaluate(expr, axis, who):
     """Parse an arithmetic expression over the anchors into a Linear."""
-    tokens = re.findall(r'\d+\.\d+|\d+|[A-Za-z_]\w*(?:\.\w+)*|[()+\-*/]', expr)
+    # `**` before the single-character class, or it splits into two `*` and
+    # the second one arrives where a number should be. Make It Rain lays its
+    # coins out at (-1) ** i * (32 - i * 8), and this is the whole reason it
+    # had no animation at all.
+    tokens = re.findall(r'\d+\.\d+|\d+|[A-Za-z_]\w*(?:\.\w+)*|\*\*|[()+\-*/]', expr)
     pos = 0
     def peek(): return tokens[pos] if pos < len(tokens) else None
     def take():
@@ -194,10 +198,22 @@ def evaluate(expr, axis, who):
             key = anchor[0] + ('b' if prop.startswith('behind') else 'l')
             return Linear(0.0, **{anchor[0]: 1.0, key: arg.c})
         raise Unparsed('token ' + tok)
-    def product():
+    def power():
+        # Constant only, and that is all the client ever needs: by the time a
+        # loop has been unrolled the counter is a number, so (-1) ** i is a
+        # sign and not an unknown.
         v = primary()
+        while peek() == '**':
+            take(); w = primary()
+            if not (v.constant() and w.constant()):
+                raise Unparsed('nonlinear power')
+            v = Linear(v.c ** w.c)
+        return v
+
+    def product():
+        v = power()
         while peek() in ('*', '/'):
-            op = take(); w = primary()
+            op = take(); w = power()
             if op == '*':
                 if w.constant(): v = v.scaled(w.c)
                 elif v.constant(): v = w.scaled(v.c)
@@ -362,9 +378,19 @@ def recipe(entry):
     body = '\n' + strip_comments(body)
     names, body, spread, extra = unwrap_spread(names, body)
     body, scalars, arrays = declarations(body)
+    # Put the declarations back before the loops are unrolled as well as
+    # after. One written *inside* a loop carries the counter in it -- Make It
+    # Rain lays its coins at `const hitPos = (-1) ** i * (32 - i * 8)` -- and
+    # substituting it only afterwards leaves an `i` in an expression that has
+    # to be a number by then, which is a whole animation lost to an ordering.
+    def settle(text):
+        for _ in range(3):
+            for name, value in scalars.items():
+                text = re.sub(r'\b' + name + r'\b', value, text)
+        return text
+    body = settle(body)
     body = unroll(body, arrays)
-    for _ in range(3):
-        for name, value in scalars.items(): body = re.sub(r'\b' + name + r'\b', value, body)
+    body = settle(body)
     out = {'steps': translate(body, names, extra)}
     if spread: out['spread'] = True
     return out

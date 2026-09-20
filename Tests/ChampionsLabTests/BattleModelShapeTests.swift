@@ -34,7 +34,7 @@ final class BattleModelShapeTests: XCTestCase {
 
     /// Every aspect, and the most lines it may run to.
     static let aspects: [String: Int] = [
-        "Board": 1450,          // the state; large because Fighter carries a lot, Power Points included
+        "Board": 1500,          // the state; large because Fighter carries a lot, Power Points included
         "TurnModel": 400,       // the orchestrator, and nothing else
         "TurnOrder": 400,
         "Strikes": 1640,        // the action pipeline, in its phases; a flurry is rolled blow by blow
