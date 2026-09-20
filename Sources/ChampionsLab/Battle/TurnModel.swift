@@ -143,8 +143,19 @@ enum TurnModel {
         }
         // Trick Room does not invert this: Mega Evolution is worked out on raw
         // Speed regardless of what is on the field.
+        // Each one is its own step, the way each switch is. Two Megas in a
+        // turn are two things that happen one after the other, and when both
+        // bring weather the order is the whole outcome -- so the field has to
+        // be able to show them a beat apart rather than as one moment in which
+        // the sun somehow lost to the rain.
         for entry in evolving.sorted(by: { $0.speed > $1.speed }) {
             let before = out.field
+            let team = entry.mine ? out.mine : out.theirs
+            let becoming = team[entry.slot].pendingMega?.formLabel
+                ?? team[entry.slot].build.form.formLabel
+            out.beginStep(Board.Action(byMine: entry.mine, slot: entry.slot,
+                                       move: "", category: "Mega", type: ""))
+            out.note("\(team[entry.slot].build.form.formLabel) Mega Evolved into \(becoming).")
             if entry.mine {
                 Switching.megaEvolve(&out.mine, slot: entry.slot, opposing: &out.theirs,
                            field: &out.field)
@@ -155,6 +166,7 @@ enum TurnModel {
                 Switching.intimidate(from: false, slot: entry.slot, board: &out)
             }
             out.fieldSettled(from: before)
+            out.closeStep()
         }
 
         // -- everything else, in order ---------------------------------------

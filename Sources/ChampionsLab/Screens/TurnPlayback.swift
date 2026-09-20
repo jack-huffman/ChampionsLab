@@ -693,7 +693,10 @@ final class TurnPlayback: ObservableObject {
     private func stage(_ action: Board.Action, order: Int, user: Seat, reached: [Seat],
                        singles: Bool, within: TimeInterval = TurnPlayback.longestMove) -> (impact: TimeInterval, total: TimeInterval) {
         let table = Choreography.shared
-        if !table.isEmpty, let geometry = stage, action.category != "Switch" {
+        // A switch and a Mega Evolution are steps with no move in them: the
+        // field animates both itself and nothing is choreographed.
+        if !table.isEmpty, let geometry = stage,
+           action.category != "Switch", action.category != "Mega" {
             var targets = reached
             let recipe: Choreography.Resolved?
             if action.charging {

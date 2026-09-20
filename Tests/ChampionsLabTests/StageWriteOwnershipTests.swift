@@ -21,7 +21,7 @@ final class StageWriteOwnershipTests: HarnessCase {
     /// Direct writes to a stage, by file: the door itself, and the few that
     /// bypass it on purpose.
     static let allowed: [String: (count: Int, why: String)] = [
-        "StatChanges": (5, "the door, White Herb putting drops back, and giving a narrow array from an older peer the room for accuracy and evasion"),
+        "StatChanges": (6, "the door; White Herb putting drops back, which is written directly on purpose so a Contrary cannot turn a restoration round; and giving a narrow array from an older peer the room for accuracy and evasion"),
         "Board": (3, "Speed Boost's and Moody-style end-of-turn movers on the board itself"),
         "Strikes": (2, "Anger Point straight to six on a critical hit"),
         "SupportMoves": (10, "Power and Guard Swap, Belly Drum, Stockpile and its undoing, Haze, Topsy-Turvy"),

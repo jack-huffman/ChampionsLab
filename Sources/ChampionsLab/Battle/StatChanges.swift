@@ -73,17 +73,43 @@ enum StatChanges {
     /// White Herb: the moment any of the holder's stats sits below zero, the
     /// herb goes and the drops are undone. It is what turns Unburden on — the
     /// item is gone, so the Speed doubles — which is the whole Sneasler set.
-    static func whiteHerb(_ fighter: inout Fighter) -> String? {
-        guard fighter.build.item == "White Herb", !fighter.build.itemSpent,
-              fighter.build.boosts.contains(where: { $0 < 0 }) else { return nil }
-        for index in fighter.build.boosts.indices where fighter.build.boosts[index] < 0 {
-            fighter.build.boosts[index] = 0
+    /// Three things happen and the field should show three things.
+    ///
+    /// The drop, the herb putting it back, and the Unburden that follows from
+    /// the herb being gone. This used to write the stages back by hand and
+    /// return one sentence, which meant the field saw a Pokemon go down two
+    /// and up two inside a single step and drew *nothing at all* -- the two
+    /// netted to zero when the step was reconciled. Each one is recorded on
+    /// its own now, with its own cause, which is what cuts a step into beats.
+    ///
+    /// The stages are still written directly rather than through `change`,
+    /// and deliberately: a restoration is not a stat change anybody caused, so
+    /// a Contrary must not turn it round and a Simple must not double it.
+    static func whiteHerb(onMine mine: Bool, slot: Int, board: inout Board) {
+        let team = mine ? board.mine : board.theirs
+        guard team.indices.contains(slot),
+              team[slot].build.item == "White Herb", !team[slot].build.itemSpent,
+              team[slot].build.boosts.contains(where: { $0 < 0 }) else { return }
+        // Spent before the stages move, so putting them back cannot set it off
+        // again on the way through.
+        if mine { board.mine[slot].build.itemSpent = true }
+        else { board.theirs[slot].build.itemSpent = true }
+        for stage in Stage.allCases {
+            guard team[slot].build.boosts.indices.contains(stage.rawValue) else { continue }
+            let was = team[slot].build.boosts[stage.rawValue]
+            guard was < 0 else { continue }
+            if mine { board.mine[slot].build.boosts[stage.rawValue] = 0 }
+            else { board.theirs[slot].build.boosts[stage.rawValue] = 0 }
+            board.recordStat(mine: mine, slot: slot, stat: stage.rawValue,
+                             delta: -was, cause: "White Herb")
         }
-        fighter.build.itemSpent = true
-        let name = fighter.build.form.formLabel
-        var said = "\(name)'s White Herb restored its stats."
-        if fighter.build.ability == "Unburden" { said += " Its Unburden doubled its Speed." }
-        return said
+        let name = team[slot].build.form.formLabel
+        board.note("\(name)'s White Herb restored its stats.")
+        // And the ability that follows from the item being gone, said on its
+        // own line so it reads as a consequence rather than as an aside.
+        if team[slot].build.ability == "Unburden" {
+            board.note("\(name)'s Unburden: its item is gone, so its Speed doubled.")
+        }
     }
 
     /// Opportunist: whatever the other side just gained, it gains too.
@@ -143,9 +169,6 @@ enum StatChanges {
         else if ability == "Contrary" { line = "\(name)'s Contrary turned it round: " + parts.joined(separator: "; ") + "." }
         else if ability == "Simple" { line = "\(name)'s Simple doubled it: " + parts.joined(separator: "; ") + "." }
         board.note(line)
-        if !fell.isEmpty {
-            let herb = onMine ? whiteHerb(&board.mine[slot]) : whiteHerb(&board.theirs[slot])
-            if let herb { board.note(herb) }
-        }
+        if !fell.isEmpty { whiteHerb(onMine: onMine, slot: slot, board: &board) }
     }
 }

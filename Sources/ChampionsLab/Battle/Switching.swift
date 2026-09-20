@@ -220,10 +220,9 @@ enum Switching {
         for index in guardDogs {
             StatChanges.change([.attack: 1], onMine: !side, slot: index, board: &board, because: "Guard Dog")
         }
-        // A White Herb puts the drop back.
+        // A White Herb puts the drop back, as its own beat after it.
         for index in opposing.indices.prefix(board.activeCount) {
-            let herb = side ? StatChanges.whiteHerb(&board.theirs[index]) : StatChanges.whiteHerb(&board.mine[index])
-            if let herb { board.note(herb) }
+            StatChanges.whiteHerb(onMine: !side, slot: index, board: &board)
         }
     }
 
