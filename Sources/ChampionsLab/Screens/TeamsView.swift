@@ -126,7 +126,7 @@ struct TeamsView: View {
             HStack(spacing: 2) {
                 ForEach(team.slots) { slot in
                     if let form = slot.form(in: store.rulebook) {
-                        SpriteImage(form: form, side: 26)
+                        SpriteImage(form: form, side: 26, shiny: slot.shiny)
                     }
                 }
                 if team.slots.isEmpty {

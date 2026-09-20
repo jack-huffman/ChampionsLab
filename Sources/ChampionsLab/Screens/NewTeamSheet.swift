@@ -125,7 +125,8 @@ struct NewTeamSheet: View {
                             } label: {
                                 SixCard(name: ladder.team.name,
                                         tag: String(format: "%.0f%% of the field", ladder.weight * 100),
-                                        forms: ladder.team.slots.map { $0.battleForm(in: store.rulebook) },
+                                        forms: ladder.team.slots.map { ShownForm($0.battleForm(in: store.rulebook),
+                                                                                 shiny: $0.shiny) },
                                         spriteSide: 38)
                             }
                             .buttonStyle(.plain)

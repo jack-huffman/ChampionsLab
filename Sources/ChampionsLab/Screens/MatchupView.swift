@@ -113,7 +113,7 @@ struct MatchupView: View {
         let name: String
         let tag: String
         let group: String
-        let forms: [Form?]
+        let forms: [ShownForm]
     }
 
     private var candidates: [Candidate] {
@@ -126,18 +126,19 @@ struct MatchupView: View {
                     : (meta.record.map { "\($0)\(meta.placement.map { p in " · \(p)" } ?? "")" }
                        ?? meta.archetype),
                 group: meta.record == nil ? "Meta archetypes" : "Tournament results",
-                forms: meta.members.map { store.form(named: $0.form) }))
+                forms: meta.members.map { ShownForm(store.form(named: $0.form)) }))
         }
         for saved in store.teams where saved.id != team.id {
             out.append(Candidate(id: saved.id.uuidString, name: saved.name,
                                  tag: "\(saved.slots.count) Pokémon", group: "My teams",
-                                 forms: saved.slots.map { $0.battleForm(in: store.rulebook) }))
+                                 forms: saved.slots.map { ShownForm($0.battleForm(in: store.rulebook),
+                                                                     shiny: $0.shiny) }))
         }
         guard !opponentSearch.isEmpty else { return out }
         let needle = opponentSearch.lowercased()
         return out.filter { candidate in
             candidate.name.lowercased().contains(needle)
-                || candidate.forms.contains { ($0?.formLabel.lowercased().contains(needle)) == true }
+                || candidate.forms.contains { ($0.form?.formLabel.lowercased().contains(needle)) == true }
         }
     }
 
@@ -200,8 +201,10 @@ struct MatchupView: View {
             Button { choosing = true } label: {
                 HStack(spacing: 6) {
                     if let chosen {
-                        ForEach(Array(chosen.forms.prefix(6).enumerated()), id: \.offset) { _, f in
-                            if let f { SpriteImage(form: f, side: 24) }
+                        ForEach(Array(chosen.forms.prefix(6).enumerated()), id: \.offset) { _, shown in
+                            if let form = shown.form {
+                                SpriteImage(form: form, side: 24, shiny: shown.shiny)
+                            }
                         }
                         Text(chosen.name).font(.system(size: 12)).lineLimit(1)
                     } else {

@@ -13,7 +13,7 @@ import SwiftUI
 struct SixCard: View {
     let name: String
     let tag: String
-    let forms: [Form?]
+    let forms: [ShownForm]
     var selected = false
     var spriteSide: CGFloat = 34
 
@@ -27,9 +27,9 @@ struct SixCard: View {
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
             HStack(spacing: 2) {
-                ForEach(Array(forms.prefix(6).enumerated()), id: \.offset) { _, form in
-                    if let form {
-                        SpriteImage(form: form, side: spriteSide)
+                ForEach(Array(forms.prefix(6).enumerated()), id: \.offset) { _, shown in
+                    if let form = shown.form {
+                        SpriteImage(form: form, side: spriteSide, shiny: shown.shiny)
                             .help(form.formLabel)
                     } else {
                         Image(systemName: "questionmark.square.dashed")
@@ -105,7 +105,7 @@ struct VersusBanner: View {
         let tag: String
         /// The six as registered — a Charizard, not yet a Mega Charizard —
         /// leads first, the pair likeliest to be left home last.
-        let forms: [Form]
+        let forms: [ShownForm]
         let leadCount: Int
         let tint: Color
     }
@@ -188,6 +188,7 @@ struct VersusBanner: View {
     /// divider, the front rank nearer and larger.
     private struct Place {
         let form: Form
+        let shiny: Bool
         let x: CGFloat
         let y: CGFloat
         let side: CGFloat
@@ -202,14 +203,18 @@ struct VersusBanner: View {
         func dividerX(_ y: CGFloat) -> CGFloat { size.width / 2 + lean - 2 * lean * (y / h) }
         let sign: CGFloat = left ? -1 : 1
         var out: [Place] = []
-        for (index, form) in side.forms.dropFirst(3).prefix(3).enumerated() {
+        for (index, shown) in side.forms.dropFirst(3).prefix(3).enumerated() {
+            guard let form = shown.form else { continue }
             let y = h * rows[index]
-            out.append(Place(form: form, x: dividerX(y) + sign * 262, y: y, side: 74, lead: false))
+            out.append(Place(form: form, shiny: shown.shiny,
+                             x: dividerX(y) + sign * 262, y: y, side: 74, lead: false))
         }
-        for (index, form) in side.forms.prefix(3).enumerated() {
+        for (index, shown) in side.forms.prefix(3).enumerated() {
+            guard let form = shown.form else { continue }
             let y = h * rows[index]
             let lead = index < side.leadCount
-            out.append(Place(form: form, x: dividerX(y) + sign * 122, y: y,
+            out.append(Place(form: form, shiny: shown.shiny,
+                             x: dividerX(y) + sign * 122, y: y,
                              side: lead ? 104 : 86, lead: lead))
         }
         return out
@@ -222,7 +227,7 @@ struct VersusBanner: View {
         let placed = places(side, in: size, lean: lean, left: left)
         return ZStack {
             ForEach(Array(placed.enumerated()), id: \.offset) { _, place in
-                SpriteImage(form: place.form, side: place.side)
+                SpriteImage(form: place.form, side: place.side, shiny: place.shiny)
                     .shadow(color: side.tint.opacity(0.75), radius: 14)
                     .shadow(color: .black.opacity(0.65), radius: 4, y: 3)
                     .position(x: place.x, y: place.y)

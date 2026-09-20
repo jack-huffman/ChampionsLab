@@ -243,7 +243,8 @@ struct LANView: View {
             }
             if let six {
                 SixCard(name: six.name, tag: "\(six.forms.count) Pok\u{00E9}mon",
-                        forms: six.forms.map { store.formsByID[$0] }, selected: mine, spriteSide: 40)
+                        forms: six.forms.map { ShownForm(store.formsByID[$0]) },
+                        selected: mine, spriteSide: 40)
             } else {
                 Text(mine ? "Choose a team." : "Choosing...")
                     .font(.system(size: 11)).foregroundStyle(.tertiary)

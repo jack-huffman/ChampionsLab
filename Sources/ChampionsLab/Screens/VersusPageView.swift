@@ -308,7 +308,8 @@ struct VersusPageView: View {
             ordered = all
         }
         return VersusBanner.Side(title: title, name: team.name, tag: tag,
-                                 forms: ordered.map { MegaGuess(store: store).registered($0, in: team) },
+                                 forms: ordered.map { ShownForm(MegaGuess(store: store).registered($0, in: team),
+                                                              shiny: team.isShiny($0, in: store.rulebook)) },
                                  leadCount: plan == nil ? 0 : leadCount, tint: tint)
     }
 
@@ -330,7 +331,7 @@ struct VersusPageView: View {
                 SectionHeader(title: "Your side", subtitle: "What the engine would bring, and why")
                 if let plan = lobby.myPlan, let mine = myTeam {
                     fourRow(plan.bring.map { MegaGuess(store: store).registered($0, in: mine) }, megas: MegaGuess(store: store).stoneHolders(mine),
-                            leads: leadCount, tint: Palette.accent)
+                            leads: leadCount, tint: Palette.accent, shinyIn: mine)
                     bullets(Array(plan.reasons.prefix(2)) + Array(plan.warnings.prefix(1)),
                             tint: Palette.accent)
                     if !lobby.myFears.isEmpty {
@@ -357,7 +358,7 @@ struct VersusPageView: View {
                     Text("They will most likely bring")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                     fourRow(plan.bring.map { MegaGuess(store: store).registered($0, in: theirs) }, megas: MegaGuess(store: store).possibleMegas(theirs),
-                            uncertain: true, leads: leadCount, tint: Palette.bad)
+                            uncertain: true, leads: leadCount, tint: Palette.bad, shinyIn: theirs)
                     bullets(plan.reasons.prefix(2).map(fromTheirChair), tint: Palette.bad)
                     if !lobby.theirFears.isEmpty {
                         Label("Nothing on their six beats your \(names(lobby.theirFears)) — expect them to play around it, not into it.",
@@ -380,12 +381,13 @@ struct VersusPageView: View {
     }
 
     private func fourRow(_ forms: [Form], megas: Set<String> = [], uncertain: Bool = false,
-                         leads: Int, tint: Color) -> some View {
+                         leads: Int, tint: Color, shinyIn team: Team? = nil) -> some View {
         HStack(spacing: 10) {
             ForEach(Array(forms.enumerated()), id: \.offset) { index, form in
                 VStack(spacing: 2) {
                     ZStack(alignment: .topLeading) {
-                        SpriteImage(form: form, side: 52)
+                        SpriteImage(form: form, side: 52,
+                                    shiny: team?.isShiny(form, in: store.rulebook) ?? false)
                         Text("\(index + 1)")
                             .font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
                             .frame(width: 16, height: 16)

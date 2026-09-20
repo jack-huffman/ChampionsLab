@@ -1121,9 +1121,16 @@ extension Board {
                 if !alreadyEvolved, mega != nil {
                     // Before it evolves it is what the list registered, ability
                     // and all: a Salamence with Intimidate, not Aerilate.
-                    fighting = Combatant(form: registered, ability: named,
-                                         item: slot.item, sp: slot.sp,
-                                         alignment: slot.alignment)
+                    //
+                    // Two fields, not a fresh Combatant. Rebuilding it here
+                    // threw away everything else the slot had said, and the
+                    // only slots it happened to were the ones holding a stone:
+                    // a shiny Salamence walked into a battle the ordinary
+                    // colours while a shiny Sneasler, which has no Mega, was
+                    // fine. The item, the Stat Points and the alignment were
+                    // being copied back in by hand, which is the tell.
+                    fighting.form = registered
+                    fighting.ability = named
                 }
                 var moves = slot.moves.compactMap { rules.move($0) }
                 if !moves.contains(where: \.isDamaging) {

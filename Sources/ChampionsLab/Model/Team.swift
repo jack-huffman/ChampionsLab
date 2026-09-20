@@ -132,6 +132,19 @@ struct Team: Codable, Identifiable, Hashable {
 
     var isDoubles: Bool { format == "doubles" }
 
+    /// Whether the slot that fields this form is registered shiny.
+    ///
+    /// Several screens are handed forms rather than slots -- the versus
+    /// banner is given the predicted four, the chooser a row of six -- and a
+    /// form arrives having sometimes already become its Mega, so both what is
+    /// registered and what it turns into are checked.
+    @MainActor func isShiny(_ form: Form, in rules: Rulebook) -> Bool {
+        slots.contains { slot in
+            slot.shiny && (slot.formID == form.id
+                           || slot.battleForm(in: rules)?.id == form.id)
+        }
+    }
+
     init(name: String = "New Team", format: String = "doubles") {
         self.name = name
         self.format = format

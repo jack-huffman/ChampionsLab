@@ -187,7 +187,8 @@ struct TeamPreviewView: View {
                 }
                 if let form {
                     ZStack(alignment: .topTrailing) {
-                        SpriteImage(form: form, side: 46).shadow(color: .black.opacity(0.5), radius: 3, y: 2)
+                        SpriteImage(form: form, side: 46, shiny: slot.shiny)
+                            .shadow(color: .black.opacity(0.5), radius: 3, y: 2)
                         if holdsStone { MegaBadge(uncertain: false, form: form) }
                     }
                 }
@@ -270,7 +271,7 @@ struct TeamPreviewView: View {
             }
             if let form {
                 ZStack(alignment: .topTrailing) {
-                    SpriteImage(form: form, side: 46).opacity(likelyHome ? 0.6 : 1)
+                    SpriteImage(form: form, side: 46, shiny: slot.shiny).opacity(likelyHome ? 0.6 : 1)
                         .shadow(color: .black.opacity(0.5), radius: 3, y: 2)
                     if couldMega { MegaBadge(uncertain: true, form: form) }
                 }

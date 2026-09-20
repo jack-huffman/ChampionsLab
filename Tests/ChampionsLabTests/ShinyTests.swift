@@ -82,6 +82,60 @@ final class ShinyTests: HarnessCase {
         check("and its one slot is not shiny", team.slots.first?.shiny == false)
     }
 
+    // MARK: - Through a Mega Evolution
+
+    /// The bug this was written for: a shiny Salamence walked into a battle,
+    /// Mega Evolved, and came out of it the ordinary colours. Mega Evolution
+    /// built a fresh Combatant and copied two fields onto it.
+    func testMegaEvolvingKeepsEverythingItDoesNotChange() {
+        var team = fighters([("Salamence", "Salamencite", ["Dragon Claw", "Protect"]),
+                             ("Rillaboom", "", ["Wood Hammer", "Protect"])])
+        team.slots[0].shiny = true
+        var board = Board(mine: team,
+                          theirs: fighters([("Milotic", "", ["Calm Mind", "Protect"]),
+                                            ("Farigiraf", "", ["Calm Mind", "Protect"])]),
+                          rules: store.rulebook, field: Field(isDoubles: true),
+                          alreadyEvolved: false)
+        check("it walks in shiny", board.mine[0].build.shiny)
+        check("and has a Mega waiting", board.mine[0].pendingMega != nil,
+              board.mine[0].pendingMega?.formLabel ?? "none")
+        // Something the battle did to it that the change of form does not undo.
+        board.mine[0].build.statOverride = [Stat.speed.rawValue: 123]
+        board.mine[0].build.boosts[Stage.attack.rawValue] = 2
+
+        Switching.megaEvolve(&board.mine, slot: 0, opposing: &board.theirs, field: &board.field)
+        check("it Mega Evolved", board.mine[0].build.form.isMega,
+              board.mine[0].build.form.formLabel)
+        check("and is still shiny", board.mine[0].build.shiny)
+        check("and still has its stages", board.mine[0].build.boosts[Stage.attack.rawValue] == 2)
+        check("and still has what was done to its stats",
+              board.mine[0].build.statOverride?[Stat.speed.rawValue] == 123)
+        check("but wears the Mega's own typing, not the old form's",
+              board.mine[0].build.typeOverride == nil)
+    }
+
+    /// Every screen that draws a six holds a form and a flag together now,
+    /// rather than a form alone, because holding them apart is what let the
+    /// team list and the versus banner go on drawing ordinary colours.
+    func testAFormAndItsShinyTravelTogether() {
+        var team = Team(name: "Sparkly")
+        var slot = TeamSlot(formID: form("Salamence").id)
+        slot.item = "Salamencite"
+        slot.shiny = true
+        team.slots = [slot]
+        guard let registered = slot.form(in: store.rulebook),
+              let mega = slot.battleForm(in: store.rulebook) else {
+            return check("Salamence resolves both ways", false)
+        }
+        check("asked by what is registered", team.isShiny(registered, in: store.rulebook))
+        check("and asked by what it becomes", team.isShiny(mega, in: store.rulebook))
+        let other = form("Rillaboom")
+        check("and something not on the team is not shiny",
+              !team.isShiny(other, in: store.rulebook))
+        check("the pair carries the flag", ShownForm(registered, shiny: slot.shiny).shiny)
+        check("and defaults to off", !ShownForm(other).shiny)
+    }
+
     // MARK: - Carried in and out
 
     func testAPasteSaysShinyAndIsBelieved() {

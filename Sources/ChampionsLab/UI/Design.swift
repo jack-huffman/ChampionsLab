@@ -402,6 +402,23 @@ extension Palette {
     static let shiny = Color(red: 0.93, green: 0.65, blue: 0.16)
 }
 
+/// A form and whether it is drawn shiny.
+///
+/// Kept together rather than passed as a form here and a flag there, because
+/// that is what went wrong: the builder could mark one shiny and the team
+/// list, the versus banner and the team preview all went on drawing the
+/// ordinary colours, each of them holding a `Form` and nothing else. A
+/// parallel array of flags would have been the same bug waiting again.
+struct ShownForm: Hashable {
+    let form: Form?
+    var shiny: Bool = false
+
+    init(_ form: Form?, shiny: Bool = false) {
+        self.form = form
+        self.shiny = shiny
+    }
+}
+
 struct SpriteImage: View {
     let form: Form
     var side: CGFloat = 48

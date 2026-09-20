@@ -27,13 +27,24 @@ enum Switching {
         guard team.indices.contains(slot), let mega = team[slot].pendingMega,
               !team[slot].hasMegaEvolved,
               !team.contains(where: { $0.hasMegaEvolved }) else { return }
+        // What it becomes, keeping everything about it that the change of form
+        // does not touch.
+        //
+        // Built fresh and then put back field by field, which is the shape
+        // that lost things: it started by copying the stages and the spent
+        // item and nothing else, so a Soaked Pokemon came out of its Mega
+        // Evolution the type it used to be, a Power Split was undone by it,
+        // and a shiny stopped being shiny halfway through the battle. The
+        // form, the ability and the typing are what Mega Evolving changes.
+        // Everything else is the same Pokemon.
         let before = team[slot].build
-        team[slot].build = Combatant(form: mega,
-                                     ability: mega.abilities.first?.name ?? before.ability,
-                                     item: before.item, sp: before.sp,
-                                     alignment: before.alignment)
-        team[slot].build.boosts = before.boosts
-        team[slot].build.itemSpent = before.itemSpent
+        var evolved = before
+        evolved.form = mega
+        evolved.ability = mega.abilities.first?.name ?? before.ability
+        // The Mega's own typing replaces whatever the battle had done to the
+        // old form's, because it is a different set of types entirely.
+        evolved.typeOverride = nil
+        team[slot].build = evolved
         team[slot].pendingMega = nil
         for index in team.indices { team[index].hasMegaEvolved = true }
         entryAbility(of: team[slot].build.ability, team: &team, slot: slot,

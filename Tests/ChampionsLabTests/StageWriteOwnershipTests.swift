@@ -25,7 +25,7 @@ final class StageWriteOwnershipTests: HarnessCase {
         "Board": (3, "Speed Boost's and Moody-style end-of-turn movers on the board itself"),
         "Strikes": (2, "Anger Point straight to six on a critical hit"),
         "SupportMoves": (10, "Power and Guard Swap, Belly Drum, Stockpile and its undoing, Haze, Topsy-Turvy"),
-        "Switching": (4, "a switch resetting stages, Regenerator's restore, Baton Pass handing stages over"),
+        "Switching": (3, "a switch resetting stages, and Baton Pass handing stages over -- Mega Evolution used to copy them across by hand and no longer needs to, because it keeps the build rather than rebuilding it"),
     ]
 
     func testEveryDirectStageWriteIsAccountedFor() throws {
