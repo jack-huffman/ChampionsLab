@@ -236,6 +236,15 @@ extension BattleFieldView {
                 .shadow(color: hit ? Palette.bad.opacity(0.6) : .clear, radius: 10)
                 .animation(.spring(response: 0.32, dampingFraction: 0.5), value: hit)
                 .animation(.easeOut(duration: 0.35), value: fighter.fainted)
+                // A Pokemon cries twice in its life on the field: once when
+                // it is sent out, once when it goes down. Showdown plays both
+                // from the same place, and the second is what makes a faint
+                // land as a loss rather than a sprite quietly fading out.
+                // The value only arrives here when it changes, so becoming
+                // true is the moment of going down and nothing else.
+                .onChange(of: fighter.fainted) { down in
+                    if down { BattleAudio.shared.cry(fighter.build.form) }
+                }
             // The shield, in front of the Pokemon it covers and thin enough to
             // see it through; the substitute's ring the same.
             if guarding(fighter) {
