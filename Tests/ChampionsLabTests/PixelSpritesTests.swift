@@ -56,13 +56,22 @@ final class PixelSpritesTests: HarnessCase {
               "\(PixelSprites.Style.pixel.chain.first.map(\.rawValue) ?? "nothing")")
         check("so the two do not open with the same ask",
               PixelSprites.Style.models.chain.first != PixelSprites.Style.pixel.chain.first)
-        // Both still end somewhere for a Pokemon the preferred set has not
-        // got, and every set is reachable from either.
+        // Both end on the still, which is the same art standing still and so
+        // belongs to either look.
         for style in PixelSprites.Style.offered {
-            check("\(style.label) can fall all the way through",
-                  Set(style.chain) == Set(PixelSprites.Source.allCases),
+            check("\(style.label) ends on a still", style.chain.last == .still,
                   "\(style.chain.map(\.rawValue))")
         }
+        // And the asymmetry the client has: its default look reads the Gen 5
+        // index when the Gen 6 one has nothing, but under `bwgfx` it never
+        // reads the Gen 6 index at all. A model among the pixel art is the
+        // most obvious way for the look to be wrong, and Pixel cannot reach
+        // one however little Showdown has.
+        check("Models may fall back to the pixel animation",
+              PixelSprites.Style.models.chain.contains(.gen5))
+        check("but Pixel can never reach a model",
+              !PixelSprites.Style.pixel.chain.contains(.gen6),
+              "\(PixelSprites.Style.pixel.chain.map(\.rawValue))")
     }
 
     /// A cached sprite has to say which set it came out of, in the filename

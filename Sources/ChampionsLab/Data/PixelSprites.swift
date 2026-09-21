@@ -52,15 +52,25 @@ final class PixelSprites: ObservableObject {
             case .illustrated: return "Art"
             }
         }
-        /// The sets to try, best first. Empty for the illustrations, which
-        /// are not Showdown's and are always there.
+        /// The sets to try, best first, which are the client's own two
+        /// ladders. Empty for the illustrations, which are not Showdown's and
+        /// are always there.
+        ///
+        /// Read off `getSpriteData`: the default look builds its list from the
+        /// Gen 6 index and then the Gen 5 one, and drops to a Gen 5 still if
+        /// neither animates it. Under `bwgfx` it never consults the Gen 6
+        /// index at all -- the Gen 5 animation, or the still, and nothing
+        /// else.
+        ///
+        /// That asymmetry is the point rather than an oversight. A model is
+        /// not a worse pixel sprite, it is a different thing, and one
+        /// appearing among the pixel art is the single most obvious way for
+        /// the look to be wrong. A still is not: it is the same art standing
+        /// still, which is why it is where both ladders end.
         var chain: [Source] {
             switch self {
             case .models: return [.gen6, .gen5, .still]
-            // Falling through to the models rather than to the illustration:
-            // a still from Gen 5 is still pixel art, and after that an
-            // animated model is closer to what was asked for than a painting.
-            case .pixel: return [.gen5, .still, .gen6]
+            case .pixel: return [.gen5, .still]
             case .illustrated: return []
             }
         }

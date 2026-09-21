@@ -30,29 +30,31 @@ final class SpriteSizeTests: XCTestCase {
         return rep.representation(using: .png, properties: [:])!
     }
 
-    /// Two of Showdown's looks and the app's own, and a Showdown look falls
-    /// all the way through Showdown before it gives up.
+    /// Both of Showdown's looks exhaust Showdown before the app's own art is
+    /// reached, and neither one strays into the other's set on the way.
+    ///
+    /// Which sets each may use is checked in PixelSpritesTests; what matters
+    /// here is that a look never gives up on Showdown early, because giving
+    /// up early is what puts a painting on a field of sprites.
     func testEachLookTriesShowdownBeforeThePainting() {
-        check("Models starts with the Gen 6 set",
-              PixelSprites.Style.models.chain.first == .gen6,
-              "\(PixelSprites.Style.models.chain.map(\.rawValue))")
-        check("Pixel starts with the Gen 5 one",
-              PixelSprites.Style.pixel.chain.first == .gen5,
-              "\(PixelSprites.Style.pixel.chain.map(\.rawValue))")
-        for style in [PixelSprites.Style.models, .pixel] {
-            check("\(style.label) tries every set Showdown has",
-                  Set(style.chain) == Set(PixelSprites.Source.allCases),
+        for style in PixelSprites.Style.offered {
+            check("\(style.label) asks Showdown for something",
+                  !style.chain.isEmpty, "\(style.chain.map(\.rawValue))")
+            check("  and ends on the still, the last thing Showdown has",
+                  style.chain.last == .still, "\(style.chain.map(\.rawValue))")
+            check("  without asking for the same set twice",
+                  Set(style.chain).count == style.chain.count,
                   "\(style.chain.map(\.rawValue))")
         }
-        check("and the illustrations ask Showdown for nothing",
+        check("the illustrations ask Showdown for nothing",
               PixelSprites.Style.illustrated.chain.isEmpty)
-        check("Pixel prefers a Gen 5 still to a Gen 6 animation",
-              PixelSprites.Style.pixel.chain.firstIndex(of: .still)!
-                < PixelSprites.Style.pixel.chain.firstIndex(of: .gen6)!)
-        check("all three are offered", PixelSprites.Style.allCases.count == 3)
-        check("and they are named for what they are",
-              PixelSprites.Style.allCases.map(\.label) == ["Models", "Pixel", "Art"],
-              "\(PixelSprites.Style.allCases.map(\.label))")
+        // The enum still carries the illustration -- a snapshot needs it, and
+        // so does a Pokemon Showdown has nothing for -- but it is not a look
+        // anyone can pick.
+        check("three looks exist", PixelSprites.Style.allCases.count == 3)
+        check("and two of them are offered",
+              PixelSprites.Style.offered.map(\.label) == ["Models", "Pixel"],
+              "\(PixelSprites.Style.offered.map(\.label))")
     }
 
     /// A seat is a point on the ground, so a sprite is anchored by its feet.
