@@ -66,7 +66,7 @@ struct TeamChooser: View {
                         VStack(alignment: .leading, spacing: 1) {
                             Text("Random opponent")
                                 .font(.system(size: 12, weight: .semibold))
-                            Text("Drawn from the ladder and your own teams, and not shown until team preview.")
+                            Text("Drawn from the ladder, the archetypes, real tournament teams and your own, and not shown until team preview.")
                                 .font(.system(size: 10)).foregroundStyle(.tertiary)
                         }
                         Spacer(minLength: 0)

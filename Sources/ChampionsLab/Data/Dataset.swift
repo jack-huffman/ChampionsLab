@@ -282,9 +282,9 @@ final class Store: ObservableObject {
         return teams.indices.contains(place) ? teams[place].team : nil
     }
 
-    /// An opponent drawn at random, the way a ladder hands you one: a team
-    /// built from the usage table, or one of your own that is not the six you
-    /// are bringing.
+    /// An opponent drawn at random, the way a ladder hands you one: anything
+    /// the opponent chooser would have offered you, minus the six you are
+    /// bringing.
     ///
     /// It gives back the same kind of id a chosen opponent has, so nothing
     /// downstream can tell a drawn opponent from a picked one. That is what
@@ -298,13 +298,27 @@ final class Store: ObservableObject {
         opponentPool(format: format, excluding: myTeamID).randomElement()
     }
 
-    /// Everything a draw could land on. Separate from the draw itself because
-    /// the lobby has to know whether to offer one at all: the data this app
-    /// ships is a doubles format, so a singles lobby has no ladder to draw
-    /// from and often no saved teams either, and a button that silently does
+    /// Everything a draw could land on, in the chooser's own order: teams
+    /// built from the usage table, the meta archetypes, the real tournament
+    /// results, and your own.
+    ///
+    /// Every one of these is something you could have picked by hand, which
+    /// is the whole rule for what belongs here -- a drawn opponent should
+    /// never be a team the lobby would not otherwise have offered.
+    ///
+    /// The draw across them is flat. The tournament results outnumber the
+    /// ladder teams better than ten to one, so most draws are a real team
+    /// somebody registered rather than one sampled from usage, and that is
+    /// the intent: the ladder eight are eight, and the point of drawing is
+    /// to meet something you have not already seen.
+    ///
+    /// Separate from the draw itself because the lobby has to know whether to
+    /// offer one at all: the data this app ships is a doubles format, so a
+    /// singles lobby has nothing behind it, and a button that silently does
     /// nothing is worse than no button.
     func opponentPool(format: String, excluding myTeamID: String) -> [String] {
         var pool = ladderTeams(format: format).indices.map { "ladder-\(format)-\($0)" }
+        pool += data.metaTeams.filter { $0.format == format }.map(\.id)
         pool += teams.filter { $0.id.uuidString != myTeamID && $0.format == format }
                      .map(\.id.uuidString)
         return pool

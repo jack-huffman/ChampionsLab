@@ -364,7 +364,7 @@ struct VersusPageView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     SectionHeader(title: "A blind matchup",
                                   subtitle: "You are up against a team you have not seen")
-                    Text("The opponent was drawn at random from the ladder and your own teams. No reading of the matchup is shown while it is hidden -- not theirs, and not yours, because what you would bring is worked out from what they have.")
+                    Text("The opponent was drawn at random from everything you could have picked: the ladder teams, the meta archetypes, the tournament results and your own. No reading of the matchup is shown while it is hidden -- not theirs, and not yours, because what you would bring is worked out from what they have.")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Text("Start the battle to reveal their six at team preview, and pick your \(bringCount) knowing what you know then.")

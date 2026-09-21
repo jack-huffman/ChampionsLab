@@ -60,6 +60,27 @@ final class RandomOpponentTests: HarnessCase {
         }
     }
 
+    /// Every id in the pool, not a sample of it. The pool took on a hundred
+    /// and twelve teams in one go, and a draw landing on a broken one would
+    /// surface as an empty team preview perhaps one game in a hundred --
+    /// exactly the kind of thing a forty-draw sample walks straight past.
+    func testEverySingleThingInThePoolIsAWholeTeam() {
+        let pool = store.opponentPool(format: "doubles", excluding: "")
+        check("the pool is the whole chooser, not just the ladder", pool.count > 100, "\(pool.count)")
+        check("and has no id in it twice", Set(pool).count == pool.count,
+              "\(pool.count - Set(pool).count) repeated")
+        for id in pool {
+            guard let team = resolves(id) else {
+                check("\(id) resolves to a team", false); continue
+            }
+            check("\(team.name): enough to bring four", team.slots.count >= 4, "\(team.slots.count)")
+            check("  every slot a real Pokemon",
+                  team.slots.allSatisfy { $0.form(in: store.rulebook) != nil })
+            check("  and every one of them with moves",
+                  team.slots.allSatisfy { !$0.moves.isEmpty })
+        }
+    }
+
     /// The draw has to actually vary -- one that always returns the same team
     /// passes every other test here and is useless.
     func testTheDrawVariesWhenThereIsMoreThanOneToDrawFrom() {
