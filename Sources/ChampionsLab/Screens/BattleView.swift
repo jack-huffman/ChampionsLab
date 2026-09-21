@@ -66,6 +66,11 @@ struct BattleView: View {
     @State private var stage: Stage = .versus
     @State private var myTeamID = ""
     @State private var opponentID = ""
+    /// Their six is drawn rather than chosen, and stays unshown until team
+    /// preview. It is one flag rather than a second kind of opponent: the
+    /// team is real and the lobby works the matchup out as usual, it is only
+    /// declining to show any of it.
+    @State private var concealed = false
     /// The matchup last looked at, so the lobby opens ready. The defaults
     /// read and written directly rather than through @AppStorage: while this
     /// screen was showing, the sidebar's list lost every row, and
@@ -233,10 +238,15 @@ struct BattleView: View {
                 case .versus:
                     VersusPageView(myTeam: myTeam, theirTeam: theirTeam, lobby: lobby,
                                    myTeamID: myTeamID, opponentID: opponentID, singles: singles,
-                                   startHover: $startHover,
+                                   startHover: $startHover, concealed: concealed,
                                    onChooseMine: { choose(mine: $0) },
-                                   onChooseTheirs: { choose(theirs: $0) }) {
+                                   onChooseTheirs: { choose(theirs: $0) },
+                                   onRandomOpponent: drawOpponent) {
                         bringing = []; focused = nil
+                        // Team preview is the reveal, and it does not go back:
+                        // returning to the lobby afterwards shows what you
+                        // have already been shown.
+                        concealed = false
                         stage = .preview
                     }
                 case .preview:
@@ -558,6 +568,7 @@ struct BattleView: View {
         BattleAudio.shared.stopMusic()
         opening = false; startFlash = false; shown = []; landed = []; callout = nil
         bringing = []; focused = nil; lobby = Lobby()
+        concealed = false
         stage = .versus
         if myTeam != nil, theirTeam != nil { enterVersus() }
     }
@@ -642,6 +653,22 @@ struct BattleView: View {
     private func choose(theirs id: String) {
         opponentID = id
         rememberedTheirs = id
+        concealed = false
+        lobby = Lobby(); session.endGame()
+        if myTeam != nil { enterVersus() }
+    }
+
+    /// Draw an opponent instead of picking one: a team off the ladder or one
+    /// of your own, kept back until team preview.
+    ///
+    /// It deliberately does not remember the draw the way a choice is
+    /// remembered. A lobby reopened later would restore the id and show it,
+    /// which is a secret that only survives until the next launch -- worse
+    /// than one that was never offered.
+    private func drawOpponent() {
+        guard let drawn = store.randomOpponent(format: format, excluding: myTeamID) else { return }
+        opponentID = drawn
+        concealed = true
         lobby = Lobby(); session.endGame()
         if myTeam != nil { enterVersus() }
     }

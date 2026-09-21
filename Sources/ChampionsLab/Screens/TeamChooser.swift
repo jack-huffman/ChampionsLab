@@ -28,6 +28,8 @@ struct TeamChooser: View {
     let myTeamID: String
     let opponentID: String
     let singles: Bool
+    /// Draw one at random instead of picking. Opponents only; nil hides it.
+    var onRandom: (() -> Void)? = nil
     let onChoose: (String) -> Void
     @State private var search = ""
 
@@ -54,6 +56,30 @@ struct TeamChooser: View {
                 .overlay(RoundedRectangle(cornerRadius: 8)
                     .strokeBorder(Palette.hairline, lineWidth: 1))
                 .frame(width: 240)
+            }
+            if side == .theirs, let onRandom {
+                Button(action: onRandom) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "die.face.5.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Palette.bad)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Random opponent")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text("Drawn from the ladder and your own teams, and not shown until team preview.")
+                                .font(.system(size: 10)).foregroundStyle(.tertiary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Palette.bad.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Palette.bad.opacity(0.45), lineWidth: 1))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
             if side == .mine, store.teams.isEmpty {
                 EmptyHint(symbol: "person.3", title: "No teams yet",

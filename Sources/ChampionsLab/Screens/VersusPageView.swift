@@ -21,8 +21,13 @@ struct VersusPageView: View {
     let opponentID: String
     let singles: Bool
     @Binding var startHover: Bool
+    /// Their six is chosen but kept back: a random opponent, not shown until
+    /// team preview.
+    let concealed: Bool
     let onChooseMine: (String) -> Void
     let onChooseTheirs: (String) -> Void
+    /// Draw an opponent at random rather than picking one.
+    let onRandomOpponent: () -> Void
     let onStart: () -> Void
     /// Which side's chooser is open, under that side's name.
     @State private var choosingMine = false
@@ -46,8 +51,14 @@ struct VersusPageView: View {
                                         tag: "\(mine.slots.count) Pokémon · \(format)",
                                         tint: Palette.accent) },
                          theirs: theirTeam.map { theirs in
-                             bannerSide(theirs, plan: lobby.theirPlan, title: "THEIR TEAM",
-                                        tag: theirTag, tint: Palette.bad) },
+                             concealed
+                                 ? VersusBanner.Side(
+                                     title: "THEIR TEAM", name: "Unknown",
+                                     tag: "drawn at random \u{00B7} revealed at team preview",
+                                     forms: Array(repeating: ShownForm(nil), count: theirs.slots.count),
+                                     leadCount: 0, tint: Palette.bad, hidden: true)
+                                 : bannerSide(theirs, plan: lobby.theirPlan, title: "THEIR TEAM",
+                                              tag: theirTag, tint: Palette.bad) },
                          score: lobby.verdict?.score ?? 0,
                          verdict: edgeWords(lobby.verdict?.score ?? 0),
                          onChoose: { mine in
@@ -76,11 +87,18 @@ struct VersusPageView: View {
                 }
 
             if myTeam != nil, theirTeam != nil {
-                // The two readings end at the same depth, and the row keeps
-                // that depth while the next matchup is being worked out.
-                EqualCards(spacing: 14, floor: 232) {
-                    yourSideCard
-                    theirSideCard
+                if concealed {
+                    // Not just their card: yours names their Pokemon too --
+                    // "nothing on your six beats their X" is the whole secret
+                    // given away from your own side of the page.
+                    blindCard
+                } else {
+                    // The two readings end at the same depth, and the row keeps
+                    // that depth while the next matchup is being worked out.
+                    EqualCards(spacing: 14, floor: 232) {
+                        yourSideCard
+                        theirSideCard
+                    }
                 }
 
                 HStack {
@@ -289,7 +307,16 @@ struct VersusPageView: View {
     }
 
     private func chooser(_ side: TeamChooser.Side) -> some View {
-        TeamChooser(side: side, myTeamID: myTeamID, opponentID: opponentID, singles: singles) { id in
+        // A drawn opponent is in the list like any other, and marking it as
+        // the chosen one would point straight at it. Nothing is selected
+        // while the far side is hidden.
+        TeamChooser(side: side, myTeamID: myTeamID,
+                    opponentID: concealed ? "" : opponentID, singles: singles,
+                    onRandom: side == .theirs
+                        && !store.opponentPool(format: format, excluding: myTeamID).isEmpty ? {
+                        choosingTheirs = false
+                        onRandomOpponent()
+                    } : nil) { id in
             choosingMine = false; choosingTheirs = false
             if side == .mine { onChooseMine(id) } else { onChooseTheirs(id) }
         }
@@ -323,6 +350,37 @@ struct VersusPageView: View {
             return meta.archetype
         }
         return "\(theirTeam?.slots.count ?? 0) Pokémon · \(theirTeam?.format ?? format)"
+    }
+
+    /// What the page says when it is deliberately not saying anything: that
+    /// there is a six over there, that it was drawn rather than picked, and
+    /// that pressing on is how you find out what it is.
+    private var blindCard: some View {
+        Card(stretches: true) {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: "eye.slash.fill")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(Palette.bad)
+                VStack(alignment: .leading, spacing: 6) {
+                    SectionHeader(title: "A blind matchup",
+                                  subtitle: "You are up against a team you have not seen")
+                    Text("The opponent was drawn at random from the ladder and your own teams. No reading of the matchup is shown while it is hidden -- not theirs, and not yours, because what you would bring is worked out from what they have.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Start the battle to reveal their six at team preview, and pick your \(bringCount) knowing what you know then.")
+                        .font(.system(size: 11)).foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        onRandomOpponent()
+                    } label: {
+                        Label("Draw a different opponent", systemImage: "die.face.5")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .buttonStyle(.link)
+                    .padding(.top, 2)
+                }
+            }
+        }
     }
 
     private var yourSideCard: some View {

@@ -282,6 +282,34 @@ final class Store: ObservableObject {
         return teams.indices.contains(place) ? teams[place].team : nil
     }
 
+    /// An opponent drawn at random, the way a ladder hands you one: a team
+    /// built from the usage table, or one of your own that is not the six you
+    /// are bringing.
+    ///
+    /// It gives back the same kind of id a chosen opponent has, so nothing
+    /// downstream can tell a drawn opponent from a picked one. That is what
+    /// lets the lobby simply decline to show it: the secret is one flag on
+    /// the screen, not a second kind of team threaded through everything.
+    ///
+    /// Your own teams are held to the format. A ladder team is built for one
+    /// and cannot be wrong, but a saved team can be, and being handed your
+    /// singles six for a doubles game reads as a bug rather than a draw.
+    func randomOpponent(format: String, excluding myTeamID: String) -> String? {
+        opponentPool(format: format, excluding: myTeamID).randomElement()
+    }
+
+    /// Everything a draw could land on. Separate from the draw itself because
+    /// the lobby has to know whether to offer one at all: the data this app
+    /// ships is a doubles format, so a singles lobby has no ladder to draw
+    /// from and often no saved teams either, and a button that silently does
+    /// nothing is worse than no button.
+    func opponentPool(format: String, excluding myTeamID: String) -> [String] {
+        var pool = ladderTeams(format: format).indices.map { "ladder-\(format)-\($0)" }
+        pool += teams.filter { $0.id.uuidString != myTeamID && $0.format == format }
+                     .map(\.id.uuidString)
+        return pool
+    }
+
     /// What winning teams carry, worked out once. It depends only on the
     /// dataset, and rebuilding forty-eight teams inside every team evaluation
     /// took a score from 100ms to 390ms.

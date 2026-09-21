@@ -108,6 +108,11 @@ struct VersusBanner: View {
         let forms: [ShownForm]
         let leadCount: Int
         let tint: Color
+        /// Chosen, but not shown. A random opponent stands on the field from
+        /// the moment it is drawn -- the lobby needs a real six to work the
+        /// matchup out -- and the whole of the secret is that this side is
+        /// drawn as six unknowns and its name withheld until team preview.
+        var hidden = false
     }
 
     /// Either side may still be open: the lobby starts with nobody chosen.
@@ -172,7 +177,7 @@ struct VersusBanner: View {
                 HStack(alignment: .top) {
                     nameBlock(mine, title: "YOUR TEAM", tint: leftTint, leading: true)
                     Spacer()
-                    if mine != nil, theirs != nil { verdictChip.padding(.top, 4) }
+                    if mine != nil, let theirs, !theirs.hidden { verdictChip.padding(.top, 4) }
                     Spacer()
                     nameBlock(theirs, title: "THEIR TEAM", tint: rightTint, leading: false)
                 }
@@ -187,7 +192,8 @@ struct VersusBanner: View {
     /// Where each of the six stands: two ranks along lines parallel to the
     /// divider, the front rank nearer and larger.
     private struct Place {
-        let form: Form
+        /// Nil on a hidden side: there is deliberately nothing here to draw.
+        let form: Form?
         let shiny: Bool
         let x: CGFloat
         let y: CGFloat
@@ -204,16 +210,16 @@ struct VersusBanner: View {
         let sign: CGFloat = left ? -1 : 1
         var out: [Place] = []
         for (index, shown) in side.forms.dropFirst(3).prefix(3).enumerated() {
-            guard let form = shown.form else { continue }
+            guard shown.form != nil || side.hidden else { continue }
             let y = h * rows[index]
-            out.append(Place(form: form, shiny: shown.shiny,
+            out.append(Place(form: side.hidden ? nil : shown.form, shiny: shown.shiny,
                              x: dividerX(y) + sign * 262, y: y, side: 74, lead: false))
         }
         for (index, shown) in side.forms.prefix(3).enumerated() {
-            guard let form = shown.form else { continue }
+            guard shown.form != nil || side.hidden else { continue }
             let y = h * rows[index]
             let lead = index < side.leadCount
-            out.append(Place(form: form, shiny: shown.shiny,
+            out.append(Place(form: side.hidden ? nil : shown.form, shiny: shown.shiny,
                              x: dividerX(y) + sign * 122, y: y,
                              side: lead ? 104 : 86, lead: lead))
         }
@@ -227,12 +233,35 @@ struct VersusBanner: View {
         let placed = places(side, in: size, lean: lean, left: left)
         return ZStack {
             ForEach(Array(placed.enumerated()), id: \.offset) { _, place in
-                SpriteImage(form: place.form, side: place.side, shiny: place.shiny)
-                    .shadow(color: side.tint.opacity(0.75), radius: 14)
-                    .shadow(color: .black.opacity(0.65), radius: 4, y: 3)
-                    .position(x: place.x, y: place.y)
+                Group {
+                    if let form = place.form {
+                        SpriteImage(form: form, side: place.side, shiny: place.shiny)
+                    } else {
+                        unknown(side: place.side, tint: side.tint)
+                    }
+                }
+                .shadow(color: side.tint.opacity(0.75), radius: 14)
+                .shadow(color: .black.opacity(0.65), radius: 4, y: 3)
+                .position(x: place.x, y: place.y)
             }
         }
+    }
+
+    /// One of a hidden side's six. Deliberately identical for all of them:
+    /// the shape of a silhouette is a guess waiting to be made, and the point
+    /// of a drawn opponent is that there is nothing to guess from yet.
+    private func unknown(side: CGFloat, tint: Color) -> some View {
+        ZStack {
+            Circle()
+                .fill(RadialGradient(colors: [tint.opacity(0.42), tint.opacity(0.14)],
+                                     center: .init(x: 0.35, y: 0.3),
+                                     startRadius: 1, endRadius: side * 0.6))
+            Circle().strokeBorder(.white.opacity(0.5), lineWidth: 2)
+            Image(systemName: "questionmark")
+                .font(.system(size: side * 0.42, weight: .black))
+                .foregroundStyle(.white.opacity(0.92))
+        }
+        .frame(width: side * 0.72, height: side * 0.72)
     }
 
     private func nameBlock(_ side: Side?, title: String, tint: Color, leading: Bool) -> some View {
@@ -249,7 +278,8 @@ struct VersusBanner: View {
                         .foregroundStyle(.white.opacity(0.62))
                 }
             }
-            Text((side?.name ?? (leading ? emptyMine : emptyTheirs)).uppercased())
+            Text((side?.hidden == true ? "Unknown"
+                  : side?.name ?? (leading ? emptyMine : emptyTheirs)).uppercased())
                 .font(.system(size: 22, weight: .black)).italic()
                 .foregroundStyle(.white.opacity(side == nil ? 0.5 : 1))
                 .lineLimit(1).minimumScaleFactor(0.6)
