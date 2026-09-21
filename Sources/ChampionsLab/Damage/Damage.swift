@@ -88,6 +88,11 @@ struct Combatant {
     /// At a third of its health or less, which is when Blaze and its family
     /// switch on. A build on paper is never low; a battle sets this.
     var lowHP = false
+    /// What it actually has left, when a battle has told us. Nil on paper,
+    /// where a build is whole by definition. Only Final Gambit reads it, and
+    /// it has to: what that move deals is the health its user has now, and a
+    /// Combatant otherwise knows only what it would have at full.
+    var currentHP: Int?
     /// A condition it is carrying. Set at the point of use the way `lowHP`
     /// and `atFullHP` are, because a build on paper has no status and only a
     /// battle knows: Marvel Scale and Quick Feet are both paid for being ill.
@@ -334,10 +339,26 @@ enum DamageCalc {
             return DamageResult(minDamage: 0, maxDamage: 0, targetHP: defender.maxHP,
                                 effectiveness: 1, notes: ["Status move"])
         }
-        // Final Gambit deals the user's remaining health, not a base power of 1.
-        // It costs the user its life, which the worth model already charges for.
+        // Final Gambit deals the user's remaining health, not a base power of
+        // 1. It costs the user its life, which the worth model already charges
+        // for -- but only if it lands, which is the part that matters and the
+        // part this had wrong twice.
         if move.id == "finalgambit" {
-            let dealt = attacker.stat(.hp)
+            // It is a Fighting move before it is anything else, so a Ghost is
+            // not there to be hit. The damage is fixed and the type chart does
+            // not scale it; what the chart still decides is whether there is
+            // anybody to deal it to.
+            var said: [String] = []
+            let reaches = effectiveness(of: PokeType(loose: move.type) ?? .normal,
+                                        into: defender, ignored: attacker.ignoresAbility,
+                                        notes: &said)
+            guard reaches > 0 else {
+                return DamageResult(minDamage: 0, maxDamage: 0, targetHP: defender.maxHP,
+                                    effectiveness: 0, notes: said + ["No effect"])
+            }
+            // What it has left, not what it would have at full. A Pokemon
+            // throwing this at a sixth of its health is throwing a sixth.
+            let dealt = attacker.currentHP ?? attacker.stat(.hp)
             return DamageResult(minDamage: dealt, maxDamage: dealt,
                                 targetHP: defender.maxHP, effectiveness: 1,
                                 notes: ["Final Gambit: deals \(dealt), equal to the user's HP, and the user faints"])

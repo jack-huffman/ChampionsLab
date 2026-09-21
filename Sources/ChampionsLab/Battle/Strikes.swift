@@ -729,6 +729,7 @@ enum Strikes {
         attacker.ignoresAbility = ["Mold Breaker", "Turboblaze", "Teravolt"]
             .contains(actor.build.ability)
         attacker.lowHP = actor.hp * 3 <= actor.maxHP
+        attacker.currentHP = actor.hp
         attacker.status = actor.status
         // Electromorphosis stored a charge the last time it was hit;
         // the next Electric move it throws spends it.
@@ -1432,10 +1433,24 @@ enum Strikes {
             lost += Swift.max(1, Int(Double(maxHP) * MoveLegality.struggleCost))
             board.note("\(name) is hurt by the recoil.")
         }
-        // Moves that end the user's game outright.
+        // Moves that end the user's game outright, of which there are two
+        // kinds and the difference is whether the move landed.
+        //
+        // An Explosion goes off whatever happens to it. A Final Gambit does
+        // not: it hands over the health its user has, and if there is nobody
+        // there to hand it to -- a Protect in the way, a Ghost that a Fighting
+        // move cannot touch -- the user keeps it. Showdown carries the two as
+        // `selfdestruct: "always"` against `"ifHit"`, and without the
+        // distinction a Final Gambit thrown into a Protect cost the game.
+        //
+        // The other three Showdown marks "ifHit" -- Memento, Healing Wish,
+        // Lunar Dance -- are status moves and never reach here.
         if move.effect.contains("The user faints") {
-            lost = team[slot].hp
-            board.note("\(name) fainted using \(move.name).")
+            let onlyIfItLanded = ["finalgambit"]
+            if dealt > 0 || !onlyIfItLanded.contains(move.id) {
+                lost = team[slot].hp
+                board.note("\(name) fainted using \(move.name).")
+            }
         } else {
             let costs = move.drawbacks
             if costs.recoil > 0, dealt > 0 {

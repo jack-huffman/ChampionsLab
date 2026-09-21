@@ -466,10 +466,18 @@ extension BattleFieldView {
         let showing = Binding(get: { detail?.seat == seat }, set: { if !$0, detail?.seat == seat { detail = nil } })
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                SpriteImage(form: fighter.build.form, side: 22, shiny: fighter.build.shiny)
-                    .saturation(fighter.fainted ? 0 : 1)
+                // No sprite: the Pokemon it names is standing on the field a
+                // few inches below, drawn ten times the size. What the card
+                // can say that the field cannot is what it *is* -- and after
+                // a Soak or a Mega Evolution that is not what the dex printed,
+                // so these are the types it has right now.
                 Text(fighter.build.form.formLabel)
                     .font(.system(size: 11, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
+                HStack(spacing: 2) {
+                    ForEach(fighter.types) { TypeIcon(type: $0, side: 13) }
+                }
+                .saturation(fighter.fainted ? 0 : 1)
+                .opacity(fighter.fainted ? 0.5 : 1)
                 if fighter.pendingMega != nil {
                     Text("M").font(.system(size: 8, weight: .heavy)).frame(width: 14, height: 14)
                         .background(Palette.warn).foregroundStyle(.white).clipShape(Circle())

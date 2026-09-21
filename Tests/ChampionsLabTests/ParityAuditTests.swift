@@ -37,11 +37,15 @@ final class ParityAuditTests: HarnessCase {
         let fighter = Fighter(build: Combatant(form: store.data.forms[0]), moves: [])
         let counts = [("Fighter", Mirror(reflecting: fighter).children.count, 53),
                       ("Screens", Mirror(reflecting: Screens()).children.count, 12),
-                      // 17 with `shiny`, which is deliberately *not* in the
-                      // fingerprint: it cannot change an outcome, and putting
-                      // it there would make two identical positions compare
-                      // as different because one of them is prettier.
-                      ("Combatant", Mirror(reflecting: fighter.build).children.count, 17)]
+                      // 18. Two of them are deliberately *not* in the
+                      // fingerprint. `shiny` cannot change an outcome, and
+                      // putting it there would make two identical positions
+                      // compare as different because one of them is prettier.
+                      // `currentHP` is the Fighter's own health copied onto
+                      // the build at the point of use, for the one move that
+                      // needs it, and the Fighter's health is fingerprinted
+                      // already -- counting it twice would say nothing new.
+                      ("Combatant", Mirror(reflecting: fighter.build).children.count, 18)]
         for (name, found, expected) in counts {
             print("  \(name): \(found) properties, fingerprint written for \(expected)")
             check("\(name) has not grown a field the audit cannot see", found == expected)
