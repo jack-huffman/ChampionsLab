@@ -404,13 +404,21 @@ struct MetaModel {
                     slot.sp = measured.sp
                     slot.alignmentName = measured.alignment
                 } else {
-                    let physical = registered.attack >= registered.spAttack
-                    var sp = Array(repeating: 0, count: 6)
-                    sp[physical ? Stat.attack.rawValue : Stat.spAttack.rawValue] = 32
-                    sp[Stat.speed.rawValue] = 32
-                    sp[Stat.hp.rawValue] = 2
-                    slot.sp = sp
-                    slot.alignmentName = physical ? "Adamant" : "Modest"
+                    // Nobody published a spread for this one, so the app works
+                    // one out rather than handing every Pokemon the same
+                    // thirty-two into its attack and thirty-two into Speed.
+                    //
+                    // That default was what a team off the ladder looked like:
+                    // six Pokemon with an identical 2/32/0/0/0/32, which is not
+                    // a spread anybody would run and is obviously not a
+                    // measured one either. Pikalytics publishes what people
+                    // bring and what they click and not what they invest, so
+                    // there is nothing to read; the planner at least asks what
+                    // this Pokemon needs to outspeed and survive.
+                    let planned = Self.planner(store: store, format: format)
+                        .plan(for: registered, ability: slot.ability, item: slot.item)
+                    slot.sp = planned.sp
+                    slot.alignmentName = planned.alignment.name
                 }
                 return slot
             }
@@ -419,6 +427,18 @@ struct MetaModel {
             if out.count >= limit { break }
         }
         return out
+    }
+
+    /// One planner per format, kept because building a spread walks the whole
+    /// measured field and a ladder page asks for six of them eight times over.
+    @MainActor private static var planners: [String: SpreadPlanner] = [:]
+    @MainActor static func planner(store: Store, format: String) -> SpreadPlanner {
+        if let ready = planners[format] { return ready }
+        var made = SpreadPlanner(store: store)
+        made.format = format
+        made.field = Field(isDoubles: format == "doubles")
+        planners[format] = made
+        return made
     }
 
     /// A published spread -- "Jolly 2/32/0/0/0/32", the alignment then Stat
