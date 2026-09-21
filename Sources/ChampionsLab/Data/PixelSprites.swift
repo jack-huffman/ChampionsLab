@@ -228,11 +228,8 @@ final class PixelSprites: ObservableObject {
         fetching.insert(key)
         let chain = style.chain
         Task.detached(priority: .userInitiated) { [weak self] in
-            var found = Self.kept(base, chain: chain)
-            if found == nil {
-                found = await Self.fetch(slug: slug, back: back, shiny: shiny,
-                                         base: base, chain: chain)
-            }
+            let found = await Self.art(slug: slug, back: back, shiny: shiny,
+                                       base: base, chain: chain)
             let decoded = found.flatMap { Frames.decode($0.data, from: $0.source) }
             await MainActor.run { [weak self] in
                 guard let self else { return }
@@ -281,48 +278,64 @@ final class PixelSprites: ObservableObject {
         try? FileManager.default.removeItem(at: old)
     }
 
-    /// Already on disk from an earlier fetch. Read off the main thread, like
-    /// the fetch; only the decode into an image happens on it.
-    /// Already on disk from an earlier fetch, and which set it came out of.
+    /// The best set this Pokemon actually has, asking the site for the ones
+    /// it has not been asked for yet.
+    ///
+    /// The chain is a statement about what *Showdown* has -- use the Gen 5
+    /// sprite, and if Showdown has not got one use the Gen 6 -- and it has to
+    /// be read against Showdown, not against this cache. Reading it against
+    /// the cache is what made the two looks identical: viewing a battle in
+    /// Models put the Gen 6 sprite on disk, and switching to Pixel then found
+    /// that file two rungs down its own chain and stopped there, perfectly
+    /// happy, having never once asked whether a Gen 5 sprite existed. Every
+    /// Pokemon you had already looked at was immune to the toggle.
+    ///
+    /// So each rung is settled completely before the next is tried: on disk,
+    /// or ask, and only a Pokemon the site genuinely has not got at that size
+    /// moves down.
     ///
     /// The set is in the filename because nothing else remembers it, and how
-    /// big a sprite should be drawn depends on it. A cache that forgets where
-    /// a thing came from can only guess at what to do with it.
-    private nonisolated static func kept(_ base: String,
-                                         chain: [Source]) -> (data: Data, source: Source)? {
+    /// big a sprite should be drawn depends on which one it came out of.
+    private nonisolated static func art(slug: String, back: Bool, shiny: Bool,
+                                        base: String,
+                                        chain: [Source]) async -> (data: Data, source: Source)? {
+        let site = "https://play.pokemonshowdown.com/sprites/"
         for source in chain {
-            let url = folder.appendingPathComponent("\(base).\(source.rawValue).\(source.extension_)")
-            if let data = try? Data(contentsOf: url), !data.isEmpty { return (data, source) }
+            let file = folder.appendingPathComponent("\(base).\(source.rawValue).\(source.extension_)")
+            if let data = try? Data(contentsOf: file), !data.isEmpty { return (data, source) }
+            // Asked before, and the site said it has not got it.
+            if FileManager.default.fileExists(atPath: absent(base, source).path) { continue }
+            let address = site + source.path(back: back, shiny: shiny) + slug + "." + source.extension_
+            guard let url = URL(string: address),
+                  let (data, response) = try? await URLSession.shared.data(from: url) else { continue }
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if code == 200, !data.isEmpty {
+                try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(),
+                                                         withIntermediateDirectories: true)
+                try? data.write(to: file)
+                return (data, source)
+            }
+            // A 404 is the site answering; anything else is the network
+            // failing, and a sprite must never be written off for that.
+            if code == 404 { remember(base, source) }
         }
         return nil
     }
 
-    /// The animated sprite where there is one, the still where there is not,
-    /// written to the cache on the way back. Bytes rather than an image, so it
-    /// can cross back to the main actor.
-    /// Biggest set first, then the older one, then a still.
+    /// Where it is noted that Showdown has not got this Pokemon in this set.
     ///
-    /// Showdown files the shinies and the backs as the same directories with
-    /// "-shiny" and "-back" stuck on, and carries one for everything it
-    /// carries a plain one for -- so a form with an animation has a shiny
-    /// animation, and one with only a still has a shiny still. That
-    /// convention is why this is a loop rather than twelve lines.
-    private nonisolated static func fetch(slug: String, back: Bool, shiny: Bool,
-                                          base: String,
-                                          chain: [Source]) async -> (data: Data, source: Source)? {
-        let site = "https://play.pokemonshowdown.com/sprites/"
-        for source in chain {
-            let address = site + source.path(back: back, shiny: shiny) + slug + "." + source.extension_
-            guard let url = URL(string: address),
-                  let (data, response) = try? await URLSession.shared.data(from: url),
-                  (response as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty else { continue }
-            let destination = folder
-                .appendingPathComponent("\(base).\(source.rawValue).\(source.extension_)")
-            try? FileManager.default.createDirectory(at: destination.deletingLastPathComponent(),
-                                                     withIntermediateDirectories: true)
-            try? data.write(to: destination)
-            return (data, source)
-        }
-        return nil
+    /// On disk rather than in memory because it is a fact about Showdown
+    /// rather than about this run, and because the alternative is a round
+    /// trip per Pokemon per launch for every gap in the older set -- which is
+    /// a hundred and twenty-six of them.
+    private nonisolated static func absent(_ base: String, _ source: Source) -> URL {
+        folder.appendingPathComponent("\(base).\(source.rawValue).absent")
+    }
+
+    private nonisolated static func remember(_ base: String, _ source: Source) {
+        let mark = absent(base, source)
+        try? FileManager.default.createDirectory(at: mark.deletingLastPathComponent(),
+                                                 withIntermediateDirectories: true)
+        try? Data().write(to: mark)
     }
 }

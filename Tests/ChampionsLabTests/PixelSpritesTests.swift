@@ -38,6 +38,60 @@ final class PixelSpritesTests: HarnessCase {
               PixelSprites.Style.chosen("illustrated") == .models)
     }
 
+    /// The two looks have to actually ask for different pictures.
+    ///
+    /// They stopped doing that without anything in the picker changing:
+    /// the chain was being read against the cache rather than against
+    /// Showdown, so a Gen 6 sprite already on disk answered a request for the
+    /// Gen 5 one two rungs further down its own chain, and every Pokemon you
+    /// had already looked at ignored the toggle. What makes the toggle mean
+    /// anything is that the two lead with different sets and that a file from
+    /// one is never mistaken for a file from the other.
+    func testTheTwoLooksLeadWithDifferentSets() {
+        check("Models asks Showdown's Gen 6 set first",
+              PixelSprites.Style.models.chain.first == .gen6,
+              "\(PixelSprites.Style.models.chain.first.map(\.rawValue) ?? "nothing")")
+        check("Pixel asks its Gen 5 set first",
+              PixelSprites.Style.pixel.chain.first == .gen5,
+              "\(PixelSprites.Style.pixel.chain.first.map(\.rawValue) ?? "nothing")")
+        check("so the two do not open with the same ask",
+              PixelSprites.Style.models.chain.first != PixelSprites.Style.pixel.chain.first)
+        // Both still end somewhere for a Pokemon the preferred set has not
+        // got, and every set is reachable from either.
+        for style in PixelSprites.Style.offered {
+            check("\(style.label) can fall all the way through",
+                  Set(style.chain) == Set(PixelSprites.Source.allCases),
+                  "\(style.chain.map(\.rawValue))")
+        }
+    }
+
+    /// A cached sprite has to say which set it came out of, in the filename
+    /// and in the URL both. Everything about telling the looks apart rests on
+    /// it: the file they are kept under, and how big they are drawn.
+    func testEverySetIsItsOwnFileAndItsOwnAddress() {
+        var files = Set<String>(), paths = Set<String>()
+        for source in PixelSprites.Source.allCases {
+            files.insert("\(source.rawValue).\(source.extension_)")
+            paths.insert(source.path(back: false, shiny: false))
+        }
+        check("each set has its own cache filename", files.count == PixelSprites.Source.allCases.count,
+              "\(files.sorted())")
+        check("and its own directory on Showdown", paths.count == PixelSprites.Source.allCases.count,
+              "\(paths.sorted())")
+        // The shape of the ask is on the directory, the way Showdown files it.
+        check("a back sprite is a different directory",
+              PixelSprites.Source.gen6.path(back: true, shiny: false) == "ani-back/")
+        check("and a shiny one too",
+              PixelSprites.Source.gen6.path(back: false, shiny: true) == "ani-shiny/")
+        check("and a shiny back is both",
+              PixelSprites.Source.gen6.path(back: true, shiny: true) == "ani-back-shiny/")
+        // The two animated sets are drawn to different scales, which is the
+        // other half of why a sprite must remember where it came from.
+        check("the two animated sets measure against different medians",
+              PixelSprites.Source.gen6.typical != PixelSprites.Source.gen5.typical,
+              "\(PixelSprites.Source.gen6.typical ?? -1) and \(PixelSprites.Source.gen5.typical ?? -1)")
+    }
+
     @MainActor func testTheDexKnowsItsShowdownNames() {
         let forms = store.data.forms
         let named = forms.filter { $0.showdown != nil }
