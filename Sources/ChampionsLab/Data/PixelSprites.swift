@@ -33,12 +33,47 @@ import ImageIO
 
 @MainActor
 final class PixelSprites: ObservableObject {
+    /// Which of Showdown's sets a sprite came out of, and how big a typical
+    /// one in it is.
+    ///
+    /// The sets are drawn to different scales and the client knows it: a Gen 6
+    /// sprite runs from 69 pixels to 195 and a Gen 5 one from 52 to 119. That
+    /// spread is the Pokemon's own size -- a Joltik is small and a Staraptor
+    /// has a wingspan -- and drawing each of them to fill the same square
+    /// throws all of it away, which is how a Whimsicott ended up towering over
+    /// a Staraptor. The median is what a sprite is measured against.
+    ///
+    /// A still has no size in it to read: every one is drawn on the same 96
+    /// square whatever is on it, so those are left at their nominal size.
+    enum Source: String, CaseIterable, Sendable {
+        case gen6 = "ani"
+        case gen5 = "gen5ani"
+        case still = "gen5"
+
+        var typical: Double? {
+            switch self {
+            case .gen6:  return 110
+            case .gen5:  return 84
+            case .still: return nil
+            }
+        }
+        var extension_: String { self == .still ? "png" : "gif" }
+        /// The directory, with the shape of the ask on it.
+        func path(back: Bool, shiny: Bool) -> String {
+            rawValue + (back ? "-back" : "") + (shiny ? "-shiny" : "") + "/"
+        }
+    }
     /// A sprite's frames and how long each shows. CGImages are immutable and
     /// safe to read from anywhere, which is what the unchecked promise says.
     struct Frames: @unchecked Sendable {
         let images: [CGImage]
         let delays: [TimeInterval]
         let total: TimeInterval
+        /// How big this one is against a typical sprite from the same set.
+        /// One for anything with no size to read. Clamped, because the widest
+        /// sprite in the set is nearly three times the narrowest and a field
+        /// with one Pokemon three times the other is not a field.
+        var relative: Double = 1
 
         /// The frame showing at this instant of a clock that loops.
         func frame(at time: TimeInterval) -> CGImage {
@@ -52,7 +87,7 @@ final class PixelSprites: ObservableObject {
         }
 
         /// Every frame of a GIF, or the one frame of a PNG.
-        nonisolated static func decode(_ data: Data) -> Frames? {
+        nonisolated static func decode(_ data: Data, from set: Source = .still) -> Frames? {
             guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
             let count = CGImageSourceGetCount(source)
             var images: [CGImage] = [], delays: [TimeInterval] = []
@@ -68,7 +103,13 @@ final class PixelSprites: ObservableObject {
                 images.append(image); delays.append(delay)
             }
             guard !images.isEmpty else { return nil }
-            return Frames(images: images, delays: delays, total: delays.reduce(0, +))
+            var scale = 1.0
+            if let typical = set.typical, let first = images.first {
+                let widest = Double(Swift.max(first.width, first.height))
+                scale = Swift.max(0.66, Swift.min(1.55, widest / typical))
+            }
+            return Frames(images: images, delays: delays, total: delays.reduce(0, +),
+                          relative: scale)
         }
     }
 
@@ -124,9 +165,11 @@ final class PixelSprites: ObservableObject {
         guard !missing.contains(key), !fetching.contains(key) else { return nil }
         fetching.insert(key)
         Task.detached(priority: .userInitiated) { [weak self] in
-            var data = Self.kept(key)
-            if data == nil { data = await Self.fetch(slug: slug, back: back, shiny: shiny, key: key) }
-            let decoded = data.flatMap(Frames.decode)
+            var found = Self.kept(key)
+            if found == nil {
+                found = await Self.fetch(slug: slug, back: back, shiny: shiny, key: key)
+            }
+            let decoded = found.flatMap { Frames.decode($0.data, from: $0.source) }
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.fetching.remove(key)
@@ -159,9 +202,15 @@ final class PixelSprites: ObservableObject {
 
     /// Already on disk from an earlier fetch. Read off the main thread, like
     /// the fetch; only the decode into an image happens on it.
-    private nonisolated static func kept(_ key: String) -> Data? {
-        for ext in ["gif", "png"] {
-            if let data = try? Data(contentsOf: folder.appendingPathComponent(key + "." + ext)), !data.isEmpty { return data }
+    /// Already on disk from an earlier fetch, and which set it came out of.
+    ///
+    /// The set is in the filename because nothing else remembers it, and how
+    /// big a sprite should be drawn depends on it. A cache that forgets where
+    /// a thing came from can only guess at what to do with it.
+    private nonisolated static func kept(_ key: String) -> (data: Data, source: Source)? {
+        for source in Source.allCases {
+            let url = folder.appendingPathComponent("\(key).\(source.rawValue).\(source.extension_)")
+            if let data = try? Data(contentsOf: url), !data.isEmpty { return (data, source) }
         }
         return nil
     }
@@ -169,30 +218,27 @@ final class PixelSprites: ObservableObject {
     /// The animated sprite where there is one, the still where there is not,
     /// written to the cache on the way back. Bytes rather than an image, so it
     /// can cross back to the main actor.
+    /// Biggest set first, then the older one, then a still.
+    ///
+    /// Showdown files the shinies and the backs as the same directories with
+    /// "-shiny" and "-back" stuck on, and carries one for everything it
+    /// carries a plain one for -- so a form with an animation has a shiny
+    /// animation, and one with only a still has a shiny still. That
+    /// convention is why this is a loop rather than twelve lines.
     private nonisolated static func fetch(slug: String, back: Bool, shiny: Bool,
-                                          key: String) async -> Data? {
+                                          key: String) async -> (data: Data, source: Source)? {
         let base = "https://play.pokemonshowdown.com/sprites/"
-        // Showdown files the shinies as the same four directories with
-        // "-shiny" on the end, and carries one for everything it carries a
-        // plain one for -- so a form that has an animation has a shiny
-        // animation, and one that only has a still has a shiny still.
-        let tail = shiny ? "-shiny/" : "/"
-        // Biggest set first, then the older one, then a still. Each shape of
-        // the name is the directory with "-back" and "-shiny" stuck on it,
-        // which is Showdown's own convention and the reason this is three
-        // lines rather than twelve.
-        let tries = [(base + (back ? "ani-back" : "ani") + tail + slug + ".gif", "gif"),
-                     (base + (back ? "gen5ani-back" : "gen5ani") + tail + slug + ".gif", "gif"),
-                     (base + (back ? "gen5-back" : "gen5") + tail + slug + ".png", "png")]
-        for (address, ext) in tries {
+        for source in Source.allCases {
+            let address = base + source.path(back: back, shiny: shiny) + slug + "." + source.extension_
             guard let url = URL(string: address),
                   let (data, response) = try? await URLSession.shared.data(from: url),
                   (response as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty else { continue }
-            let destination = folder.appendingPathComponent(key + "." + ext)
+            let destination = folder
+                .appendingPathComponent("\(key).\(source.rawValue).\(source.extension_)")
             try? FileManager.default.createDirectory(at: destination.deletingLastPathComponent(),
                                                      withIntermediateDirectories: true)
             try? data.write(to: destination)
-            return data
+            return (data, source)
         }
         return nil
     }

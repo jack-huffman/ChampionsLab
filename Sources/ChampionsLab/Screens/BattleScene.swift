@@ -413,7 +413,11 @@ extension BattleFieldView {
     @ViewBuilder func fighterSprite(_ form: Form, mine: Bool, side: CGFloat,
                                     shiny: Bool = false) -> some View {
         if usesPixelSprites, let frames = pixels.frames(for: form, back: mine, shiny: shiny) {
-            PixelSpriteView(frames: frames).frame(width: side, height: side)
+            // At its own size, not squeezed into everybody's box. A Joltik is
+            // small and a Staraptor has a wingspan, and the client draws them
+            // that way.
+            PixelSpriteView(frames: frames)
+                .frame(width: side * frames.relative, height: side * frames.relative)
         } else {
             SpriteImage(form: form, side: side, shiny: shiny)
                 .scaleEffect(x: mine ? -1 : 1, y: 1)
