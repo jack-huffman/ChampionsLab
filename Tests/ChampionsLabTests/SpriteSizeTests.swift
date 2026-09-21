@@ -30,6 +30,46 @@ final class SpriteSizeTests: XCTestCase {
         return rep.representation(using: .png, properties: [:])!
     }
 
+    /// Two of Showdown's looks and the app's own, and a Showdown look falls
+    /// all the way through Showdown before it gives up.
+    func testEachLookTriesShowdownBeforeThePainting() {
+        check("Models starts with the Gen 6 set",
+              PixelSprites.Style.models.chain.first == .gen6,
+              "\(PixelSprites.Style.models.chain.map(\.rawValue))")
+        check("Pixel starts with the Gen 5 one",
+              PixelSprites.Style.pixel.chain.first == .gen5,
+              "\(PixelSprites.Style.pixel.chain.map(\.rawValue))")
+        for style in [PixelSprites.Style.models, .pixel] {
+            check("\(style.label) tries every set Showdown has",
+                  Set(style.chain) == Set(PixelSprites.Source.allCases),
+                  "\(style.chain.map(\.rawValue))")
+        }
+        check("and the illustrations ask Showdown for nothing",
+              PixelSprites.Style.illustrated.chain.isEmpty)
+        check("Pixel prefers a Gen 5 still to a Gen 6 animation",
+              PixelSprites.Style.pixel.chain.firstIndex(of: .still)!
+                < PixelSprites.Style.pixel.chain.firstIndex(of: .gen6)!)
+        check("all three are offered", PixelSprites.Style.allCases.count == 3)
+        check("and they are named for what they are",
+              PixelSprites.Style.allCases.map(\.label) == ["Models", "Pixel", "Art"],
+              "\(PixelSprites.Style.allCases.map(\.label))")
+    }
+
+    /// A seat is a point on the ground, so a sprite is anchored by its feet.
+    /// Lifting it by half the difference is what keeps a big one out of the
+    /// floor, and the sums are worth pinning because nothing else checks them.
+    func testASpriteIsLiftedByHalfWhateverItGained() {
+        let side: CGFloat = 96
+        for relative in [0.66, 1.0, 1.24, 1.55] {
+            let drawn = side * relative
+            let lift = -(relative - 1) / 2 * side
+            // Where its bottom edge lands, measured from the middle of the box.
+            let bottom = lift + drawn / 2
+            check("at \(relative) its feet are where the box's are",
+                  abs(bottom - side / 2) < 0.001, "\(bottom) against \(side / 2)")
+        }
+    }
+
     func testTheDirectoriesAreShowdownsOwnShape() {
         check("the Gen 6 front", PixelSprites.Source.gen6.path(back: false, shiny: false) == "ani/")
         check("its back", PixelSprites.Source.gen6.path(back: true, shiny: false) == "ani-back/")

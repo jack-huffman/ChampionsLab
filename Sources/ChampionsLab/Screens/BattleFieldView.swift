@@ -46,7 +46,8 @@ struct BattleFieldView: View {
     /// and the pixel sprites are fetched the first time they are wanted.
     /// Art or pixel sprites, read from the defaults once and written back
     /// when changed -- without @AppStorage, for the reason given in BattleView.
-    @State var spriteStyle = UserDefaults.standard.string(forKey: "battleSpriteStyle") ?? "pixel"
+    @State var spriteStyle = UserDefaults.standard.string(forKey: "battleSpriteStyle")
+        ?? PixelSprites.Style.models.rawValue
     @ObservedObject var pixels = PixelSprites.shared
 
     typealias TurnReview = BattleSession.TurnReview
@@ -77,7 +78,30 @@ struct BattleFieldView: View {
     var struckTheirs: Set<Int> { get { playback.struckTheirs } nonmutating set { playback.struckTheirs = newValue } }
 
     var body: some View {
-        if let board { field(board) } else { openingCard.padding(14) }
+        Group {
+            if let board { field(board) } else { openingCard.padding(14) }
+        }
+        // Everything that could walk out this game, fetched now.
+        //
+        // A sprite is asked for the first time its Pokemon is on screen, and
+        // the first time is exactly when somebody is watching it happen: a
+        // Garchomp switched in as a still and became an animation after the
+        // style was toggled off and back, which is what a fetch finishing
+        // unobserved looks like. Both teams whole is a few hundred kilobytes
+        // and every one of them is wanted inside the minute.
+        .task(id: warmingKey) {
+            guard let board else { return }
+            let all = board.mine + board.theirs
+            pixels.warm(all.map(\.build.form), shiny: all.map(\.build.shiny), style: look)
+        }
+    }
+
+    /// Changes when there is a different game on the board or a different look
+    /// to draw it in, and not when a turn plays.
+    private var warmingKey: String {
+        guard let board else { return "none" }
+        return spriteStyle + "/" + (board.mine + board.theirs)
+            .map(\.build.form.id).joined(separator: ",")
     }
 
     private func field(_ live: Board) -> some View {
@@ -260,12 +284,13 @@ struct BattleFieldView: View {
                     }
                     if !snapshotMode {
                         Picker("Sprites", selection: $spriteStyle) {
-                            Text("Art").tag("illustrated")
-                            Text("Pixel").tag("pixel")
+                            ForEach(PixelSprites.Style.allCases, id: \.rawValue) { style in
+                                Text(style.label).tag(style.rawValue)
+                            }
                         }
                         .pickerStyle(.segmented).controlSize(.mini).labelsHidden()
-                        .frame(width: 88)
-                        .help("How the Pokemon are drawn: the app's illustrations, or Pokemon Showdown's pixel sprites, fetched the first time they are needed.")
+                        .frame(width: 150)
+                        .help("How the Pokemon are drawn. Models and Pixel are Showdown's own animated sets, fetched the first time they are needed; Art is the app's illustrations, and is what a Showdown look falls back to only when Showdown has nothing.")
                     }
                 }
                 .padding(.horizontal, 10).padding(.vertical, 8)

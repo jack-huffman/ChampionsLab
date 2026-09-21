@@ -24,7 +24,16 @@ extension BattleFieldView {
 
     /// Pixel sprites are the scene's own look; the illustrations stay for a
     /// still, which cannot fetch and cannot play an AppKit view anyway.
-    var usesPixelSprites: Bool { spriteStyle == "pixel" && !snapshotMode }
+    /// Which of the three looks the battle is drawn in. A snapshot is always
+    /// the illustrations: the others are fetched, and a picture that depends
+    /// on the network is not a picture you can compare against last week's.
+    var look: PixelSprites.Style {
+        guard !snapshotMode else { return .illustrated }
+        return PixelSprites.Style(rawValue: spriteStyle) ?? .models
+    }
+    /// Kept for the geometry, which is laid out differently for a sprite than
+    /// for an illustration whichever of Showdown's sets it came from.
+    var usesPixelSprites: Bool { look != .illustrated }
 
     /// Back row first, so the front draws over it; within a row the client's
     /// own order, the further one behind.
@@ -412,12 +421,21 @@ extension BattleFieldView {
     /// on your side, and always in a still.
     @ViewBuilder func fighterSprite(_ form: Form, mine: Bool, side: CGFloat,
                                     shiny: Bool = false) -> some View {
-        if usesPixelSprites, let frames = pixels.frames(for: form, back: mine, shiny: shiny) {
+        if let frames = pixels.frames(for: form, back: mine, shiny: shiny, style: look) {
             // At its own size, not squeezed into everybody's box. A Joltik is
             // small and a Staraptor has a wingspan, and the client draws them
             // that way.
+            //
+            // Anchored by its feet, which is the half that letting them differ
+            // in size made necessary: a seat is a point on the ground, a view
+            // is centred on the point it is given, and a sprite half again as
+            // tall as the box therefore hung a quarter of the box below the
+            // floor. Every big Pokemon was standing through the platform it
+            // was meant to be standing on. Lifting it by half the difference
+            // puts its bottom edge back where the shadow is.
             PixelSpriteView(frames: frames)
                 .frame(width: side * frames.relative, height: side * frames.relative)
+                .offset(y: -(frames.relative - 1) / 2 * side)
         } else {
             SpriteImage(form: form, side: side, shiny: shiny)
                 .scaleEffect(x: mine ? -1 : 1, y: 1)

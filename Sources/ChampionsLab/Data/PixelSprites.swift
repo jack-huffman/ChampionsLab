@@ -33,6 +33,39 @@ import ImageIO
 
 @MainActor
 final class PixelSprites: ObservableObject {
+    /// Which of Showdown's looks to draw a battle in.
+    ///
+    /// The client offers two and they are different things, not two qualities
+    /// of the same thing: the Gen 6 set is animated models, the Gen 5 set is
+    /// animated pixel art, and people have opinions. The app's own
+    /// illustrations are the third, and the last resort -- a Showdown look
+    /// falls all the way through Showdown before it gives up, because a board
+    /// with one Pokemon drawn in a different style to the rest is worse than
+    /// one drawn a little smaller than you wanted.
+    enum Style: String, CaseIterable, Sendable {
+        case models, pixel, illustrated
+
+        var label: String {
+            switch self {
+            case .models: return "Models"
+            case .pixel: return "Pixel"
+            case .illustrated: return "Art"
+            }
+        }
+        /// The sets to try, best first. Empty for the illustrations, which
+        /// are not Showdown's and are always there.
+        var chain: [Source] {
+            switch self {
+            case .models: return [.gen6, .gen5, .still]
+            // Falling through to the models rather than to the illustration:
+            // a still from Gen 5 is still pixel art, and after that an
+            // animated model is closer to what was asked for than a painting.
+            case .pixel: return [.gen5, .still, .gen6]
+            case .illustrated: return []
+            }
+        }
+    }
+
     /// Which of Showdown's sets a sprite came out of, and how big a typical
     /// one in it is.
     ///
@@ -158,16 +191,24 @@ final class PixelSprites: ObservableObject {
     /// The sprite's frames, or nil while it is on its way or when there is
     /// none. Asking starts the fetch and the decode, both off the main
     /// thread; the object announces itself when they land.
-    func frames(for form: Form, back: Bool, shiny: Bool = false) -> Frames? {
-        guard let slug = Self.slug(form) else { return nil }
-        let key = (back ? "back/" : "front/") + (shiny ? "shiny/" : "") + slug
+    func frames(for form: Form, back: Bool, shiny: Bool = false,
+                style: Style = .models) -> Frames? {
+        guard style != .illustrated, let slug = Self.slug(form) else { return nil }
+        // Where it goes on disk is decided by which set it came out of, so two
+        // looks that land on the same set share the file. What is kept in
+        // memory is keyed by the look as well, because the same Pokemon is a
+        // different picture in each.
+        let base = (back ? "back/" : "front/") + (shiny ? "shiny/" : "") + slug
+        let key = style.rawValue + "/" + base
         if let ready = frames[key] { return ready }
         guard !missing.contains(key), !fetching.contains(key) else { return nil }
         fetching.insert(key)
+        let chain = style.chain
         Task.detached(priority: .userInitiated) { [weak self] in
-            var found = Self.kept(key)
+            var found = Self.kept(base, chain: chain)
             if found == nil {
-                found = await Self.fetch(slug: slug, back: back, shiny: shiny, key: key)
+                found = await Self.fetch(slug: slug, back: back, shiny: shiny,
+                                         base: base, chain: chain)
             }
             let decoded = found.flatMap { Frames.decode($0.data, from: $0.source) }
             await MainActor.run { [weak self] in
@@ -187,6 +228,23 @@ final class PixelSprites: ObservableObject {
     /// asked for first would go on serving the worse sprite for ever, since
     /// nothing in a cache remembers which shelf it came off. A new directory
     /// is the whole migration; the old one is swept up once.
+    /// Fetch these now, so that walking one out mid-battle is not a download.
+    ///
+    /// A sprite is asked for the first time the Pokemon is on screen, and the
+    /// first time is exactly when somebody is watching: a Garchomp switched in
+    /// showed the still, and showed the animation after the style was toggled
+    /// off and back, which is the sound of a fetch finishing while nobody was
+    /// asking. The whole of both teams is a few hundred kilobytes and it is
+    /// wanted within the minute.
+    func warm(_ forms: [Form], shiny: [Bool] = [], style: Style) {
+        guard style != .illustrated else { return }
+        for (index, form) in forms.enumerated() {
+            let sparkly = index < shiny.count ? shiny[index] : false
+            _ = frames(for: form, back: true, shiny: sparkly, style: style)
+            _ = frames(for: form, back: false, shiny: sparkly, style: style)
+        }
+    }
+
     private nonisolated static var folder: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ChampionsLab/sprites-ani")
@@ -207,9 +265,10 @@ final class PixelSprites: ObservableObject {
     /// The set is in the filename because nothing else remembers it, and how
     /// big a sprite should be drawn depends on it. A cache that forgets where
     /// a thing came from can only guess at what to do with it.
-    private nonisolated static func kept(_ key: String) -> (data: Data, source: Source)? {
-        for source in Source.allCases {
-            let url = folder.appendingPathComponent("\(key).\(source.rawValue).\(source.extension_)")
+    private nonisolated static func kept(_ base: String,
+                                         chain: [Source]) -> (data: Data, source: Source)? {
+        for source in chain {
+            let url = folder.appendingPathComponent("\(base).\(source.rawValue).\(source.extension_)")
             if let data = try? Data(contentsOf: url), !data.isEmpty { return (data, source) }
         }
         return nil
@@ -226,15 +285,16 @@ final class PixelSprites: ObservableObject {
     /// animation, and one with only a still has a shiny still. That
     /// convention is why this is a loop rather than twelve lines.
     private nonisolated static func fetch(slug: String, back: Bool, shiny: Bool,
-                                          key: String) async -> (data: Data, source: Source)? {
-        let base = "https://play.pokemonshowdown.com/sprites/"
-        for source in Source.allCases {
-            let address = base + source.path(back: back, shiny: shiny) + slug + "." + source.extension_
+                                          base: String,
+                                          chain: [Source]) async -> (data: Data, source: Source)? {
+        let site = "https://play.pokemonshowdown.com/sprites/"
+        for source in chain {
+            let address = site + source.path(back: back, shiny: shiny) + slug + "." + source.extension_
             guard let url = URL(string: address),
                   let (data, response) = try? await URLSession.shared.data(from: url),
                   (response as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty else { continue }
             let destination = folder
-                .appendingPathComponent("\(key).\(source.rawValue).\(source.extension_)")
+                .appendingPathComponent("\(base).\(source.rawValue).\(source.extension_)")
             try? FileManager.default.createDirectory(at: destination.deletingLastPathComponent(),
                                                      withIntermediateDirectories: true)
             try? data.write(to: destination)
