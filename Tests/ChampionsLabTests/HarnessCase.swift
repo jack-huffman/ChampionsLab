@@ -59,6 +59,25 @@ class HarnessCase: XCTestCase {
     /// a run reads like the old harness did.
     var fails = 0
 
+    /// The dice, fixed, before every single case.
+    ///
+    /// Every turn a test resolves with `rolling: true` draws from `Dice`, and
+    /// `Dice` was the system generator: unseeded, so fifteen files' worth of
+    /// tests were quietly running against real luck. Icy Wind is ninety-five
+    /// accurate, and about one gate run in twenty it missed and took
+    /// `testAProtectCoversOnlyTheOneBehindIt` down with it -- a test that
+    /// passed on its own every time it was asked to explain itself.
+    ///
+    /// A fixed seed makes every rolling test reproducible: the same stream
+    /// from the same point, whatever order the suite runs them in. Tests that
+    /// want a distribution rather than an outcome still get one -- a seeded
+    /// six hundred trials is as good a sample as an unseeded six hundred, and
+    /// it is the same sample twice.
+    override func setUp() {
+        super.setUp()
+        Dice.source = TeamLab.SplitMix(seed: 0x5EED_1CE5)
+    }
+
     @MainActor var store: Store { Store.shared }
 
     /// Assert, and say so either way: the printed line is what makes a failing

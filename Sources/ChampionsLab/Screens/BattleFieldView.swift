@@ -42,12 +42,12 @@ struct BattleFieldView: View {
     let singles: Bool
     let onBackToPreview: () -> Void
     /// How the Pokemon are drawn on their cards: the app's illustrations, or
-    /// Showdown's pixel sprites. A setting, because it is a matter of taste
-    /// and the pixel sprites are fetched the first time they are wanted.
-    /// Art or pixel sprites, read from the defaults once and written back
-    /// when changed -- without @AppStorage, for the reason given in BattleView.
-    @State var spriteStyle = UserDefaults.standard.string(forKey: "battleSpriteStyle")
-        ?? PixelSprites.Style.models.rawValue
+    /// Which of Showdown's two sets the field is drawn in. A setting, because
+    /// it is a matter of taste and either set is fetched the first time it is
+    /// wanted. Read from the defaults once and written back when changed --
+    /// without @AppStorage, for the reason given in BattleView.
+    @State var spriteStyle = PixelSprites.Style
+        .chosen(UserDefaults.standard.string(forKey: "battleSpriteStyle")).rawValue
     @ObservedObject var pixels = PixelSprites.shared
 
     typealias TurnReview = BattleSession.TurnReview
@@ -284,13 +284,13 @@ struct BattleFieldView: View {
                     }
                     if !snapshotMode {
                         Picker("Sprites", selection: $spriteStyle) {
-                            ForEach(PixelSprites.Style.allCases, id: \.rawValue) { style in
+                            ForEach(PixelSprites.Style.offered, id: \.rawValue) { style in
                                 Text(style.label).tag(style.rawValue)
                             }
                         }
                         .pickerStyle(.segmented).controlSize(.mini).labelsHidden()
-                        .frame(width: 150)
-                        .help("How the Pokemon are drawn. Models and Pixel are Showdown's own animated sets, fetched the first time they are needed; Art is the app's illustrations, and is what a Showdown look falls back to only when Showdown has nothing.")
+                        .frame(width: 110)
+                        .help("How the Pokemon are drawn: Showdown's two animated sets, fetched the first time they are needed. Models is its Gen 6 set, Pixel its Gen 5 one. Where Showdown has neither, the app's own illustration stands in on its own.")
                     }
                 }
                 .padding(.horizontal, 10).padding(.vertical, 8)

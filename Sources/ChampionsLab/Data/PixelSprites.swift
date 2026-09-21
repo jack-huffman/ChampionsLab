@@ -64,6 +64,29 @@ final class PixelSprites: ObservableObject {
             case .illustrated: return []
             }
         }
+
+        /// The looks a battle can be set to: Showdown's two, and only those.
+        ///
+        /// `illustrated` is deliberately not among them. It is not one of
+        /// Showdown's sets and never appears on a Showdown battle field --
+        /// the client picks between its animated Gen 6 set and, under its
+        /// `bwgfx` preference, the Gen 5 one, and falls back to Gen 5 stills;
+        /// dex art belongs to the teambuilder and the tooltips. Offering it
+        /// as a third choice put a look nobody would pick beside two they
+        /// would.
+        ///
+        /// It stays in the enum for the two jobs it is genuinely the right
+        /// answer to: a snapshot, which must not depend on the network, and
+        /// the last resort when Showdown has nothing for a Pokemon at all.
+        static let offered: [Style] = [.models, .pixel]
+
+        /// What a stored preference means now. Anyone the old picker left on
+        /// the illustrations is moved to the default rather than stranded on
+        /// a setting nothing can show them how to leave.
+        static func chosen(_ stored: String?) -> Style {
+            let style = stored.flatMap { Style(rawValue: $0) } ?? .models
+            return offered.contains(style) ? style : .models
+        }
     }
 
     /// Which of Showdown's sets a sprite came out of, and how big a typical

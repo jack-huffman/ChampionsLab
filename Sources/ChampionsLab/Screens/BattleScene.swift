@@ -24,12 +24,12 @@ extension BattleFieldView {
 
     /// Pixel sprites are the scene's own look; the illustrations stay for a
     /// still, which cannot fetch and cannot play an AppKit view anyway.
-    /// Which of the three looks the battle is drawn in. A snapshot is always
-    /// the illustrations: the others are fetched, and a picture that depends
-    /// on the network is not a picture you can compare against last week's.
+    /// Which of Showdown's two sets the battle is drawn in. A snapshot is
+    /// always the illustrations: the sets are fetched, and a picture that
+    /// depends on the network is not one you can compare against last week's.
     var look: PixelSprites.Style {
         guard !snapshotMode else { return .illustrated }
-        return PixelSprites.Style(rawValue: spriteStyle) ?? .models
+        return PixelSprites.Style.chosen(spriteStyle)
     }
     /// Kept for the geometry, which is laid out differently for a sprite than
     /// for an illustration whichever of Showdown's sets it came from.

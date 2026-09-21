@@ -970,6 +970,11 @@ def showdown_form_keys(label, species):
         if mega.group(2):
             out.append(base + "mega" + mega.group(2).lower())
         out.append(base + "mega")
+        # A few species Mega Evolve per gender and the table files those under
+        # the gender: "Meowstic-M-Mega", never "Meowstic-Mega". Champions
+        # lists a single Mega Meowstic, which is the male's. Tried after the
+        # plain key, so a species with an ordinary Mega never reaches it.
+        out.append(base + "mmega")
     for word, tag in (("Alolan", "alola"), ("Galarian", "galar"),
                       ("Hisuian", "hisui"), ("Paldean", "paldea")):
         if label.startswith(word + " "):
@@ -982,9 +987,17 @@ def showdown_form_keys(label, species):
     bracket = re.search(r"\((.+?)\)$", label)
     if bracket:
         base = key(re.sub(r"\s*\(.*\)$", "", label))
-        out.append(base + key(bracket.group(1)))
+        inside = bracket.group(1)
+        out.append(base + key(inside))
         # "Indeedee (Female)" is filed as "indeedeef".
-        out.append(base + key(bracket.group(1))[0])
+        out.append(base + key(inside)[0])
+        # Serebii spells the whole distinguishing phrase where the table keeps
+        # one word of it: "Squawkabilly (Blue Plumage)" is "Squawkabilly-Blue"
+        # and "Maushold (Family of Four)" is "Maushold-Four". Each word in
+        # turn, after the whole phrase has had its chance, so a form the table
+        # spells out in full is still matched in full first.
+        for word in inside.split():
+            out.append(base + key(word))
     out.append(key(label))
     return out
 

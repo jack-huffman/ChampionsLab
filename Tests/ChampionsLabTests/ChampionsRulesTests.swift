@@ -57,7 +57,7 @@ print("\n== against the mod ==")
     }
 
     @MainActor func testTheSimPlaysThem() throws {
-        defer { Dice.source = SystemRandomNumberGenerator() }
+        defer { Dice.source = TeamLab.SplitMix(seed: 0x5EED_1CE5) }
         let start = board()
         let claw = at(start.mine[0], "Dragon Claw")
         let swing = Play(left: .attack(move: claw, target: 0), right: .pass)
