@@ -46,6 +46,61 @@ print("\n== aliases and includes ==")
         check("Heat Wave is written against every target", table.recipe(forMove: "Heat Wave")?.spread == true)
     }
 
+    /// The two moves the extractor used to throw away, and the reason it did.
+    ///
+    /// Both lay their sprites out with `x: attacker.x + (50 / i)` inside a
+    /// `for (let i = 0; ...)`, so the first turn of the loop divides by zero.
+    /// JavaScript makes Infinity of that, adds it to a position and sends one
+    /// sprite somewhere nobody can see. Python raised instead, and the whole
+    /// recipe went with it -- so Matcha Gotcha and Spin Out fell through to
+    /// the client's generic animation for their category, which is what
+    /// "generic animation" looks like from the outside.
+    @MainActor func testTheMovesThatDivideByZeroKeptTheirOwnChoreography() throws {
+        for (name, sprite, category) in [("Matcha Gotcha", "energyball", "Special"),
+                                         ("Spin Out", "gear", "Physical")] {
+            let recipe = try XCTUnwrap(table.recipe(forMove: name), "\(name) has no recipe")
+            check("\(name) has choreography of its own", !recipe.steps.isEmpty, "\(recipe.steps.count) steps")
+            check("  built from its own sprite, \(sprite)",
+                  recipe.steps.contains { $0.sprite == sprite },
+                  "\(Set(recipe.steps.compactMap(\.sprite)).sorted())")
+            // What it used to land on instead: a Special move with no recipe
+            // is thrown as a shadowball, which is exactly what a generic
+            // animation looks like from the far side of the screen.
+            let generic = table.fallback(category: category, targetsSelf: false)
+            let mine = Set(recipe.steps.compactMap(\.sprite))
+            let theirs = Set(generic?.steps.compactMap(\.sprite) ?? [])
+            check("  and is not the \(category) fallback it used to get",
+                  mine != theirs, "\(mine.sorted()) against \(theirs.sorted())")
+        }
+        // Matcha Gotcha hits both of them, and the recipe has to know.
+        check("Matcha Gotcha is laid out as a spread move",
+              table.recipe(forMove: "Matcha Gotcha")?.spread == true)
+    }
+
+    /// Wide Guard and the rest of the Protect family really do share one
+    /// animation, and it is Showdown's own: the client writes them all as
+    /// `anim: BattleOtherAnims.selfstatus.anim`. Pinned because it looks
+    /// exactly like a fallback and is not one -- the fallback is what a move
+    /// with no recipe at all gets, and these have one.
+    @MainActor func testTheProtectFamilyDeliberatelySharesOneAnimation() throws {
+        let guardMoves = ["Protect", "Detect", "Wide Guard", "Quick Guard",
+                          "Spiky Shield", "King's Shield"]
+        let shared = try XCTUnwrap(table.recipe(forMove: "Protect"), "Protect has no recipe")
+        check("Protect has real steps", !shared.steps.isEmpty, "\(shared.steps.count)")
+        for name in guardMoves {
+            guard let recipe = table.recipe(forMove: name) else {
+                check("\(name) has a recipe", false); continue
+            }
+            check("\(name) shares Protect's", recipe.steps.count == shared.steps.count,
+                  "\(recipe.steps.count) against \(shared.steps.count)")
+        }
+        // Baneful Bunker is the one that does not, which is how we know the
+        // sharing above is the client's choice rather than ours.
+        check("Baneful Bunker has its own instead",
+              table.recipe(forMove: "Baneful Bunker")?.steps.count != shared.steps.count,
+              "\(table.recipe(forMove: "Baneful Bunker")?.steps.count ?? -1)")
+    }
+
     func testARecipeLandsBetweenTheSeats() throws {
         let stage = MoveTimeline.Stage(size: CGSize(width: 800, height: 480), singles: false)
         let mine = Seat(mine: true, slot: 0), theirs = Seat(mine: false, slot: 1)

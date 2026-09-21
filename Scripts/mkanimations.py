@@ -46,6 +46,22 @@ if '--fetch' in sys.argv or not (os.path.exists(MOVES) and os.path.exists(OTHER)
 
 class Unparsed(Exception): pass
 
+
+class Offscreen(Unparsed):
+    """A coordinate JavaScript works out to be Infinity.
+
+    Two moves lay their sprites out with `x: attacker.x + (50 / i)` inside a
+    `for (let i = 0; ...)`, and the first turn of that loop divides by zero.
+    JavaScript does not mind: it makes Infinity, adds it to a position, and
+    the client dutifully sends that one sprite to a place nobody can see.
+    Python minds, and the whole recipe was being thrown away over a sprite
+    that was never visible in the first place.
+
+    So this is not a parse failure. It is the parse succeeding and finding a
+    step with nothing in it, and the honest translation of a sprite at
+    infinity is no sprite at all.
+    """
+
 NUM = r'[+-]?\d+(?:\.\d+)?'
 
 # ----------------------------------------------------------------- text ----
@@ -219,7 +235,8 @@ def evaluate(expr, axis, who):
                 elif v.constant(): v = w.scaled(v.c)
                 else: raise Unparsed('nonlinear')
             else:
-                if not w.constant() or w.c == 0: raise Unparsed('division')
+                if not w.constant(): raise Unparsed('division')
+                if w.c == 0: raise Offscreen('divided by zero')
                 v = v.scaled(1 / w.c)
         return v
     def sum_():
@@ -326,8 +343,13 @@ def translate(body, names, extra={}):
             m = re.fullmatch(r"\(\w+\.isFrontSprite \? '(\w+)' : '(\w+)'\)", sprite)
             if m: sprite = m.group(1)
             if not re.fullmatch(r'\w+', sprite): raise Unparsed('sprite ' + sprite[:30])
-            step = {'kind': 'effect', 'sprite': sprite, 'from': pose(a[1], who), 'to': pose(a[2], who),
-                    'easing': easing(unquote(a[3]))}
+            try:
+                step = {'kind': 'effect', 'sprite': sprite, 'from': pose(a[1], who), 'to': pose(a[2], who),
+                        'easing': easing(unquote(a[3]))}
+            except Offscreen:
+                # The client draws this one where it cannot be seen. Leaving
+                # it out is what it looks like; leaving the move out is not.
+                continue
             if len(a) > 4 and a[4].startswith(("'", '"')): step['ending'] = unquote(a[4])
             steps.append(step)
         elif re.match(r'(\w+)\.delay\((' + NUM + r')\)\.anim\(', st):
