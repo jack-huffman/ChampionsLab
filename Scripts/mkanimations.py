@@ -87,11 +87,41 @@ def alias(entry):
     return ('other' if m.group(1) == 'Other' else 'moves', m.group(2) or m.group(3)) if m else None
 
 def anim_body(entry):
-    """The body of anim(scene, [...]) { ... } and the participants' names."""
+    """The body of anim(scene, [...]) { ... } and the participants' names.
+
+    Three shapes, and the last one matters more than it looks. An entry
+    written `anim() {}` is not a move the client forgot: it is the client
+    saying play nothing. Gravity says so in as many words --
+
+        anim() {
+            // do not give Gravity an animation,
+            // it'll conflict with the gravity animation in BattleOtherAnims
+            // this one prevents the wisp from showing up
+        },
+
+    -- and Reflect, Light Screen, Aurora Veil, Safeguard and Substitute are
+    all written the same way, because their picture is the screen that goes up
+    afterwards rather than anything thrown at anyone. Reading those as "no
+    animation" and dropping them had the exact opposite effect of what they
+    are for: a move with no recipe falls through to the generic one, so every
+    one of them threw the wisp they were written to suppress.
+    """
     m = re.search(r'\banim\(scene, \[([^\]]*)\]\) \{\n(.*?)\n\t\t\}', entry, re.S)
-    if not m: return None, None
-    names = [n.strip() for n in m.group(1).split(',') if n.strip()]
-    return names, m.group(2)
+    if m:
+        names = [n.strip() for n in m.group(1).split(',') if n.strip()]
+        return names, m.group(2)
+    # anim(scene) { ... }: choreography that paints the field rather than
+    # anyone standing on it. Doom Desire darkens the sky and drops its beam
+    # without naming a soul.
+    m = re.search(r'\banim\(scene\) \{\n(.*?)\n\t\t\}', entry, re.S)
+    if m: return [], m.group(1)
+    # `anim: null!` beside a prepareAnim: the charge turn has the animation
+    # and the release turn deliberately has none.
+    if re.search(r'\banim: null!', entry): return [], ''
+    # anim() {} and anim() { //... }: play nothing, on purpose.
+    m = re.search(r'\banim\(\) \{(.*?)\}', entry, re.S)
+    if m and not strip_comments(m.group(1)).strip(): return [], ''
+    return None, None
 
 def strip_comments(body):
     return re.sub(r'^\s*//.*$', '', body, flags=re.M)
@@ -126,17 +156,56 @@ def unwrap_spread(names, body):
 
 def declarations(body):
     """`let xstep = (defender.x - attacker.x) / 5;` and `let xf = [1, -1];`
-    -- substituted textually, arrays after the loop counter is known."""
+    -- substituted textually, arrays after the loop counter is known.
+
+    Walked top to bottom, because a name does not have to keep its value.
+    Extreme Evoboost fires eight fans of flares and steers each one by
+    reassigning the same variable between the loops:
+
+        let xstep = (attacker.x + 200 - attacker.x) / 5;
+        for (...) { ... xstep ... }
+        xstep = (attacker.x + 150 - attacker.x) / 5;
+        for (...) { ... xstep ... }
+
+    Taking only the first and substituting it everywhere got both halves
+    wrong: every fan came out at the first one's angle, and the bare
+    reassignments -- no `let`, so nothing removed them -- were left behind as
+    statements reading `((attacker.x + 200 - attacker.x) / 5) = ...`, which is
+    not anything. The recipe was lost, and Never-Ending Nightmare, Core
+    Enforcer, and through them Poltergeist, Max Phantasm and Clangorous Soul
+    went with it.
+
+    So each assignment gets a name of its own and the lines after it are
+    rewritten to use that name. A reassignment is only recognised for a name
+    already declared, which keeps `sprite = ...` and friends out of it.
+    """
     scalars, arrays = {}, {}
-    def take(m):
-        name, value = m.group(1), m.group(2).strip()
+    known, live, seen = set(), {}, {}
+    declare = re.compile(r'^(\s*)(?:(?:let|const|var) )(\w+) = ([^;]+);\s*$')
+    assign = re.compile(r'^(\s*)(\w+) = ([^;]+);\s*$')
+    def rename(text):
+        for name, current in live.items():
+            if current != name: text = re.sub(r'\b' + name + r'\b', current, text)
+        return text
+    out = []
+    for line in body.split('\n'):
+        m = declare.match(line) or (assign.match(line) if assign.match(line)
+                                    and assign.match(line).group(2) in known else None)
+        if not m:
+            out.append(rename(line)); continue
+        name, value = m.group(2), m.group(3).strip()
         if value.startswith('['):
             arrays[name] = [v.strip() for v in value[1:-1].split(',')]
-        else:
-            scalars[name] = '(' + value + ')'
-        return ''
-    body = re.sub(r'^\s*(?:let|const|var) (\w+) = ([^;]+);\s*$', take, body, flags=re.M)
-    return body, scalars, arrays
+            out.append(''); continue
+        known.add(name)
+        seen[name] = seen.get(name, 0) + 1
+        current = name if seen[name] == 1 else f'{name}__{seen[name]}'
+        # The value is read with whatever the names meant *here*, before this
+        # one takes its new meaning.
+        scalars[current] = '(' + rename(value) + ')'
+        live[name] = current
+        out.append('')
+    return '\n'.join(out), scalars, arrays
 
 def unroll(body, arrays):
     """for (let i = a; i < b; i++) { ... } -> the body once per value of i."""
@@ -157,10 +226,21 @@ def unroll(body, arrays):
             out.append(text)
             i += inc; guard += 1
         return '\n' + '\n'.join(out)
+    # `for (const effect of ['mistball', 'heart'])`: the same body once per
+    # item, the name replaced by the literal. The storm moves are each built
+    # this way -- Springtide Storm throws mistballs and then hearts out of one
+    # loop -- and it is the same unrolling as the counted kind, over a list
+    # written down on the spot rather than a range.
+    over = re.compile(r"\n(\t+)for \(const (\w+) of \[([^\]]*)\]\) \{\n(.*?)\n\1\}", re.S)
+    def spread_over(m):
+        pad, var, items, inner = m.group(1), m.group(2), m.group(3), m.group(4)
+        values = [v.strip() for v in items.split(',') if v.strip()]
+        return '\n' + '\n'.join(re.sub(r'\b' + var + r'\b', v, inner) for v in values)
     previous = None
     while previous != body:
         previous = body
         body = loop.sub(expand, body)
+        body = over.sub(spread_over, body)
     if re.search(r'\bfor \(', body): raise Unparsed(re.search(r'for \([^)]*\)', body).group(0)[:40])
     return body
 
@@ -323,7 +403,8 @@ def easing(name):
     return 'linear'
 
 def translate(body, names, extra={}):
-    who = {names[0]: 'attacker'}
+    who = {}
+    if names: who[names[0]] = 'attacker'
     if len(names) > 1: who[names[1]] = 'defender'
     who.update(extra)
     def part(n):
@@ -398,6 +479,7 @@ def recipe(entry):
     names, body = anim_body(entry)
     if body is None: raise Unparsed('no anim')
     body = '\n' + strip_comments(body)
+    body = re.sub(r'^\s*if \(\w+\.isMissedPokemon\) return;\s*$', '', body, flags=re.M)
     names, body, spread, extra = unwrap_spread(names, body)
     body, scalars, arrays = declarations(body)
     # Put the declarations back before the loops are unrolled as well as

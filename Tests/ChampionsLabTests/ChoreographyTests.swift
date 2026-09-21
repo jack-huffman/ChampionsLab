@@ -101,6 +101,54 @@ print("\n== aliases and includes ==")
               "\(table.recipe(forMove: "Baneful Bunker")?.steps.count ?? -1)")
     }
 
+    /// A move the client deliberately silences plays nothing, and the whole
+    /// point is that this is different from a move it has never heard of.
+    ///
+    /// Showdown writes `anim() {}` for a dozen of them, and Gravity says why
+    /// in a comment: "this one prevents the wisp from showing up". Their
+    /// picture is the screen that goes up afterwards, or the substitute that
+    /// appears, not anything thrown at anybody. Reading those as "no
+    /// animation" and dropping them did the exact opposite of what they are
+    /// for -- a move with no recipe falls through to the generic one, so
+    /// every one of them threw the wisp it was written to suppress.
+    @MainActor func testTheMovesShowdownSilencesStaySilent() throws {
+        for name in ["Reflect", "Light Screen", "Aurora Veil", "Safeguard", "Substitute",
+                     "Gravity", "Transform", "Sleep Talk", "Ally Switch", "Shed Tail"] {
+            guard let recipe = table.recipe(forMove: name) else {
+                check("\(name) has a recipe of its own", false); continue
+            }
+            check("\(name) is silent on purpose", recipe.steps.isEmpty, "\(recipe.steps.count) steps")
+        }
+        // Silence has to survive being laid on the arena, too: an empty
+        // recipe still goes through the timeline like any other.
+        let stage = MoveTimeline.Stage(size: CGSize(width: 800, height: 480), singles: false)
+        let quiet = try XCTUnwrap(table.recipe(forMove: "Reflect"))
+        let timeline = MoveTimeline.build(quiet, attacker: Seat(mine: true, slot: 0),
+                                          targets: [], sizes: table.sprites, stage: stage)
+        check("nothing is drawn for it", timeline.sprites.isEmpty && timeline.leans.isEmpty)
+        check("and it takes no time", timeline.duration == 0, "\(timeline.duration)")
+        // The distinction the whole fix rests on: a move Showdown has never
+        // heard of still falls back, because there is nothing to play instead.
+        check("a move the client has no entry for still falls back",
+              table.recipe(forMove: "Nihil Light") == nil
+                && table.fallback(category: "Special", targetsSelf: false)?.steps.isEmpty == false)
+    }
+
+    /// Moves recovered from the extractor, each for its own reason: a name
+    /// reassigned between loops, a loop over a list of sprite names, a guard
+    /// on a target that was not hit.
+    @MainActor func testTheRecoveredMovesHaveRealChoreography() throws {
+        for name in ["Poltergeist", "Extreme Evoboost", "Core Enforcer", "Never-Ending Nightmare",
+                     "Springtide Storm", "Wildbolt Storm", "Will-O-Wisp", "Confuse Ray",
+                     "Lovely Kiss", "Doom Desire", "Future Sight", "Sweet Kiss",
+                     "Clangorous Soul", "Max Phantasm"] {
+            guard let recipe = table.recipe(forMove: name) else {
+                check("\(name) has a recipe", false); continue
+            }
+            check("\(name) has steps of its own", !recipe.steps.isEmpty, "\(recipe.steps.count)")
+        }
+    }
+
     func testARecipeLandsBetweenTheSeats() throws {
         let stage = MoveTimeline.Stage(size: CGSize(width: 800, height: 480), singles: false)
         let mine = Seat(mine: true, slot: 0), theirs = Seat(mine: false, slot: 1)
