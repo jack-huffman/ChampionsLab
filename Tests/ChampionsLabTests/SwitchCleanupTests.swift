@@ -54,4 +54,39 @@ final class SwitchCleanupTests: HarnessCase {
         // Against the ailment's own none: an optional against `.none` is nil.
         check("Natural Cure dropped the burn", incineroar?.status == Ailment.none, "\(incineroar?.status.rawValue ?? "?")")
     }
+
+    /// Toxic is a clock, and the clock is the ramp: a sixteenth on the first
+    /// turn, two on the second, and so on. Going out and coming back keeps the
+    /// poison and pays the ramp back down to the start, which is most of why a
+    /// pivot answers a Toxic at all.
+    @MainActor func testTheBadPoisonsClockRestartsButThePoisonItselfKeeps() {
+        var board = lineup()
+        board.mine[0].status = .badPoison
+        board.mine[0].toxicTurns = 5
+        Switching.swapIn(mine: true, active: 0, bench: 2, board: &board)
+        let incineroar = board.mine.first { $0.build.form.formLabel == "Incineroar" }
+        check("it is still badly poisoned", incineroar?.status == .badPoison,
+              "\(incineroar?.status.rawValue ?? "?")")
+        check("but the ramp restarted", incineroar?.toxicTurns == 0,
+              "\(incineroar?.toxicTurns ?? -1)")
+    }
+
+    /// Sleep is the other half of that pair and goes the other way: it keeps
+    /// across a switch, counter and all, so the bench is never a place to wait
+    /// it off.
+    @MainActor func testSleepRunsDownOnTheFieldAndNotOnTheBench() {
+        var board = lineup()
+        check("slot 2 really is on the bench", board.activeCount <= 2, "\(board.activeCount)")
+        // The same three turns to go, one standing out there and one waiting.
+        board.mine[0].status = .sleep; board.mine[0].asleepFor = 3
+        board.mine[2].status = .sleep; board.mine[2].asleepFor = 3
+        let out = TurnModel.resolve(board, mine: Play(left: .pass, right: .pass),
+                                    theirs: Play(left: .pass, right: .pass))
+        check("the one on the field slept a turn off", out.mine[0].asleepFor == 2,
+              "\(out.mine[0].asleepFor)")
+        check("the one on the bench kept all three", out.mine[2].asleepFor == 3,
+              "\(out.mine[2].asleepFor)")
+        check("and is still asleep", out.mine[2].status == .sleep,
+              out.mine[2].status.rawValue)
+    }
 }

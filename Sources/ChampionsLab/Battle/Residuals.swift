@@ -415,6 +415,12 @@ enum Residuals {
     /// again. A Pokemon that arrived partway through this turn has its first
     /// turn next, so that flag has to survive to reach it.
     private static func turnOver(onMine mine: Bool, board: inout Board) {
+        // Who is actually standing out there. Most of what this loop clears is
+        // cleared again by `depart` on the way to the bench, so running it over
+        // the whole team costs nothing -- but sleep is the one thing here that
+        // deliberately survives leaving the field, so it is the one thing that
+        // must not run while benched.
+        let onField = Swift.min(board.activeCount, (mine ? board.mine : board.theirs).count)
         for index in (mine ? board.mine : board.theirs).indices {
             var fighter = mine ? board.mine[index] : board.theirs[index]
             fighter.protectedLast = fighter.isProtected
@@ -434,7 +440,11 @@ enum Residuals {
             }
             fighter.justArrived = fighter.arrivedThisTurn
             fighter.helped = false
-            if fighter.asleepFor > 0 {
+            // Sleep runs down on the field and nowhere else. A Pokemon put to
+            // sleep and switched out keeps every turn of it, so sitting on the
+            // bench was never a way to wait the sleep off -- and it had been,
+            // which let a three-turn sleep expire behind a single pivot.
+            if fighter.asleepFor > 0, index < onField {
                 let quick = fighter.build.ability == "Early Bird"
                 fighter.asleepFor -= quick ? 2 : 1
                 if fighter.asleepFor <= 0 {

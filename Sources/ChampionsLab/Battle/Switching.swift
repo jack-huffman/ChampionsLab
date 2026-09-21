@@ -272,6 +272,13 @@ enum Switching {
         team[active].drowsyFor = 0
         team[active].disabled = nil
         team[active].disabledFor = 0
+        // The bad poison stays -- it is the status, not something the field
+        // did -- but its clock restarts. Toxic is a sixteenth more every turn
+        // it holds, and that ramp is what makes it a clock rather than chip;
+        // going out and coming back pays the ramp back down to a sixteenth
+        // while the poison itself keeps. Leaving it running made a Toxic land
+        // once and then bill at a half regardless of what was standing there.
+        team[active].toxicTurns = 0
         // The seal is the Pokemon standing there, so it goes with it. Power
         // Points deliberately do not: a pivot out and back is not a way to
         // refill, and treating it as one would make the whole resource free.
