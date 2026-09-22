@@ -24,10 +24,71 @@ enum TeamPaste {
         return min(ChampionsStats.spPerStat, 1 + (evs - 4) / 8)
     }
 
-    /// The inverse, for writing a paste other tools can read.
+    /// The inverse, for writing a paste a main-series tool can read.
     static func evs(fromStatPoints sp: Int) -> Int {
         guard sp > 0 else { return 0 }
         return min(252, 4 + (sp - 1) * 8)
+    }
+
+    // MARK: - Which dialect a paste is written in
+
+    /// A spread can be written two ways and they do not look different.
+    ///
+    /// A main-series paste spells a Stat Point as the EVs it would have cost
+    /// -- four for the first and eight apiece after -- so a maxed stat is 252.
+    /// Showdown's own Champions formats spell the points themselves, because
+    /// the mod's `statModify` reads the EV field as the points: `base + evs +
+    /// 75` for HP and `+ 20` for the rest. A maxed stat is 32.
+    ///
+    /// Read in the wrong dialect, "EVs: 32 HP / 32 Atk" off Showdown becomes
+    /// four points and four points, which is a team nobody built.
+    enum Dialect {
+        case mainSeries, champions
+
+        /// What one written number is worth in Stat Points.
+        func statPoints(_ written: Int) -> Int {
+            switch self {
+            case .mainSeries: return TeamPaste.statPoints(fromEVs: written)
+            case .champions: return Swift.max(0, Swift.min(ChampionsStats.spPerStat, written))
+            }
+        }
+    }
+
+    /// Which dialect a whole paste is in.
+    ///
+    /// Decided across the paste rather than per Pokémon, because a paste is
+    /// written by one tool in one dialect, and a single Pokémon carrying a
+    /// small spread says nothing either way.
+    ///
+    /// The tell is that the two dialects cannot both be true of the same
+    /// numbers: a Stat Point spread never exceeds 32 on a stat or 66 across
+    /// one Pokémon, and a main-series spread that stayed under both of those
+    /// would be a Pokémon with almost nothing invested. So anything above
+    /// either line is EVs, and everything else is points.
+    static func dialect(of text: String) -> Dialect {
+        for amounts in spreads(in: text) {
+            if amounts.contains(where: { $0 > ChampionsStats.spPerStat }) { return .mainSeries }
+            if amounts.reduce(0, +) > ChampionsStats.spTotal { return .mainSeries }
+        }
+        return .champions
+    }
+
+    /// Every EV line's numbers, one array per Pokémon that has one.
+    private static func spreads(in text: String) -> [[Int]] {
+        var out: [[Int]] = []
+        for line in text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.lowercased().hasPrefix("evs:") else { continue }
+            let numbers = trimmed.dropFirst("evs:".count)
+                .components(separatedBy: "/")
+                .compactMap { part -> Int? in
+                    let bits = part.trimmingCharacters(in: .whitespaces).components(separatedBy: " ")
+                    guard bits.count >= 2, stat(named: bits[1]) != nil else { return nil }
+                    return Int(bits[0])
+                }
+            if !numbers.isEmpty { out.append(numbers) }
+        }
+        return out
     }
 
     // MARK: - Import
@@ -43,6 +104,8 @@ enum TeamPaste {
     static func parse(_ text: String, store: Store, name: String? = nil) -> Result {
         var team = Team(name: name ?? "Imported team")
         var warnings: [String] = []
+        // Settled once for the whole paste, before anything is read out of it.
+        let dialect = Self.dialect(of: text)
 
         // Blocks are separated by blank lines; a block is one Pokémon.
         let blocks = text
@@ -99,7 +162,8 @@ enum TeamPaste {
             }
 
             for line in lines.dropFirst() {
-                parse(line: line, into: &slot, form: form, store: store, warnings: &warnings)
+                parse(line: line, into: &slot, form: form, store: store,
+                      dialect: dialect, warnings: &warnings)
             }
 
             // A Mega has to hold its stone, so fill it in if the paste omitted one.
@@ -117,7 +181,7 @@ enum TeamPaste {
 
     @MainActor
     private static func parse(line: String, into slot: inout TeamSlot, form: Form,
-                              store: Store, warnings: inout [String]) {
+                              store: Store, dialect: Dialect, warnings: inout [String]) {
         if line.lowercased().hasPrefix("ability:") {
             let value = line.dropFirst("ability:".count).trimmingCharacters(in: .whitespaces)
             if let match = form.abilities.first(where: {
@@ -152,7 +216,7 @@ enum TeamPaste {
                     .components(separatedBy: " ")
                 guard bits.count >= 2, let amount = Int(bits[0]),
                       let stat = stat(named: bits[1]) else { continue }
-                slot.sp[stat.rawValue] = statPoints(fromEVs: amount)
+                slot.sp[stat.rawValue] = dialect.statPoints(amount)
             }
             return
         }
@@ -297,10 +361,14 @@ enum TeamPaste {
             if slot.shiny { block.append("Shiny: Yes") }
             block.append("Level: \(ChampionsStats.level)")
 
+            // The Champions dialect: the points themselves, which is what
+            // Showdown's own Champions formats read and write. Written the
+            // main-series way instead, a maxed stat says 252 and Showdown
+            // makes 422 HP of a Pokemon that should have 202.
             let spread = Stat.allCases.compactMap { stat -> String? in
                 let sp = slot.sp[stat.rawValue]
                 guard sp > 0 else { return nil }
-                return "\(evs(fromStatPoints: sp)) \(showdownStat(stat))"
+                return "\(sp) \(showdownStat(stat))"
             }
             if !spread.isEmpty { block.append("EVs: " + spread.joined(separator: " / ")) }
             block.append("\(slot.alignmentName) Nature")
