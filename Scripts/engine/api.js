@@ -54,6 +54,22 @@ globalThis.PS = {
     return s && s.activeRequest ? JSON.stringify(s.activeRequest) : null;
   },
 
+  /// A position, kept so it can be gone back to.
+  ///
+  /// The search needs a great many of these -- it plays a turn, looks at
+  /// what happened, and puts the board back to try a different one -- and
+  /// replaying the game from its first turn each time would cost the whole
+  /// game per position. Showdown serialises a battle whole, which makes a
+  /// position something that can be saved once and returned to at will.
+  save: () => JSON.stringify(battle.toJSON()),
+
+  restore: (state) => {
+    battle = Battle.fromJSON(JSON.parse(state));
+    battle.restart();
+    read = battle.log.length;
+    return true;
+  },
+
   ended: () => battle.ended,
   winner: () => battle.winner || null,
   turn: () => battle.turn,

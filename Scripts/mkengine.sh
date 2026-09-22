@@ -73,16 +73,22 @@ for b in net http https stream events crypto os zlib url tls dns worker_threads 
   ALIASES+=(--alias:node:$b="$ROOT/Scripts/engine/shim-empty.js")
 done
 
+# `--keep-names` is not optional. Showdown serialises a battle by writing
+# down each object's class name and rebuilds it by looking that name up, so a
+# minifier that renames the classes leaves a restored battle as plain objects
+# with none of their methods -- which is a search that cannot take a position
+# back, reported as `getMoveRequestData is not a function`.
+
 # The data first, so the sim's runtime `require` has somewhere to look.
 "$ESB" "$SRC/registry.js" --bundle --format=iife --platform=browser \
-  "${ALIASES[@]}" --minify --log-level=error --outfile=/tmp/ps-registry.js
+  "${ALIASES[@]}" --minify --keep-names --log-level=error --outfile=/tmp/ps-registry.js
 
 # Then the sim. `require` is already defined by the prelude, which is exactly
 # what esbuild's own fallback looks for before giving up on a dynamic require.
 "$ESB" "$SRC/api.js" --bundle --format=iife --platform=browser \
   "${ALIASES[@]}" \
   --banner:js='var require = function (p) { return globalThis.__psResolve(p); };' \
-  --minify --log-level=error --outfile=/tmp/ps-sim.js
+  --minify --keep-names --log-level=error --outfile=/tmp/ps-sim.js
 
 cat "$ROOT/Scripts/engine/prelude.js" /tmp/ps-registry.js /tmp/ps-sim.js > "$BUNDLE"
 echo "==> wrote $BUNDLE ($(du -h "$BUNDLE" | cut -f1)), showdown $COMMIT"
