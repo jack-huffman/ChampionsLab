@@ -498,22 +498,25 @@ final class ShowdownBattle {
     func read(_ lines: [String]) {
         // `|split|<side>` says the next two lines are the same event told
         // twice: the exact numbers for the side named, then the same thing in
-        // percentages for everyone else. A reader that takes both ends up
-        // with whatever the percentage said, which is how every Pokemon on
-        // this board came out at 100 HP out of two hundred and seven.
-        var skipNext = false
+        // percentages for everyone else. Counted rather than guessed at -- it
+        // used to skip the next line that *looked* like a repeat, which threw
+        // away the second of two residuals when a burn and a Leftovers landed
+        // one after the other with no split between them.
+        var afterSplit = 0
         for line in lines {
             guard line.hasPrefix("|") else { continue }
-            if line.hasPrefix("|split|") { skipNext = false; continue }
-            if skipNext, line.hasPrefix("|-damage|") || line.hasPrefix("|-heal|")
-                || line.hasPrefix("|-sethp|") || line.hasPrefix("|switch|")
-                || line.hasPrefix("|drag|") || line.hasPrefix("|replace|") {
-                skipNext = false
+            if line.hasPrefix("|split|") { afterSplit = 2; continue }
+            if afterSplit == 2 {
+                afterSplit = 1          // the exact one, for the side that owns it
+            } else if afterSplit == 1 {
+                afterSplit = 0          // the same thing in percentages
                 continue
             }
-            skipNext = false
             let parts = line.dropFirst().components(separatedBy: "|")
-            guard let tag = parts.first, !tag.isEmpty else { continue }
+            guard let tag = parts.first else { continue }
+            // The empty line: Showdown writes one to mark the end of the
+            // acting and the start of the residuals.
+            if tag.isEmpty { board.closeStep(); continue }
             let arg = { (n: Int) -> String in n < parts.count ? parts[n] : "" }
             switch tag {
             case "move":
@@ -538,11 +541,20 @@ final class ShowdownBattle {
                 }
                 board.note("\(name(of: arg(1))) used \(arg(2)).")
             case "-damage", "-heal", "-sethp":
-                skipNext = true
                 let reading = health(arg(2))
                 withFighter(arg(1)) { f in
                     if let hp = reading.hp { f.hp = max(0, min(f.maxHP, hp)) }
                     if let status = reading.status { f.status = status }
+                }
+                // Health that moved for a reason of its own rather than
+                // because somebody hit it. Said out loud, because a step with
+                // nothing in it is no step at all: the end of a turn was
+                // changing everyone's health without a word and without a
+                // beat to draw it on, so the bars simply jumped.
+                if let why = parts.first(where: { $0.hasPrefix("[from]") }) {
+                    board.note(Self.because(String(why.dropFirst("[from]".count))
+                                                .trimmingCharacters(in: .whitespaces),
+                                            to: name(of: arg(1)), healing: tag == "-heal"))
                 }
             case "faint":
                 withFighter(arg(1)) { $0.hp = 0 }
@@ -570,7 +582,6 @@ final class ShowdownBattle {
             case "-clearboost", "-clearallboost":
                 withFighter(arg(1)) { $0.build.boosts = Array(repeating: 0, count: Stage.width) }
             case "switch", "drag", "replace":
-                skipNext = true
                 // A step of its own, marked as an arrival: it is what both
                 // screens play the opening from, one Pokemon at a time.
                 if let at = seat(arg(1)) {
@@ -692,6 +703,7 @@ final class ShowdownBattle {
                 // Whatever was being gathered belongs to the turn that just
                 // finished, not the one starting.
                 board.closeStep()
+                ranDown()
                 turn = Int(arg(1)) ?? turn
                 if turnMarks[turn] == nil { turnMarks[turn] = script.count }
             case "-prepare":
@@ -725,7 +737,7 @@ final class ShowdownBattle {
     nonisolated static let chrome: Set<String> = [
         // The room, the match, the players.
         "player", "teamsize", "gametype", "gen", "tier", "rule", "rated", "start",
-        "clearpoke", "poke", "teampreview", "showteam", "upkeep", "t:", "",
+        "clearpoke", "poke", "teampreview", "showteam", "upkeep", "t:",
         "request", "sideupdate", "update", "done", "inactive", "inactiveoff", "expire",
         "askreg", "1ET",
         // Chat and the client's own chrome.
@@ -740,6 +752,86 @@ final class ShowdownBattle {
         "-block", "-ohko", "-hitcount", "-primal", "-burst",
     ]
 
+
+    /// What a line of health moving says for itself.
+    ///
+    /// The client gives the cause and leaves the sentence to whoever is
+    /// drawing it. Written the way the model wrote them, so the same callouts
+    /// light up: `note` reads an item or an ability out of its own text, and
+    /// a Leftovers that says nothing is a Leftovers nobody sees work.
+    static func because(_ source: String, to who: String, healing: Bool) -> String {
+        switch source {
+        case "psn": return "\(who) is hurt by poison."
+        case "tox": return "\(who) is hurt badly by poison."
+        case "brn": return "\(who) is hurt by its burn."
+        case "Leech Seed": return "\(who)'s health was sapped by Leech Seed."
+        case "Recoil": return "\(who) is hit by the recoil."
+        case "drain": return "\(who) had its energy drained."
+        default: break
+        }
+        // The weather and the terrain are named by the file that owns their
+        // names, rather than spelled out again here: one place knows what a
+        // weather is called, and a second copy is the drift that rule exists
+        // to stop.
+        if FieldSetters.weather(named: source) != nil {
+            return healing ? "\(who) is healed by the \(source.lowercased())."
+                           : "The \(source.lowercased()) buffets \(who)."
+        }
+        if FieldSetters.terrain(named: source) != nil {
+            return healing ? "\(source) tops \(who) up." : "\(source) hurts \(who)."
+        }
+        // "item: Leftovers", "ability: Poison Heal", "move: Aqua Ring".
+        if source.hasPrefix("item: ") || source.hasPrefix("ability: ") {
+            let named = source.split(separator: ":", maxSplits: 1)[1].trimmingCharacters(in: .whitespaces)
+            return healing ? "\(who)'s \(named) restored a little health."
+                           : "\(who) is hurt by its \(named)."
+        }
+        let named = source.contains(":")
+            ? source.split(separator: ":", maxSplits: 1)[1].trimmingCharacters(in: .whitespaces)
+            : source
+        return healing ? "\(who) was healed by \(named)." : "\(who) was hurt by \(named)."
+    }
+
+    /// The clocks, wound down a turn.
+    ///
+    /// The engine owns how long a screen or a Taunt lasts and says only when
+    /// one starts and when it ends, so nothing here would ever move: a
+    /// Reflect put up on turn one still read "5" on turn six, right up to the
+    /// moment it vanished. Counting them down is what the game does and lands
+    /// on zero the same turn the engine says it is over -- and the engine
+    /// stays the authority, because it is `-sideend` and `-end` that clear
+    /// them, not this reaching zero.
+    ///
+    /// Perish is not counted here: the client sends the number itself, once a
+    /// turn, and counting it as well would halve the song.
+    private func ranDown() {
+        func wind(_ screens: inout Screens) {
+            screens.reflect = Swift.max(0, screens.reflect - 1)
+            screens.lightScreen = Swift.max(0, screens.lightScreen - 1)
+            screens.auroraVeil = Swift.max(0, screens.auroraVeil - 1)
+            screens.safeguard = Swift.max(0, screens.safeguard - 1)
+            // These last the turn they were used on and no longer.
+            screens.wideGuard = false
+            screens.quickGuard = false
+        }
+        wind(&board.myScreens)
+        wind(&board.theirScreens)
+        board.myTailwind = Swift.max(0, board.myTailwind - 1)
+        board.theirTailwind = Swift.max(0, board.theirTailwind - 1)
+        board.trickRoom = Swift.max(0, board.trickRoom - 1)
+        for index in board.mine.indices {
+            board.mine[index].isProtected = false
+            board.mine[index].tauntedFor = Swift.max(0, board.mine[index].tauntedFor - 1)
+            board.mine[index].encoredFor = Swift.max(0, board.mine[index].encoredFor - 1)
+            board.mine[index].disabledFor = Swift.max(0, board.mine[index].disabledFor - 1)
+        }
+        for index in board.theirs.indices {
+            board.theirs[index].isProtected = false
+            board.theirs[index].tauntedFor = Swift.max(0, board.theirs[index].tauntedFor - 1)
+            board.theirs[index].encoredFor = Swift.max(0, board.theirs[index].encoredFor - 1)
+            board.theirs[index].disabledFor = Swift.max(0, board.theirs[index].disabledFor - 1)
+        }
+    }
 
     /// `move: Reflect`, `ability: Intimidate`, `item: Leftovers` -- the
     /// client prefixes an effect with where it came from.
