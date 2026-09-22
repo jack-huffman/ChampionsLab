@@ -20,7 +20,8 @@ let read = 0;
 // first illegal move in a search is not an error but a crash -- and the error
 // it was trying to report never gets read.
 const hush = function (type, data) {
-  globalThis.__psLastError = String(data);
+  var said = Array.isArray(data) ? data.join(' ') : String(data);
+  globalThis.__psLastError = said.replace(/\n/g, ' ').trim();
 };
 
 globalThis.PS = {
@@ -40,6 +41,10 @@ globalThis.PS = {
       strictChoices: false,
     });
     read = 0;
+    // Somewhere for a refused choice to be reported. Without it the sim
+    // tries to tell the player who made it, finds nobody, and throws -- so
+    // the reason a turn would not play is lost exactly when it is wanted.
+    battle.send = hush;
     battle.setPlayer('p1', { name: p1.name, team: p1.team });
     battle.setPlayer('p2', { name: p2.name, team: p2.team });
     return true;
@@ -172,6 +177,9 @@ globalThis.PS = {
     putBack();
     return out.sort((a, b) => b.chance - a.chance);
   },
+
+  /// Why the last choice was refused, in the simulator's own words.
+  lastError: () => globalThis.__psLastError || null,
 
   ended: () => battle.ended,
   winner: () => battle.winner || null,

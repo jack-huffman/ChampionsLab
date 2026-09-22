@@ -166,6 +166,12 @@ final class ShowdownEngine: @unchecked Sendable {
         try call("outcomes", [mine, theirs, branching]).toArray() as? [[String: Any]] ?? []
     }
 
+    /// Why the last choice was refused, in the simulator's own words.
+    var lastRefusal: String? {
+        guard let out = try? call("lastError"), !out.isNull, !out.isUndefined else { return nil }
+        return out.toString()
+    }
+
     var turn: Int { (try? call("turn").toInt32()).map(Int.init) ?? 0 }
     var ended: Bool { (try? call("ended").toBool()) ?? false }
     var winner: String? {

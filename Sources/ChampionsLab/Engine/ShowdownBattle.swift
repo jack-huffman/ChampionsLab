@@ -73,8 +73,20 @@ final class ShowdownBattle {
                       rules: Rulebook, data: Dataset, seed: [Int]? = nil,
                       onto prebuilt: Board? = nil,
                       engine: ShowdownEngine = .shared) throws -> ShowdownBattle {
-        let myPaste = ShowdownTeam.paste(for: mine, bringing: myFour, rules: rules, data: data)
-        let theirPaste = ShowdownTeam.paste(for: theirs, bringing: theirFour, rules: rules, data: data)
+        // The board first, so the order it actually stands its four in is
+        // the order the simulator is packed in. Packing in the order they
+        // were asked for and letting the board put its leads at the front
+        // means `move 1` reaches a different Pokemon on each side of the
+        // bridge.
+        let blank = Board(mine: Self.reduced(mine, to: myFour),
+                          theirs: Self.reduced(theirs, to: theirFour),
+                          rules: rules, field: Field(isDoubles: true),
+                          alreadyEvolved: false)
+        let standing = prebuilt ?? blank
+        let myOrder = Self.order(of: standing.mine, in: mine, rules: rules)
+        let theirOrder = Self.order(of: standing.theirs, in: theirs, rules: rules)
+        let myPaste = ShowdownTeam.paste(for: mine, bringing: myOrder, rules: rules, data: data)
+        let theirPaste = ShowdownTeam.paste(for: theirs, bringing: theirOrder, rules: rules, data: data)
         // A seed of its own when none was given, so the game is repeatable
         // even when nobody asked for a particular one -- which is what makes
         // a take-back possible at all.
@@ -83,21 +95,16 @@ final class ShowdownBattle {
                       theirs: (name: theirs.name, team: try engine.pack(paste: theirPaste)))
         try engine.start(mine: packed.mine, theirs: packed.theirs, seed: rolled)
         // Both sides bring everything they packed, in the order they packed it.
-        let ordering = (mine: "team " + (1...myFour.count).map(String.init).joined(),
-                        theirs: "team " + (1...theirFour.count).map(String.init).joined())
+        let ordering = (mine: "team " + (1...Swift.max(1, myOrder.count)).map(String.init).joined(),
+                        theirs: "team " + (1...Swift.max(1, theirOrder.count)).map(String.init).joined())
         try engine.choose("p1", ordering.mine)
         try engine.choose("p2", ordering.theirs)
         // The board is built from the same four, in the same order, so the
         // sim's positions and the board's indices mean the same thing.
-        // The board the opening is read onto. A game the screen is about to
-        // show hands its own in, with the leads not yet out, so that the
-        // switches and the abilities that open the battle come off the
-        // protocol like everything else does.
-        let blank = Board(mine: Self.reduced(mine, to: myFour),
-                          theirs: Self.reduced(theirs, to: theirFour),
-                          rules: rules, field: Field(isDoubles: true),
-                          alreadyEvolved: false)
-        let battle = ShowdownBattle(board: prebuilt ?? blank, data: data, engine: engine)
+        // The board the opening is read onto: the one handed in, with the
+        // leads not yet out, so the switches and abilities that open the
+        // battle come off the protocol like everything else does.
+        let battle = ShowdownBattle(board: standing, data: data, engine: engine)
         // What a replay starts from: the board before a word of the protocol
         // has been read onto it.
         let beginning = battle.board
@@ -106,6 +113,39 @@ final class ShowdownBattle {
                                theirs: packed.theirs, seed: rolled,
                                ordering: ordering, board: beginning)
         return battle
+    }
+
+    /// Which team slot each fighter on the board is, in the board's own order.
+    ///
+    /// The board does not stand its four in the order they were handed to it
+    /// -- it puts the leads at the front -- and the packed team the simulator
+    /// is given has whatever order it was packed in. Those two have to be the
+    /// same list or every order goes to the wrong Pokemon: `move 1` means the
+    /// first active on the sim's side, and the app means the first fighter on
+    /// the board. They were only accidentally the same.
+    static func order(of fighters: [Fighter], in team: Team, rules: Rulebook) -> [Int] {
+        var taken = Set<Int>(), out: [Int] = []
+        for fighter in fighters {
+            let wanted = fighter.build.form.dex
+            let item = fighter.build.item
+            let moves = Set(fighter.moves.map(\.id))
+            // The species, then the set. Reg M-C has a Species Clause so the
+            // species alone is enough there -- but the wider roster does not,
+            // and two of the same Pokemon matched by species alone would put
+            // every order on the wrong one of them.
+            func slot(matching exact: Bool) -> Int? {
+                team.slots.indices.first { index in
+                    guard !taken.contains(index),
+                          team.slots[index].form(in: rules)?.dex == wanted else { return false }
+                    guard exact else { return true }
+                    return team.slots[index].item == item
+                        && Set(team.slots[index].moves) == moves
+                }
+            }
+            guard let index = slot(matching: true) ?? slot(matching: false) else { continue }
+            taken.insert(index); out.append(index)
+        }
+        return out
     }
 
     /// The team as only the four that were brought, in the order chosen.
@@ -118,21 +158,8 @@ final class ShowdownBattle {
     static func start(from board: Board, mine: Team, theirs: Team,
                       rules: Rulebook, data: Dataset, seed: [Int]? = nil,
                       engine: ShowdownEngine = .shared) throws -> ShowdownBattle {
-        func chosen(_ fighters: [Fighter], from team: Team) -> [Int] {
-            var taken = Set<Int>(), out: [Int] = []
-            for fighter in fighters.prefix(board.activeCount * 2) {
-                let wanted = fighter.build.form.dex
-                if let index = team.slots.indices.first(where: { index in
-                    !taken.contains(index)
-                        && team.slots[index].form(in: rules)?.dex == wanted
-                }) {
-                    taken.insert(index); out.append(index)
-                }
-            }
-            return out
-        }
-        let myFour = chosen(board.mine, from: mine)
-        let theirFour = chosen(board.theirs, from: theirs)
+        let myFour = Self.order(of: board.mine, in: mine, rules: rules)
+        let theirFour = Self.order(of: board.theirs, in: theirs, rules: rules)
         // Read onto the board rather than over it: the leads walking on and
         // the abilities that fire as they land are the engine's to decide,
         // the same as every turn after. The opening used to be the app's own
@@ -356,7 +383,13 @@ final class ShowdownBattle {
                 throw ShowdownEngine.Trouble.refused("\(side) would not play \(choice)")
             }
             played = "default"
-            substituted.append("\(side): \(choice)")
+            substituted.append("\(side): \(choice)"
+                               + (engine.lastRefusal.map { " -- \($0)" } ?? ""))
+            // Said on the board as well as recorded, because an order the
+            // engine would not take is a turn you did not ask for, and
+            // finding that out by watching the wrong move go off is worse
+            // than being told.
+            board.note("That order could not be played; the first legal one was used instead.")
         }
         if !replaying { script.append((side, played)) }
     }
@@ -430,13 +463,22 @@ final class ShowdownBattle {
             case .protectSelf(let move), .attack(let move, _):
                 let number = move + 1
                 var text = "move \(number)"
-                if case .attack(_, let target) = choice,
-                   index < team.count, move < team[index].moves.count,
-                   !team[index].moves[move].isSpread,
-                   !team[index].moves[move].aimsAtUser,
-                   !team[index].moves[move].aimsAtAlly {
-                    // Opponents are +1 and +2 from whoever is choosing.
-                    text += " \(target + 1)"
+                let named = index < team.count && move < team[index].moves.count
+                    ? team[index].moves[move] : nil
+                // Showdown counts a target from whoever is choosing: a foe is
+                // positive and an ally negative, each a one-based place on
+                // that side. A move on the user or on everybody takes none.
+                if let named, !named.isSpread, !named.aimsAtUser {
+                    if named.aimsAtAlly {
+                        // The partner, which in doubles is the other slot.
+                        // Left off entirely before, so a Charm on your own
+                        // Whimsicott was refused -- and a refused order takes
+                        // the whole side's turn down with it, which is how a
+                        // Mega toggled on the other Pokemon went missing too.
+                        text += " -\(2 - index)"
+                    } else if case .attack(_, let target) = choice {
+                        text += " \(target + 1)"
+                    }
                 }
                 // Mega Evolution is part of the order, not a thing that
                 // happens to you: the sim is told on the move that triggers
