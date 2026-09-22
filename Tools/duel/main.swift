@@ -151,7 +151,12 @@ func pair(_ flag: String, _ fallback: (Double, Double)) -> (Double, Double) {
                 mine: left, theirs: right, rules: rules,
                 forMine: SelfPlay.Seat(engine: near.engine, branchedRolls: near.branchedRolls),
                 forTheirs: SelfPlay.Seat(engine: far.engine, branchedRolls: far.branchedRolls),
-                dice: Seeded(seed: gameSeed))
+                dice: Seeded(seed: gameSeed),
+                // Refereed by Showdown. The duel exists to say which engine
+                // chooses better, and that answer is only as good as who is
+                // deciding what the choices did -- a few milliseconds a turn
+                // against a search that spends tens of them.
+                refereedBy: store.data)
             turnsPlayed += result.turns
             switch result.winner {
             case .mine:   if swapped { wins.b += 1; tookIt.b += 1 } else { wins.a += 1; tookIt.a += 1 }

@@ -13,17 +13,17 @@
 
 import Foundation
 
-@MainActor
 final class ShowdownBattle {
-    private let engine = ShowdownEngine.shared
+    private let engine: ShowdownEngine
     /// Protocol tags the reader does not know yet. Collected rather than
     /// ignored: a tag nobody handled is a thing the board is quietly wrong
     /// about, and the tests read this.
     private(set) var unread: Set<String> = []
     private(set) var board: Board
-    /// What a move is: its category and type, which the choreography needs to
-    /// know before it can throw anything.
-    private var store: Store?
+    /// What a move is and what a form is called: the two things the reader
+    /// looks up. The dataset rather than the Store, because the lab and the
+    /// duel run off any actor and a plain table travels where a Store cannot.
+    private var data: Dataset?
 
     /// Which side of the protocol is ours. The sim always calls the first
     /// player p1; the app always calls itself "mine".
@@ -59,9 +59,10 @@ final class ShowdownBattle {
     /// The turn the engine last announced.
     private(set) var turn = 1
 
-    init(board: Board, store: Store? = nil) {
+    init(board: Board, data: Dataset? = nil, engine: ShowdownEngine = .shared) {
         self.board = board
-        self.store = store
+        self.data = data
+        self.engine = engine
         // `note` is what writes the story and the steps, and it does nothing
         // unless the board is narrating.
         self.board.narrating = true
@@ -69,11 +70,11 @@ final class ShowdownBattle {
 
     /// Stand a battle up from two teams, bringing the four each side chose.
     static func start(mine: Team, theirs: Team, myFour: [Int], theirFour: [Int],
-                      store: Store, seed: [Int]? = nil,
-                      onto prebuilt: Board? = nil) throws -> ShowdownBattle {
-        let engine = ShowdownEngine.shared
-        let myPaste = ShowdownTeam.paste(for: mine, bringing: myFour, store: store)
-        let theirPaste = ShowdownTeam.paste(for: theirs, bringing: theirFour, store: store)
+                      rules: Rulebook, data: Dataset, seed: [Int]? = nil,
+                      onto prebuilt: Board? = nil,
+                      engine: ShowdownEngine = .shared) throws -> ShowdownBattle {
+        let myPaste = ShowdownTeam.paste(for: mine, bringing: myFour, rules: rules, data: data)
+        let theirPaste = ShowdownTeam.paste(for: theirs, bringing: theirFour, rules: rules, data: data)
         // A seed of its own when none was given, so the game is repeatable
         // even when nobody asked for a particular one -- which is what makes
         // a take-back possible at all.
@@ -94,9 +95,9 @@ final class ShowdownBattle {
         // protocol like everything else does.
         let blank = Board(mine: Self.reduced(mine, to: myFour),
                           theirs: Self.reduced(theirs, to: theirFour),
-                          rules: store.rulebook, field: Field(isDoubles: true),
+                          rules: rules, field: Field(isDoubles: true),
                           alreadyEvolved: false)
-        let battle = ShowdownBattle(board: prebuilt ?? blank, store: store)
+        let battle = ShowdownBattle(board: prebuilt ?? blank, data: data, engine: engine)
         // What a replay starts from: the board before a word of the protocol
         // has been read onto it.
         let beginning = battle.board
@@ -115,14 +116,15 @@ final class ShowdownBattle {
     /// Reading them back off the board is what keeps the sim and the board
     /// holding the same eight Pokemon rather than two guesses at them.
     static func start(from board: Board, mine: Team, theirs: Team,
-                      store: Store, seed: [Int]? = nil) throws -> ShowdownBattle {
+                      rules: Rulebook, data: Dataset, seed: [Int]? = nil,
+                      engine: ShowdownEngine = .shared) throws -> ShowdownBattle {
         func chosen(_ fighters: [Fighter], from team: Team) -> [Int] {
             var taken = Set<Int>(), out: [Int] = []
             for fighter in fighters.prefix(board.activeCount * 2) {
                 let wanted = fighter.build.form.dex
                 if let index = team.slots.indices.first(where: { index in
                     !taken.contains(index)
-                        && team.slots[index].form(in: store.rulebook)?.dex == wanted
+                        && team.slots[index].form(in: rules)?.dex == wanted
                 }) {
                     taken.insert(index); out.append(index)
                 }
@@ -139,7 +141,23 @@ final class ShowdownBattle {
         var opening = board
         opening.narrating = true
         return try start(mine: mine, theirs: theirs, myFour: myFour, theirFour: theirFour,
-                         store: store, seed: seed, onto: opening)
+                         rules: rules, data: data, seed: seed, onto: opening, engine: engine)
+    }
+
+    // MARK: - The app's way in
+
+    @MainActor
+    static func start(mine: Team, theirs: Team, myFour: [Int], theirFour: [Int],
+                      store: Store, seed: [Int]? = nil) throws -> ShowdownBattle {
+        try start(mine: mine, theirs: theirs, myFour: myFour, theirFour: theirFour,
+                  rules: store.rulebook, data: store.data, seed: seed)
+    }
+
+    @MainActor
+    static func start(from board: Board, mine: Team, theirs: Team,
+                      store: Store, seed: [Int]? = nil) throws -> ShowdownBattle {
+        try start(from: board, mine: mine, theirs: theirs,
+                  rules: store.rulebook, data: store.data, seed: seed)
     }
 
     private static func reduced(_ team: Team, to bringing: [Int]) -> Team {
@@ -505,7 +523,7 @@ final class ShowdownBattle {
                 // the damage, the crit and the effectiveness that follow are
                 // all part of the same beat.
                 if let at = seat(arg(1)) {
-                    let move = store?.data.moves.values.first { $0.name == arg(2) }
+                    let move = data?.moves.values.first { $0.name == arg(2) }
                     board.beginStep(Board.Action(byMine: at.mine, slot: at.slot,
                                                  move: arg(2),
                                                  category: move?.category ?? "Physical",
@@ -797,7 +815,7 @@ final class ShowdownBattle {
     private func becomes(_ ident: String, details: String) {
         let species = details.split(separator: ",").first.map(String.init)?
             .trimmingCharacters(in: .whitespaces) ?? details
-        guard let form = store?.data.forms.first(where: {
+        guard let form = data?.forms.first(where: {
             $0.showdown == species || $0.formLabel == species
         }) else { return }
         withFighter(ident) { fighter in

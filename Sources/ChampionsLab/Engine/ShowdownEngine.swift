@@ -20,12 +20,21 @@ import JavaScriptCore
 
 /// The engine, and a battle in progress.
 ///
-/// One context, loaded once. Standing a battle up costs about two
+/// One context per engine, loaded once. Standing a battle up costs about two
 /// milliseconds and a turn about four, so a played game never notices it and
 /// a search can afford a few hundred positions a second.
-@MainActor
-final class ShowdownEngine {
+///
+/// Not confined to an actor, and used the way `Dice` is: one thread at a
+/// time. A JavaScript context is not safe to share, and this does not share
+/// one -- the app has `shared` on the main actor, and the lab and the duel
+/// each make their own in their own process, which is how they already shard.
+/// Two engines are two contexts and two virtual machines; nothing is passed
+/// between them but teams and text.
+final class ShowdownEngine: @unchecked Sendable {
+    /// The app's, on the main actor. A tool makes its own.
     static let shared = ShowdownEngine()
+
+    init() {}
 
     enum Trouble: LocalizedError {
         case noBundle, didNotLoad(String), refused(String)

@@ -21,22 +21,35 @@ import Foundation
 
 enum ShowdownTeam {
     /// One team as a Showdown paste in the Reg M-C dialect.
-    @MainActor
-    static func paste(for team: Team, store: Store) -> String {
-        team.slots.compactMap { block(for: $0, store: store) }.joined(separator: "\n\n") + "\n"
+    ///
+    /// Takes the rulebook and the dataset rather than the Store, so the lab
+    /// and the duel -- which run in their own processes, off any actor -- can
+    /// write a team out the same way the app does.
+    static func paste(for team: Team, rules: Rulebook, data: Dataset) -> String {
+        team.slots.compactMap { block(for: $0, rules: rules, data: data) }
+            .joined(separator: "\n\n") + "\n"
     }
 
     /// Only the four that were brought, in the order they were brought, which
     /// is how a battle is actually started.
-    @MainActor
-    static func paste(for team: Team, bringing: [Int], store: Store) -> String {
+    static func paste(for team: Team, bringing: [Int], rules: Rulebook, data: Dataset) -> String {
         let chosen = bringing.compactMap { team.slots.indices.contains($0) ? team.slots[$0] : nil }
-        return chosen.compactMap { block(for: $0, store: store) }.joined(separator: "\n\n") + "\n"
+        return chosen.compactMap { block(for: $0, rules: rules, data: data) }
+            .joined(separator: "\n\n") + "\n"
     }
 
     @MainActor
-    private static func block(for slot: TeamSlot, store: Store) -> String? {
-        guard let form = slot.form(in: store.rulebook) else { return nil }
+    static func paste(for team: Team, store: Store) -> String {
+        paste(for: team, rules: store.rulebook, data: store.data)
+    }
+
+    @MainActor
+    static func paste(for team: Team, bringing: [Int], store: Store) -> String {
+        paste(for: team, bringing: bringing, rules: store.rulebook, data: store.data)
+    }
+
+    private static func block(for slot: TeamSlot, rules: Rulebook, data: Dataset) -> String? {
+        guard let form = slot.form(in: rules) else { return nil }
         // The name Showdown files it under, which the dataset now carries for
         // every form in the game. Never the Mega: a team registers the
         // Pokemon holding the stone and the sim evolves it, the same as here.
@@ -57,7 +70,7 @@ enum ShowdownTeam {
         if !spread.isEmpty { lines.append("EVs: " + spread.joined(separator: " / ")) }
         lines.append("\(slot.alignmentName) Nature")
         for id in slot.moves {
-            guard let move = store.move(id) else { continue }
+            guard let move = data.moves[id] else { continue }
             lines.append("- \(move.name)")
         }
         return lines.joined(separator: "\n")

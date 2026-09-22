@@ -215,10 +215,12 @@ enum SelfPlay {
     static func play(
         mine: Team, theirs: Team, rules: Rulebook,
         forMine: Seat, forTheirs: Seat,
-        limit: Int = 40, dice: RandomNumberGenerator) -> Outcome {
+        limit: Int = 40, dice: RandomNumberGenerator,
+        refereedBy data: Dataset? = nil) -> Outcome {
         let ledger = playLogged(mine: mine, theirs: theirs, rules: rules,
                                 forMine: forMine, forTheirs: forTheirs,
-                                limit: limit, dice: dice, logging: false)
+                                limit: limit, dice: dice, refereedBy: data,
+                                logging: false)
         return Outcome(winner: ledger.winner, turns: ledger.turns)
     }
 
@@ -232,6 +234,11 @@ enum SelfPlay {
         mine: Team, theirs: Team, rules: Rulebook,
         forMine: Seat, forTheirs: Seat,
         limit: Int = 40, dice: RandomNumberGenerator,
+        /// The dataset, when the game is to be refereed by Showdown rather
+        /// than by the model. Off by default: a caller that has no dataset --
+        /// or wants the model's own reading, which is what the parity audit
+        /// is for -- gets what it always got.
+        refereedBy data: Dataset? = nil,
         logging: Bool = true, bringSpread: Int = 1,
         weightedMine: Bool = true, weightedTheirs: Bool = true,
         stagesMine: Bool = true, stagesTheirs: Bool = true,
@@ -337,6 +344,15 @@ enum SelfPlay {
         var board = Board(mine: myFour.team, theirs: theirFour.team, rules: rules,
                           field: field, alreadyEvolved: false)
         board.activeCount = 2
+        // Showdown refereeing it, when there is a dataset to build the teams
+        // from. One engine per process, loaded once and played sequentially:
+        // a context costs a fifth of a second to stand up and a game costs
+        // milliseconds, so a thousand games pay for it once.
+        let referee: ShowdownBattle? = data.flatMap {
+            try? ShowdownBattle.start(from: board, mine: myFour.team, theirs: theirFour.team,
+                                      rules: rules, data: $0)
+        }
+        if let referee { board = referee.board }
         // Off the sixes, not the fours: what a Pokémon is worth is decided by
         // the team it is facing, and the other side's back two are part of that
         // whether they have been seen yet or not.
@@ -528,9 +544,16 @@ enum SelfPlay {
             let theirsPlay = choose(forTheirs.engine, on: board.flipped)
 
             Dice.branchedRolls = forMine.branchedRolls
-            board = TurnModel.resolve(board, mine: ours, theirs: theirsPlay, rolling: true)
-            readSteps(board)
-            board.fillGaps()
+            if let referee, let played = try? referee.play(mine: ours, theirs: theirsPlay) {
+                // The engine fills its own gaps: it asks whoever lost somebody
+                // and is answered with the first legal replacement.
+                board = played
+                readSteps(board)
+            } else {
+                board = TurnModel.resolve(board, mine: ours, theirs: theirsPlay, rolling: true)
+                readSteps(board)
+                board.fillGaps()
+            }
             sawTheField()
         }
         // Nobody finished it. Whoever is further ahead on the board takes it,
