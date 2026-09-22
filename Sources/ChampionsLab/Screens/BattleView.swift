@@ -789,16 +789,23 @@ struct BattleView: View {
             // abilities, the stages they took, the weather that stayed. It is
             // played the way a turn is played, because that is what it is.
             if let game = session.showdown {
+                // Flashed a step at a time, not shown as a turn. `show` is
+                // what hands the screen a turn to step through, and an
+                // opening is all switches -- which are drawn by the field
+                // itself and choreographed not at all. Handing it over that
+                // way put an opening in the stepper as a list of lines with
+                // nothing to play, and left it there.
                 let opened = game.board
-                log += opened.story
-                playback.show(opened, steps: opened.steps, before: start)
                 board = opened
-                playback.play(opened.steps, hitMine: [], hitTheirs: [],
-                              singles: opened.activeCount == 1)
-                // Long enough for the callouts to run; the playback cancels
-                // itself if anything else starts.
-                let beats = max(1, opened.steps.count)
-                try? await Task.sleep(nanoseconds: UInt64(min(6.0, Double(beats) * 1.1) * 1_000_000_000))
+                for step in opened.steps {
+                    guard !step.text.isEmpty else { continue }
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        callout = step.text
+                    }
+                    playback.flash([step])
+                    log.append(step.text)
+                    try? await Task.sleep(nanoseconds: 1_100_000_000)
+                }
                 handOverDone()
                 return
             }

@@ -420,6 +420,11 @@ final class ShowdownBattle {
                     // Opponents are +1 and +2 from whoever is choosing.
                     text += " \(target + 1)"
                 }
+                // Mega Evolution is part of the order, not a thing that
+                // happens to you: the sim is told on the move that triggers
+                // it. Left off, the stone never goes off and the Pokemon
+                // plays the whole game as its base form.
+                if play.megaSlot == index { text += " mega" }
                 parts.append(text)
             }
         }
@@ -562,6 +567,18 @@ final class ShowdownBattle {
             case "-enditem":
                 withFighter(arg(1)) { $0.build.item = "" }
                 board.note("\(name(of: arg(1)))'s \(arg(2)) was used up.")
+            case "-mega":
+                // The stone going off. The form itself arrives on the
+                // detailschange that follows; this is the line that says so.
+                board.beginStep(seat(arg(1)).map {
+                    Board.Action(byMine: $0.mine, slot: $0.slot, move: "", category: "Mega", type: "")
+                })
+                board.note("\(name(of: arg(1))) Mega Evolved!")
+            case "detailschange", "-formechange":
+                // It is something else now: a Mega, a Primal, an Ogerpon that
+                // changed masks. Without this the board plays the whole game
+                // as whatever walked on, and the sprite never changes.
+                becomes(arg(1), details: arg(2))
             case "-crit":
                 board.note("A critical hit!")
             case "-supereffective":
@@ -596,8 +613,8 @@ final class ShowdownBattle {
                  "-hitcount", "-singlemove", "-singleturn", "-block", "-ohko",
                  "-zpower", "-zbroken", "-clearnegativeboost", "-copyboost",
                  "-swapboost", "-invertboost", "-endability", "-transform",
-                 "-formechange", "-mega", "-primal", "-burst", "-terastallize",
-                 "detailschange", "swap", "-fieldactivate", "-candynamax",
+                 "-primal", "-burst", "-terastallize",
+                 "swap", "-fieldactivate", "-candynamax",
                  "-start", "-end", "-activate", "-sidestart", "-sideend",
                  "-cureteam", "-setboost", "-boost2", "inactive", "inactiveoff",
                  "raw", "html", "bigerror", "error", "debug", "seed", "message",
@@ -610,6 +627,21 @@ final class ShowdownBattle {
             }
         }
         board.closeStep()
+    }
+
+    /// It turned into something else. The Pokemon is the same one -- same
+    /// slot, same health, same stages -- wearing a different form.
+    private func becomes(_ ident: String, details: String) {
+        let species = details.split(separator: ",").first.map(String.init)?
+            .trimmingCharacters(in: .whitespaces) ?? details
+        guard let form = store?.data.forms.first(where: {
+            $0.showdown == species || $0.formLabel == species
+        }) else { return }
+        withFighter(ident) { fighter in
+            fighter.build.form = form
+            // A Mega brings its own ability with it.
+            if let its = form.abilities.first?.name, form.isMega { fighter.build.ability = its }
+        }
     }
 
     /// Somebody walked on. The board keeps actives at the front of its array,
