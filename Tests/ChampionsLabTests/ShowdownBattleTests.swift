@@ -11,7 +11,37 @@ final class ShowdownBattleTests: HarnessCase {
     private func ready() throws -> (Team, Team) {
         guard ShowdownEngine.bundleURL() != nil else {
             throw XCTSkip("no data/showdown-engine.js; run ./Scripts/mkengine.sh")
+        
+    /// When one of ours falls, the turn stops and the engine waits to be told
+    /// who comes in -- because that is the player's decision, not the
+    /// engine's. Theirs it answers for itself.
+    func testItStopsAndAsksWhoComesInForOurs() throws {
+        let (mine, theirs) = try ready()
+        let game = try ShowdownBattle.start(mine: mine, theirs: theirs,
+                                            myFour: [0, 1, 2, 3], theirFour: [0, 1, 2, 3],
+                                            store: store, seed: [3, 1, 4, 1])
+        var asked = false
+        for _ in 0..<25 {
+            guard !ShowdownEngine.shared.ended else { break }
+            if game.awaitingSendIn {
+                asked = true
+                // Somebody of ours is down and the board says so.
+                check("one of ours is down when it asks",
+                      game.board.mine.prefix(game.board.activeCount).contains { $0.fainted })
+                let bench = game.board.mine.indices.first { $0 >= game.board.activeCount
+                    && !game.board.mine[$0].fainted }
+                guard let bench else { break }
+                _ = try game.sendIn(bench: bench)
+                check("and it plays on once told", !game.awaitingSendIn)
+                break
+            }
+            _ = try game.play(mine: "default", theirs: "default", oursWhenForced: nil)
         }
+        check("it asked at some point in twenty-five turns", asked)
+        check("and still read every tag", game.unread.isEmpty,
+              game.unread.sorted().joined(separator: ", "))
+    }
+}
         let ladder = store.ladderTeams(format: "doubles")
         guard ladder.count >= 2 else { throw XCTSkip("no ladder teams") }
         return (ladder[0].team, ladder[1].team)
@@ -59,5 +89,34 @@ final class ShowdownBattleTests: HarnessCase {
         print("  protocol tags not read: \(game.unread.sorted().joined(separator: ", "))")
         check("nothing important went unread",
               game.unread.isEmpty, game.unread.sorted().joined(separator: ", "))
+    }
+
+    /// When one of ours falls, the turn stops and the engine waits to be told
+    /// who comes in -- because that is the player's decision, not the
+    /// engine's. Theirs it answers for itself.
+    func testItStopsAndAsksWhoComesInForOurs() throws {
+        let (mine, theirs) = try ready()
+        let game = try ShowdownBattle.start(mine: mine, theirs: theirs,
+                                            myFour: [0, 1, 2, 3], theirFour: [0, 1, 2, 3],
+                                            store: store, seed: [3, 1, 4, 1])
+        var asked = false
+        for _ in 0..<25 {
+            guard !ShowdownEngine.shared.ended else { break }
+            if game.awaitingSendIn {
+                asked = true
+                check("one of ours is down when it asks",
+                      game.board.mine.prefix(game.board.activeCount).contains { $0.fainted })
+                guard let bench = game.board.mine.indices.first(where: {
+                    $0 >= game.board.activeCount && !game.board.mine[$0].fainted
+                }) else { break }
+                _ = try game.sendIn(bench: bench)
+                check("and it plays on once it is told", !game.awaitingSendIn)
+                break
+            }
+            _ = try game.play(mine: "default", theirs: "default", oursWhenForced: nil)
+        }
+        check("it asked at some point in twenty-five turns", asked)
+        check("and still read every tag", game.unread.isEmpty,
+              game.unread.sorted().joined(separator: ", "))
     }
 }

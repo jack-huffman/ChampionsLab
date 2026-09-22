@@ -712,6 +712,27 @@ struct BattleView: View {
         // has been seen. Two bring-four searches and two grids to work that
         // out, so it happens off the main thread while the flash is up.
         let rules = store.rulebook, singles = singles, bringing = bringing
+        /// Showdown resolves the game from here.
+        ///
+        /// From *here*: the opening is still the app's own. The leads come
+        /// out one at a time and their abilities fire in Speed order because
+        /// that is the sequence the screen was built to show, and the sim
+        /// fires the same abilities at the same moment inside itself. Every
+        /// turn after it is the engine's.
+        ///
+        /// If the engine cannot be stood up -- no bundle, a team it will not
+        /// take -- the app's own model plays the game instead, and says so,
+        /// rather than refusing to start one.
+        func handOver(_ start: Board) {
+            guard ShowdownEngine.bundleURL() != nil else { return }
+            do {
+                session.showdown = try ShowdownBattle.start(from: start, mine: mine,
+                                                            theirs: theirs, store: store)
+            } catch {
+                session.showdown = nil
+                session.log.append("Showdown's engine could not take this game (\(error.localizedDescription)); playing it here instead.")
+            }
+        }
         func built() async -> Board {
             await Task.detached(priority: .userInitiated) {
                 Board.opening(mine: mine, bringing: bringing, theirs: theirs,
@@ -722,6 +743,7 @@ struct BattleView: View {
             var start = Board.opening(mine: mine, bringing: bringing, theirs: theirs,
                                       rules: rules, singles: singles, sendOut: false)
             start.sendOutLeads()
+            handOver(start)
             board = start
             log += start.story
             opening = false
@@ -772,6 +794,7 @@ struct BattleView: View {
                 try? await Task.sleep(nanoseconds: 1_300_000_000)
             }
             withAnimation(.easeOut(duration: 0.3)) { callout = nil }
+            handOver(running)
             board = running
             opening = false
             session.think()

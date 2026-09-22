@@ -59,6 +59,38 @@ final class ShowdownBattle {
     }
 
     /// The team as only the four that were brought, in the order chosen.
+    /// The same game, started from a board that has already been built.
+    ///
+    /// `Board.opening` chooses the opponent's four itself -- it searches for
+    /// what they would bring -- so the four are not known until it has run.
+    /// Reading them back off the board is what keeps the sim and the board
+    /// holding the same eight Pokemon rather than two guesses at them.
+    static func start(from board: Board, mine: Team, theirs: Team,
+                      store: Store, seed: [Int]? = nil) throws -> ShowdownBattle {
+        func chosen(_ fighters: [Fighter], from team: Team) -> [Int] {
+            var taken = Set<Int>(), out: [Int] = []
+            for fighter in fighters.prefix(board.activeCount * 2) {
+                let wanted = fighter.build.form.dex
+                if let index = team.slots.indices.first(where: { index in
+                    !taken.contains(index)
+                        && team.slots[index].form(in: store.rulebook)?.dex == wanted
+                }) {
+                    taken.insert(index); out.append(index)
+                }
+            }
+            return out
+        }
+        let myFour = chosen(board.mine, from: mine)
+        let theirFour = chosen(board.theirs, from: theirs)
+        let game = try start(mine: mine, theirs: theirs, myFour: myFour, theirFour: theirFour,
+                             store: store, seed: seed)
+        // The board is the one that was already built and already shown; the
+        // engine's job is to resolve what happens to it from here.
+        game.board = board
+        game.board.narrating = true
+        return game
+    }
+
     private static func reduced(_ team: Team, to bringing: [Int]) -> Team {
         var out = team
         out.slots = bringing.compactMap { team.slots[safe: $0] }
@@ -71,13 +103,27 @@ final class ShowdownBattle {
     /// after it has resolved them.
     @discardableResult
     func play(mine: Play, theirs: Play) throws -> Board {
-        try play(mine: request(mine, side: true), theirs: request(theirs, side: false))
+        try play(mine: mine, theirs: theirs, oursWhenForced: "default")
+    }
+
+    @discardableResult
+    func play(mine: Play, theirs: Play, oursWhenForced ours: String?) throws -> Board {
+        try play(mine: request(mine, side: true), theirs: request(theirs, side: false),
+                 oursWhenForced: ours)
     }
 
     /// Both sides' choices in the sim's own words. "default" is the sim
     /// picking the first legal thing, which is what a self-playing game wants.
     @discardableResult
     func play(mine: String, theirs: String) throws -> Board {
+        try play(mine: mine, theirs: theirs, oursWhenForced: "default")
+    }
+
+    /// A turn, with what our side does if it is made to send somebody in.
+    /// Nil stops the turn there and sets `awaitingSendIn`, which is how a
+    /// played game asks the player.
+    @discardableResult
+    func play(mine: String, theirs: String, oursWhenForced ours: String?) throws -> Board {
         board.steps = []
         board.story = []
         try answer("p1", mine)
@@ -88,21 +134,47 @@ final class ShowdownBattle {
         // nothing at all, which is why both are only ever answered when they
         // have actually been asked -- choosing for a side with no question is
         // refused, and looks exactly like an illegal move.
-        // Only a forced one. A side that fainted is asked who comes in next
-        // and the turn is not finished until it says; a side asked for an
-        // ordinary move is being asked about the *next* turn, and answering
-        // that here would play the game by itself -- which it did, four turns
-        // deep, inside what was meant to be one.
+        try settle(answeringOurs: ours)
+        return board
+    }
+
+    /// Whether our side is being made to send somebody in. The turn is not
+    /// over until it has, and it is the player's choice rather than the
+    /// engine's, so a played game stops here and asks.
+    private(set) var awaitingSendIn = false
+
+    /// Send somebody in for the one that fell, by their place on the board.
+    @discardableResult
+    func sendIn(bench: Int) throws -> Board {
+        try settle(answeringOurs: "switch \(bench + 1)")
+        return board
+    }
+
+    /// Answer whatever forced questions are outstanding.
+    ///
+    /// Only forced ones. A side that fainted is asked who comes in next and
+    /// the turn is not finished until it says; a side asked for an ordinary
+    /// move is being asked about the *next* turn, and answering that here
+    /// would play the game by itself -- which it did, four turns deep, inside
+    /// what was meant to be one.
+    ///
+    /// Theirs is answered for them and ours is handed back, which is the only
+    /// asymmetry: their replacement is a decision the opponent makes and ours
+    /// is one the player does.
+    private func settle(answeringOurs ours: String?) throws {
         var rounds = 0
         while !engine.ended, rounds < 8 {
             let forced = try (self.forced("p1"), self.forced("p2"))
             guard forced.0 || forced.1 else { break }
-            if forced.0 { try answer("p1", "default") }
+            if forced.0 {
+                guard let ours else { awaitingSendIn = true; return }
+                try answer("p1", ours)
+            }
             if forced.1 { try answer("p2", "default") }
             read(try engine.since())
             rounds += 1
         }
-        return board
+        awaitingSendIn = false
     }
 
     /// Whether a side is being made to send somebody in rather than asked

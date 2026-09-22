@@ -101,6 +101,15 @@ final class BattleSession: ObservableObject {
         return nil
     }
     /// Every board so far, so a turn can be taken back and tried again.
+    /// The game Showdown is running, when the engine is the one resolving.
+    ///
+    /// The choices are still ours -- what the player picks, and what the
+    /// search picks for the opponent -- and the rules are entirely its. That
+    /// split is the point: a decision is a decision either way, and turn
+    /// order, damage, ability timing and every interaction between them is
+    /// the thing worth having from somebody who has already got it right.
+    var showdown: ShowdownBattle?
+
     @Published var history: [(board: Board, log: [String], turn: Int)] = []
     /// Every turn of this game, marked. Read back in the Review panel.
     @Published var review: [TurnReview] = []
@@ -407,10 +416,39 @@ final class BattleSession: ObservableObject {
         // the average and a player wants the dice. A pivot of yours -- a
         // U-turn, a Parting Shot, an Eject Button -- stops the turn for who
         // comes in, and the rest of it plays in `resumeTurn`.
+        let orders = "You \(game.describe(mine, mine: true)); they \(game.describe(theirPlay, mine: false))."
+
+        // Showdown's, when it is running the game. It does not need to be
+        // asked to stop before a pivot: it asks for the replacement itself,
+        // the same way it asks after a faint, so both arrive as one thing to
+        // answer rather than two mechanisms.
+        if let showdown {
+            do {
+                let next = try showdown.play(mine: mine, theirs: theirPlay, oursWhenForced: nil)
+                if showdown.awaitingSendIn {
+                    pausedTurn = PausedTurn(before: current, orders: orders, stepsPlayed: next.steps.count)
+                    board = next
+                    playback.show(next, steps: next.steps, before: current)
+                    sending = Self.fallen(in: next, since: current)
+                    chosenSends = []
+                    leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
+                    thought = nil; self.solved = nil
+                    playback.play(next.steps, hitMine: Self.hurt(mine: true, next, since: current),
+                                  hitTheirs: Self.hurt(mine: false, next, since: current),
+                                  singles: next.activeCount == 1)
+                    return
+                }
+                conclude(next, before: current, orders: orders, stepsPlayed: 0)
+            } catch {
+                log.append("The engine could not play that turn: \(error.localizedDescription)")
+                playing = false
+            }
+            return
+        }
+
         var asked = current
         asked.asksBeforePivot = true
         let next = TurnModel.resolve(asked, mine: mine, theirs: theirPlay, rolling: true)
-        let orders = "You \(game.describe(mine, mine: true)); they \(game.describe(theirPlay, mine: false))."
         if let pivot = next.pendingPivot {
             pausedTurn = PausedTurn(before: current, orders: orders, stepsPlayed: next.steps.count)
             board = next
@@ -427,9 +465,30 @@ final class BattleSession: ObservableObject {
         conclude(next, before: current, orders: orders, stepsPlayed: 0)
     }
 
+    /// The active slots of ours with nobody standing in them.
+    static func fallen(in board: Board, since before: Board) -> [Int] {
+        (0..<Swift.min(board.activeCount, board.mine.count)).filter { board.mine[$0].fainted }
+    }
+
     /// The chosen Pokemon comes in for the one that pivoted, and the turn
     /// finishes: the actions that were waiting, then the end of the turn.
     func resumeTurn(bench: Int) {
+        if let showdown {
+            let pausedOrders = pausedTurn?.orders
+            pausedTurn = nil
+            sending = []
+            let before = board
+            do {
+                let next = try showdown.sendIn(bench: bench)
+                board = next
+                conclude(next, before: before ?? next,
+                         orders: pausedOrders ?? "", stepsPlayed: 0)
+            } catch {
+                log.append("The engine would not send that one in: \(error.localizedDescription)")
+                playing = false
+            }
+            return
+        }
         if let link, remotePivot {
             remotePivot = false
             sending = []
@@ -720,8 +779,20 @@ final class BattleSession: ObservableObject {
     // MARK: - Taking one back
 
     /// Put the last turn back, so a line can be tried a different way.
+    /// Whether the game can be taken back.
+    ///
+    /// Not while Showdown is running it. The engine plays forwards and has no
+    /// way to be put back a turn, so restoring the board would leave the
+    /// picture a turn behind the game and every turn after it would be
+    /// resolved against a position nobody is looking at. Replaying from the
+    /// first turn with the choices already made would do it -- a battle
+    /// stands up in a couple of milliseconds -- and that is worth building,
+    /// but a take-back that silently desynchronises is not worth shipping in
+    /// the meantime.
+    var canTakeBack: Bool { showdown == nil }
+
     func undo() {
-        guard let last = history.popLast() else { return }
+        guard canTakeBack, let last = history.popLast() else { return }
         review.removeAll { $0.turn >= last.turn }
         restore(last.board, log: last.log, turn: last.turn)
     }
@@ -731,7 +802,8 @@ final class BattleSession: ObservableObject {
     /// already said which turns were worth the most, and the way to learn one
     /// is to play it again rather than read about it.
     func rewind(to target: Int) {
-        guard let index = history.lastIndex(where: { $0.turn == target }) else { return }
+        guard canTakeBack,
+              let index = history.lastIndex(where: { $0.turn == target }) else { return }
         let entry = history[index]
         history.removeSubrange(index...)
         review.removeAll { $0.turn >= target }
@@ -742,6 +814,9 @@ final class BattleSession: ObservableObject {
     /// game goes, and a search still running for it is dropped when it lands.
     /// The teams and the lobby are the screen's and stay.
     func endGame() {
+        // The engine holds one battle at a time, so a game that is over has
+        // to let go of it before the next one stands up.
+        showdown = nil
         thinkTicket += 1
         playback.reset()
         board = nil; log = []; turn = 1
