@@ -151,6 +151,12 @@ final class ShowdownEngine {
         return out.isNull || out.isUndefined ? nil : out.toString()
     }
 
+    /// Every way a turn could go, each with the odds of going that way, as
+    /// the engine reports them: a chance and the protocol lines for it.
+    func outcomes(_ mine: String, _ theirs: String, branching: Int) throws -> [[String: Any]] {
+        try call("outcomes", [mine, theirs, branching]).toArray() as? [[String: Any]] ?? []
+    }
+
     var turn: Int { (try? call("turn").toInt32()).map(Int.init) ?? 0 }
     var ended: Bool { (try? call("ended").toBool()) ?? false }
     var winner: String? {

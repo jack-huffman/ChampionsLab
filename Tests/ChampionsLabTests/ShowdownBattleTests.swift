@@ -210,4 +210,38 @@ final class ShowdownBattleTests: HarnessCase {
         _ = try game.play(mine: "default", theirs: "default", oursWhenForced: nil)
         check("and the first turn follows it", game.turn >= 2, "\(game.turn)")
     }
+
+    /// Every way a turn could go, weighed -- which is the thing a search
+    /// needs and playing a battle never does.
+    ///
+    /// Forced, not sampled. Showdown puts every coin flip through
+    /// `battle.randomChance` and lets `battle.prng` be replaced, so a run can
+    /// be told to answer yes to one flip and no to another. The odds are the
+    /// ones the sim asked for, not a count of how often something happened.
+    func testItCanSayEveryWayATurnCouldGo() throws {
+        let (mine, theirs) = try ready()
+        let game = try ShowdownBattle.start(mine: mine, theirs: theirs,
+                                            myFour: [0, 1, 2, 3], theirFour: [0, 1, 2, 3],
+                                            store: store, seed: [4, 5, 6, 7])
+        let play = Play(left: .attack(move: 0, target: 0), right: .attack(move: 0, target: 1))
+        let flat = try game.outcomes(mine: play, theirs: play, branching: 0)
+        check("with nothing split on, one way it goes", flat.count == 1, "\(flat.count)")
+        check("  and it is certain", abs((flat.first?.chance ?? 0) - 1) < 0.001)
+
+        let split = try game.outcomes(mine: play, theirs: play, branching: 2)
+        check("splitting two flips gives up to four", split.count > 1 && split.count <= 4,
+              "\(split.count)")
+        let total = split.reduce(0) { $0 + $1.chance }
+        check("and the odds are odds: they sum to one", abs(total - 1) < 0.001,
+              String(format: "%.4f", total))
+        check("the likeliest comes first",
+              zip(split, split.dropFirst()).allSatisfy { $0.chance >= $1.chance })
+        // Different branches are different turns.
+        let health = split.map { $0.board.theirs.map(\.hp) }
+        check("and they are not all the same turn", Set(health.map { "\($0)" }).count > 1,
+              "\(health.count) branches, \(Set(health.map { "\($0)" }).count) distinct")
+        // Asking what might happen does not change what has.
+        check("the game did not move while it was asked",
+              game.turn == 1, "\(game.turn)")
+    }
 }

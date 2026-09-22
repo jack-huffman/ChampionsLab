@@ -182,6 +182,50 @@ final class ShowdownBattle {
         try play(bothChoosing: request(mine, side: true), theirs: request(theirs, side: false))
     }
 
+    // MARK: - What might happen
+
+    /// One way a turn could go, and the odds of its going that way.
+    struct Outcome {
+        let chance: Double
+        let board: Board
+    }
+
+    /// Every way a turn could go, weighed.
+    ///
+    /// Not sampling. Showdown puts every coin flip through
+    /// `battle.randomChance`, and `battle.prng` is a property the sim itself
+    /// documents as an override -- so a run can be made to answer yes to the
+    /// third flip and no to the fourth, and what comes out is exactly the
+    /// turn where the Protect held and the secondary missed. The odds are the
+    /// ones it was asked for.
+    ///
+    /// `branching` is how many of the turn's coin flips to split on, chosen
+    /// nearest-to-even first because those are the ones worth pricing. Two of
+    /// them is four turns to resolve, three is eight.
+    func outcomes(mine: Play, theirs: Play, branching: Int = 1) throws -> [Outcome] {
+        let rows = try engine.outcomes(request(mine, side: true),
+                                       request(theirs, side: false), branching: branching)
+        // Asking what might happen must leave no mark on what has. The
+        // engine puts its own position back; these are the board's records of
+        // the game so far, which reading a hypothetical turn would otherwise
+        // advance -- the turn counter most visibly.
+        let before = board
+        let wasTurn = turn, wasMarks = turnMarks, wasUnread = unread
+        defer { board = before; turn = wasTurn; turnMarks = wasMarks; unread = wasUnread }
+        var out: [Outcome] = []
+        for row in rows {
+            guard let chance = row["chance"] as? Double else { continue }
+            // Each branch is read onto a copy of where the turn started, so
+            // the outcomes are boards that can be compared with each other.
+            board = before
+            board.steps = []
+            board.story = []
+            read(row["log"] as? [String] ?? [])
+            out.append(Outcome(chance: chance, board: board))
+        }
+        return out
+    }
+
     /// Which of a side's active slots are empty and waiting to be filled.
     func gaps(mine: Bool) -> [Int] {
         let team = mine ? board.mine : board.theirs
