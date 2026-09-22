@@ -83,6 +83,8 @@ chmod +x "$APP/Contents/MacOS/ChampionsLab"
 [ -f "$SRC_DIR/AppIcon.icns" ] && cp "$SRC_DIR/AppIcon.icns" "$APP/Contents/Resources/"
 cp "$SRC_DIR/data/champions.json" "$APP/Contents/Resources/champions.json"
 [ -f "$SRC_DIR/data/animations.json" ] && cp "$SRC_DIR/data/animations.json" "$APP/Contents/Resources/animations.json"
+# Showdown's own simulator, bundled by Scripts/mkengine.sh.
+[ -f "$SRC_DIR/data/showdown-engine.js" ] && cp "$SRC_DIR/data/showdown-engine.js" "$APP/Contents/Resources/showdown-engine.js"
 # Subdirectories, so Bundle.url(forResource:subdirectory:) can find them.
 # Copied whole rather than by glob: the shiny art lives in sprites/shiny, and
 # a glob of *.png took the 350 ordinary renders and silently left all 350
