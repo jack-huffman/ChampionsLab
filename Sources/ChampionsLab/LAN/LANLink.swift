@@ -40,6 +40,9 @@ final class LANLink: ObservableObject {
 
     // The host's side of the table.
     private var truth: Board?
+    /// The game Showdown is running, when it is. The host holds it: there is
+    /// one engine and one truth, and both live on the side that resolves.
+    private var showdown: ShowdownBattle?
     private var turn = 1
     private var hostBringing: [String]?
     private var guestTeam: Team?
@@ -104,7 +107,7 @@ final class LANLink: ObservableObject {
     func chose(pivotBench bench: Int) {
         switch role {
         case .guest: send(.pivot(rqid: rqid, bench: bench))
-        case .host: resumePivot(bench)
+        case .host: resumePivot(bench, fromHost: true)
         }
     }
 
@@ -140,8 +143,12 @@ final class LANLink: ObservableObject {
             guestPicks = picks
             tryReplace()
         case .pivot(let id, let bench):
-            guard role == .host, id == rqid, truth?.pendingPivot?.mine == false else { return }
-            resumePivot(bench)
+            // The guest's answer. With the engine running it is the engine
+            // that says whether the guest was asked; without one it is the
+            // board's own pending pivot, as before.
+            let asked = showdown.map { $0.awaiting.theirs } ?? (truth?.pendingPivot?.mine == false)
+            guard role == .host, id == rqid, asked else { return }
+            resumePivot(bench, fromHost: false)
         default:
             break
         }
@@ -164,15 +171,26 @@ final class LANLink: ObservableObject {
         // Either side's pivot stops the turn for whoever has the choice.
         board.asksBeforePivot = true
         board.asksTheirsBeforePivot = true
-        // The leads come out one at a time, each arrival a step of its own,
-        // so both screens can play the opening as a local game plays it:
-        // the flash, the leads, each ability going off with its line.
-        for entry in board.leadOrder {
-            board.beginStep(Board.Action(byMine: entry.mine, slot: entry.slot, move: "", category: "Switch", type: ""))
-            board.landed(mine: entry.mine, slot: entry.slot)
-            board.closeStep()
+        // Showdown resolves it, opening included, if it can be stood up.
+        // Both screens are drawn from the one truth either way, so the two
+        // players see the same game whichever engine is behind it.
+        if ShowdownEngine.bundleURL() != nil,
+           let game = try? ShowdownBattle.start(from: board, mine: myTeam, theirs: guestTeam,
+                                                store: Store.shared) {
+            showdown = game
+            truth = game.board
+        } else {
+            showdown = nil
+            // The leads come out one at a time, each arrival a step of its own,
+            // so both screens can play the opening as a local game plays it:
+            // the flash, the leads, each ability going off with its line.
+            for entry in board.leadOrder {
+                board.beginStep(Board.Action(byMine: entry.mine, slot: entry.slot, move: "", category: "Switch", type: ""))
+                board.landed(mine: entry.mine, slot: entry.slot)
+                board.closeStep()
+            }
+            truth = board
         }
-        truth = board
         turn = 1
         rqid = 1
         dealt = 0
@@ -186,11 +204,37 @@ final class LANLink: ObservableObject {
         guestPlay = nil
         // A new turn: its record starts over, and so does what has been dealt.
         dealt = 0
-        truth = TurnModel.resolve(board, mine: mine.play, theirs: theirs.play, rolling: true)
+        if let showdown {
+            do { truth = try showdown.play(bothChoosing: mine.play, theirs: theirs.play) }
+            catch { truth = board }
+        } else {
+            truth = TurnModel.resolve(board, mine: mine.play, theirs: theirs.play, rolling: true)
+        }
         afterTurn()
     }
 
-    private func resumePivot(_ bench: Int) {
+    /// One side's replacement, kept until the other has given theirs.
+    ///
+    /// Both can be asked at once -- two Pokemon falling on the same turn is
+    /// ordinary -- and the engine wants the round together. Answering one and
+    /// leaving the other would take half a turn.
+    private var pendingSendIn: (host: Int?, guest: Int?) = (nil, nil)
+
+    private func resumePivot(_ bench: Int, fromHost: Bool) {
+        if let showdown, showdown.awaiting.mine || showdown.awaiting.theirs {
+            if fromHost { pendingSendIn.host = bench } else { pendingSendIn.guest = bench }
+            let ready = (!showdown.awaiting.mine || pendingSendIn.host != nil)
+                && (!showdown.awaiting.theirs || pendingSendIn.guest != nil)
+            guard ready else { return }
+            let mineBench = showdown.awaiting.mine ? pendingSendIn.host : nil
+            let theirBench = showdown.awaiting.theirs ? pendingSendIn.guest : nil
+            pendingSendIn = (nil, nil)
+            dealt = 0
+            do { truth = try showdown.sendIn(mine: mineBench, theirs: theirBench) }
+            catch { return }
+            afterTurn()
+            return
+        }
         guard let board = truth, board.pendingPivot != nil else { return }
         truth = TurnModel.resume(board, sendingIn: bench, rolling: true)
         afterTurn()
@@ -235,6 +279,16 @@ final class LANLink: ObservableObject {
     private func afterTurn() {
         guard let board = truth else { return }
         rqid += 1
+        // Showdown asks for a replacement the same way it asks for a pivot,
+        // and either side can be the one asked. Whoever is not being asked
+        // waits, which is what both screens already know how to show.
+        if let showdown, showdown.awaiting.mine || showdown.awaiting.theirs {
+            let mineGap = showdown.gaps(mine: true).first ?? 0
+            let theirGap = showdown.gaps(mine: false).first ?? 0
+            deal(asking: showdown.awaiting.mine ? .pivot(mineGap) : .wait,
+                 guestAsking: showdown.awaiting.theirs ? .pivot(theirGap) : .wait)
+            return
+        }
         if let pivot = board.pendingPivot {
             deal(asking: pivot.mine ? .pivot(pivot.slot) : .wait,
                  guestAsking: pivot.mine ? .wait : .pivot(pivot.slot))

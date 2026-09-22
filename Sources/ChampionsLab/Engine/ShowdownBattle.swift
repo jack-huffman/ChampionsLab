@@ -69,7 +69,8 @@ final class ShowdownBattle {
 
     /// Stand a battle up from two teams, bringing the four each side chose.
     static func start(mine: Team, theirs: Team, myFour: [Int], theirFour: [Int],
-                      store: Store, seed: [Int]? = nil) throws -> ShowdownBattle {
+                      store: Store, seed: [Int]? = nil,
+                      onto prebuilt: Board? = nil) throws -> ShowdownBattle {
         let engine = ShowdownEngine.shared
         let myPaste = ShowdownTeam.paste(for: mine, bringing: myFour, store: store)
         let theirPaste = ShowdownTeam.paste(for: theirs, bringing: theirFour, store: store)
@@ -87,16 +88,22 @@ final class ShowdownBattle {
         try engine.choose("p2", ordering.theirs)
         // The board is built from the same four, in the same order, so the
         // sim's positions and the board's indices mean the same thing.
-        let battle = ShowdownBattle(board: Board(mine: Self.reduced(mine, to: myFour),
-                                                 theirs: Self.reduced(theirs, to: theirFour),
-                                                 rules: store.rulebook,
-                                                 field: Field(isDoubles: true),
-                                                 alreadyEvolved: false),
-                                    store: store)
+        // The board the opening is read onto. A game the screen is about to
+        // show hands its own in, with the leads not yet out, so that the
+        // switches and the abilities that open the battle come off the
+        // protocol like everything else does.
+        let blank = Board(mine: Self.reduced(mine, to: myFour),
+                          theirs: Self.reduced(theirs, to: theirFour),
+                          rules: store.rulebook, field: Field(isDoubles: true),
+                          alreadyEvolved: false)
+        let battle = ShowdownBattle(board: prebuilt ?? blank, store: store)
+        // What a replay starts from: the board before a word of the protocol
+        // has been read onto it.
+        let beginning = battle.board
         battle.read(try engine.since())
         battle.origin = Origin(format: ShowdownEngine.regMC, mine: packed.mine,
                                theirs: packed.theirs, seed: rolled,
-                               ordering: ordering, board: battle.board)
+                               ordering: ordering, board: beginning)
         return battle
     }
 
@@ -124,18 +131,15 @@ final class ShowdownBattle {
         }
         let myFour = chosen(board.mine, from: mine)
         let theirFour = chosen(board.theirs, from: theirs)
-        let game = try start(mine: mine, theirs: theirs, myFour: myFour, theirFour: theirFour,
-                             store: store, seed: seed)
-        // The board is the one that was already built and already shown; the
-        // engine's job is to resolve what happens to it from here.
-        game.board = board
-        game.board.narrating = true
-        game.store = store
-        game.origin = game.origin.map {
-            Origin(format: $0.format, mine: $0.mine, theirs: $0.theirs,
-                   seed: $0.seed, ordering: $0.ordering, board: game.board)
-        }
-        return game
+        // Read onto the board rather than over it: the leads walking on and
+        // the abilities that fire as they land are the engine's to decide,
+        // the same as every turn after. The opening used to be the app's own
+        // and only the turns were Showdown's, which left one Intimidate in
+        // the game decided by the old model.
+        var opening = board
+        opening.narrating = true
+        return try start(mine: mine, theirs: theirs, myFour: myFour, theirFour: theirFour,
+                         store: store, seed: seed, onto: opening)
     }
 
     private static func reduced(_ team: Team, to bringing: [Int]) -> Team {
@@ -166,11 +170,30 @@ final class ShowdownBattle {
         try play(mine: mine, theirs: theirs, oursWhenForced: "default")
     }
 
+    /// A turn in a game between two people: neither side's replacement is
+    /// answered for it.
+    @discardableResult
+    func play(bothChoosing mine: String, theirs: String) throws -> Board {
+        try play(mine: mine, theirs: theirs, oursWhenForced: nil, theirsWhenForced: nil)
+    }
+
+    @discardableResult
+    func play(bothChoosing mine: Play, theirs: Play) throws -> Board {
+        try play(bothChoosing: request(mine, side: true), theirs: request(theirs, side: false))
+    }
+
+    /// Which of a side's active slots are empty and waiting to be filled.
+    func gaps(mine: Bool) -> [Int] {
+        let team = mine ? board.mine : board.theirs
+        return (0..<Swift.min(board.activeCount, team.count)).filter { team[$0].fainted }
+    }
+
     /// A turn, with what our side does if it is made to send somebody in.
     /// Nil stops the turn there and sets `awaitingSendIn`, which is how a
     /// played game asks the player.
     @discardableResult
-    func play(mine: String, theirs: String, oursWhenForced ours: String?) throws -> Board {
+    func play(mine: String, theirs: String, oursWhenForced ours: String?,
+              theirsWhenForced: String? = "default") throws -> Board {
         board.steps = []
         board.story = []
         try answer("p1", mine)
@@ -181,19 +204,30 @@ final class ShowdownBattle {
         // nothing at all, which is why both are only ever answered when they
         // have actually been asked -- choosing for a side with no question is
         // refused, and looks exactly like an illegal move.
-        try settle(answeringOurs: ours)
+        try settle(ours: ours, theirs: theirsWhenForced)
         return board
     }
 
-    /// Whether our side is being made to send somebody in. The turn is not
-    /// over until it has, and it is the player's choice rather than the
-    /// engine's, so a played game stops here and asks.
-    private(set) var awaitingSendIn = false
+    /// Which sides are being made to send somebody in.
+    ///
+    /// Both, because a game between two people has two players: the far side
+    /// is the opponent's choice there and the engine's in a game against the
+    /// app. Only which of them is answered automatically differs.
+    private(set) var awaiting: (mine: Bool, theirs: Bool) = (false, false)
+    var awaitingSendIn: Bool { awaiting.mine || awaiting.theirs }
 
     /// Send somebody in for the one that fell, by their place on the board.
     @discardableResult
     func sendIn(bench: Int) throws -> Board {
-        try settle(answeringOurs: "switch \(bench + 1)")
+        try sendIn(mine: bench, theirs: nil, autoTheirs: true)
+    }
+
+    /// Both sides' replacements, for a game where both are chosen. Nil for a
+    /// side means it is not being asked, or is not ready to say.
+    @discardableResult
+    func sendIn(mine: Int?, theirs: Int?, autoTheirs: Bool = false) throws -> Board {
+        try settle(ours: mine.map { "switch \($0 + 1)" },
+                   theirs: autoTheirs ? "default" : theirs.map { "switch \($0 + 1)" })
         return board
     }
 
@@ -208,20 +242,24 @@ final class ShowdownBattle {
     /// Theirs is answered for them and ours is handed back, which is the only
     /// asymmetry: their replacement is a decision the opponent makes and ours
     /// is one the player does.
-    private func settle(answeringOurs ours: String?) throws {
+    private func settle(ours: String?, theirs: String?) throws {
         var rounds = 0
         while !engine.ended, rounds < 8 {
             let forced = try (self.forced("p1"), self.forced("p2"))
             guard forced.0 || forced.1 else { break }
-            if forced.0 {
-                guard let ours else { awaitingSendIn = true; return }
-                try answer("p1", ours)
+            // Neither is answered until both can be: the engine wants the
+            // round together, and answering one and stopping would leave the
+            // turn half taken.
+            if forced.0 && ours == nil || forced.1 && theirs == nil {
+                awaiting = (forced.0, forced.1)
+                return
             }
-            if forced.1 { try answer("p2", "default") }
+            if forced.0, let ours { try answer("p1", ours) }
+            if forced.1, let theirs { try answer("p2", theirs) }
             read(try engine.since())
             rounds += 1
         }
-        awaitingSendIn = false
+        awaiting = (false, false)
     }
 
     /// Whether a side is being made to send somebody in rather than asked
@@ -236,12 +274,29 @@ final class ShowdownBattle {
     /// A refused choice is otherwise silence: the engine declines it, no turn
     /// resolves, and the board simply does not move. Saying so is the
     /// difference between a bug and a mystery.
+    /// Choices the engine would not take, and what was played instead.
+    ///
+    /// The app's idea of a turn and the sim's do not line up everywhere --
+    /// the board has a `pass` for a Pokemon that simply does nothing, and the
+    /// sim has no such move, because a Pokemon standing there always acts.
+    /// Where a choice cannot be honoured the sim picks the first legal thing
+    /// and it is written down here, because a turn that quietly became a
+    /// different turn is worse than one that says so.
+    private(set) var substituted: [String] = []
+
     private func answer(_ side: String, _ choice: String) throws {
         guard try engine.request(side) != nil else { return }
-        guard try engine.choose(side, choice) else {
-            throw ShowdownEngine.Trouble.refused("\(side) would not play \(choice)")
+        var played = choice
+        if try !engine.choose(side, choice) {
+            // The engine's own reading of what is legal, rather than another
+            // guess at it from here.
+            guard try engine.choose(side, "default") else {
+                throw ShowdownEngine.Trouble.refused("\(side) would not play \(choice)")
+            }
+            played = "default"
+            substituted.append("\(side): \(choice)")
         }
-        if !replaying { script.append((side, choice)) }
+        if !replaying { script.append((side, played)) }
     }
 
     /// True while the battle is being played again from the start, so the
@@ -282,7 +337,7 @@ final class ShowdownBattle {
         turnMarks = turnMarks.filter { $0.key <= target }
         board.steps = []
         board.story = []
-        awaitingSendIn = false
+        awaiting = (false, false)
         return board
     }
 
@@ -295,7 +350,17 @@ final class ShowdownBattle {
             guard index < board.activeCount else { break }
             switch choice {
             case .pass:
-                parts.append("pass")
+                // The board says `pass` for a slot with nobody in it, and the
+                // sim agrees -- but the app also uses it to mean a Pokemon
+                // that simply does nothing, and there is no such move. A
+                // Pokemon standing there has to act, so it takes the first
+                // thing it can: the sim refuses the whole turn otherwise, and
+                // a refused turn is a turn that silently did not happen.
+                let standing = index < team.count && !team[index].fainted
+                    && index < board.activeCount
+                // `default` is a whole request's worth of shortcut, not one
+                // slot's, so the slot names a move instead.
+                parts.append(standing ? "move 1" : "pass")
             case .swap(let to):
                 // The sim counts a party position, one-based, over what is
                 // left standing; the board counts an index into its own array.
@@ -396,6 +461,13 @@ final class ShowdownBattle {
                                                  move: arg(2),
                                                  category: move?.category ?? "Physical",
                                                  type: move?.type ?? "Normal"))
+                    // Used in the open, so the other side has seen it. A game
+                    // between two people sends only what has been shown, and
+                    // a move nobody recorded as shown is a move the opponent's
+                    // screen never learns about.
+                    if let id = move?.id {
+                        withFighter(arg(1)) { $0.revealedMoves.insert(id) }
+                    }
                 }
                 board.note("\(name(of: arg(1))) used \(arg(2)).")
             case "-damage", "-heal", "-sethp":
@@ -432,7 +504,12 @@ final class ShowdownBattle {
                 withFighter(arg(1)) { $0.build.boosts = Array(repeating: 0, count: Stage.width) }
             case "switch", "drag", "replace":
                 skipNext = true
-                board.beginStep()
+                // A step of its own, marked as an arrival: it is what both
+                // screens play the opening from, one Pokemon at a time.
+                if let at = seat(arg(1)) {
+                    board.beginStep(Board.Action(byMine: at.mine, slot: at.slot,
+                                                 move: "", category: "Switch", type: ""))
+                }
                 arrive(arg(1), details: arg(2), health: arg(3))
             case "-ability":
                 board.note("\(name(of: arg(1)))'s \(arg(2)).")

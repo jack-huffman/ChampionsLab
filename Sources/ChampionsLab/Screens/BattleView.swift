@@ -724,7 +724,10 @@ struct BattleView: View {
         /// take -- the app's own model plays the game instead, and says so,
         /// rather than refusing to start one.
         func handOver(_ start: Board) {
-            guard ShowdownEngine.bundleURL() != nil else { return }
+            // Never for a snapshot: a picture that has to match last week's
+            // cannot be resolved by something fetched, and the opening is
+            // exactly where the two would differ.
+            guard !snapshotMode, ShowdownEngine.bundleURL() != nil else { return }
             do {
                 session.showdown = try ShowdownBattle.start(from: start, mine: mine,
                                                             theirs: theirs, store: store)
@@ -758,6 +761,12 @@ struct BattleView: View {
         Task { @MainActor in
             let start = await built()
             board = start
+            // Before the leads walk on, so that the switches and the
+            // abilities they land with come off the protocol like everything
+            // else. It used to hand over afterwards, which left the opening
+            // -- an Intimidate, a Drought, whichever of two weathers stays --
+            // decided by the old model in a game the engine otherwise ran.
+            handOver(start)
             let order = start.leadOrder
             try? await Task.sleep(nanoseconds: 1_100_000_000)
             withAnimation(.easeOut(duration: 0.35)) { startFlash = false }
@@ -775,6 +784,25 @@ struct BattleView: View {
                 try? await Task.sleep(nanoseconds: 300_000_000)
             }
             try? await Task.sleep(nanoseconds: 250_000_000)
+
+            // Showdown has already said what happened as they landed: the
+            // abilities, the stages they took, the weather that stayed. It is
+            // played the way a turn is played, because that is what it is.
+            if let game = session.showdown {
+                let opened = game.board
+                log += opened.story
+                playback.show(opened, steps: opened.steps, before: start)
+                board = opened
+                playback.play(opened.steps, hitMine: [], hitTheirs: [],
+                              singles: opened.activeCount == 1)
+                // Long enough for the callouts to run; the playback cancels
+                // itself if anything else starts.
+                let beats = max(1, opened.steps.count)
+                try? await Task.sleep(nanoseconds: UInt64(min(6.0, Double(beats) * 1.1) * 1_000_000_000))
+                handOverDone()
+                return
+            }
+
             var running = start
             for entry in order {
                 let before = running.story.count
@@ -794,11 +822,16 @@ struct BattleView: View {
                 try? await Task.sleep(nanoseconds: 1_300_000_000)
             }
             withAnimation(.easeOut(duration: 0.3)) { callout = nil }
-            handOver(running)
             board = running
-            opening = false
-            session.think()
+            handOverDone()
         }
+    }
+
+    /// The game is standing and the player can be asked for orders.
+    private func handOverDone() {
+        withAnimation(.easeOut(duration: 0.3)) { callout = nil }
+        opening = false
+        session.think()
     }
 
     // MARK: The field

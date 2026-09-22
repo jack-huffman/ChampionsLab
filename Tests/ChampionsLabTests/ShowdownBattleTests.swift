@@ -179,4 +179,35 @@ final class ShowdownBattleTests: HarnessCase {
                                                     targetsSelf: false) != nil)
         }
     }
+
+    /// The opening is the engine's too.
+    ///
+    /// The leads walking on and the abilities that fire as they land -- an
+    /// Intimidate, a Drought, whichever of two weathers is slower and so
+    /// stays -- are read off the protocol onto the board the screen is about
+    /// to show, rather than worked out here and handed over afterwards.
+    func testTheOpeningComesOffTheProtocol() throws {
+        let (mine, theirs) = try ready()
+        // A board with the four chosen and nobody out yet, which is what the
+        // battle screen has when the flash goes up.
+        // What the battle screen has when the flash goes up: the four
+        // chosen, named the way the lobby names them, and nobody out yet.
+        let four = mine.slots.prefix(4).map(\.id.uuidString)
+        let start = Board.opening(mine: mine, bringing: four, theirs: theirs,
+                                  rules: store.rulebook, singles: false, sendOut: false)
+        let game = try ShowdownBattle.start(from: start, mine: mine, theirs: theirs,
+                                            store: store, seed: [9, 9, 9, 9] as [Int])
+        check("the leads are standing", game.board.mine.prefix(2).allSatisfy { !$0.fainted })
+        check("the opening was told", !game.board.story.isEmpty, "\(game.board.story.count) lines")
+        check("and it is made of steps the screen can play",
+              !game.board.steps.isEmpty, "\(game.board.steps.count)")
+        check("everybody is whole at the start",
+              game.board.mine.allSatisfy { $0.hp == $0.maxHP })
+        check("with nothing unread", game.unread.isEmpty,
+              game.unread.sorted().joined(separator: ", "))
+        print("  opening said: \(game.board.story.prefix(6).joined(separator: " | "))")
+        // And the game plays on from it.
+        _ = try game.play(mine: "default", theirs: "default", oursWhenForced: nil)
+        check("and the first turn follows it", game.turn >= 2, "\(game.turn)")
+    }
 }

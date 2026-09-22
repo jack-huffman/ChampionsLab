@@ -77,7 +77,17 @@ final class LANLinkTests: HarnessCase {
         guestScreen.rightPick = .pass
         guestScreen.playTurn()
         pump()
-        check("the turn resolved on both screens", hostScreen.turn == 2 && guestScreen.turn == 2, "\(hostScreen.turn) \(guestScreen.turn)")
+        // What happens to a turn is the engine's to decide and depends on
+        // its rolls: these two are frail enough that either or both can fall
+        // to the opening exchange, and a side that lost somebody is asked who
+        // comes in before the next turn begins. That the two screens agree
+        // about which of those happened is not the engine's to decide, and is
+        // the thing worth checking.
+        check("both screens are on the same turn", hostScreen.turn == guestScreen.turn,
+              "\(hostScreen.turn) \(guestScreen.turn)")
+        check("the turn was played out",
+              hostScreen.turn == 2 || !hostScreen.sending.isEmpty || !guestScreen.sending.isEmpty,
+              "turn \(hostScreen.turn), sending \(hostScreen.sending) \(guestScreen.sending)")
         check("the guest saw the move the host used",
               guestScreen.board?.theirs[0].moves.map(\.name) == ["Fake Out"], "\(guestScreen.board?.theirs[0].moves.map(\.name) ?? [])")
         check("the host saw Kowtow Cleave, if it got off",
