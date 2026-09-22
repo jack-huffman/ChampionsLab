@@ -53,6 +53,38 @@ enum FieldSetters {
     static func weather(setBy move: String) -> Weather? { weatherMoves[move] }
     static func terrain(setBy move: String) -> Terrain? { terrainMoves[move] }
 
+    /// What Showdown's protocol calls what is on the field.
+    ///
+    /// Mostly the move's own name, which is why this lives here rather than
+    /// with the reader that needs it: one place knows what a weather is
+    /// called, and a second copy of these words is exactly the drift this
+    /// file exists to stop. Where the client differs it is only in being
+    /// shorter about it -- "Sun" for the sun, "Rain" for the rain.
+    static func weather(named protocolName: String) -> Weather? {
+        if let direct = weatherMoves[protocolName] { return direct }
+        switch protocolName {
+        case "SunnyDay", "Sun", "DesolateLand", "desolateland": return .sun
+        case "RainDance", "Rain", "PrimordialSea", "primordialsea": return .rain
+        case "Sand": return .sand
+        case "Snow", "Hail": return .snow
+        case "none", "": return Weather.none
+        default: return nil
+        }
+    }
+
+    static func terrain(named protocolName: String) -> Terrain? {
+        if let direct = terrainMoves[protocolName] { return direct }
+        // The client writes a field condition with the move's name, and the
+        // ability-set ones with the ability's.
+        switch protocolName {
+        case "move: Grassy Terrain": return .grassy
+        case "move: Electric Terrain": return .electric
+        case "move: Misty Terrain": return .misty
+        case "move: Psychic Terrain": return .psychic
+        default: return nil
+        }
+    }
+
     /// Every ability that sets a field on arrival: what "a field setter" means.
     static let weatherArrivalAbilities: Set<String> = Set(weatherOnArrival.keys)
     static let terrainArrivalAbilities: Set<String> = Set(terrainOnArrival.keys)
