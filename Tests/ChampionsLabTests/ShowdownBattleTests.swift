@@ -119,4 +119,64 @@ final class ShowdownBattleTests: HarnessCase {
         check("and still read every tag", game.unread.isEmpty,
               game.unread.sorted().joined(separator: ", "))
     }
+
+    /// An engine that only plays forwards, put back a turn.
+    ///
+    /// The same seed and the same answers in the same order are the same
+    /// game, so a take-back is the battle played again from the beginning and
+    /// stopped early. What has to be true is that the position it stops at is
+    /// the position that was there the first time.
+    func testItCanBePutBackToTheStartOfATurn() throws {
+        let (mine, theirs) = try ready()
+        let game = try ShowdownBattle.start(mine: mine, theirs: theirs,
+                                            myFour: [0, 1, 2, 3], theirFour: [0, 1, 2, 3],
+                                            store: store, seed: [11, 22, 33, 44])
+        check("it knows how to go back", game.canRewind)
+        var seen: [Int: [Int]] = [:]
+        for _ in 0..<5 {
+            guard !ShowdownEngine.shared.ended, !game.awaitingSendIn else { break }
+            seen[game.turn] = game.board.mine.map(\.hp) + game.board.theirs.map(\.hp)
+            _ = try game.play(mine: "default", theirs: "default", oursWhenForced: nil)
+        }
+        check("it played a few turns", seen.count >= 3, "\(seen.count)")
+        guard let target = seen.keys.sorted().dropFirst().first else { return }
+        let back = try game.rewind(to: target)
+        check("it came back to turn \(target)", game.turn == target, "\(game.turn)")
+        check("with the health it had then",
+              back.mine.map(\.hp) + back.theirs.map(\.hp) == seen[target],
+              "\(back.mine.map(\.hp) + back.theirs.map(\.hp)) against \(seen[target] ?? [])")
+        // And it plays on from there rather than being a museum piece.
+        _ = try game.play(mine: "default", theirs: "default", oursWhenForced: nil)
+        check("and plays on from there", game.turn > target, "\(game.turn)")
+        check("reading every tag on the way back", game.unread.isEmpty,
+              game.unread.sorted().joined(separator: ", "))
+    }
+
+    /// A step the screen can actually play.
+    ///
+    /// The steps carry the text either way, but the choreography is placed
+    /// from the action behind a step -- who used what, of which category and
+    /// type. Without one there is nothing to throw and nothing to throw it
+    /// at, so a turn arrives already over: the board jumps to its end state
+    /// and no animation fires at all.
+    func testEveryMoveOpensAStepTheSceneCanPlay() throws {
+        let (mine, theirs) = try ready()
+        let game = try ShowdownBattle.start(mine: mine, theirs: theirs,
+                                            myFour: [0, 1, 2, 3], theirFour: [0, 1, 2, 3],
+                                            store: store, seed: [2, 7, 1, 8])
+        _ = try game.play(mine: "default", theirs: "default", oursWhenForced: nil)
+        let acted = game.board.steps.filter { $0.action != nil }
+        check("the turn produced steps", !game.board.steps.isEmpty, "\(game.board.steps.count)")
+        check("and moves among them carry their action", !acted.isEmpty, "\(acted.count)")
+        for step in acted {
+            guard let action = step.action else { continue }
+            check("  \(action.move) knows whose it is and what it is",
+                  !action.move.isEmpty && !action.category.isEmpty && !action.type.isEmpty,
+                  "\(action.category)/\(action.type)")
+            check("  and the scene has choreography for \(action.move)",
+                  Choreography.shared.recipe(forMove: action.move) != nil
+                    || Choreography.shared.fallback(category: action.category,
+                                                    targetsSelf: false) != nil)
+        }
+    }
 }

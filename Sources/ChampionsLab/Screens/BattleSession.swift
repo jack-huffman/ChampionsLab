@@ -781,20 +781,30 @@ final class BattleSession: ObservableObject {
     /// Put the last turn back, so a line can be tried a different way.
     /// Whether the game can be taken back.
     ///
-    /// Not while Showdown is running it. The engine plays forwards and has no
-    /// way to be put back a turn, so restoring the board would leave the
-    /// picture a turn behind the game and every turn after it would be
-    /// resolved against a position nobody is looking at. Replaying from the
-    /// first turn with the choices already made would do it -- a battle
-    /// stands up in a couple of milliseconds -- and that is worth building,
-    /// but a take-back that silently desynchronises is not worth shipping in
-    /// the meantime.
-    var canTakeBack: Bool { showdown == nil }
+    /// The engine only plays forwards, so putting it back a turn means
+    /// playing the same battle again from the beginning and stopping early --
+    /// the same seed gives the same rolls and the same answers give the same
+    /// game. It is the board that has to move with it: restoring a saved one
+    /// without moving the engine would leave the picture a turn behind the
+    /// game, and every turn after would be resolved against a position nobody
+    /// was looking at.
+    var canTakeBack: Bool { showdown == nil || showdown?.canRewind == true }
 
     func undo() {
         guard canTakeBack, let last = history.popLast() else { return }
         review.removeAll { $0.turn >= last.turn }
-        restore(last.board, log: last.log, turn: last.turn)
+        restore(engineBoard(at: last.turn) ?? last.board, log: last.log, turn: last.turn)
+    }
+
+    /// The engine put back to the start of a turn, and the board it makes of
+    /// it. Nil when the app's own model is playing, where the saved board is
+    /// the whole of the truth.
+    private func engineBoard(at turn: Int) -> Board? {
+        guard let showdown else { return nil }
+        do { return try showdown.rewind(to: turn) } catch {
+            log.append("The engine could not go back to turn \(turn): \(error.localizedDescription)")
+            return nil
+        }
     }
 
     /// Take the whole game back to the start of a turn, so it can be played a
@@ -807,6 +817,10 @@ final class BattleSession: ObservableObject {
         let entry = history[index]
         history.removeSubrange(index...)
         review.removeAll { $0.turn >= target }
+        if let engined = engineBoard(at: target) {
+            restore(engined, log: entry.log, turn: entry.turn)
+            return
+        }
         restore(entry.board, log: entry.log, turn: entry.turn)
     }
 

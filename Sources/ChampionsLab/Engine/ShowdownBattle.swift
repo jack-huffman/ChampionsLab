@@ -21,6 +21,9 @@ final class ShowdownBattle {
     /// about, and the tests read this.
     private(set) var unread: Set<String> = []
     private(set) var board: Board
+    /// What a move is: its category and type, which the choreography needs to
+    /// know before it can throw anything.
+    private var store: Store?
 
     /// Which side of the protocol is ours. The sim always calls the first
     /// player p1; the app always calls itself "mine".
@@ -28,8 +31,37 @@ final class ShowdownBattle {
 
     // MARK: - Starting
 
-    init(board: Board) {
+    /// Everything needed to stand this exact battle up again.
+    ///
+    /// The engine plays forwards and has no way to be put back a turn, so a
+    /// take-back is the same battle played again from the beginning with the
+    /// same choices: the same seed gives the same rolls, and the same answers
+    /// in the same order give the same game. It costs about two milliseconds
+    /// plus four a turn, which is nothing next to being unable to take a move
+    /// back at all.
+    private struct Origin {
+        let format: String
+        let mine: (name: String, team: String)
+        let theirs: (name: String, team: String)
+        let seed: [Int]
+        /// The team order each side gave at preview. Not part of the script,
+        /// because it is answered before the script starts -- and leaving it
+        /// out meant a replay sat at team preview refusing every move it was
+        /// then handed.
+        let ordering: (mine: String, theirs: String)
+        let board: Board
+    }
+    private var origin: Origin?
+    /// Every answer given to the engine, in the order it was given.
+    private var script: [(side: String, choice: String)] = []
+    /// Where each turn began in that script.
+    private var turnMarks: [Int: Int] = [:]
+    /// The turn the engine last announced.
+    private(set) var turn = 1
+
+    init(board: Board, store: Store? = nil) {
         self.board = board
+        self.store = store
         // `note` is what writes the story and the steps, and it does nothing
         // unless the board is narrating.
         self.board.narrating = true
@@ -41,20 +73,30 @@ final class ShowdownBattle {
         let engine = ShowdownEngine.shared
         let myPaste = ShowdownTeam.paste(for: mine, bringing: myFour, store: store)
         let theirPaste = ShowdownTeam.paste(for: theirs, bringing: theirFour, store: store)
-        try engine.start(mine: (mine.name, engine.pack(paste: myPaste)),
-                         theirs: (theirs.name, engine.pack(paste: theirPaste)),
-                         seed: seed)
+        // A seed of its own when none was given, so the game is repeatable
+        // even when nobody asked for a particular one -- which is what makes
+        // a take-back possible at all.
+        let rolled = seed ?? (0..<4).map { _ in Int.random(in: 0..<65536) }
+        let packed = (mine: (name: mine.name, team: try engine.pack(paste: myPaste)),
+                      theirs: (name: theirs.name, team: try engine.pack(paste: theirPaste)))
+        try engine.start(mine: packed.mine, theirs: packed.theirs, seed: rolled)
         // Both sides bring everything they packed, in the order they packed it.
-        try engine.choose("p1", "team " + (1...myFour.count).map(String.init).joined())
-        try engine.choose("p2", "team " + (1...theirFour.count).map(String.init).joined())
+        let ordering = (mine: "team " + (1...myFour.count).map(String.init).joined(),
+                        theirs: "team " + (1...theirFour.count).map(String.init).joined())
+        try engine.choose("p1", ordering.mine)
+        try engine.choose("p2", ordering.theirs)
         // The board is built from the same four, in the same order, so the
         // sim's positions and the board's indices mean the same thing.
         let battle = ShowdownBattle(board: Board(mine: Self.reduced(mine, to: myFour),
                                                  theirs: Self.reduced(theirs, to: theirFour),
                                                  rules: store.rulebook,
                                                  field: Field(isDoubles: true),
-                                                 alreadyEvolved: false))
+                                                 alreadyEvolved: false),
+                                    store: store)
         battle.read(try engine.since())
+        battle.origin = Origin(format: ShowdownEngine.regMC, mine: packed.mine,
+                               theirs: packed.theirs, seed: rolled,
+                               ordering: ordering, board: battle.board)
         return battle
     }
 
@@ -88,6 +130,11 @@ final class ShowdownBattle {
         // engine's job is to resolve what happens to it from here.
         game.board = board
         game.board.narrating = true
+        game.store = store
+        game.origin = game.origin.map {
+            Origin(format: $0.format, mine: $0.mine, theirs: $0.theirs,
+                   seed: $0.seed, ordering: $0.ordering, board: game.board)
+        }
         return game
     }
 
@@ -194,6 +241,49 @@ final class ShowdownBattle {
         guard try engine.choose(side, choice) else {
             throw ShowdownEngine.Trouble.refused("\(side) would not play \(choice)")
         }
+        if !replaying { script.append((side, choice)) }
+    }
+
+    /// True while the battle is being played again from the start, so the
+    /// script records itself once rather than once per replay.
+    private var replaying = false
+
+    // MARK: - Taking it back
+
+    /// Whether the game can be put back to the start of a turn.
+    var canRewind: Bool { origin != nil }
+
+    /// The same battle, replayed from the beginning up to the start of a
+    /// turn, which is the only way to move an engine that only plays forwards.
+    @discardableResult
+    func rewind(to target: Int) throws -> Board {
+        guard let origin, let mark = turnMarks[target] else {
+            throw ShowdownEngine.Trouble.refused("turn \(target) is not one this game passed through")
+        }
+        let keeping = Array(script.prefix(mark))
+        try engine.start(format: origin.format, mine: origin.mine, theirs: origin.theirs,
+                         seed: origin.seed)
+        board = origin.board
+        board.narrating = true
+        unread = []
+        turn = 1
+        replaying = true
+        defer { replaying = false }
+        _ = try engine.since()
+        try engine.choose("p1", origin.ordering.mine)
+        try engine.choose("p2", origin.ordering.theirs)
+        _ = try engine.since()
+        for step in keeping {
+            guard try engine.request(step.side) != nil else { continue }
+            _ = try engine.choose(step.side, step.choice)
+            read(try engine.since())
+        }
+        script = keeping
+        turnMarks = turnMarks.filter { $0.key <= target }
+        board.steps = []
+        board.story = []
+        awaitingSendIn = false
+        return board
     }
 
     /// One side's turn, in the sim's own words.
@@ -295,6 +385,18 @@ final class ShowdownBattle {
             let arg = { (n: Int) -> String in n < parts.count ? parts[n] : "" }
             switch tag {
             case "move":
+                // The step is what the screen animates, and a step with no
+                // action behind it is a line of text with nothing to play:
+                // the turn arrives already over. Each move opens its own, so
+                // the damage, the crit and the effectiveness that follow are
+                // all part of the same beat.
+                if let at = seat(arg(1)) {
+                    let move = store?.data.moves.values.first { $0.name == arg(2) }
+                    board.beginStep(Board.Action(byMine: at.mine, slot: at.slot,
+                                                 move: arg(2),
+                                                 category: move?.category ?? "Physical",
+                                                 type: move?.type ?? "Normal"))
+                }
                 board.note("\(name(of: arg(1))) used \(arg(2)).")
             case "-damage", "-heal", "-sethp":
                 skipNext = true
@@ -330,6 +432,7 @@ final class ShowdownBattle {
                 withFighter(arg(1)) { $0.build.boosts = Array(repeating: 0, count: Stage.width) }
             case "switch", "drag", "replace":
                 skipNext = true
+                board.beginStep()
                 arrive(arg(1), details: arg(2), health: arg(3))
             case "-ability":
                 board.note("\(name(of: arg(1)))'s \(arg(2)).")
@@ -358,7 +461,13 @@ final class ShowdownBattle {
                 board.field.terrain = FieldSetters.terrain(named: arg(1)) ?? board.field.terrain
             case "-fieldend":
                 if FieldSetters.terrain(named: arg(1)) != nil { board.field.terrain = .none }
-            case "turn", "upkeep", "", "t:", "player", "teamsize", "gen", "tier",
+            case "turn":
+                // Whatever was being gathered belongs to the turn that just
+                // finished, not the one starting.
+                board.closeStep()
+                turn = Int(arg(1)) ?? turn
+                if turnMarks[turn] == nil { turnMarks[turn] = script.count }
+            case "upkeep", "", "t:", "player", "teamsize", "gen", "tier",
                  "rule", "start", "gametype", "clearpoke", "poke", "teampreview",
                  "request", "sideupdate", "update", "-hint", "-message", "done",
                  "split", "uhtml", "uhtmlchange", "-anim", "-notarget", "-nothing",
@@ -379,6 +488,7 @@ final class ShowdownBattle {
                 unread.insert(tag)
             }
         }
+        board.closeStep()
     }
 
     /// Somebody walked on. The board keeps actives at the front of its array,
