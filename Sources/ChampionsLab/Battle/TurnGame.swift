@@ -464,6 +464,57 @@ struct TurnGame {
     /// What a cell of the matrix is worth, over every way it can come out,
     /// and the likeliest of those boards for anything that has to look on
     /// from a single position.
+    /// The same solution, with its likeliest cells priced by something else.
+    ///
+    /// Two stages, the way an engine that cannot afford to be exact
+    /// everywhere gets to be exact where it counts. The model prices the
+    /// whole matrix cheaply and finds the equilibrium; then the handful of
+    /// plays that equilibrium actually leans on are priced again by a real
+    /// simulator, and the small matrix is solved once more.
+    ///
+    /// The move you are about to make is therefore chosen on Showdown's own
+    /// arithmetic, while the tenth-best line at depth three -- which nobody
+    /// ever plays and which only has to be roughly ranked -- stays on the
+    /// model. Pricing everything that way costs about forty times as much for
+    /// an answer that differs where it does not matter.
+    ///
+    /// `pricing` stands in for `settle(_:_:).expected`: the same number, from
+    /// somewhere else. Everything around it -- what a turn of offence is
+    /// worth giving up, how reliable a line is, the conversion into a chance
+    /// of winning -- is unchanged, so the two halves of the matrix are on one
+    /// scale.
+    func refined(_ solution: Solution, width: Int = 3,
+                 pricing: (Play, Play) -> Double?) -> Solution {
+        func shortlist(_ mix: [Double], _ count: Int) -> [Int] {
+            Array(mix.indices.sorted { mix[$0] > mix[$1] }.prefix(Swift.max(1, Swift.min(width, count))))
+        }
+        let mineKept = shortlist(solution.myMix, solution.myPlays.count)
+        let theirsKept = shortlist(solution.theirMix, solution.theirPlays.count)
+        guard mineKept.count > 1 || theirsKept.count > 1 else { return solution }
+
+        let myPlays = mineKept.map { solution.myPlays[$0] }
+        let theirPlays = theirsKept.map { solution.theirPlays[$0] }
+        let myOffence = [offence(forMine: true, slot: 0), offence(forMine: true, slot: 1)]
+        let theirOffence = [offence(forMine: false, slot: 0), offence(forMine: false, slot: 1)]
+
+        var payoff = [[Double]](repeating: [Double](repeating: 0, count: theirPlays.count),
+                                count: myPlays.count)
+        for (i, mine) in myPlays.enumerated() {
+            for (j, theirs) in theirPlays.enumerated() {
+                // What the simulator says, where it has something to say; the
+                // model's own figure where it has not, so a cell is never
+                // silently worth nothing.
+                let expected = pricing(mine, theirs) ?? settle(mine, theirs).expected
+                payoff[i][j] = asWinChance(
+                    expected - forgone(mine, myOffence) + forgone(theirs, theirOffence),
+                    reliability: reliability(of: mine, forMine: true))
+            }
+        }
+        let (myMix, theirMix, value) = TurnGame.equilibrium(payoff, iterations: 3000)
+        return Solution(myPlays: myPlays, theirPlays: theirPlays, payoff: payoff,
+                        myMix: myMix, theirMix: theirMix, value: value)
+    }
+
     func settle(_ mine: Play, _ theirs: Play) -> (expected: Double, likeliest: Board) {
         let outcomes = TurnModel.outcomes(board, mine: mine, theirs: theirs)
         let before = Evaluation.value(board)

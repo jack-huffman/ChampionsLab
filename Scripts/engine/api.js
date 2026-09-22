@@ -93,6 +93,12 @@ globalThis.PS = {
   /// which keeps a turn with twenty small chances in it from becoming a
   /// million turns.
   outcomes: (p1, p2, limit) => {
+    // Written out once and parsed back per branch. A hand-rolled deep clone
+    // was tried and is slower -- 0.060ms against 0.043ms -- because
+    // JavaScriptCore's JSON is native and a loop in JavaScript is not. Both
+    // are noise anyway: a branch costs about four milliseconds and almost all
+    // of it is `Battle.fromJSON` rebuilding the object graph, which is the
+    // thing that cannot be made cheaper from out here.
     const saved = JSON.stringify(battle.toJSON());
     const cap = Math.max(0, Math.min(limit === undefined ? 1 : limit, 4));
 
@@ -105,38 +111,38 @@ globalThis.PS = {
       const scripted = Object.create(base);
       scripted.randomChance = function (numerator, denominator) {
         const forced = answers[index];
-        asked.push({ numerator, denominator });
+        let held;
+        if (forced === true || forced === false) held = forced;
+        else held = base.randomChance.call(this, numerator, denominator);
+        // What it was asked *and* what it answered, so a run with nothing
+        // forced is also a run whose answers are known -- which is what lets
+        // the probe stand in for the branch it happens to be.
+        asked.push({ numerator, denominator, held });
         index++;
-        if (forced === true || forced === false) return forced;
-        return base.randomChance.call(this, numerator, denominator);
+        return held;
       };
       battle.prng = scripted;
       const from = battle.log.length;
       battle.choose('p1', p1);
       battle.choose('p2', p2);
       battle.prng = base;
-      // The state is not serialised here. A position is twenty-odd kilobytes
-      // and a search asks for thousands of them; writing each one out and
-      // handing it across to Swift cost more than resolving the turn did.
-      // What comes back is what happened -- the protocol -- and the position
-      // itself stays where it is useful, in the engine.
       return { asked, log: battle.log.slice(from) };
     }
-
-    // What this turn actually turns on.
-    const probe = run([]);
-    globalThis.__psLastFlips = probe.asked;
-    const flips = probe.asked
-      .map((a, at) => ({ at, chance: a.numerator / a.denominator }))
-      .filter((f) => f.chance > 0 && f.chance < 1)
-      .sort((a, b) => Math.abs(0.5 - a.chance) - Math.abs(0.5 - b.chance))
-      .slice(0, cap);
 
     function putBack() {
       battle = Battle.fromJSON(JSON.parse(saved));
       battle.restart(hush);
       read = battle.log.length;
     }
+
+    // One run to find out what this turn turns on.
+    const probe = run([]);
+    globalThis.__psLastFlips = probe.asked;
+    const flips = probe.asked
+      .map((a, at) => ({ at, chance: a.numerator / a.denominator, was: a.held }))
+      .filter((f) => f.chance > 0 && f.chance < 1)
+      .sort((a, b) => Math.abs(0.5 - a.chance) - Math.abs(0.5 - b.chance))
+      .slice(0, cap);
 
     if (!flips.length) {
       putBack();
@@ -147,13 +153,18 @@ globalThis.PS = {
     for (let mask = 0; mask < (1 << flips.length); mask++) {
       const answers = [];
       let chance = 1;
+      let asProbed = true;
       flips.forEach((flip, bit) => {
         const holds = !!(mask & (1 << bit));
         answers[flip.at] = holds;
         chance *= holds ? flip.chance : 1 - flip.chance;
+        if (holds !== flip.was) asProbed = false;
       });
       if (chance <= 0) continue;
-      const got = run(answers);
+      // The probe already played exactly this one: its rolls came out this
+      // way on their own. Running it again would give the same turn for the
+      // price of another position.
+      const got = asProbed ? probe : run(answers);
       out.push({ chance, log: got.log });
     }
     // Put the battle back where it was, so asking what might happen does not

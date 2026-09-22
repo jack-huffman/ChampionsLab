@@ -206,7 +206,7 @@ final class BattleSession: ObservableObject {
             // position that no longer exists.
             guard ticket == thinkTicket else { return }
             let result = searched.result
-            let turnSolve = searched.turnSolve
+            let turnSolve = self.priced(searched.turnSolve, on: board)
             var game = TurnGame(board: searched.likeliest, believingTheirs: true)
             game.width = engine.beam + 2
 
@@ -363,7 +363,7 @@ final class BattleSession: ObservableObject {
             // The board moved on underneath — an undo, a restart — so this
             // answer is to a position that no longer exists.
             guard turn == playedTurn, board != nil else { return }
-            resolve(current, mine: mine, solved: solved)
+            resolve(current, mine: mine, solved: priced(solved, on: current))
         }
     }
 
@@ -794,6 +794,28 @@ final class BattleSession: ObservableObject {
         guard canTakeBack, let last = history.popLast() else { return }
         review.removeAll { $0.turn >= last.turn }
         restore(engineBoard(at: last.turn) ?? last.board, log: last.log, turn: last.turn)
+    }
+
+    /// The answer's likeliest cells, priced again by the simulator.
+    ///
+    /// The model searches the whole matrix and finds where the answer lives;
+    /// the engine then prices the few plays that answer leans on, exactly,
+    /// and the small matrix is solved again. Which means the move actually
+    /// recommended is costed on Showdown's own arithmetic while the search
+    /// that found it stays affordable.
+    ///
+    /// Nothing is refined when the engine is not running the game, and a cell
+    /// it cannot price keeps the model's figure rather than becoming zero.
+    func priced(_ solved: TurnGame.Solution, on board: Board) -> TurnGame.Solution {
+        guard let showdown else { return solved }
+        var game = TurnGame(board: board, believingTheirs: true)
+        game.width = 10
+        let before = Evaluation.value(board)
+        return game.refined(solved, width: 3) { mine, theirs in
+            guard let outcomes = try? showdown.outcomes(mine: mine, theirs: theirs, branching: 1),
+                  !outcomes.isEmpty else { return nil }
+            return outcomes.reduce(0) { $0 + $1.chance * (Evaluation.value($1.board) - before) }
+        }
     }
 
     /// The engine put back to the start of a turn, and the board it makes of
