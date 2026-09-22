@@ -579,6 +579,77 @@ final class ShowdownBattle {
                 // changed masks. Without this the board plays the whole game
                 // as whatever walked on, and the sprite never changes.
                 becomes(arg(1), details: arg(2))
+            case "-sidestart", "-sideend":
+                side(arg(1), condition: arg(2), starting: tag == "-sidestart")
+            case "-start", "-end":
+                volatile(arg(1), effect: arg(2), starting: tag == "-start")
+            case "-singleturn":
+                // Protect and its family last the turn. The board has a flag
+                // for it and the scene draws a shield from it; without this
+                // nothing on screen ever looks protected.
+                let what = bare(arg(2))
+                if what == "Protect" || what == "Endure" || what.hasSuffix("Shield")
+                    || what.hasSuffix("Bunker") || what == "Obstruct" || what == "Burning Bulwark"
+                    || what == "Silk Trap" || what == "Detect" {
+                    withFighter(arg(1)) { $0.isProtected = true; $0.protectStreak += 1 }
+                } else if what == "Wide Guard" || what == "Quick Guard" {
+                    guarding(arg(1), wide: what == "Wide Guard")
+                }
+                board.note("\(name(of: arg(1))) used \(what).")
+            case "-singlemove":
+                if bare(arg(2)) == "Destiny Bond" { withFighter(arg(1)) { $0.destinyBound = true } }
+            case "-setboost":
+                if let stage = Self.stage(arg(2)) {
+                    withFighter(arg(1)) { $0.build.boosts[stage.rawValue] = Int(arg(3)) ?? 0 }
+                }
+            case "-clearnegativeboost":
+                withFighter(arg(1)) { f in
+                    for index in f.build.boosts.indices where f.build.boosts[index] < 0 {
+                        f.build.boosts[index] = 0
+                    }
+                }
+            case "-clearpositiveboost":
+                withFighter(arg(1)) { f in
+                    for index in f.build.boosts.indices where f.build.boosts[index] > 0 {
+                        f.build.boosts[index] = 0
+                    }
+                }
+            case "-invertboost":
+                withFighter(arg(1)) { f in
+                    f.build.boosts = f.build.boosts.map { -$0 }
+                }
+            case "-copyboost", "-swapboost":
+                // Between two Pokemon: one takes the other's stages, or they
+                // trade them.
+                if let to = seat(arg(1)), let from = seat(arg(2)) {
+                    let source = (from.mine ? board.mine : board.theirs)[safe: from.slot]?.build.boosts
+                    let target = (to.mine ? board.mine : board.theirs)[safe: to.slot]?.build.boosts
+                    if let source { withFighter(arg(1)) { $0.build.boosts = source } }
+                    if tag == "-swapboost", let target { withFighter(arg(2)) { $0.build.boosts = target } }
+                }
+            case "swap":
+                // Ally Switch: the two of them change places, and the board
+                // keeps its actives by position.
+                if let at = seat(arg(1)), let with = Int(arg(2)), with != at.slot {
+                    if at.mine, board.mine.indices.contains(with) { board.mine.swapAt(at.slot, with) }
+                    else if !at.mine, board.theirs.indices.contains(with) { board.theirs.swapAt(at.slot, with) }
+                }
+            case "-terastallize":
+                if let type = PokeType(loose: arg(2)) {
+                    withFighter(arg(1)) { $0.build.typeOverride = [type] }
+                }
+                board.note("\(name(of: arg(1))) Terastallized into \(arg(2)).")
+            case "-transform":
+                board.note("\(name(of: arg(1))) transformed into \(name(of: arg(2)))!")
+            case "-endability":
+                withFighter(arg(1)) { $0.build.ability = "" }
+            case "-activate":
+                // The client's catch-all for "this did something" -- a Focus
+                // Sash holding, a Sturdy, an Ability Shield. Said rather than
+                // modelled: whatever it did shows up as its own line.
+                if !arg(2).isEmpty { board.note("\(name(of: arg(1)))'s \(bare(arg(2)))." ) }
+            case "-mustrecharge":
+                board.note("\(name(of: arg(1))) must recharge.")
             case "-crit":
                 board.note("A critical hit!")
             case "-supereffective":
@@ -605,28 +676,120 @@ final class ShowdownBattle {
                 board.closeStep()
                 turn = Int(arg(1)) ?? turn
                 if turnMarks[turn] == nil { turnMarks[turn] = script.count }
-            case "upkeep", "", "t:", "player", "teamsize", "gen", "tier",
-                 "rule", "start", "gametype", "clearpoke", "poke", "teampreview",
-                 "request", "sideupdate", "update", "-hint", "-message", "done",
-                 "split", "uhtml", "uhtmlchange", "-anim", "-notarget", "-nothing",
-                 "-center", "-combine", "-waiting", "-prepare", "-mustrecharge",
-                 "-hitcount", "-singlemove", "-singleturn", "-block", "-ohko",
-                 "-zpower", "-zbroken", "-clearnegativeboost", "-copyboost",
-                 "-swapboost", "-invertboost", "-endability", "-transform",
-                 "-primal", "-burst", "-terastallize",
-                 "swap", "-fieldactivate", "-candynamax",
-                 "-start", "-end", "-activate", "-sidestart", "-sideend",
-                 "-cureteam", "-setboost", "-boost2", "inactive", "inactiveoff",
-                 "raw", "html", "bigerror", "error", "debug", "seed", "message",
-                 "-hidelinebreak", "askreg", "chat", "c", "j", "l", "n", "expire":
-                break
+            case "-prepare":
+                // A two-turn move winding up. The field draws the glow from
+                // this; without it a Sky Attack looks like a turn where
+                // nothing happened.
+                withFighter(arg(1)) { $0.charging = 0 }
             case "win", "tie":
                 board.note(tag == "win" ? "\(arg(1)) won." : "It is a tie.")
             default:
+                if Self.chrome.contains(tag) { break }
                 unread.insert(tag)
             }
         }
         board.closeStep()
+    }
+
+    /// Tags that say nothing about the board.
+    ///
+    /// Named rather than skipped, and checked against the simulator's own
+    /// source by a test: every tag it can emit has to be read here or listed
+    /// here. Mega Evolution was dropped for a fortnight because a hand-written
+    /// list of things to step over is a list nobody ever reads again.
+    ///
+    /// The groups, and why each is chrome: the room and the match around the
+    /// battle; the client's own presentation, which this app draws its own
+    /// way; the two halves of a split message, handled before the switch; and
+    /// a handful of effects whose consequence arrives as its own line -- a
+    /// `-block` is followed by the move failing, a `-hitcount` by the damage
+    /// it counted.
+    nonisolated static let chrome: Set<String> = [
+        // The room, the match, the players.
+        "player", "teamsize", "gametype", "gen", "tier", "rule", "rated", "start",
+        "clearpoke", "poke", "teampreview", "showteam", "upkeep", "t:", "",
+        "request", "sideupdate", "update", "done", "inactive", "inactiveoff", "expire",
+        "askreg", "1ET",
+        // Chat and the client's own chrome.
+        "chat", "c", "j", "l", "n", "raw", "html", "uhtml", "uhtmlchange", "bigerror",
+        "error", "debug", "seed", "message", "-message", "-hint", "-hidelinebreak",
+        // Presentation this app does its own way.
+        "-anim", "-center", "-combine", "-waiting", "-notarget", "-nothing",
+        "-fieldactivate", "-candynamax", "-zpower", "-zbroken", "-swapsideconditions",
+        // Split messages: read before the switch, never reaching it.
+        "split",
+        // Said by the line that follows them.
+        "-block", "-ohko", "-hitcount", "-primal", "-burst",
+    ]
+
+
+    /// `move: Reflect`, `ability: Intimidate`, `item: Leftovers` -- the
+    /// client prefixes an effect with where it came from.
+    private func bare(_ effect: String) -> String {
+        guard let colon = effect.firstIndex(of: ":") else { return effect }
+        return String(effect[effect.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
+    }
+
+    /// A screen, a Tailwind, a layer of hazards: everything that belongs to a
+    /// side of the field rather than to a Pokemon standing on it.
+    private func side(_ ident: String, condition: String, starting: Bool) {
+        let mine = ident.hasPrefix(mySide)
+        var screens = mine ? board.myScreens : board.theirScreens
+        var tailwind = mine ? board.myTailwind : board.theirTailwind
+        switch bare(condition) {
+        case "Reflect": screens.reflect = starting ? 5 : 0
+        case "Light Screen": screens.lightScreen = starting ? 5 : 0
+        case "Aurora Veil": screens.auroraVeil = starting ? 5 : 0
+        case "Safeguard": screens.safeguard = starting ? 5 : 0
+        case "Tailwind": tailwind = starting ? 4 : 0
+        case "Spikes": screens.spikes = starting ? Swift.min(3, screens.spikes + 1) : 0
+        case "Toxic Spikes": screens.toxicSpikes = starting ? Swift.min(2, screens.toxicSpikes + 1) : 0
+        case "Stealth Rock": screens.stealthRock = starting
+        case "Sticky Web": screens.stickyWeb = starting
+        case "Wide Guard": screens.wideGuard = starting
+        case "Quick Guard": screens.quickGuard = starting
+        default: break
+        }
+        if mine { board.myScreens = screens; board.myTailwind = tailwind }
+        else { board.theirScreens = screens; board.theirTailwind = tailwind }
+        board.note("\(bare(condition)) \(starting ? "went up" : "ended").")
+    }
+
+    private func guarding(_ ident: String, wide: Bool) {
+        let mine = ident.hasPrefix(mySide)
+        if mine { if wide { board.myScreens.wideGuard = true } else { board.myScreens.quickGuard = true } }
+        else { if wide { board.theirScreens.wideGuard = true } else { board.theirScreens.quickGuard = true } }
+    }
+
+    /// What is on one Pokemon: a Substitute, a Leech Seed, a Taunt, the
+    /// confusion it is under. The board carries each of these as its own
+    /// field, and the scene draws several of them.
+    private func volatile(_ ident: String, effect: String, starting: Bool) {
+        let what = bare(effect)
+        withFighter(ident) { fighter in
+            switch what {
+            case "Substitute": fighter.substitute = starting ? Swift.max(1, fighter.maxHP / 4) : 0
+            case "confusion": fighter.confusedFor = starting ? 3 : 0
+            case "Taunt": fighter.tauntedFor = starting ? 3 : 0
+            case "Encore": fighter.encoredFor = starting ? 3 : 0
+            case "Disable": fighter.disabledFor = starting ? 4 : 0
+            case "Yawn": fighter.drowsyFor = starting ? 1 : 0
+            case "Aqua Ring": fighter.aquaRing = starting
+            case "Octolock": fighter.octolocked = starting
+            case "Torment": fighter.tormented = starting
+            case "Attract": fighter.infatuatedWith = starting ? 0 : nil
+            case "Ingrain", "No Retreat": fighter.cannotEscape = starting
+            case "Perish3": fighter.perishIn = 3
+            case "Perish2": fighter.perishIn = 2
+            case "Perish1": fighter.perishIn = 1
+            case "Perish0": fighter.perishIn = 0
+            default: break
+            }
+        }
+        if what == "Leech Seed", let at = seat(ident) {
+            withFighter(ident) { $0.seededFrom = starting ? (at.slot) : nil }
+        }
+        board.note("\(name(of: ident))\(starting ? " is " : " is no longer ")\(what).")
     }
 
     /// It turned into something else. The Pokemon is the same one -- same

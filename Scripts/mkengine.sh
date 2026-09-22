@@ -90,5 +90,23 @@ done
   --banner:js='var require = function (p) { return globalThis.__psResolve(p); };' \
   --minify --keep-names --log-level=error --outfile=/tmp/ps-sim.js
 
+# Every protocol tag the simulator can emit, read out of its own source.
+# The reader is checked against this: a tag that is neither read nor named as
+# chrome fails a test, which is how Mega Evolution stopped being dropped
+# silently and how the next one will.
+python3 - "$SRC" > "$ROOT/data/showdown-protocol.txt" <<'TAGS'
+import re, sys, glob, os
+root = sys.argv[1]
+pat = re.compile(r"\.add(?:Move|Split)?\(\s*[`'\"](-?[a-zA-Z0-9]+)[`'\"]")
+tags = set()
+for pattern in ('sim/*.ts', 'data/*.ts', 'data/mods/champions/*.ts'):
+    for path in glob.glob(os.path.join(root, pattern)):
+        with open(path, encoding='utf-8') as fh:
+            tags.update(m.group(1) for m in pat.finditer(fh.read()))
+for tag in sorted(tags):
+    print(tag)
+TAGS
+echo "==> $(wc -l < "$ROOT/data/showdown-protocol.txt" | tr -d ' ') protocol tags written"
+
 cat "$ROOT/Scripts/engine/prelude.js" /tmp/ps-registry.js /tmp/ps-sim.js > "$BUNDLE"
 echo "==> wrote $BUNDLE ($(du -h "$BUNDLE" | cut -f1)), showdown $COMMIT"
