@@ -150,12 +150,18 @@ struct BattleFieldView: View {
                         // the turn plays, with its rows appearing as it does,
                         // then the orders or the decision. No stepping back;
                         // the Review and Log panels keep the record.
-                        else if session.link != nil, !replay.isEmpty, playback.task != nil { TurnStepper(session: session, playback: playback, live: true) }
+                        // The turn playing itself, either way round. It runs
+                        // in real time and cannot be stepped while it does:
+                        // the rows appear as it goes.
+                        else if !replay.isEmpty, playback.task != nil { TurnStepper(session: session, playback: playback, live: true) }
                         // A decision to make -- who comes in for a faint, who
                         // comes in for a pivot -- comes up on its own the
                         // moment the turn has finished playing.
                         else if !sending.isEmpty, finished == nil, playback.task == nil { ReplacementView(session: session, board: board) }
-                        else if !replay.isEmpty, session.link == nil { TurnStepper(session: session, playback: playback) }
+                        // Watching it again, which is asked for: the orders
+                        // come up on their own once a turn has played, and
+                        // the deck has the button that opens this.
+                        else if session.reviewing, !replay.isEmpty, session.link == nil { TurnStepper(session: session, playback: playback) }
                         else if !sending.isEmpty, finished == nil { ReplacementView(session: session, board: board) }
                         else if finished == nil { CommandDeckView(session: session, playback: playback, board: board) }
                         else { afterGame }

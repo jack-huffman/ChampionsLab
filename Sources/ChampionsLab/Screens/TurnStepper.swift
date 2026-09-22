@@ -107,7 +107,7 @@ struct TurnStepper: View {
             }
             .controlSize(.small).disabled(Swift.max(0, at) + 1 >= replay.count)
             .help("The next step")
-            Button(session.sending.isEmpty ? "Done" : "Who comes in") { playback.finish() }
+            Button(session.sending.isEmpty ? "Done" : "Who comes in") { session.stopReviewing() }
                 .controlSize(.small)
                 .keyboardShortcut(.defaultAction)
                 .help(session.sending.isEmpty ? "Back to giving orders"

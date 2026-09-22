@@ -99,4 +99,52 @@ final class EnginePlaybackTests: HarnessCase {
               || game.board.mine[0].build.form.isMega,
               "\(game.board.mine[0].build.form.formLabel): \(said.prefix(120))")
     }
+
+    /// A turn plays itself once and then it is your move. Watching it again
+    /// is a button, not the next thing that happens to you.
+    func testTheTurnDoesNotLeaveAReplayStandingInTheWay() throws {
+        guard ShowdownEngine.bundleURL() != nil else { throw XCTSkip("no engine") }
+        let ladder = store.ladderTeams(format: "doubles")
+        guard ladder.count >= 2 else { throw XCTSkip("no ladder teams") }
+        let mine = ladder[0].team, theirs = ladder[1].team
+        let playback = TurnPlayback()
+        let session = BattleSession(rules: store.rulebook, playback: playback)
+        playback.stage(MoveTimeline.Stage(size: CGSize(width: 900, height: 520), singles: false))
+        let start = Board.opening(mine: mine, bringing: mine.slots.prefix(4).map(\.id.uuidString),
+                                  theirs: theirs, rules: store.rulebook,
+                                  singles: false, sendOut: false)
+        let battle = try ShowdownBattle.start(from: start, mine: mine, theirs: theirs,
+                                              store: store, seed: [2, 2, 2, 2])
+        session.showdown = battle
+        session.board = battle.board
+
+        check("nothing to replay before a turn has played", !session.canReplayTurn)
+        let play = Play(left: .attack(move: 0, target: 0), right: .attack(move: 0, target: 1))
+        session.resolve(battle.board, mine: play,
+                        solved: TurnGame(board: battle.board, believingTheirs: true).solve())
+
+        check("the turn is not left being reviewed", !session.reviewing)
+        check("but it can be asked for", session.canReplayTurn)
+        session.replayLastTurn()
+        check("and then it is being reviewed", session.reviewing)
+        session.stopReviewing()
+        check("until you are done with it", !session.reviewing)
+    }
+
+    /// A game between two people is played in real time. There is nothing to
+    /// step back to, and offering it would let one player stop while the
+    /// other is waiting on them.
+    func testALinkedGameHasNothingToReplay() throws {
+        let ladder = store.ladderTeams(format: "doubles")
+        guard let team = ladder.first?.team else { throw XCTSkip("no ladder teams") }
+        let link = LANLink(role: .guest, theirName: "Them", singles: false,
+                           myTeam: team,
+                           theirSix: Wire.Six(name: "Them", forms: []),
+                           send: { _ in })
+        let session = BattleSession(rules: store.rulebook, playback: TurnPlayback())
+        session.link = link
+        check("no replay over the wire", !session.canReplayTurn)
+        session.replayLastTurn()
+        check("and asking does nothing", !session.reviewing)
+    }
 }

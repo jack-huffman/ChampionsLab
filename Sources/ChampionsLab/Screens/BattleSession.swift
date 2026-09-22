@@ -110,6 +110,35 @@ final class BattleSession: ObservableObject {
     /// the thing worth having from somebody who has already got it right.
     var showdown: ShowdownBattle?
 
+    /// Looking back over the turn that just played, which is something you
+    /// ask for rather than something that happens to you.
+    ///
+    /// The turn plays itself once, live, and then the orders come up. It used
+    /// to leave the stepper standing there afterwards holding the turn you
+    /// had just watched, so the next thing after every turn was dismissing a
+    /// replay of it. Never in a game between two people: that one is played
+    /// in real time and there is nothing to go back to.
+    @Published var reviewing = false
+    /// The last turn, kept so it can be watched again.
+    private var lastTurn: (recorded: Board, before: Board)?
+    var canReplayTurn: Bool { link == nil && lastTurn != nil }
+
+    func replayLastTurn() {
+        guard link == nil, let last = lastTurn else { return }
+        reviewing = true
+        playback.show(last.recorded, steps: last.recorded.steps, before: last.before)
+        playback.play(last.recorded.steps,
+                      hitMine: Self.hurt(mine: true, last.recorded, since: last.before),
+                      hitTheirs: Self.hurt(mine: false, last.recorded, since: last.before),
+                      singles: last.recorded.activeCount == 1)
+    }
+
+    /// Done looking.
+    func stopReviewing() {
+        reviewing = false
+        playback.finish()
+    }
+
     @Published var history: [(board: Board, log: [String], turn: Int)] = []
     /// Every turn of this game, marked. Read back in the Review panel.
     @Published var review: [TurnReview] = []
@@ -647,6 +676,9 @@ final class BattleSession: ObservableObject {
         chosenSends = []
         leftPick = nil; rightPick = nil; megaSlot = nil; command = .menu
         thought = nil; self.solved = nil
+        // Kept so it can be asked for again, and not left standing.
+        lastTurn = (recorded: recorded, before: current)
+        reviewing = false
         playback.play(recorded.steps, hitMine: hitMine, hitTheirs: hitTheirs,
                       singles: next.activeCount == 1, from: stepsPlayed)
         if next.isOut(mine: false) { finished = "You win." }
@@ -862,6 +894,7 @@ final class BattleSession: ObservableObject {
         playing = false; finished = nil; history = []; review = []; grade = nil
         explaining = nil; pendingReview = nil
         sending = []; chosenSends = []; pausedTurn = nil
+        reviewing = false; lastTurn = nil
         remotePivot = false; waitingOn = nil; shownSteps = 0; shownStory = 0
         intro = nil; introAsking = nil
         panel = .engine

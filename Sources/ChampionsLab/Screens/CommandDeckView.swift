@@ -123,6 +123,18 @@ struct CommandDeckView: View {
                     HStack(spacing: 6) {
                         Text("What will \(ahead.build.form.formLabel) do?")
                             .font(.system(size: 14, weight: .semibold))
+                        // The turn that just played, watched again. Asked for
+                        // rather than left standing in the way: a turn plays
+                        // itself once and then it is your move.
+                        if session.canReplayTurn {
+                            Button { session.replayLastTurn() } label: {
+                                Label("Replay turn", systemImage: "arrow.counterclockwise")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .labelStyle(.titleAndIcon)
+                            }
+                            .buttonStyle(.link)
+                            .help("Play the last turn again, a step at a time.")
+                        }
                         if fighter.status != .none {
                             Text(fighter.status.rawValue.uppercased())
                                 .font(.system(size: 8, weight: .bold)).kerning(0.4)
