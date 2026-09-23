@@ -306,6 +306,7 @@ final class ShowdownBattle {
         // refused, and looks exactly like an illegal move.
         try settle(ours: ours, theirs: theirsWhenForced)
         refreshLegality()
+        refreshToxic()
         return board
     }
 
@@ -324,6 +325,7 @@ final class ShowdownBattle {
         defer { keepPosition() }
         _ = try sendIn(mine: bench, theirs: nil, autoTheirs: true)
         refreshLegality()
+        refreshToxic()
         return board
     }
 
@@ -479,12 +481,20 @@ final class ShowdownBattle {
         board.narrating = true
         unread = []
         turn = 1
+        weatherNamed = nil
         replaying = true
         defer { replaying = false }
+        // Team preview: the room and the rules, nothing that lands on a board.
         _ = try engine.since()
         try engine.choose("p1", origin.ordering.mine)
         try engine.choose("p2", origin.ordering.theirs)
-        _ = try engine.since()
+        // The leads walking on -- read, not thrown away. `origin.board` is the
+        // board from *before* the opening, so everything the opening does
+        // happens here or not at all: a Drought's sun, a Grassy Surge, the
+        // Intimidates. These lines were being discarded, so taking a turn
+        // back rebuilt a game in which no lead had ever used its ability, and
+        // the weather they set was simply not there.
+        read(try engine.since())
         for step in keeping {
             guard try engine.request(step.side) != nil else { continue }
             _ = try engine.choose(step.side, step.choice)
@@ -495,6 +505,10 @@ final class ShowdownBattle {
         board.steps = []
         board.story = []
         awaiting = (false, false)
+        // What may be clicked from here is the simulator's to say, as it is
+        // after any other turn.
+        refreshLegality()
+        refreshToxic()
         return board
     }
 
@@ -699,6 +713,16 @@ final class ShowdownBattle {
                         }
                         f.lastTarget = aimedAt
                         f.lastMoveFailed = false
+                        // A move line is either a fresh move or the release of
+                        // one that was wound up last turn, and either way the
+                        // winding is over. Nothing cleared it before, which
+                        // mattered more than it sounds: the order for a slot
+                        // that is charging is taken as read, so after a single
+                        // Solar Beam the app ignored every order given to that
+                        // Pokemon for the rest of the game. A `-prepare` that
+                        // follows in the same step winds it again.
+                        f.charging = nil
+                        f.hidden = false
                     }
                 }
                 board.note("\(name(of: arg(1))) used \(arg(2)).")
@@ -736,7 +760,10 @@ final class ShowdownBattle {
                                             to: name(of: arg(1)), healing: tag == "-heal"))
                 }
             case "faint":
-                withFighter(arg(1)) { $0.hp = 0 }
+                // Down, and carrying nothing: the simulator clears a status
+                // when a Pokemon faints, and a card that went on reading TOX
+                // over a fainted Pokemon was saying something no longer true.
+                withFighter(arg(1)) { $0.hp = 0; $0.status = .none; $0.toxicTurns = 0 }
                 board.note("\(name(of: arg(1))) fainted.")
             case "-status":
                 withFighter(arg(1)) { $0.status = Self.ailment(arg(2)) ?? $0.status }
@@ -1013,7 +1040,21 @@ final class ShowdownBattle {
                 // A two-turn move winding up. The field draws the glow from
                 // this; without it a Sky Attack looks like a turn where
                 // nothing happened.
-                withFighter(arg(1)) { $0.charging = 0 }
+                // Which move, by its place on the Pokemon: this was nought,
+                // which is the first move whatever was actually being charged.
+                // And its aim, which is the aim it was thrown with a line ago.
+                // And whether it is out of reach meanwhile -- Fly, Dig, Dive,
+                // Bounce, Phantom Force -- which nothing here recorded, so the
+                // search went on pricing blows into a Pokemon that was in the
+                // sky.
+                let aim = board.acting.map { $0.aimsAtAlly ? Choice.allyTarget : ($0.target ?? 0) } ?? 0
+                withFighter(arg(1)) { f in
+                    guard let index = f.moves.firstIndex(where: { $0.name == bare(arg(2)) })
+                    else { return }
+                    f.charging = index
+                    f.chargingTarget = aim
+                    f.hidden = f.moves[index].charge?.hides ?? false
+                }
             case "win", "tie":
                 board.note(tag == "win" ? "\(arg(1)) won." : "It is a tie.")
             default:
@@ -1147,6 +1188,14 @@ final class ShowdownBattle {
                     }
                 }
                 let trapped = (entry["trapped"] as? Bool) == true
+                // Not locked into anything: a Power Herb or the sun let the
+                // move go off on the turn it was begun, with no second move
+                // line to say so. The request is the one place that knows, so
+                // a Pokemon offered its whole moveset is not winding anything.
+                if moves.count >= team[slot].moves.count {
+                    if mine { board.mine[slot].charging = nil; board.mine[slot].hidden = false }
+                    else { board.theirs[slot].charging = nil; board.theirs[slot].hidden = false }
+                }
                 if mine {
                     board.mine[slot].unusable = unusable
                     board.mine[slot].ppLeft = pp
@@ -1157,6 +1206,42 @@ final class ShowdownBattle {
                     board.theirs[slot].trapped = trapped
                 }
             }
+        }
+    }
+
+    /// How far along a bad poisoning is, from the simulator's own record.
+    ///
+    /// Toxic takes a sixteenth more every turn it holds, and `toxicTurns` is
+    /// the count the model prices that ramp from. Nothing on this path kept
+    /// it, so a Pokemon six turns into a Toxic was priced as taking a
+    /// sixteenth, and the damage preview and the search both thought it had
+    /// time it did not have. The count is not on the protocol at all --
+    /// Magic Guard and Poison Heal both advance it without a damage line --
+    /// so it is read off the simulator's position, and only when somebody is
+    /// badly poisoned, which is when it is worth the read.
+    func refreshToxic() {
+        let poisoned = (board.mine + board.theirs).contains { $0.status == .badPoison }
+        guard poisoned, let json = try? engine.save(), let data = json.data(using: .utf8),
+              let top = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let sides = top["sides"] as? [[String: Any]], sides.count == 2 else { return }
+        for (index, mine) in [(0, true), (1, false)] {
+            let party = sides[index]["pokemon"] as? [[String: Any]] ?? []
+            var team = mine ? board.mine : board.theirs
+            for (slot, fighter) in team.enumerated() where fighter.status == .badPoison {
+                // The simulator keeps its actives at the front as the board
+                // does, so the same place is the first guess; the name is the
+                // check on it.
+                let named: ([String: Any]) -> Bool = { mon in
+                    let species = (mon["details"] as? String)?
+                        .split(separator: ",").first.map(String.init) ?? ""
+                    return species == fighter.build.form.showdown || species == fighter.build.form.formLabel
+                }
+                let mon = party.indices.contains(slot) && named(party[slot])
+                    ? party[slot] : party.first(where: named)
+                let state = mon?["statusState"] as? [String: Any]
+                if let stage = state?["stage"] as? Int { team[slot].toxicTurns = stage }
+            }
+            if mine { board.mine = team } else { board.theirs = team }
         }
     }
 

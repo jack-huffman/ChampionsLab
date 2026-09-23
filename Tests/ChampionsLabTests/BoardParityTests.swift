@@ -40,6 +40,8 @@ final class BoardParityTests: HarnessCase {
         var volatiles: Set<String>
         var substitute: Int
         var moves: [String]
+        /// How far along a bad poisoning is: the simulator's own count.
+        var toxicStage: Int
     }
 
     private struct SimSide {
@@ -107,7 +109,8 @@ final class BoardParityTests: HarnessCase {
                         // lists differ in length or order the app is naming a
                         // different move than the one that was clicked.
                         moves: (mon["moveSlots"] as? [[String: Any]] ?? [])
-                            .compactMap { $0["id"] as? String })
+                            .compactMap { $0["id"] as? String },
+                        toxicStage: ((mon["statusState"] as? [String: Any])?["stage"] as? Int) ?? 0)
                 }
             }
             let party = side["pokemon"] as? [[String: Any]] ?? []
@@ -239,6 +242,19 @@ final class BoardParityTests: HarnessCase {
                 same("\(tag) move list", fighter.moves.map { ShowdownText.id($0.name) }
                         .joined(separator: ","),
                      mon.moves.joined(separator: ","))
+                // Winding a two-turn move up, and out of reach while doing it.
+                // The simulator keeps the first as `twoturnmove` and the second
+                // as the move's own volatile, which is what carries the
+                // invulnerability.
+                same("\(tag) charging", "\(fighter.charging != nil)",
+                     "\(mon.volatiles.contains("twoturnmove"))")
+                let unreachable = ["fly", "bounce", "dig", "dive", "phantomforce",
+                                   "shadowforce", "skydrop"]
+                same("\(tag) out of reach", "\(fighter.hidden)",
+                     "\(unreachable.contains { mon.volatiles.contains($0) })")
+                if mon.status == "tox" {
+                    same("\(tag) toxic count", "\(fighter.toxicTurns)", "\(mon.toxicStage)")
+                }
                 same("\(tag) substitute", "\(fighter.substitute > 0)",
                      "\(mon.volatiles.contains("substitute"))")
                 // Every volatile the board has somewhere to put.
@@ -468,5 +484,89 @@ final class BoardParityTests: HarnessCase {
             try compare(game, turn: game.turn)
         }
         report("a ladder game with switches in it")
+    }
+
+    /// Fly, a Toxic, and a Solar Beam in the sun -- then every turn taken
+    /// back and the rebuilt board checked against the simulator.
+    ///
+    /// The three are the parts of a Pokemon's state the reader had not kept.
+    /// A wound-up move was recorded as move nought and never cleared, so after
+    /// one Solar Beam the app ignored every order given to that Pokemon. Fly
+    /// never made anything unreachable. The Toxic count never climbed. And
+    /// the sun matters twice: Solar Beam fires on the turn it is begun, with
+    /// no second move line to say the winding is over, and it is the weather a
+    /// lead brings on the way in -- which taking a turn back was losing,
+    /// because it rebuilt the game without reading the opening.
+    func testWindUpsToxicAndTakingATurnBackAgreeWithTheSimulator() throws {
+        guard ShowdownEngine.bundleURL() != nil else { throw XCTSkip("no engine") }
+        guard let dragonite = slot("Dragonite", item: "", ability: "Inner Focus",
+                                   moves: ["Fly", "Protect", "Dragon Claw", "Extreme Speed"], sp: [32, 32, 0, 0, 0, 0]),
+              let gengar = slot("Gengar", item: "", ability: "Cursed Body",
+                                moves: ["Toxic", "Protect", "Shadow Ball", "Sludge Bomb"], sp: [0, 0, 0, 32, 0, 32]),
+              let ninetales = slot("Ninetales", item: "", ability: "Drought",
+                                   moves: ["Solar Beam", "Protect", "Flamethrower", "Will-O-Wisp"], sp: [32, 0, 0, 32, 0, 0]),
+              let milotic = slot("Milotic", item: "", ability: "Marvel Scale",
+                                 moves: ["Scald", "Protect", "Recover", "Ice Beam"], sp: [32, 0, 32, 0, 0, 0]),
+              [dragonite, gengar, ninetales, milotic].allSatisfy({ $0.moves.count == 4 })
+        else { throw XCTSkip("the cast is not in this dex") }
+
+        var mine = Team(name: "Mine"); mine.format = "doubles"; mine.slots = [dragonite, gengar]
+        var theirs = Team(name: "Theirs"); theirs.format = "doubles"; theirs.slots = [ninetales, milotic]
+        for i in mine.slots.indices { mine.slots[i].id = UUID() }
+        for i in theirs.slots.indices { theirs.slots[i].id = UUID() }
+        let game = try ShowdownBattle.start(mine: mine, theirs: theirs,
+                                            myFour: [0, 1], theirFour: [0, 1],
+                                            store: store, seed: [6, 2, 8, 3])
+        divergences = []
+        witnessed = []
+        try compare(game, turn: game.turn)
+
+        func use(_ name: String, _ slot: Int, mine: Bool, at target: Int = 0) -> Choice {
+            let team = mine ? game.board.mine : game.board.theirs
+            guard slot < team.count, !team[slot].fainted,
+                  let index = team[slot].moves.firstIndex(where: { $0.name == name })
+            else { return .pass }
+            return .attack(move: index, target: target)
+        }
+        // The Pokemon's own order when it is mid-Fly: the app's, which is the
+        // thing under test, rather than one the script supplies.
+        func orders(_ left: String, _ right: String, mine: Bool) -> Play {
+            let team = mine ? game.board.mine : game.board.theirs
+            func one(_ name: String, _ slot: Int) -> Choice {
+                if let charging = team[slot].charging {
+                    return .attack(move: charging, target: team[slot].chargingTarget)
+                }
+                return use(name, slot, mine: mine)
+            }
+            return Play(left: one(left, 0), right: one(right, 1))
+        }
+        var sawCharge = false, sawHidden = false, sawToxic = 0
+        let script: [(String, String, String, String)] = [
+            ("Fly", "Toxic", "Solar Beam", "Protect"),        // up, poison, sun beam
+            ("Fly", "Protect", "Flamethrower", "Scald"),       // Fly lands
+            ("Dragon Claw", "Shadow Ball", "Solar Beam", "Recover"),
+            ("Extreme Speed", "Sludge Bomb", "Flamethrower", "Ice Beam"),
+        ]
+        for (a, b, c, d) in script where !ShowdownEngine.shared.ended {
+            try game.play(mine: orders(a, b, mine: true), theirs: orders(c, d, mine: false))
+            if game.board.mine.contains(where: { $0.charging != nil }) { sawCharge = true }
+            if game.board.mine.contains(where: \.hidden) { sawHidden = true }
+            sawToxic = max(sawToxic, game.board.theirs.map(\.toxicTurns).max() ?? 0)
+            try compare(game, turn: game.turn)
+        }
+        print("  wound up: \(sawCharge), out of reach: \(sawHidden), deepest Toxic: \(sawToxic)")
+        check("a Fly was wound up and out of reach", sawCharge && sawHidden)
+        check("and the Toxic count climbed", sawToxic >= 2, "\(sawToxic)")
+        check("the sun came up with the lead", witnessed.contains("weather"))
+
+        // And back through every turn, each rebuilt board checked whole.
+        let reached = game.turn
+        for back in stride(from: reached - 1, through: 1, by: -1) {
+            _ = try game.rewind(to: back)
+            try compare(game, turn: back)
+            check("taking back to turn \(back) keeps the sun",
+                  game.board.field.weather == .sun, game.board.field.weather.rawValue)
+        }
+        report("Fly, Toxic, sun, and every turn taken back")
     }
 }
