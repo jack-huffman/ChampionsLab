@@ -98,6 +98,92 @@ final class EnginePlaybackTests: HarnessCase {
         check("the stone went off", said.lowercased().contains("mega")
               || game.board.mine[0].build.form.isMega,
               "\(game.board.mine[0].build.form.formLabel): \(said.prefix(120))")
+        // And having gone off, it is gone. The deck offers "Mega Evolve" for
+        // any Pokemon still holding one in hand, so a side that does not
+        // record having spent its one is asked again the turn after -- on a
+        // Pokemon that has already done it.
+        if game.board.mine[0].build.form.isMega || said.lowercased().contains("mega") {
+            check("the side has spent its one Mega",
+                  game.board.mine.allSatisfy(\.hasMegaEvolved))
+            check("and nobody is still holding one in hand",
+                  game.board.mine.allSatisfy { $0.pendingMega == nil },
+                  "\(game.board.mine.compactMap { $0.pendingMega?.formLabel })")
+        }
+    }
+
+    /// The field works a move's aim out from whoever took damage, and a move
+    /// that missed damaged nobody. Left without an aim, a move is played as a
+    /// move on the user -- so a missed Close Combat went off over the Pokemon
+    /// that threw it rather than flying past the one it was meant for.
+    func testEveryMovePlayedSaysWhereItWasAimed() throws {
+        guard ShowdownEngine.bundleURL() != nil else { throw XCTSkip("no engine") }
+        let ladder = store.ladderTeams(format: "doubles")
+        guard ladder.count >= 2 else { throw XCTSkip("no ladder teams") }
+        let game = try ShowdownBattle.start(mine: ladder[0].team, theirs: ladder[1].team,
+                                            myFour: [0, 1, 2, 3], theirFour: [0, 1, 2, 3],
+                                            store: store, seed: [7, 7, 7, 7])
+        var seen = 0, aimless: [String] = []
+        for _ in 0..<6 {
+            let play = Play(left: .attack(move: 0, target: 0), right: .attack(move: 0, target: 1))
+            // A turn that cannot be played -- somebody has fainted and is
+            // owed a replacement, or the game is over -- ends the sample.
+            guard (try? game.play(mine: play, theirs: play)) != nil else { break }
+            for step in game.board.steps {
+                guard let action = step.action, action.category != "Switch",
+                      action.category != "Mega", !action.move.isEmpty,
+                      action.stopped == nil else { continue }
+                seen += 1
+                if action.target == nil && !action.aimsAtUser && !action.aimsAtAlly {
+                    aimless.append(action.move)
+                }
+            }
+        }
+        check("moves were played", seen > 0, "\(seen)")
+        check("and every one of them says where it went",
+              aimless.isEmpty, "aimless: \(Set(aimless).sorted().joined(separator: ", "))")
+    }
+
+    /// A miss is drawn over the Pokemon that avoided it, the way an immunity
+    /// is -- and it reaches the other chair, where all three of the field's
+    /// badges were being dropped on the way.
+    func testAMissIsSaidOverThePokemonThatAvoidedIt() {
+        let ladder = store.ladderTeams(format: "doubles")
+        guard ladder.count >= 2 else { return check("no ladder teams", false) }
+        var board = Board.opening(mine: ladder[0].team,
+                                  bringing: ladder[0].team.slots.prefix(4).map(\.id.uuidString),
+                                  theirs: ladder[1].team, rules: store.rulebook,
+                                  singles: false, sendOut: true)
+        // A step that says a move went past somebody and nothing else. The
+        // badge is the whole of what the field has to draw, which is the
+        // case the marker exists for.
+        board.beginStep()
+        board.miss(onMine: false, slot: 1, by: "Focus Blast")
+        board.note("It missed.")
+        board.closeStep()
+
+        guard let step = board.steps.last else { return check("a step was made", false) }
+        check("the step says who avoided it",
+              step.missed == [Board.Step.Firing(mine: false, slot: 1, name: "Focus Blast")],
+              "\(step.missed)")
+        // From the other chair it is their own Pokemon that dodged.
+        check("and from the other chair it is the other side's",
+              step.flipped.missed == [Board.Step.Firing(mine: true, slot: 1, name: "Focus Blast")],
+              "\(step.flipped.missed)")
+        // And it survives the wire, where it has to cross to be drawn at all.
+        do {
+            let wire = try JSONEncoder().encode(step)
+            let back = try JSONDecoder().decode(Board.Step.self, from: wire)
+            check("and it survives the wire", back.missed == step.missed, "\(back.missed)")
+        } catch {
+            check("and it survives the wire", false, "\(error)")
+        }
+
+        // The playback reads it into the seat the field draws over.
+        let playback = TurnPlayback()
+        playback.show(board, steps: board.steps)
+        playback.replay(step: board.steps.count - 1)
+        check("the field is told to draw it",
+              playback.missed.contains(Seat(mine: false, slot: 1)), "\(playback.missed)")
     }
 
     /// A turn plays itself once and then it is your move. Watching it again

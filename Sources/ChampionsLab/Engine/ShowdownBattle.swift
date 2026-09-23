@@ -576,10 +576,29 @@ final class ShowdownBattle {
                 // all part of the same beat.
                 if let at = seat(arg(1)) {
                     let move = data?.moves.values.first { $0.name == arg(2) }
-                    board.beginStep(Board.Action(byMine: at.mine, slot: at.slot,
-                                                 move: arg(2),
-                                                 category: move?.category ?? "Physical",
-                                                 type: move?.type ?? "Normal"))
+                    var action = Board.Action(byMine: at.mine, slot: at.slot,
+                                              move: arg(2),
+                                              category: move?.category ?? "Physical",
+                                              type: move?.type ?? "Normal")
+                    // Showdown names what it was thrown at, and the field
+                    // needs that most when nothing came of it: it works the
+                    // aim out from whoever took damage, and a miss leaves it
+                    // nobody. A move aimed at nobody is a move on the user,
+                    // so a missed Close Combat played over the Pokemon that
+                    // threw it rather than flying past the one it was for.
+                    if let aim = seat(arg(3)) {
+                        if aim.mine != at.mine {
+                            action.target = aim.slot
+                        } else if aim.slot == at.slot {
+                            action.aimsAtUser = true
+                        } else {
+                            action.aimsAtAlly = true
+                        }
+                    } else if move?.aimsAtUser == true {
+                        // Trick Room and its like: no target on the line.
+                        action.aimsAtUser = true
+                    }
+                    board.beginStep(action)
                     // Used in the open, so the other side has seen it. A game
                     // between two people sends only what has been shown, and
                     // a move nobody recorded as shown is a move the opponent's
@@ -624,9 +643,8 @@ final class ShowdownBattle {
                     }
                 }
             case "-setboost":
-                if let at = seat(arg(1)), let stage = Self.stage(arg(2)) {
+                if let stage = Self.stage(arg(2)) {
                     withFighter(arg(1)) { $0.build.boosts[stage.rawValue] = Int(arg(3)) ?? 0 }
-                    _ = at
                 }
             case "-clearboost", "-clearallboost":
                 withFighter(arg(1)) { $0.build.boosts = Array(repeating: 0, count: Stage.width) }
@@ -651,6 +669,20 @@ final class ShowdownBattle {
                 board.beginStep(seat(arg(1)).map {
                     Board.Action(byMine: $0.mine, slot: $0.slot, move: "", category: "Mega", type: "")
                 })
+                // And the side has spent its one. Without this the board still
+                // reads as holding a Mega in hand, so the deck offered "Mega
+                // Evolve" again the turn after -- on a Pokemon that already had.
+                if let at = seat(arg(1)) {
+                    for index in (at.mine ? board.mine : board.theirs).indices {
+                        if at.mine {
+                            board.mine[index].pendingMega = nil
+                            board.mine[index].hasMegaEvolved = true
+                        } else {
+                            board.theirs[index].pendingMega = nil
+                            board.theirs[index].hasMegaEvolved = true
+                        }
+                    }
+                }
                 board.note("\(name(of: arg(1))) Mega Evolved!")
             case "detailschange", "-formechange":
                 // It is something else now: a Mega, a Primal, an Ogerpon that
@@ -676,10 +708,6 @@ final class ShowdownBattle {
                 board.note("\(name(of: arg(1))) used \(what).")
             case "-singlemove":
                 if bare(arg(2)) == "Destiny Bond" { withFighter(arg(1)) { $0.destinyBound = true } }
-            case "-setboost":
-                if let stage = Self.stage(arg(2)) {
-                    withFighter(arg(1)) { $0.build.boosts[stage.rawValue] = Int(arg(3)) ?? 0 }
-                }
             case "-clearnegativeboost":
                 withFighter(arg(1)) { f in
                     for index in f.build.boosts.indices where f.build.boosts[index] < 0 {
@@ -735,9 +763,18 @@ final class ShowdownBattle {
             case "-resisted":
                 board.note("It's not very effective...")
             case "-immune":
+                if let at = seat(arg(1)) {
+                    board.untouchable(onMine: at.mine, slot: at.slot, by: board.acting?.move ?? "")
+                }
                 board.note("\(name(of: arg(1))) is immune.")
             case "-miss":
-                board.note("\(name(of: arg(2).isEmpty ? arg(1) : arg(2))) avoided the attack.")
+                // The target, which is the second field when there is one and
+                // the only field when the move was thrown at nothing.
+                let dodged = arg(2).isEmpty ? arg(1) : arg(2)
+                if let at = seat(dodged) {
+                    board.miss(onMine: at.mine, slot: at.slot, by: board.acting?.move ?? "")
+                }
+                board.note("\(name(of: dodged)) avoided the attack.")
             case "-fail":
                 board.note("But it failed.")
             case "cant":

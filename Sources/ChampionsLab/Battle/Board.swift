@@ -628,6 +628,10 @@ struct Board {
         /// aimed at something immune to it looked the same as one that
         /// fizzled for any other reason.
         var untouched: [Firing] = []
+        /// And who the move was thrown at and did not reach. An immunity and
+        /// a miss are two different answers, and the field was giving neither:
+        /// the attack flew out and nothing at all came back.
+        var missed: [Firing] = []
         /// An ability that went off during the step, and whose.
         struct Firing: Equatable {
             let mine: Bool
@@ -820,6 +824,8 @@ struct Board {
     var criticals: [Step.Firing] = []
     /// And who was untouched, for the same window.
     var untouched: [Step.Firing] = []
+    /// And who avoided one, for the same window.
+    var missed: [Step.Firing] = []
     /// Everything that happened since the step began, in order.
     var events: [Step.Event] = []
     /// Where every stage and status stood when the step began. At the close,
@@ -866,7 +872,7 @@ struct Board {
     private mutating func snapshot(_ text: String) -> Step {
         reconcileEvents()
         defer {
-            firing = []; itemsFired = []; criticals = []; untouched = []
+            firing = []; itemsFired = []; criticals = []; untouched = []; missed = []
             events = []; markStepStart()
         }
         return Step(text: text, action: acting,
@@ -877,7 +883,7 @@ struct Board {
                     theirTailwind: theirTailwind, trickRoom: trickRoom,
                     myBoosts: mine.map(\.build.boosts), theirBoosts: theirs.map(\.build.boosts),
                     items: itemsFired, criticals: criticals, untouched: untouched,
-                    abilities: firing, events: events,
+                    missed: missed, abilities: firing, events: events,
                     myStatus: mine.map(\.status), theirStatus: theirs.map(\.status),
                     myConfused: mine.map(\.isConfused), theirConfused: theirs.map(\.isConfused),
                     myProtected: mine.map(\.isProtected), theirProtected: theirs.map(\.isProtected))
@@ -895,6 +901,13 @@ struct Board {
     mutating func untouchable(onMine mine: Bool, slot: Int, by move: String) {
         let hit = Step.Firing(mine: mine, slot: slot, name: move)
         if !untouched.contains(hit) { untouched.append(hit) }
+    }
+
+    /// A move was aimed at somebody and went past them. The same door as
+    /// `untouchable`, for the other reason nothing landed.
+    mutating func miss(onMine mine: Bool, slot: Int, by move: String) {
+        let hit = Step.Firing(mine: mine, slot: slot, name: move)
+        if !missed.contains(hit) { missed.append(hit) }
     }
 
     /// Say what happened, and remember what the board looked like when it did.
@@ -1412,8 +1425,10 @@ struct Play: Hashable {
 //
 // A game between two people is one board on one machine and a view of it on
 // the other, so the pieces of a board the other player may see have to be
-// encodable. Nothing here decides what they may see; `asTheOtherPlayerSeesIt`
-// in the LAN folder does that.
+// encodable. Swift synthesises that only beside the type itself, which is why
+// these live here; turning a board round for the other chair does not, and is
+// in BoardWire.swift. Nothing here decides what they may see;
+// `asTheOtherPlayerSeesIt` in the LAN folder does that.
 
 extension Fighter: Codable {}
 extension Screens: Codable {}
@@ -1429,55 +1444,9 @@ extension Board.Step: Codable {
     /// Everything but the id, which is the step's own and fresh on each side.
     enum CodingKeys: String, CodingKey {
         case text, action, myHP, theirHP, myForms, theirForms, field, myTailwind, theirTailwind,
-             trickRoom, myBoosts, theirBoosts, abilities, items, events, myStatus, theirStatus, myConfused, theirConfused,
+             trickRoom, myBoosts, theirBoosts, abilities, items, criticals, untouched, missed,
+             events, myStatus, theirStatus, myConfused, theirConfused,
              myProtected, theirProtected
     }
 }
-extension Board.Step.Event: Codable {
-    /// The same event from the other chair.
-    var flipped: Board.Step.Event {
-        switch self {
-        case .ability(let firing):
-            return .ability(Board.Step.Firing(mine: !firing.mine, slot: firing.slot, name: firing.name))
-        case .stat(let mine, let slot, let stat, let delta, let cause):
-            return .stat(mine: !mine, slot: slot, stat: stat, delta: delta, cause: cause)
-        case .status(let mine, let slot, let ailment):
-            return .status(mine: !mine, slot: slot, ailment: ailment)
-        case .item(let firing):
-            return .item(Board.Step.Firing(mine: !firing.mine, slot: firing.slot, name: firing.name))
-        }
-    }
-}
-
-extension Board.Action {
-    /// The same action from the other chair.
-    var flipped: Board.Action {
-        var out = Board.Action(byMine: !byMine, slot: slot, move: move, category: category, type: type)
-        out.stopped = stopped
-        out.target = target
-        out.aimsAtUser = aimsAtUser
-        out.aimsAtAlly = aimsAtAlly
-        out.hits = hits
-        return out
-    }
-}
-
-extension Board.Step {
-    /// The same step from the other chair: each side's columns swapped, and
-    /// who acted and whose ability fired turned round.
-    var flipped: Board.Step {
-        var out = Board.Step(text: text, action: action?.flipped,
-                             myHP: theirHP, theirHP: myHP,
-                             myForms: theirForms, theirForms: myForms,
-                             field: field, myTailwind: theirTailwind, theirTailwind: myTailwind,
-                             trickRoom: trickRoom,
-                             myBoosts: theirBoosts, theirBoosts: myBoosts,
-                             abilities: abilities.map { Firing(mine: !$0.mine, slot: $0.slot, name: $0.name) },
-                             events: events.map(\.flipped),
-                             myStatus: theirStatus, theirStatus: myStatus,
-                             myConfused: theirConfused, theirConfused: myConfused,
-                             myProtected: theirProtected, theirProtected: myProtected)
-        out.action = action?.flipped
-        return out
-    }
-}
+extension Board.Step.Event: Codable {}

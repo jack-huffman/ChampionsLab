@@ -302,6 +302,19 @@ extension BattleFieldView {
                 // and a move that was never aimed here look the same on a
                 // field that says nothing, and one of them is a decision
                 // somebody got wrong.
+                if playback.missed.contains(seat) {
+                    Text("MISS")
+                        .font(.system(size: max(9, 8 * stage.k), weight: .black, design: .rounded))
+                        .kerning(0.9)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Capsule().fill(Color(red: 0.60, green: 0.44, blue: 0.26)))
+                        .overlay(Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
+                        .transition(.asymmetric(insertion: .scale(scale: 0.5).combined(with: .opacity),
+                                                removal: .opacity))
+                        .id(playback.hitNumber)
+                }
                 if playback.untouched.contains(seat) {
                     Text("IMMUNE")
                         .font(.system(size: max(9, 8 * stage.k), weight: .black, design: .rounded))
