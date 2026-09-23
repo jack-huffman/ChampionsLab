@@ -927,3 +927,56 @@ struct ProtectShield: View {
         }
     }
 }
+
+/// A Pokemon out of reach for a turn, drawn the way the client draws it.
+///
+/// Read off each move's `prepareAnim` in Showdown's client:
+///
+///     fly, bounce, skydrop    attacker.anim({ opacity: 0.2, y: y + 80, time: 300 })
+///     dig                     attacker.anim({ opacity: 0.2, y: y - 80, time: 300 })
+///     dive                    the same, eased 'swing'
+///     phantomforce,
+///     shadowforce             the field darkens; the Pokemon blinks out and in
+///                             four times, fifty milliseconds a beat, and is gone
+///
+/// The client's `y` counts upward, so plus eighty is into the sky and minus
+/// eighty is into the ground. A fifth of its opacity is left on for the ones
+/// that go up or down -- it is still there, and you can see where -- and none
+/// at all for the ones that vanish, which is the point of them.
+struct Vanishing: ViewModifier {
+    let way: Move.Vanish?
+    /// Eighty of the client's units, at this Pokemon's depth.
+    let lift: CGFloat
+
+    @State private var blink = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .offset(y: way == .up ? -lift : way == .down ? lift : 0)
+            .opacity(opacity)
+            .animation(reduceMotion ? nil : (way == .down ? .easeInOut(duration: 0.3)
+                                                           : .linear(duration: 0.3)), value: way)
+            .onChange(of: way) { new in if new == .gone { flicker() } }
+    }
+
+    private var opacity: Double {
+        switch way {
+        case nil: return 1
+        case .up, .down: return 0.2
+        case .gone: return blink ? 1 : 0
+        }
+    }
+
+    /// Out and in four times and out, fifty milliseconds apiece.
+    private func flicker() {
+        guard !reduceMotion else { blink = false; return }
+        Task { @MainActor in
+            for beat in 0..<9 {
+                blink = beat % 2 == 1
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+            blink = false
+        }
+    }
+}

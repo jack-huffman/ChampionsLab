@@ -372,6 +372,13 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         guarded.theirScreens.auroraVeil = 5
         render(BattleView(playing: guarded), named: "battle-protect-dark",
                size: CGSize(width: 1180, height: 900), dark: true)
+        // Out of reach for a turn: one of yours up in the sky, one of theirs
+        // down in the ground, as the client draws Fly and Dig.
+        var gone = board
+        gone.mine[0].hidden = true; gone.mine[0].vanished = .up
+        gone.theirs[1].hidden = true; gone.theirs[1].vanished = .down
+        render(BattleView(playing: gone), named: "battle-vanish-dark",
+               size: CGSize(width: 1180, height: 900), dark: true)
         render(BattleView(playing: board), named: "battle-dark",
                size: CGSize(width: 1280, height: 860), dark: true)
         // And the Fight grid, which is what most turns are spent looking at.

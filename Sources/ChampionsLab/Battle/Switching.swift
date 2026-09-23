@@ -267,6 +267,7 @@ enum Switching {
         // pivot out and come back later still at +2.
         fighter.charging = nil
         fighter.hidden = false
+        fighter.vanished = nil
         fighter.protectStreak = 0
         fighter.confusedFor = 0
         fighter.encoredFor = 0

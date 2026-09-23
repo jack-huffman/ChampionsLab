@@ -48,6 +48,10 @@ struct BattleFieldView: View {
     /// is what makes the same Pokemon coming back later come back out of a
     /// ball rather than remembering that it once did.
     @State var emerged: Set<Seat> = []
+    /// The field darkening as a Phantom Force takes its user away, and who had
+    /// already gone, so only a new disappearance darkens it.
+    @State var darkened = false
+    @State var goneBefore: Set<Seat> = []
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     let singles: Bool
     let onBackToPreview: () -> Void
@@ -835,6 +839,10 @@ struct BattleFieldView: View {
             if index < step.myStatus.count { out.mine[index].status = step.myStatus[index] }
             if index < step.myConfused.count { out.mine[index].confusedFor = step.myConfused[index] ? max(1, out.mine[index].confusedFor) : 0 }
             if index < step.myProtected.count { out.mine[index].isProtected = step.myProtected[index] }
+            if index < step.myVanished.count {
+                out.mine[index].vanished = step.myVanished[index]
+                out.mine[index].hidden = step.myVanished[index] != nil
+            }
         }
         for index in out.theirs.indices where index < step.theirHP.count {
             out.theirs[index].hp = step.theirHP[index]
@@ -846,6 +854,10 @@ struct BattleFieldView: View {
             if index < step.theirStatus.count { out.theirs[index].status = step.theirStatus[index] }
             if index < step.theirConfused.count { out.theirs[index].confusedFor = step.theirConfused[index] ? max(1, out.theirs[index].confusedFor) : 0 }
             if index < step.theirProtected.count { out.theirs[index].isProtected = step.theirProtected[index] }
+            if index < step.theirVanished.count {
+                out.theirs[index].vanished = step.theirVanished[index]
+                out.theirs[index].hidden = step.theirVanished[index] != nil
+            }
         }
         out.field = step.field
         out.myTailwind = step.myTailwind

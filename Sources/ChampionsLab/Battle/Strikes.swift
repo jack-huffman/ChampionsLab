@@ -306,10 +306,12 @@ enum Strikes {
                         board.mine[slot].charging = moveIndex
                         board.mine[slot].chargingTarget = target
                         board.mine[slot].hidden = charge.hides
+                        board.mine[slot].vanished = charge.vanish
                     } else {
                         board.theirs[slot].charging = moveIndex
                         board.theirs[slot].chargingTarget = target
                         board.theirs[slot].hidden = charge.hides
+                        board.theirs[slot].vanished = charge.vanish
                     }
                     return false
                 }

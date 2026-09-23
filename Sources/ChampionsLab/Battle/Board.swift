@@ -79,6 +79,8 @@ struct Fighter {
     var chargingTarget = 0
     /// Up in the air, underground, under water: nothing reaches it this turn.
     var hidden = false
+    /// Which way it went; a Sky Drop's passenger charges nothing, so not `charging`.
+    var vanished: Move.Vanish?
     /// Protects landed in a row. Each one after the first has a third of the
     /// chance of the one before, and a turn without one starts the count over.
     var protectStreak = 0
@@ -678,6 +680,10 @@ struct Board {
         /// from the first step of the turn.
         var myProtected: [Bool] = []
         var theirProtected: [Bool] = []
+        /// Who was out of reach as the step closed, and which way, so it
+        /// leaves on the beat it flies and returns on the beat it lands.
+        var myVanished: [Move.Vanish?] = []
+        var theirVanished: [Move.Vanish?] = []
     }
 
     /// Turns of weather and terrain left. Five when something sets them; zero
@@ -907,7 +913,8 @@ struct Board {
                     missed: missed, blocked: blocked, abilities: firing, events: events,
                     myStatus: mine.map(\.status), theirStatus: theirs.map(\.status),
                     myConfused: mine.map(\.isConfused), theirConfused: theirs.map(\.isConfused),
-                    myProtected: mine.map(\.isProtected), theirProtected: theirs.map(\.isProtected))
+                    myProtected: mine.map(\.isProtected), theirProtected: theirs.map(\.isProtected),
+                    myVanished: mine.map(\.vanished), theirVanished: theirs.map(\.vanished))
     }
 
     /// A critical hit landed on somebody, so the field can say so where the
@@ -1486,7 +1493,7 @@ extension Board.Step: Codable {
         case text, action, myHP, theirHP, myForms, theirForms, field, myTailwind, theirTailwind,
              trickRoom, myBoosts, theirBoosts, abilities, items, criticals, untouched, missed,
              blocked, events, myStatus, theirStatus, myConfused, theirConfused,
-             myProtected, theirProtected
+             myProtected, theirProtected, myVanished, theirVanished
     }
 }
 extension Board.Step.Event: Codable {}

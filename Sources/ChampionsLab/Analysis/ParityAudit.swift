@@ -468,7 +468,7 @@ private struct Bench {
                 out += "/\(f.ppLeft)/\(f.imprisoning)"
                 // And what the simulator itself has ruled out: a Choice-locked
                 // Pokemon and a free one are not the same position.
-                out += "/\(f.unusable.sorted())/\(f.trapped)|"
+                out += "/\(f.unusable.sorted())/\(f.trapped)/\(f.vanished?.rawValue ?? "-")|"
             }
         }
         out += "\(b.field.weather)\(b.field.terrain)\(b.myTailwind)\(b.theirTailwind)\(b.trickRoom)"

@@ -42,7 +42,7 @@ enum MoveHistory {
         if !quietly, team[slot].moves.indices.contains(charging) {
             board.note("\(team[slot].build.form.formLabel) lost its \(team[slot].moves[charging].name).")
         }
-        if byMine { board.mine[slot].charging = nil; board.mine[slot].hidden = false }
-        else { board.theirs[slot].charging = nil; board.theirs[slot].hidden = false }
+        if byMine { board.mine[slot].charging = nil; board.mine[slot].hidden = false; board.mine[slot].vanished = nil }
+        else { board.theirs[slot].charging = nil; board.theirs[slot].hidden = false; board.theirs[slot].vanished = nil }
     }
 }

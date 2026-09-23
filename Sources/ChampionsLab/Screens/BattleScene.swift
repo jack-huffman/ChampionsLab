@@ -142,6 +142,11 @@ extension BattleFieldView {
                         .id("screen-\(mine ? "m" : "t")-\(kind.rawValue)")
                 }
             }
+            // Phantom Force and Shadow Force darken the field as the user
+            // goes: the client's `backgroundEffect('#000000', 700, 0.3)`.
+            Rectangle().fill(.black)
+                .opacity(darkened ? 0.3 : 0)
+                .allowsHitTesting(false)
             if let scene {
                 ChoreographyLayer(scene: scene)
             }
@@ -155,6 +160,16 @@ extension BattleFieldView {
         // this the second time a Pokemon came out at a seat it was already
         // marked as having come out, and skipped straight to standing there.
         .onChange(of: playback.arriving) { _ in emerged = [] }
+        .onChange(of: vanishedFromSight(board)) { gone in
+            let arrived = gone.subtracting(goneBefore)
+            goneBefore = gone
+            guard !arrived.isEmpty, !reduceMotion else { return }
+            withAnimation(.easeIn(duration: 0.12)) { darkened = true }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                withAnimation(.easeOut(duration: 0.3)) { darkened = false }
+            }
+        }
         .onChange(of: size) { new in playback.stage(stageFor(new, board: board)) }
         .onChange(of: spriteStyle) { style in
             UserDefaults.standard.set(style, forKey: "battleSpriteStyle")
@@ -243,7 +258,7 @@ extension BattleFieldView {
         let hit = seat.mine ? struck.contains(seat.slot) : struckTheirs.contains(seat.slot)
         let asked = seat.mine && session.awaitingOrders(board) == seat.slot && !fighter.fainted
         return ZStack {
-            if !fighter.fainted {
+            if !fighter.fainted, fighter.vanished != .down, fighter.vanished != .gone {
                 Ellipse()
                     .fill(RadialGradient(colors: [.black.opacity(0.22), .clear],
                                          center: .center, startRadius: 1, endRadius: side * 0.3))
@@ -274,6 +289,10 @@ extension BattleFieldView {
                           shiny: fighter.build.shiny)
                 .offset(y: fighter.fainted ? side * 0.12 : (pixel ? 0 : bob))
                 .opacity(fighter.fainted ? 0.2 : 1)
+                // Up into the sky, down into the ground, or gone: Fly, Dig,
+                // Phantom Force and the rest, the way the client draws them.
+                .modifier(Vanishing(way: fighter.fainted ? nil : fighter.vanished,
+                                    lift: 80 * stage.scale(at: home.z)))
                 .saturation(fighter.fainted ? 0 : 1)
                 .scaleEffect(fighter.fainted ? 0.82 : (hit ? 1.08 : 1))
                 .shadow(color: hit ? Palette.bad.opacity(0.6) : .clear, radius: 10)
@@ -548,6 +567,17 @@ extension BattleFieldView {
             SpriteImage(form: form, side: side, shiny: shiny)
                 .scaleEffect(x: mine ? -1 : 1, y: 1)
         }
+    }
+
+    /// The seats whose Pokemon has vanished outright, for the darkening.
+    func vanishedFromSight(_ board: Board) -> Set<Seat> {
+        var out: Set<Seat> = []
+        for (mine, side) in [(true, board.mine), (false, board.theirs)] {
+            for slot in 0..<min(board.activeCount, side.count) where side[slot].vanished == .gone {
+                out.insert(Seat(mine: mine, slot: slot))
+            }
+        }
+        return out
     }
 
     /// Where a side's screen stands, and how big.

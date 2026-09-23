@@ -737,6 +737,12 @@ final class ShowdownBattle {
                         // follows in the same step winds it again.
                         f.charging = nil
                         f.hidden = false
+                        f.vanished = nil
+                    }
+                    // Sky Drop comes down with its passenger: the one carried up
+                    // lands on the same beat as the one carrying it.
+                    if arg(2) == "Sky Drop", !arg(3).isEmpty {
+                        withFighter(arg(3)) { $0.hidden = false; $0.vanished = nil }
                     }
                 }
                 board.note("\(name(of: arg(1))) used \(arg(2)).")
@@ -1103,7 +1109,13 @@ final class ShowdownBattle {
                     else { return }
                     f.charging = index
                     f.chargingTarget = aim
-                    f.hidden = f.moves[index].charge?.hides ?? false
+                    f.vanished = f.moves[index].charge?.vanish
+                    f.hidden = f.vanished != nil
+                }
+                // Sky Drop carries its target up with it -- out of reach, and
+                // unable to act, without winding anything up of its own.
+                if bare(arg(2)) == "Sky Drop", !arg(3).isEmpty {
+                    withFighter(arg(3)) { $0.hidden = true; $0.vanished = .up }
                 }
                 // "Archaludon absorbed electricity!", "Charizard absorbed
                 // light!", "Dragonite flew up high!" -- the charging turn said
@@ -1250,8 +1262,19 @@ final class ShowdownBattle {
                 // line to say so. The request is the one place that knows, so
                 // a Pokemon offered its whole moveset is not winding anything.
                 if moves.count >= team[slot].moves.count {
-                    if mine { board.mine[slot].charging = nil; board.mine[slot].hidden = false }
-                    else { board.theirs[slot].charging = nil; board.theirs[slot].hidden = false }
+                    let carried = team[slot].vanished != nil && team[slot].charging == nil
+                    // Not a Sky Drop's passenger, who is offered everything and
+                    // may use none of it: that one stays up until the move
+                    // carrying it comes down.
+                    if !carried {
+                        if mine {
+                            board.mine[slot].charging = nil; board.mine[slot].hidden = false
+                            board.mine[slot].vanished = nil
+                        } else {
+                            board.theirs[slot].charging = nil; board.theirs[slot].hidden = false
+                            board.theirs[slot].vanished = nil
+                        }
+                    }
                 }
                 if mine {
                     board.mine[slot].unusable = unusable

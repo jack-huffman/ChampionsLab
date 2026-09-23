@@ -52,7 +52,8 @@ extension Board.Step {
                              events: events.map(\.flipped),
                              myStatus: theirStatus, theirStatus: myStatus,
                              myConfused: theirConfused, theirConfused: myConfused,
-                             myProtected: theirProtected, theirProtected: myProtected)
+                             myProtected: theirProtected, theirProtected: myProtected,
+                             myVanished: theirVanished, theirVanished: myVanished)
         out.action = action?.flipped
         // The badges the field draws over a Pokemon, turned round with it.
         // They were being dropped on the way to the other chair, so a LAN

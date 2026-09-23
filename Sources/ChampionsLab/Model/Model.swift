@@ -461,9 +461,58 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
     /// A move that takes a turn to wind up: what the user does on the first
     /// turn, whether it is out of reach while doing it, and the weather that
     /// lets it skip the wait. Read from the text, which is regular about it.
+    /// Which way a two-turn move takes its user out of reach, which is also
+    /// the way the client draws it going: up into the sky, down into the
+    /// ground or the water, or simply gone.
+    enum Vanish: String, Codable, Sendable {
+        case up, down, gone
+    }
+
+    /// The simulator's own list, from `Pokemon.isSemiInvulnerable`: Fly,
+    /// Bounce, Dive, Dig, Phantom Force, Shadow Force, and Sky Drop -- which
+    /// takes its target up with it.
+    ///
+    /// Read from the move's text first, because that is regular about it, and
+    /// from this list when the text says nothing: Shadow Force's entry in the
+    /// dataset is blank, so a later release that taught it to something would
+    /// have been a Pokemon that vanished while the app kept pricing blows into
+    /// it.
+    static func vanish(named id: String, effect: String) -> Vanish? {
+        let lower = effect.lowercased()
+        // The text only counts when it is describing *this* move as a
+        // two-turn move. Gravity's entry carries a table of the moves it
+        // cancels, Bounce's description word for word among them, so a plain
+        // search found "the user gains the Sky-High status on the turn this
+        // move is used" in Gravity -- and the model had been treating Gravity
+        // as a two-turn move that takes its user into the sky ever since.
+        if describesItself(lower) {
+            if lower.contains("gains the sky-high status") { return .up }
+            if lower.contains("gains the underground status")
+                || lower.contains("gains the submerged status") { return .down }
+            if lower.contains("gains the concealed status") { return .gone }
+        }
+        switch id {
+        case "fly", "bounce", "skydrop": return .up
+        case "dig", "dive": return .down
+        case "phantomforce", "shadowforce": return .gone
+        default: return nil
+        }
+    }
+
+    /// How the dataset words a two-turn move.
+    static let twoTurns = "status on the turn this move is used then attacks on the following turn"
+
+    /// Whether a move's text is about the move itself being two-turn, rather
+    /// than quoting another one: every real entry opens on its own user.
+    static func describesItself(_ lower: String) -> Bool {
+        lower.hasPrefix("the user") && lower.contains(twoTurns)
+    }
+
     struct Charge: Sendable {
+        /// Out of reach while it winds up, and which way it went.
+        let vanish: Vanish?
         /// Fly, Dig, Dive, Bounce, Phantom Force: nothing reaches it meanwhile.
-        let hides: Bool
+        var hides: Bool { vanish != nil }
         /// Solar Beam fires at once in sun, Electro Shot in rain.
         let skipsIn: Weather?
         /// Stages gained on the charging turn: Electro Shot and Meteor Beam
@@ -473,10 +522,10 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
 
     internal var computedCharge: Charge? {
         let lower = effect.lowercased()
-        guard lower.contains("status on the turn this move is used then attacks on the following turn")
-        else { return nil }
-        let hides = ["sky-high", "underground", "submerged", "concealed"]
-            .contains { lower.contains("gains the \($0) status") }
+        let vanish = Self.vanish(named: id, effect: effect)
+        // A two-turn move by its text, or one of the simulator's vanishing
+        // moves by name when the text has nothing to say.
+        guard Self.describesItself(lower) || vanish != nil else { return nil }
         var skipsIn: Weather?
         if lower.contains("in rain the user does not gain") { skipsIn = .rain }
         if lower.contains("in harsh sunlight the user does not gain") { skipsIn = .sun }
@@ -499,7 +548,7 @@ struct Move: Codable, Identifiable, Hashable, Sendable {
             default: break
             }
         }
-        return Charge(hides: hides, skipsIn: skipsIn, boosts: boosts)
+        return Charge(vanish: vanish, skipsIn: skipsIn, boosts: boosts)
     }
 
     /// The share of the damage dealt that comes back to the user: Leech Life,
