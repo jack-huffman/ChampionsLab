@@ -769,3 +769,161 @@ struct ChargeGlow: View {
         return drawn ? to : from
     }
 }
+
+/// Showdown's side screens, and its Protect.
+///
+/// The client draws none of these as a move animation -- `reflect`,
+/// `lightscreen` and `auroraveil` all have an empty `anim()` in its table, and
+/// Protect's is the generic two-ring `selfstatus`, which this app already
+/// plays. What you actually see on a Showdown field is a *sprite*: a flat
+/// translucent panel standing in front of the side it protects, put up when
+/// the condition starts and taken down when it ends.
+///
+/// They are plain coloured rectangles in the client, styled in battle.css,
+/// and the colours here are its:
+///
+///     .sidecondition-auroraveil   #88EEFF on #55BBCC
+///     .sidecondition-reflect      #EEEEEE on #888888
+///     .sidecondition-safeguard    #DD88DD on #AA66AA
+///     .sidecondition-lightscreen  #CCCC00 on #AAAA00
+///     .turnstatus-protect         #DD88DD on #AA66AA
+///
+/// Each stands at its own depth so that a side running two of them shows
+/// both, in the client's own order: Aurora Veil in front, then Reflect, then
+/// Safeguard, then Light Screen. And each comes up the same way -- from
+/// almost nothing to seven tenths over four hundred milliseconds, then back
+/// to three tenths over three hundred -- which is a flash and a settle rather
+/// than a fade.
+///
+/// The opacities are lower than the client's -- it settles a screen at three
+/// tenths and Protect at four. Those are numbers for a field drawn on a pale
+/// sky; over this one, which is dark, the same three tenths of a saturated
+/// magenta is a slab with a Pokemon somewhere behind it. The construction is
+/// the client's and so are the colours; what they are worth against the
+/// background is not a thing that travels.
+struct BattleScreen: View {
+    enum Kind: String, CaseIterable {
+        case auroraVeil, reflect, safeguard, lightScreen
+
+        /// How far in front of the side it stands, in the client's own units.
+        var depth: Double {
+            switch self {
+            case .auroraVeil: return 14
+            case .reflect: return 17
+            case .safeguard: return 20
+            case .lightScreen: return 23
+            }
+        }
+        var fill: Color {
+            switch self {
+            case .auroraVeil: return Color(red: 0x88 / 255.0, green: 0xEE / 255.0, blue: 0xFF / 255.0)
+            case .reflect: return Color(red: 0xEE / 255.0, green: 0xEE / 255.0, blue: 0xEE / 255.0)
+            case .safeguard: return Color(red: 0xDD / 255.0, green: 0x88 / 255.0, blue: 0xDD / 255.0)
+            case .lightScreen: return Color(red: 0xCC / 255.0, green: 0xCC / 255.0, blue: 0x00 / 255.0)
+            }
+        }
+        var border: Color {
+            switch self {
+            case .auroraVeil: return Color(red: 0x55 / 255.0, green: 0xBB / 255.0, blue: 0xCC / 255.0)
+            case .reflect: return Color(red: 0x88 / 255.0, green: 0x88 / 255.0, blue: 0x88 / 255.0)
+            case .safeguard: return Color(red: 0xAA / 255.0, green: 0x66 / 255.0, blue: 0xAA / 255.0)
+            case .lightScreen: return Color(red: 0xAA / 255.0, green: 0xAA / 255.0, blue: 0x00 / 255.0)
+            }
+        }
+    }
+
+    let kind: Kind
+    /// Where the panel's middle sits, and how big it is drawn there.
+    let centre: CGPoint
+    let width: CGFloat
+    let height: CGFloat
+
+    @State private var raised = false
+    @State private var settled = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Rectangle()
+            .fill(LinearGradient(colors: [kind.fill.opacity(0.5), kind.fill.opacity(0.14),
+                                          kind.fill.opacity(0.5)],
+                                 startPoint: .top, endPoint: .bottom))
+            .overlay(Rectangle().strokeBorder(kind.border, lineWidth: 1.5))
+            .frame(width: width, height: height)
+            .opacity(settled ? 0.5 : (raised ? 0.8 : 0.1))
+            .position(centre)
+            .allowsHitTesting(false)
+            .onAppear(perform: run)
+    }
+
+    private func run() {
+        guard !reduceMotion else { raised = true; settled = true; return }
+        withAnimation(.easeOut(duration: 0.4)) { raised = true }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            withAnimation(.easeIn(duration: 0.3)) { settled = true }
+        }
+    }
+}
+
+/// Showdown's Protect: the same flat panel, in front of the one Pokémon it
+/// covers rather than the side.
+///
+/// It comes up to nine tenths and settles at four, and then -- this is the
+/// part that makes it read as doing something rather than being scenery --
+/// the client *flares* it every time it turns an attack away: to full, a
+/// fifth larger, in a tenth of a second, and back down over three.
+///
+/// Placed by whoever draws it rather than positioned absolutely: it lives in
+/// the stack that is already centred on the Pokemon, and a `.position` there
+/// would pin it to that stack's corner instead.
+struct ProtectShield: View {
+    let width: CGFloat
+    let height: CGFloat
+    /// Bumped each time this shield stops something.
+    let flares: Int
+
+    @State private var raised = false
+    @State private var settled = false
+    @State private var flaring = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let fill = Color(red: 0xDD / 255.0, green: 0x88 / 255.0, blue: 0xDD / 255.0)
+    private static let edge = Color(red: 0xAA / 255.0, green: 0x66 / 255.0, blue: 0xAA / 255.0)
+
+    var body: some View {
+        // The pane's edges carry it and the middle stays clear, so there is
+        // still a Pokemon behind the shield. A flat fill at the client's own
+        // four tenths is a slab on a field this dark -- the client's is a
+        // bright sky, where the same wash reads as tinted glass.
+        Rectangle()
+            .fill(LinearGradient(colors: [Self.fill.opacity(0.55), Self.fill.opacity(0.12),
+                                          Self.fill.opacity(0.55)],
+                                 startPoint: .top, endPoint: .bottom))
+            .overlay(Rectangle().strokeBorder(Self.edge, lineWidth: 1.5))
+            .overlay(Rectangle().strokeBorder(.white.opacity(0.45), lineWidth: 0.5).padding(2))
+            .frame(width: width, height: height)
+            .scaleEffect(flaring ? 1.2 : 1)
+            .opacity(flaring ? 1 : (settled ? 0.55 : (raised ? 0.85 : 0.1)))
+            .allowsHitTesting(false)
+            .onAppear(perform: run)
+            .onChange(of: flares) { _ in flare() }
+    }
+
+    private func run() {
+        guard !reduceMotion else { raised = true; settled = true; return }
+        withAnimation(.easeOut(duration: 0.4)) { raised = true }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            withAnimation(.easeIn(duration: 0.3)) { settled = true }
+        }
+    }
+
+    private func flare() {
+        guard !reduceMotion else { return }
+        withAnimation(.easeOut(duration: 0.1)) { flaring = true }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            withAnimation(.easeIn(duration: 0.3)) { flaring = false }
+        }
+    }
+}

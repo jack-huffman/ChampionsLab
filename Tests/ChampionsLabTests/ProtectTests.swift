@@ -72,4 +72,42 @@ final class ProtectTests: HarnessCase {
         print("  --- log ---")
         for line in game.board.story.prefix(8) { print("    | \(line)") }
     }
+
+    /// The flare has to reach the field. Showdown lights its shield every
+    /// time the shield stops something, and that flare is the whole of how a
+    /// Protect reads as doing rather than merely being up.
+    func testAShieldThatTurnsSomethingAwaySaysSo() {
+        let ladder = store.ladderTeams(format: "doubles")
+        guard ladder.count >= 2 else { return check("no ladder teams", false) }
+        var board = Board.opening(mine: ladder[0].team,
+                                  bringing: ladder[0].team.slots.prefix(4).map(\.id.uuidString),
+                                  theirs: ladder[1].team, rules: store.rulebook,
+                                  singles: false, sendOut: true)
+        // A step with nothing to animate, so the field shows what the step
+        // says rather than waiting on a move's clock to reach its impact.
+        board.beginStep()
+        board.turnedAway(onMine: false, slot: 1, by: "Protect")
+        board.note("It was blocked.")
+        board.closeStep()
+
+        guard let step = board.steps.last else { return check("a step was made", false) }
+        check("the step says whose shield held",
+              step.blocked == [Board.Step.Firing(mine: false, slot: 1, name: "Protect")],
+              "\(step.blocked)")
+        check("and from the other chair it is the other side's",
+              step.flipped.blocked == [Board.Step.Firing(mine: true, slot: 1, name: "Protect")],
+              "\(step.flipped.blocked)")
+        do {
+            let back = try JSONDecoder().decode(Board.Step.self,
+                                                from: try JSONEncoder().encode(step))
+            check("and it survives the wire", back.blocked == step.blocked, "\(back.blocked)")
+        } catch {
+            check("and it survives the wire", false, "\(error)")
+        }
+        let playback = TurnPlayback()
+        playback.show(board, steps: board.steps)
+        playback.replay(step: board.steps.count - 1)
+        check("the field is told to flare it",
+              playback.blocked.contains(Seat(mine: false, slot: 1)), "\(playback.blocked)")
+    }
 }

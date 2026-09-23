@@ -767,6 +767,12 @@ final class ShowdownBattle {
                 // Sash holding, a Sturdy, an Ability Shield. Said rather than
                 // modelled: whatever it did shows up as its own line.
                 if !arg(2).isEmpty {
+                    // A shield that just stopped something. The client flares
+                    // the panel here rather than only drawing it, which is
+                    // what makes a Protect read as doing something.
+                    if Move.protectMoves.contains(bare(arg(2))), let at = seat(arg(1)) {
+                        board.turnedAway(onMine: at.mine, slot: at.slot, by: bare(arg(2)))
+                    }
                     // `block` first: an attack stopped by a Protect is the
                     // commonest -activate there is, and the table keeps the
                     // sentence for it under that key. Without it the log read

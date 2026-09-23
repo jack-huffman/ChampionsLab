@@ -62,6 +62,7 @@ extension Board.Step {
         out.criticals = criticals.map { Firing(mine: !$0.mine, slot: $0.slot, name: $0.name) }
         out.untouched = untouched.map { Firing(mine: !$0.mine, slot: $0.slot, name: $0.name) }
         out.missed = missed.map { Firing(mine: !$0.mine, slot: $0.slot, name: $0.name) }
+        out.blocked = blocked.map { Firing(mine: !$0.mine, slot: $0.slot, name: $0.name) }
         return out
     }
 }

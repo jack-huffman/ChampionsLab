@@ -632,6 +632,10 @@ struct Board {
         /// a miss are two different answers, and the field was giving neither:
         /// the attack flew out and nothing at all came back.
         var missed: [Firing] = []
+        /// And who turned one away with a Protect. The client flares the
+        /// shield each time it stops something -- that flare is the whole of
+        /// how a Protect reads as *doing* rather than merely being up.
+        var blocked: [Firing] = []
         /// An ability that went off during the step, and whose.
         struct Firing: Equatable {
             let mine: Bool
@@ -826,6 +830,8 @@ struct Board {
     var untouched: [Step.Firing] = []
     /// And who avoided one, for the same window.
     var missed: [Step.Firing] = []
+    /// And who turned one away behind a shield.
+    var blocked: [Step.Firing] = []
     /// Everything that happened since the step began, in order.
     var events: [Step.Event] = []
     /// Where every stage and status stood when the step began. At the close,
@@ -873,7 +879,7 @@ struct Board {
         reconcileEvents()
         defer {
             firing = []; itemsFired = []; criticals = []; untouched = []; missed = []
-            events = []; markStepStart()
+            blocked = []; events = []; markStepStart()
         }
         return Step(text: text, action: acting,
                     myHP: mine.map(\.hp), theirHP: theirs.map(\.hp),
@@ -883,7 +889,7 @@ struct Board {
                     theirTailwind: theirTailwind, trickRoom: trickRoom,
                     myBoosts: mine.map(\.build.boosts), theirBoosts: theirs.map(\.build.boosts),
                     items: itemsFired, criticals: criticals, untouched: untouched,
-                    missed: missed, abilities: firing, events: events,
+                    missed: missed, blocked: blocked, abilities: firing, events: events,
                     myStatus: mine.map(\.status), theirStatus: theirs.map(\.status),
                     myConfused: mine.map(\.isConfused), theirConfused: theirs.map(\.isConfused),
                     myProtected: mine.map(\.isProtected), theirProtected: theirs.map(\.isProtected))
@@ -908,6 +914,13 @@ struct Board {
     mutating func miss(onMine mine: Bool, slot: Int, by move: String) {
         let hit = Step.Firing(mine: mine, slot: slot, name: move)
         if !missed.contains(hit) { missed.append(hit) }
+    }
+
+    /// A shield turned one away, so the field can flare it the way the client
+    /// does rather than leaving a Protect looking like scenery.
+    mutating func turnedAway(onMine mine: Bool, slot: Int, by move: String) {
+        let hit = Step.Firing(mine: mine, slot: slot, name: move)
+        if !blocked.contains(hit) { blocked.append(hit) }
     }
 
     /// Say what happened, and remember what the board looked like when it did.
@@ -1457,7 +1470,7 @@ extension Board.Step: Codable {
     enum CodingKeys: String, CodingKey {
         case text, action, myHP, theirHP, myForms, theirForms, field, myTailwind, theirTailwind,
              trickRoom, myBoosts, theirBoosts, abilities, items, criticals, untouched, missed,
-             events, myStatus, theirStatus, myConfused, theirConfused,
+             blocked, events, myStatus, theirStatus, myConfused, theirConfused,
              myProtected, theirProtected
     }
 }

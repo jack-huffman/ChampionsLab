@@ -126,6 +126,22 @@ extension BattleFieldView {
                     }
                 }
             }
+            // The screens, standing in front of the side each protects, in
+            // the client's own order and at its own depths -- so a side
+            // running two of them shows both.
+            ForEach([true, false], id: \.self) { mine in
+                let screens = mine ? board.myScreens : board.theirScreens
+                let up: [(BattleScreen.Kind, Int)] = [
+                    (.auroraVeil, screens.auroraVeil), (.reflect, screens.reflect),
+                    (.safeguard, screens.safeguard), (.lightScreen, screens.lightScreen),
+                ].filter { $0.1 > 0 }
+                ForEach(up, id: \.0.rawValue) { kind, _ in
+                    let at = wall(kind, mine: mine, stage: stage)
+                    BattleScreen(kind: kind, centre: at.centre,
+                                 width: at.width, height: at.height)
+                        .id("screen-\(mine ? "m" : "t")-\(kind.rawValue)")
+                }
+            }
             if let scene {
                 ChoreographyLayer(scene: scene)
             }
@@ -275,13 +291,13 @@ extension BattleFieldView {
             // The shield, in front of the Pokemon it covers and thin enough to
             // see it through; the substitute's ring the same.
             if guarding(fighter) {
-                Circle()
-                    .fill(RadialGradient(colors: [Palette.accent.opacity(0.02), Palette.accent.opacity(0.22)],
-                                         center: .center, startRadius: side * 0.15, endRadius: side * 0.5))
-                    .overlay(Circle().strokeBorder(Palette.accent.opacity(0.8), lineWidth: 1.5))
-                    .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 0.5).padding(3))
-                    .frame(width: side * 0.98, height: side * 0.98)
-                    .transition(.scale.combined(with: .opacity))
+                // The client's own panel, not a bubble in the app's accent:
+                // #DD88DD on #AA66AA, a hundred by seventy of its units, and
+                // it flares every time it turns something away.
+                ProtectShield(width: side * 1.05, height: side * 0.74,
+                              flares: playback.blocked.contains(seat) ? playback.hitNumber : 0)
+                    .offset(y: -side * 0.06)
+                    .transition(.opacity)
             } else if fighter.substitute > 0, !fighter.fainted {
                 Circle()
                     .strokeBorder(Palette.dim.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
@@ -521,6 +537,30 @@ extension BattleFieldView {
             SpriteImage(form: form, side: side, shiny: shiny)
                 .scaleEffect(x: mine ? -1 : 1, y: 1)
         }
+    }
+
+    /// Where a side's screen stands, and how big.
+    ///
+    /// The client hangs one sprite per side at the side's own anchor, a
+    /// hundred by fifty of its units, with `z` pulled toward the viewer by
+    /// fourteen to twenty-three depending on which screen it is. Here the
+    /// anchor is the middle of the two seats on that side, which is the same
+    /// place; the depth comes off the kind so the four stack rather than
+    /// overlap into one muddy colour.
+    func wall(_ kind: BattleScreen.Kind, mine: Bool,
+              stage: MoveTimeline.Stage) -> (centre: CGPoint, width: CGFloat, height: CGFloat) {
+        let seats = [Seat(mine: mine, slot: 0), Seat(mine: mine, slot: 1)]
+        let homes = seats.map { stage.home($0) }
+        let x = (homes[0].x + homes[1].x) / 2
+        let y = (homes[0].y + homes[1].y) / 2
+        // Toward the viewer from the Pokemon it covers, which is `behind(-n)`
+        // in the client: nearer on your side of the field and nearer on
+        // theirs too, because a screen is between the Pokemon and whatever is
+        // being thrown at them.
+        let z = homes[0].z - kind.depth
+        let at = stage.project(SIMD3(x, y - 14, z))
+        let unit = stage.scale(at: z)
+        return (at, 118 * unit, 34 * unit)
     }
 
     // MARK: - The readouts

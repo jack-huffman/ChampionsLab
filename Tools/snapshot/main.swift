@@ -365,6 +365,11 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         guarded.mine[1].isProtected = true
         guarded.theirs[0].isProtected = true
         guarded.theirs[1].substitute = 40
+        // And the screens, which stand on the field now rather than only
+        // appearing as a chip in a row of text.
+        guarded.myScreens.reflect = 4
+        guarded.theirScreens.lightScreen = 3
+        guarded.theirScreens.auroraVeil = 5
         render(BattleView(playing: guarded), named: "battle-protect-dark",
                size: CGSize(width: 1180, height: 900), dark: true)
         render(BattleView(playing: board), named: "battle-dark",
