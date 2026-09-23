@@ -246,47 +246,63 @@ enum Switching {
             team[active].hp = Swift.min(team[active].maxHP,
                                         team[active].hp + team[active].maxHP / 3)
         }
+        // Everything the field did to it is left on the field.
+        strip(&team[active])
+    }
+
+    /// Everything the field did to a Pokemon, taken off it.
+    ///
+    /// Split out of `depart` so that the Showdown reader can use it too. The
+    /// sim clears all of this on a switch and the reader's board did not, so
+    /// a Pokemon could set up, pivot out and come back later still reading
+    /// +2 on its card while the sim had it at nothing -- which is a statbar
+    /// telling you that you are about to hit twice as hard as you are.
+    ///
+    /// Deliberately not the whole of `depart`: Natural Cure and Regenerator
+    /// belong to whoever is running the battle, and when that is Showdown it
+    /// has already applied them and said so.
+    static func strip(_ fighter: inout Fighter) {
         // Everything the field did to it is left on the field. Stat stages
         // especially: they were surviving a switch, so a Pokémon could set up,
         // pivot out and come back later still at +2.
-        team[active].charging = nil
-        team[active].hidden = false
-        team[active].protectStreak = 0
-        team[active].confusedFor = 0
-        team[active].encoredFor = 0
-        team[active].tauntedFor = 0
-        team[active].seededFrom = nil
-        team[active].critStage = 0
-        team[active].lastMove = nil
-        team[active].build.boosts = Array(repeating: 0, count: Stage.width)
-        team[active].substitute = 0
-        team[active].infatuatedWith = nil
-        team[active].tormented = false
-        team[active].cannotEscape = false
-        team[active].aquaRing = false
-        team[active].stockpile = 0
+        fighter.charging = nil
+        fighter.hidden = false
+        fighter.protectStreak = 0
+        fighter.confusedFor = 0
+        fighter.encoredFor = 0
+        fighter.tauntedFor = 0
+        fighter.seededFrom = nil
+        fighter.critStage = 0
+        fighter.lastMove = nil
+        fighter.build.boosts = Array(repeating: 0, count: Stage.width)
+        fighter.substitute = 0
+        fighter.infatuatedWith = nil
+        fighter.tormented = false
+        fighter.cannotEscape = false
+        fighter.aquaRing = false
+        fighter.stockpile = 0
         // The song does not follow to the bench, which is the whole counter to
         // Perish Song and the reason it is not simply a win button. The rest
         // go the same way: they were done to the Pokémon standing there.
-        team[active].perishIn = 0
-        team[active].drowsyFor = 0
-        team[active].disabled = nil
-        team[active].disabledFor = 0
+        fighter.perishIn = 0
+        fighter.drowsyFor = 0
+        fighter.disabled = nil
+        fighter.disabledFor = 0
         // The bad poison stays -- it is the status, not something the field
         // did -- but its clock restarts. Toxic is a sixteenth more every turn
         // it holds, and that ramp is what makes it a clock rather than chip;
         // going out and coming back pays the ramp back down to a sixteenth
         // while the poison itself keeps. Leaving it running made a Toxic land
         // once and then bill at a half regardless of what was standing there.
-        team[active].toxicTurns = 0
+        fighter.toxicTurns = 0
         // The seal is the Pokemon standing there, so it goes with it. Power
         // Points deliberately do not: a pivot out and back is not a way to
         // refill, and treating it as one would make the whole resource free.
-        team[active].imprisoning = false
-        team[active].destinyBound = false
-        team[active].octolocked = false
-        team[active].build.typeOverride = nil
-        team[active].build.statOverride = nil
+        fighter.imprisoning = false
+        fighter.destinyBound = false
+        fighter.octolocked = false
+        fighter.build.typeOverride = nil
+        fighter.build.statOverride = nil
     }
 
     /// Emergency Exit and Wimp Out: dropping below half health sends the

@@ -160,6 +160,18 @@ final class ShowdownEngine: @unchecked Sendable {
         return out.isNull || out.isUndefined ? nil : out.toString()
     }
 
+    /// The whole battle as the simulator holds it, serialised.
+    ///
+    /// The search uses this to go back to a position. It is also the only
+    /// place the sim's own view of a Pokemon -- its stages, its volatiles --
+    /// can be read from out here, which is what an audit of the board against
+    /// the engine needs: the board is a mirror, and a mirror is worth nothing
+    /// if nothing ever checks it.
+    func save() throws -> String? {
+        let out = try call("save")
+        return out.isNull || out.isUndefined ? nil : out.toString()
+    }
+
     /// Every way a turn could go, each with the odds of going that way, as
     /// the engine reports them: a chance and the protocol lines for it.
     func outcomes(_ mine: String, _ theirs: String, branching: Int) throws -> [[String: Any]] {

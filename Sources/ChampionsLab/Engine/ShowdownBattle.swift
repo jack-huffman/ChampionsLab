@@ -1070,7 +1070,20 @@ final class ShowdownBattle {
             $0.build.form.showdown == species || $0.build.form.formLabel == species
                 || $0.build.form.name == species
         }) else { return }
-        if found != at.slot, team.indices.contains(at.slot) { team.swapAt(found, at.slot) }
+        if found != at.slot, team.indices.contains(at.slot) {
+            team.swapAt(found, at.slot)
+            // Whoever was standing here is on the bench now, and everything
+            // the field did to them stays on the field.
+            Switching.strip(&team[found])
+        }
+        // And whoever is walking on arrives clean. The sim clears stages and
+        // volatiles on a switch and this board did not, so a Pokemon could
+        // set up, pivot out and come back still reading +2 on its card while
+        // the sim had it at nothing. A statbar saying +2 over a Pokemon the
+        // engine is resolving at +0 is the worst kind of wrong: every number
+        // on the screen agrees with itself and none of them agree with what
+        // is about to happen.
+        if team.indices.contains(at.slot) { Switching.strip(&team[at.slot]) }
         let reading = self.health(health)
         if let hp = reading.hp, team.indices.contains(at.slot) {
             team[at.slot].hp = max(0, min(team[at.slot].maxHP, hp))
