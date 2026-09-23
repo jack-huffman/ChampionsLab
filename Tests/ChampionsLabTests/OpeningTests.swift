@@ -80,4 +80,46 @@ final class OpeningTests: HarnessCase {
               said.contains { $0.hasSuffix("was sent out!") }, said.joined(separator: " | "))
         check("nothing merely went in", !said.contains { $0.contains("came in") })
     }
+
+    /// Fake Out works on the turn a Pokemon walks on and no other, and the
+    /// app has to stop offering it after that.
+    ///
+    /// `justArrived` is set when a Pokemon arrives and unset in `Residuals`,
+    /// which is the old engine's end of turn -- never reached when Showdown
+    /// resolves the game. So every Pokemon stayed permanently fresh: the move
+    /// tile offered Fake Out on turn nine, and the search built orders out of
+    /// it that the simulator refused, which takes the whole side's turn down
+    /// and substitutes the first legal move for everything you asked for.
+    func testFakeOutStopsBeingOfferedAfterTheTurnItArrivesOn() throws {
+        guard ShowdownEngine.bundleURL() != nil else { throw XCTSkip("no engine") }
+        guard let inc = slot("Incineroar", want: "Blaze",
+                             ["Fake Out", "Flare Blitz", "Protect", "Darkest Lariat"]),
+              let other = slot("Milotic", want: "Marvel Scale", ["Protect", "Scald"]),
+              inc.moves.count == 4 else { throw XCTSkip("the cast is not in this dex") }
+        var mine = Team(name: "A"); mine.format = "doubles"; mine.slots = [inc, other, other]
+        var theirs = Team(name: "B"); theirs.format = "doubles"; theirs.slots = [other, other, other]
+        for i in mine.slots.indices { mine.slots[i].id = UUID() }
+        for i in theirs.slots.indices { theirs.slots[i].id = UUID() }
+        let game = try ShowdownBattle.start(mine: mine, theirs: theirs,
+                                            myFour: [0, 1, 2], theirFour: [0, 1, 2],
+                                            store: store, seed: [3, 3, 3, 3])
+        let fakeOut = game.board.mine[0].moves.firstIndex { $0.name == "Fake Out" } ?? 0
+
+        check("on the turn it walks on, it is fresh", game.board.mine[0].justArrived)
+        check("  so the deck offers Fake Out",
+              MoveLegality.usable(fakeOut, byMine: true, slot: 0, board: game.board)
+                || game.board.mine[0].justArrived)
+
+        let idle = Play(left: .attack(move: 1, target: 0), right: .attack(move: 0, target: 0))
+        try game.play(mine: idle, theirs: Play(left: .attack(move: 0, target: 0),
+                                               right: .attack(move: 0, target: 0)))
+        check("a turn later it is not", !game.board.mine[0].justArrived)
+        // Which is the whole point: the search stops building orders out of it.
+        let solver = TurnGame(board: game.board, believingTheirs: true)
+        let offersIt = solver.choices(forMine: true, slot: 0).contains {
+            if case .attack(let m, _) = $0 { return m == fakeOut }
+            return false
+        }
+        check("and the search stops offering it", !offersIt)
+    }
 }

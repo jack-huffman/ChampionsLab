@@ -975,6 +975,12 @@ final class ShowdownBattle {
                 // than closing one.
                 let starting = Int(arg(1)) ?? turn
                 if starting > 1 { ranDown() }
+                // Whether anybody is still fresh, which is a different
+                // question from how the clocks stand and has to be asked on
+                // every turn including the first: the leads walk on before
+                // |turn|1|, so if this waited for the second turn they would
+                // still be arriving on it.
+                freshness()
                 turn = starting
                 if turnMarks[turn] == nil { turnMarks[turn] = script.count }
             case "-prepare":
@@ -1075,6 +1081,32 @@ final class ShowdownBattle {
     ///
     /// Perish is not counted here: the client sends the number itself, once a
     /// turn, and counting it as well would halve the song.
+    /// Who has just come in, rolled forward a turn.
+    ///
+    /// `justArrived` gates everything that only works on the turn a Pokemon
+    /// walks on -- Fake Out above all -- and on this path nothing ever
+    /// cleared it. It is set when a Pokemon arrives and unset in `Residuals`,
+    /// which is the old engine's end of turn and is never reached when
+    /// Showdown resolves the game, so every Pokemon was permanently fresh:
+    /// the deck offered Fake Out on turn nine, and the search built orders
+    /// out of it that the simulator refused -- which takes the whole side's
+    /// turn down and substitutes the first legal move.
+    ///
+    /// A turn late on purpose, which is the rule: a Pokemon switched in
+    /// during a turn cannot also move in it, so the turn it may Fake Out on
+    /// is the one after the one it arrived in. `arrivedThisTurn` carries it
+    /// across that boundary, exactly as `Residuals` does.
+    private func freshness() {
+        for index in board.mine.indices {
+            board.mine[index].justArrived = board.mine[index].arrivedThisTurn
+            board.mine[index].arrivedThisTurn = false
+        }
+        for index in board.theirs.indices {
+            board.theirs[index].justArrived = board.theirs[index].arrivedThisTurn
+            board.theirs[index].arrivedThisTurn = false
+        }
+    }
+
     private func ranDown() {
         func wind(_ screens: inout Screens) {
             screens.reflect = Swift.max(0, screens.reflect - 1)
@@ -1269,6 +1301,7 @@ final class ShowdownBattle {
             team[at.slot].hp = max(0, min(team[at.slot].maxHP, hp))
         }
         if at.mine { board.mine = team } else { board.theirs = team }
+        withFighter(ident) { $0.justArrived = true; $0.arrivedThisTurn = true }
         // The client's own wording, which tells the two sides apart: yours is
         // called out, theirs is sent out against you. Four Pokemon walking on
         // is four lines whatever they say, but "Staraptor went in" four times

@@ -145,4 +145,62 @@ final class ChoiceEchoTests: HarnessCase {
         check("and the Whimsicott used Charm, not Moonblast",
               said.contains("Charm") && !said.contains("Moonblast"))
     }
+
+    /// And every order the *solver* can produce, which is not the same set.
+    ///
+    /// The deck builds attacks and switches. `TurnGame` also builds
+    /// `.protectSelf`, and it builds switches by an index into the board's own
+    /// array -- which is not the party position the simulator counts, because
+    /// the board keeps its actives at the front and the simulator keeps the
+    /// side's own order. Those two agree at the start of a game and stop
+    /// agreeing the moment anybody switches.
+    ///
+    /// This is what a turn is actually played from: `resolve` takes the
+    /// opponent's play out of the solution, and a solution is a mixture, so
+    /// which order gets played is sampled. An order in there that the
+    /// simulator will not take is a turn that fails about one game in three,
+    /// on a different move each time.
+    func testEveryOrderTheSolverCanProduceIsOneTheSimulatorWillPlay() throws {
+        guard ShowdownEngine.bundleURL() != nil else { throw XCTSkip("no engine") }
+        let ladder = store.ladderTeams(format: "doubles")
+        guard ladder.count >= 2 else { throw XCTSkip("no ladder teams") }
+        let game = try ShowdownBattle.start(mine: ladder[0].team, theirs: ladder[1].team,
+                                            myFour: [0, 1, 2, 3], theirFour: [0, 1, 2, 3],
+                                            store: store, seed: [5, 5, 5, 5])
+
+        var offered = 0, swaps = 0, protects = 0
+        var refused: [String] = []
+        // Over several turns, because the board's order and the simulator's
+        // agree at the start of a game and diverge once anybody has moved.
+        for turn in 0..<5 where !ShowdownEngine.shared.ended {
+            let solver = TurnGame(board: game.board, believingTheirs: true)
+            for mine in [true, false] {
+                for play in solver.plays(forMine: mine) {
+                    let text = game.request(play, side: mine)
+                    let verdict = try accepted(text, side: mine ? "p1" : "p2")
+                    offered += 1
+                    if play.left.isSwap || play.right.isSwap { swaps += 1 }
+                    if play.left.isProtect || play.right.isProtect { protects += 1 }
+                    if !verdict.ok {
+                        refused.append("turn \(turn + 1) \(mine ? "ours" : "theirs")"
+                            + " -> \"\(text)\"  \(verdict.why)")
+                    }
+                }
+            }
+            let step = solver.plays(forMine: true).first ?? Play(left: .pass, right: .pass)
+            let theirStep = solver.plays(forMine: false).first ?? Play(left: .pass, right: .pass)
+            guard (try? game.play(mine: step, theirs: theirStep)) != nil else { break }
+            var guarded = 0
+            while game.awaitingSendIn, guarded < 4 { try game.sendIn(bench: 0); guarded += 1 }
+        }
+
+        print("  \(offered) solver orders offered, \(swaps) with a switch in them, "
+              + "\(protects) with a Protect")
+        for line in refused.prefix(20) { print("       \(line)") }
+        if refused.count > 20 { print("       ... and \(refused.count - 20) more") }
+        check("orders were offered", offered >= 20, "\(offered)")
+        check("including switches", swaps > 0, "\(swaps)")
+        check("the simulator would play every one of them",
+              refused.isEmpty, "\(refused.count) of \(offered) refused")
+    }
 }
