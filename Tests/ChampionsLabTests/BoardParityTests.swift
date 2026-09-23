@@ -45,6 +45,12 @@ final class BoardParityTests: HarnessCase {
     private struct SimSide {
         var conditions: [String: Int]      // id -> turns left
         var actives: [SimMon]
+        /// The rest of the party. A Pokemon on the bench is still a Pokemon
+        /// the screen draws -- its health, whether it is down, what it is
+        /// still carrying -- and the divergence that started all this was a
+        /// Pokemon keeping something on the bench that it should have left on
+        /// the field.
+        var bench: [SimMon]
     }
 
     private struct SimState {
@@ -75,9 +81,8 @@ final class BoardParityTests: HarnessCase {
             for (id, value) in (side["sideConditions"] as? [String: Any] ?? [:]) {
                 conditions[id] = duration(value)
             }
-            let actives = (side["pokemon"] as? [[String: Any]] ?? [])
-                .filter { ($0["isActive"] as? Bool) == true }
-                .map { mon -> SimMon in
+            func read(_ mons: [[String: Any]]) -> [SimMon] {
+                mons.map { mon -> SimMon in
                     // `species` serialises as a reference -- "[Species:x]" --
                     // so the name comes off `details`, the same string the
                     // protocol puts in a |switch| line: "Ceruledge, L50, M".
@@ -104,7 +109,12 @@ final class BoardParityTests: HarnessCase {
                         moves: (mon["moveSlots"] as? [[String: Any]] ?? [])
                             .compactMap { $0["id"] as? String })
                 }
-            sides.append(SimSide(conditions: conditions, actives: actives))
+            }
+            let party = side["pokemon"] as? [[String: Any]] ?? []
+            sides.append(SimSide(
+                conditions: conditions,
+                actives: read(party.filter { ($0["isActive"] as? Bool) == true }),
+                bench: read(party.filter { ($0["isActive"] as? Bool) != true })))
         }
         return SimState(weather: (field["weather"] as? String) ?? "",
                         weatherTurns: duration(field["weatherState"]),
@@ -247,6 +257,61 @@ final class BoardParityTests: HarnessCase {
                     ("perish song", "perishsong", fighter.perishIn > 0),
                 ]
                 for (label, id, ourView) in held {
+                    same("\(tag) \(label)", "\(ourView)", "\(mon.volatiles.contains(id))")
+                }
+            }
+
+            // --- and the bench --------------------------------------------
+            //
+            // The screen draws these too: the four little cards along the
+            // side, the health on each, which of them are down. And the
+            // divergence that started all of this was a Pokemon keeping on
+            // the bench something it should have left on the field, so the
+            // bench is exactly where it has to be checked that it did not.
+            // The whole party, not the slice after `activeCount`. Showdown
+            // clears `isActive` the moment a Pokemon faints; the board keeps
+            // it lying in its slot until something replaces it, so the screen
+            // has something to draw going down. That is a deliberate
+            // difference about where a fainted Pokemon *sits*, not about what
+            // is true of it, so the party is matched by name and every
+            // Pokemon is checked wherever it happens to be.
+            let benched = mine ? board.mine : board.theirs
+            for mon in side.bench {
+                guard let fighter = benched.first(where: {
+                    $0.build.form.showdown == mon.species
+                        || $0.build.form.formLabel == mon.species
+                }) else {
+                    divergences.append("turn \(turn) \(who) bench: the sim has \(mon.species) "
+                        + "and the board does not (\(benched.map(\.build.form.formLabel).joined(separator: ", ")))")
+                    continue
+                }
+                let tag = "turn \(turn) \(who) bench \(mon.species)"
+                same("\(tag) HP", "\(fighter.hp)", "\(mon.hp)")
+                same("\(tag) max HP", "\(fighter.maxHP)", "\(mon.maxHP)")
+                same("\(tag) fainted", "\(fighter.fainted)", "\(mon.fainted)")
+                same("\(tag) status", fighter.status.rawValue,
+                     (Self.statusNamed[mon.status] ?? .none).rawValue)
+                same("\(tag) item", ShowdownText.id(fighter.build.item), mon.item)
+                same("\(tag) move list",
+                     fighter.moves.map { ShowdownText.id($0.name) }.joined(separator: ","),
+                     mon.moves.joined(separator: ","))
+                // Nothing the field did follows a Pokemon off it.
+                for (key, stat) in Self.stageNamed.sorted(by: { $0.key < $1.key }) {
+                    same("\(tag) \(key)", "\(fighter.build.boosts[stat.rawValue])",
+                         "\(mon.boosts[key] ?? 0)")
+                }
+                for (label, id) in [("substitute", "substitute"), ("confusion", "confusion"),
+                                    ("taunt", "taunt"), ("leech seed", "leechseed"),
+                                    ("yawn", "yawn"), ("encore", "encore")] {
+                    let ourView: Bool
+                    switch id {
+                    case "substitute": ourView = fighter.substitute > 0
+                    case "confusion": ourView = fighter.confusedFor > 0
+                    case "taunt": ourView = fighter.tauntedFor > 0
+                    case "leechseed": ourView = fighter.seededFrom != nil
+                    case "yawn": ourView = fighter.drowsyFor > 0
+                    default: ourView = fighter.encoredFor > 0
+                    }
                     same("\(tag) \(label)", "\(ourView)", "\(mon.volatiles.contains(id))")
                 }
             }
