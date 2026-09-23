@@ -88,6 +88,23 @@ final class PixelSpritesTests: HarnessCase {
                 + "vs models \(PixelSprites.Style.models.chain.map(\.rawValue))")
     }
 
+    /// Sixteen of this game's eighty-two Megas have no back sprite anywhere
+    /// on Showdown -- not animated, not still. They are Megas this game
+    /// invented, so no client has ever drawn one from behind: Mega
+    /// Baxcalibur, Mega Staraptor, the three Z Megas, Mega Golisopod and ten
+    /// others. The field used to borrow their front sprite for your side,
+    /// which is how a Mega Baxcalibur of yours ended up standing on your own
+    /// half of the field looking straight at you. It falls through to the
+    /// app's own render now, the way the chain always said it would -- so
+    /// that render has to be there for every Mega in the game.
+    @MainActor func testEveryMegaHasArtOfItsOwnToFallBackOn() {
+        let megas = store.data.forms.filter(\.isMega)
+        check("there are Megas in the dex", !megas.isEmpty, "\(megas.count)")
+        let missing = megas.filter { store.sprite($0) == nil }.map(\.formLabel)
+        check("every one has the app's own render to stand in",
+              missing.isEmpty, missing.joined(separator: ", "))
+    }
+
     /// A cached sprite has to say which set it came out of, in the filename
     /// and in the URL both. Everything about telling the looks apart rests on
     /// it: the file they are kept under, and how big they are drawn.

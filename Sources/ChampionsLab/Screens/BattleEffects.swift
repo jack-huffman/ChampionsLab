@@ -507,16 +507,23 @@ struct SendOutEffect: View {
         .onAppear(perform: run)
     }
 
-    /// Where it is thrown from: below and behind, straight down the line the
-    /// Pokemon will stand on.
+    /// Where it is thrown from: from behind the trainer who threw it, straight
+    /// down the line the Pokemon will stand on.
     ///
     /// No sideways component, which is Showdown's answer and was not mine:
     /// starting it off to one side made the ball cross the field on the way
     /// in, and on your own side that reads as a ball flying towards the
     /// middle rather than one being thrown out in front of you. The depth is
     /// carried by the scale instead, which is where it belongs.
+    ///
+    /// Which way "behind" points depends on whose ball it is, and that was
+    /// missing: `behind(offset)` in the client is `z + (isFrontSprite ? 1 :
+    /// -1) * offset`, so behind your own Pokemon is towards the viewer and
+    /// behind theirs is away from them. Throwing both from below meant the
+    /// opponent's ball flew up the field from your end of it, as though you
+    /// had sent out their Pokemon for them.
     private var start: CGPoint {
-        CGPoint(x: centre.x, y: centre.y + side * 0.95)
+        CGPoint(x: centre.x, y: centre.y + (fromMine ? side * 0.95 : -side * 0.75))
     }
 
     private func run() {
@@ -572,21 +579,34 @@ struct ShinySparkle: View {
 /// A Pokémon being recalled: it is drawn up into nothing and the ball drops
 /// away with it.
 ///
-/// Showdown's animUnsummon, which is its summon read backwards and a little
-/// quicker: the Pokémon rises about half its own height, shrinking to nothing
-/// over four tenths of a second, and the ball appears where its head was and
-/// arcs back down and behind, fading. There is no cry for this one — Showdown
-/// plays one coming out and one going down, and not for a recall.
+/// Showdown's animUnsummon: the Pokémon shrinks to nothing over four tenths
+/// of a second, settling *down* into the ball at its feet rather than rising
+/// out of the top of the picture; the ball then arcs up and away behind,
+/// fading, over the next four. There is no cry for this one — Showdown plays
+/// one coming out and one going down, and not for a recall.
+///
+/// The direction was inverted here for a while, and it is worth being exact
+/// about why, because the client's own numbers read backwards at a glance. In
+/// Showdown's scene `y` counts upward from the floor, so `this.y - 40` in
+/// animUnsummon is forty units *below* where the Pokémon stands -- the ball
+/// is on the ground and the Pokémon is drawn down into it. The ball then runs
+/// from that low point back up to `this.y` and `behind(50)`, which is it
+/// returning to the hand that threw it.
 ///
 /// It draws the departing Pokémon itself, because by the time a step is on the
-/// board the slot already belongs to whoever replaced it.
-struct RecallEffect: View {
-    let form: Form
-    let shiny: Bool
+/// board the slot already belongs to whoever replaced it -- and it draws it
+/// with the field's own sprite, handed in, rather than reaching for one of its
+/// own. Reaching for its own is how a Pokémon of yours spent its last half
+/// second facing the wrong way: `SpriteImage` is the *front* of a Pokémon,
+/// always, so every recall on your side of the field turned the Pokémon round
+/// to look at you and swapped its art for the illustration on the way out.
+struct RecallEffect<Sprite: View>: View {
     let centre: CGPoint
     let side: CGFloat
     let mine: Bool
     var onDone: () -> Void = {}
+    /// The Pokémon as the field was already drawing it, a moment ago.
+    @ViewBuilder var sprite: () -> Sprite
 
     @State private var pulled = false
     @State private var thrown = false
@@ -596,13 +616,16 @@ struct RecallEffect: View {
     var body: some View {
         ZStack {
             if !gone {
-                SpriteImage(form: form, side: side, shiny: shiny)
-                    .scaleEffect(pulled ? 0.01 : 1, anchor: .top)
+                // Down into the ball at its feet, which is what `anchor:
+                // .bottom` means here: the feet stay put and the rest of it
+                // comes down to meet them.
+                sprite()
+                    .scaleEffect(pulled ? 0.01 : 1, anchor: .bottom)
                     .opacity(pulled ? 0 : 1)
-                    .position(x: centre.x, y: centre.y - (pulled ? side * 0.42 : 0))
+                    .position(x: centre.x, y: centre.y + (pulled ? side * 0.16 : 0))
                 PokeBall(side: Swift.max(14, side * 0.34), open: !thrown)
                     .position(x: centre.x,
-                              y: centre.y - (thrown ? -side * 0.55 : side * 0.42))
+                              y: centre.y + (thrown ? -side * 0.55 : side * 0.30))
                     .scaleEffect(thrown ? 0.6 : 1)
                     .opacity(pulled ? (thrown ? 0 : 1) : 0)
                     .rotationEffect(.degrees(thrown ? (mine ? -160 : 160) : 0))

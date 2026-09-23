@@ -39,6 +39,16 @@ struct BattleFieldView: View {
     /// itself already in it and played no recall at all for the rest of the
     /// game.
     @State var recalled: [Seat: String] = [:]
+    /// Seats whose arriving Pokemon has come out of its ball.
+    ///
+    /// The opening had `landed` for this and the rest of the game had
+    /// nothing: a Pokemon switched in mid-battle was simply on the field
+    /// already, at full size, while its ball was still in the air. Cleared
+    /// whenever the playback moves on to a different set of arrivals, which
+    /// is what makes the same Pokemon coming back later come back out of a
+    /// ball rather than remembering that it once did.
+    @State var emerged: Set<Seat> = []
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     let singles: Bool
     let onBackToPreview: () -> Void
     /// How the Pokemon are drawn on their cards: the app's illustrations, or

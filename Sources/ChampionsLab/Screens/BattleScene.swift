@@ -82,9 +82,14 @@ extension BattleFieldView {
                 // the effect because the board has already given the slot away.
                 if let leftID = playback.departing[seat], recalled[seat] != leftID,
                    let left = store.formsByID[leftID] {
-                    RecallEffect(form: left, shiny: wasShiny(leftID, mine: seat.mine, board: board),
-                                 centre: stage.project(home), side: side, mine: seat.mine) {
+                    RecallEffect(centre: stage.project(home), side: side, mine: seat.mine) {
                         recalled[seat] = leftID
+                    } sprite: {
+                        // The same sprite the field had a moment ago: its back
+                        // on your side, in whichever of Showdown's sets the
+                        // battle is set to.
+                        fighterSprite(left, mine: seat.mine, side: side * 0.92,
+                                      shiny: wasShiny(leftID, mine: seat.mine, board: board))
                     }
                     .id("recall-\(key)-\(leftID)")
                 }
@@ -110,6 +115,9 @@ extension BattleFieldView {
                 if coming, let fighter = fighter(at: seat, in: board), !fighter.fainted {
                     SendOutEffect(centre: stage.project(home), side: side, fromMine: seat.mine) {
                         BattleAudio.shared.cry(fighter.build.form)
+                        // The ball is open, so the Pokemon may come out of it.
+                        // Showdown starts the sprite on the same beat.
+                        emerged.insert(seat)
                     }
                     .id("ball-\(key)-\(fighter.build.form.id)")
                     if fighter.build.shiny, opening ? landed.contains(key) : true {
@@ -127,6 +135,10 @@ extension BattleFieldView {
         // The playback places a recipe on the scene, so it has to know how
         // the scene is laid out -- and again whenever that changes.
         .onAppear { playback.stage(stage) }
+        // A new set of arrivals is a new set of balls to wait for. Without
+        // this the second time a Pokemon came out at a seat it was already
+        // marked as having come out, and skipped straight to standing there.
+        .onChange(of: playback.arriving) { _ in emerged = [] }
         .onChange(of: size) { new in playback.stage(stageFor(new, board: board)) }
         .onChange(of: spriteStyle) { style in
             UserDefaults.standard.set(style, forKey: "battleSpriteStyle")
@@ -201,7 +213,17 @@ extension BattleFieldView {
         // the one going out is still on screen and this one waits its turn.
         let waiting = playback.departing[seat] != nil
             && recalled[seat] != playback.departing[seat]
-        let out = (!opening || landed.contains("\(seat.mine ? "m" : "t")\(seat.slot)")) && !waiting
+        // Out of its ball, or still inside it.
+        //
+        // The opening waited for `landed` and the rest of the game waited for
+        // nothing, so a Pokemon switched in mid-battle stood there at full
+        // size while its own ball was still in flight towards it -- and then
+        // the ball arrived and burst on top of it. Both now wait for the ball
+        // to open.
+        let arriving = !opening && playback.arriving.contains(seat)
+        let out = (opening ? landed.contains("\(seat.mine ? "m" : "t")\(seat.slot)")
+                           : (!arriving || emerged.contains(seat)))
+            && !waiting
         let hit = seat.mine ? struck.contains(seat.slot) : struckTheirs.contains(seat.slot)
         let asked = seat.mine && session.awaitingOrders(board) == seat.slot && !fighter.fainted
         return ZStack {
@@ -274,8 +296,20 @@ extension BattleFieldView {
         // the Pokemon itself is still inside its ball. Putting the opacity on
         // the outside took the ability's name and the stat arrows down with
         // the sprite, and a switch-in takes the best part of a second.
+        // Showdown's animSummon, which is a shape rather than a fade. The
+        // Pokemon starts at nothing, just under where it will stand; it grows
+        // as it rises, goes up past its own feet, and drops back into them.
+        // The client spends four tenths of a second on the rise and three on
+        // the settle, and a spring underdamped enough to overshoot is the
+        // same curve written the way SwiftUI writes one.
+        //
+        // It used to be a scale from a fifth to full with no animation on it
+        // at all, which is not a curve, it is a cut.
         .opacity(out ? 1 : 0)
-        .scaleEffect(out ? 1 : 0.2)
+        .scaleEffect(out ? 1 : 0.01)
+        .offset(y: out ? 0 : side * 0.16)
+        .animation(reduceMotion ? .easeOut(duration: 0.12)
+                                : .spring(response: 0.42, dampingFraction: 0.58), value: out)
         .frame(width: side, height: side)
         // The game is over and this one is on the side that won: a crown,
         // hovering, riding the same bob the Pokemon does.
@@ -448,13 +482,26 @@ extension BattleFieldView {
     /// on your side, and always in a still.
     @ViewBuilder func fighterSprite(_ form: Form, mine: Bool, side: CGFloat,
                                     shiny: Bool = false) -> some View {
-        // The sprite for this side: ours seen from behind, theirs facing us.
-        // Where a back sprite has not arrived yet, Showdown's front is a far
-        // better stand-in than the app's own render -- and it is not
-        // mirrored, because mirroring a front view is exactly what makes a
-        // Pokemon of yours look like it is facing the wrong way.
+        // The sprite for this side, and only ever that side's: ours seen from
+        // behind, theirs facing us.
+        //
+        // There used to be a fallback here -- no back sprite, so borrow the
+        // front -- on the theory that it covered the moment before a fetch
+        // landed. It covered rather more than that. Sixteen of this game's
+        // eighty-two Megas have no back sprite anywhere on Showdown, not
+        // animated and not still, because they are Megas this game invented:
+        // Mega Baxcalibur, Mega Staraptor, the three Z Megas, Mega Golisopod
+        // and ten more. For those the borrowed front was not a stand-in for
+        // a second, it was the sprite, for the whole game -- a Pokemon of
+        // yours standing on your side of the field looking straight at you.
+        //
+        // Showdown does not do this. Its index records which *facings* a set
+        // has, it skips a set whose entry for that facing is missing, and it
+        // goes on to the Gen 5 still keeping the `-back` on the directory. It
+        // never once substitutes a front for a back. Neither does this now:
+        // where Showdown has no back, the app's own render stands in, and
+        // that one is mirrored to face across the field.
         let facing = pixels.frames(for: form, back: mine, shiny: shiny, style: look)
-            ?? (mine ? pixels.frames(for: form, back: false, shiny: shiny, style: look) : nil)
         if let frames = facing {
             // At its own size, not squeezed into everybody's box. A Joltik is
             // small and a Staraptor has a wingspan, and the client draws them
