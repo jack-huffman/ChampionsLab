@@ -108,5 +108,10 @@ for tag in sorted(tags):
 TAGS
 echo "==> $(wc -l < "$ROOT/data/showdown-protocol.txt" | tr -d ' ') protocol tags written"
 
+# And the sentences the client prints for them. The protocol's tags are not
+# English -- "-start|move: Yawn" glued to a name reads "Salamence is Yawn" --
+# and the English is in the sim's own text tables, which ship with it.
+node "$ROOT/Scripts/mktext.js" "$SRC" "$ROOT/data/showdown-text.json"
+
 cat "$ROOT/Scripts/engine/prelude.js" /tmp/ps-registry.js /tmp/ps-sim.js > "$BUNDLE"
 echo "==> wrote $BUNDLE ($(du -h "$BUNDLE" | cut -f1)), showdown $COMMIT"

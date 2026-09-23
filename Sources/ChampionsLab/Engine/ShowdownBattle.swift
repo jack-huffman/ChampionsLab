@@ -629,9 +629,17 @@ final class ShowdownBattle {
                 board.note("\(name(of: arg(1))) fainted.")
             case "-status":
                 withFighter(arg(1)) { $0.status = Self.ailment(arg(2)) ?? $0.status }
-                board.note("\(name(of: arg(1))) was \(arg(2)).")
+                // "was brn" is the protocol's spelling, not a sentence.
+                board.note(ShowdownText.say("start", of: arg(2),
+                                            values: ["POKEMON": name(of: arg(1))])
+                           ?? "\(name(of: arg(1))) was \(arg(2)).")
             case "-curestatus":
                 withFighter(arg(1)) { $0.status = .none; $0.asleepFor = 0 }
+                // And it said nothing at all when one wore off.
+                if let said = ShowdownText.say("end", of: arg(2),
+                                               values: ["POKEMON": name(of: arg(1))]) {
+                    board.note(said)
+                }
             case "-boost", "-unboost":
                 let by = (Int(arg(3)) ?? 0) * (tag == "-boost" ? 1 : -1)
                 if let at = seat(arg(1)), let stage = Self.stage(arg(2)) {
@@ -753,7 +761,13 @@ final class ShowdownBattle {
                 // The client's catch-all for "this did something" -- a Focus
                 // Sash holding, a Sturdy, an Ability Shield. Said rather than
                 // modelled: whatever it did shows up as its own line.
-                if !arg(2).isEmpty { board.note("\(name(of: arg(1)))'s \(bare(arg(2)))." ) }
+                if !arg(2).isEmpty {
+                    board.note(ShowdownText.say("activate", of: arg(2),
+                                                values: ["POKEMON": name(of: arg(1)),
+                                                         "TARGET": name(of: arg(3)),
+                                                         "SOURCE": name(of: arg(1))])
+                               ?? "\(name(of: arg(1)))'s \(bare(arg(2))).")
+                }
             case "-mustrecharge":
                 board.note("\(name(of: arg(1))) must recharge.")
             case "-crit":
@@ -778,13 +792,41 @@ final class ShowdownBattle {
             case "-fail":
                 board.note("But it failed.")
             case "cant":
-                board.note("\(name(of: arg(1))) could not move.")
+                // The reason is the whole of what is worth saying, and the
+                // sim has a sentence for each: flinched, fully paralysed,
+                // fast asleep, taunted out of the move it picked.
+                board.note(ShowdownText.say("cant", of: arg(2),
+                                            values: ["POKEMON": name(of: arg(1)),
+                                                     "MOVE": bare(arg(3))])
+                           ?? "\(name(of: arg(1))) could not move.")
             case "-weather":
+                // Only the change, never the upkeep: Showdown marks the turns
+                // a weather is merely still going with [upkeep], and a log
+                // that says "the sunlight is strong" every turn is a log
+                // nobody reads.
+                let upkeep = parts.contains { $0.hasPrefix("[upkeep]") }
                 board.field.weather = FieldSetters.weather(named: arg(1)) ?? .none
-            case "-fieldstart":
-                board.field.terrain = FieldSetters.terrain(named: arg(1)) ?? board.field.terrain
-            case "-fieldend":
-                if FieldSetters.terrain(named: arg(1)) != nil { board.field.terrain = .none }
+                if !upkeep {
+                    if arg(1) == "none" {
+                        // The sim says `|-weather|none` and does not name what
+                        // stopped, so the sentence belongs to whatever was
+                        // blowing a moment ago.
+                        if let was = weatherNamed,
+                           let said = ShowdownText.say("end", of: was) { board.note(said) }
+                        weatherNamed = nil
+                    } else {
+                        if let said = ShowdownText.say("start", of: arg(1)) { board.note(said) }
+                        weatherNamed = arg(1)
+                    }
+                }
+            case "-fieldstart", "-fieldend":
+                let starting = tag == "-fieldstart"
+                if let terrain = FieldSetters.terrain(named: arg(1)) {
+                    board.field.terrain = starting ? terrain : .none
+                }
+                if let said = ShowdownText.say(starting ? "start" : "end", of: arg(1)) {
+                    board.note(said)
+                }
             case "turn":
                 // Whatever was being gathered belongs to the turn that just
                 // finished, not the one starting.
@@ -960,6 +1002,10 @@ final class ShowdownBattle {
     /// What is on one Pokemon: a Substitute, a Leech Seed, a Taunt, the
     /// confusion it is under. The board carries each of these as its own
     /// field, and the scene draws several of them.
+    /// What is blowing, by Showdown's name for it, so that the line when it
+    /// stops can be the right one: `|-weather|none` does not say what ended.
+    private var weatherNamed: String?
+
     private func volatile(_ ident: String, effect: String, starting: Bool) {
         let what = bare(effect)
         withFighter(ident) { fighter in
@@ -985,7 +1031,17 @@ final class ShowdownBattle {
         if what == "Leech Seed", let at = seat(ident) {
             withFighter(ident) { $0.seededFrom = starting ? (at.slot) : nil }
         }
-        board.note("\(name(of: ident))\(starting ? " is " : " is no longer ")\(what).")
+        // Showdown's own sentence for it. The tag is not English and no
+        // arrangement of it becomes English: "|-start|p2a: Salamence|move:
+        // Yawn" glued together as it stood read "Salamence is Yawn", and the
+        // sentence it wanted -- "Salamence grew drowsy!" -- is sitting in the
+        // Yawn entry's `start`, which ships with the sim.
+        //
+        // The fallback stays for anything Showdown has no line for, which is
+        // mostly the things it never says out loud in the first place.
+        board.note(ShowdownText.say(starting ? "start" : "end", of: effect,
+                                    values: ["POKEMON": name(of: ident)])
+                   ?? "\(name(of: ident))\(starting ? " is " : " is no longer ")\(what).")
     }
 
     /// It turned into something else. The Pokemon is the same one -- same
