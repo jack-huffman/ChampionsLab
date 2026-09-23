@@ -530,10 +530,11 @@ extension BattleFieldView {
                 }
                 .saturation(fighter.fainted ? 0 : 1)
                 .opacity(fighter.fainted ? 0.5 : 1)
-                if fighter.pendingMega != nil {
-                    Text("M").font(.system(size: 8, weight: .heavy)).frame(width: 14, height: 14)
-                        .background(Palette.warn).foregroundStyle(.white).clipShape(Circle())
-                } else if fighter.build.form.isMega {
+                // Only what it has become. Holding a stone is not a state
+                // worth a badge on every card: the deck already offers the
+                // toggle to the one Pokemon that can use it, and the marker
+                // said the same thing a second time in a smaller place.
+                if fighter.build.form.isMega {
                     Image(systemName: "sparkles").font(.system(size: 9)).foregroundStyle(Palette.warn)
                 }
                 Spacer(minLength: 0)

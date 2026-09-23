@@ -1171,19 +1171,13 @@ struct BattleFieldView: View {
                     .opacity(fighter.fainted ? 0 : 1)
             }
         }
-        // The stone marker takes the other corner. It used to share the right
-        // one with the stat column, which is fine at one stat changed and
-        // overlapping at four.
+        // What it has become takes the other corner, away from the stat
+        // column, which is fine at one stat changed and overlapping at four.
+        // A stone still in hand used to be marked here too; the deck offers
+        // the toggle to the Pokemon holding it, which is the place the
+        // decision is actually made.
         .overlay(alignment: .topLeading) {
-            if fighter.pendingMega != nil {
-                Text("M").font(.system(size: 9, weight: .heavy))
-                    .frame(width: 17, height: 17)
-                    .background(Palette.warn).foregroundStyle(.white)
-                    .clipShape(Circle())
-                    .padding(2)
-                    .help("Holding its stone. It Mega Evolves only if you toggle it on "
-                          + "with a move, before anything else happens, in Speed order.")
-            } else if fighter.build.form.isMega {
+            if fighter.build.form.isMega {
                 Image(systemName: "sparkles")
                     .font(.system(size: 10))
                     .foregroundStyle(Palette.warn)
