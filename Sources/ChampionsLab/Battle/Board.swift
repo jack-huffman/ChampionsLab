@@ -161,6 +161,21 @@ struct Fighter {
     /// switching out, which is what makes them the one resource a battle
     /// really runs down. A Pokémon with none left anywhere Struggles.
     var ppLeft: [Int] = []
+    /// Moves the simulator will not take from this Pokemon this turn, by
+    /// index, read off its own request -- which is where Showdown's client
+    /// gets the greyed-out buttons from.
+    ///
+    /// A Choice item's lock, an Assault Vest, an Encore, a Disable, a
+    /// Gigaton Hammer used last turn, a Throat Chop, a Heal Block, a move at
+    /// no Power Points: the app modelled some of these and not others, and
+    /// on the Showdown path the bookkeeping for the ones it did model was
+    /// never run. Every one of them was a button you could press that the
+    /// simulator refused, and a refused order takes the whole side's turn
+    /// down with it. The request already knows all of them.
+    var unusable: Set<Int> = []
+    /// The simulator will not let this one switch out: an Arena Trap, a
+    /// Shadow Tag, a Mean Look, an Ingrain. Also off the request.
+    var trapped = false
     /// Imprison: while this one stands there, nobody across the field may use
     /// a move it knows itself. It seals what it has, not what it uses, so it
     /// costs the other side the move for as long as this one is out.

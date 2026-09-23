@@ -166,7 +166,10 @@ struct TurnGame {
         }
         // One switch: the benched member that fares best against what is out.
         let benchStart = 2
-        if team.count > benchStart {
+        // Not for something that cannot leave: an Arena Trap across the
+        // field, a Mean Look, its own Ingrain. The simulator refuses the
+        // switch, and a refused order is the whole side's turn.
+        if team.count > benchStart, !fighter.trapped, !fighter.cannotEscape {
             var best: (index: Int, score: Double)?
             for index in benchStart..<team.count where !team[index].fainted {
                 var worst = 0.0

@@ -465,7 +465,10 @@ private struct Bench {
                 // Power Points and the seal over them: two positions alike in
                 // every other way are not the same position when one of them
                 // has run a move dry.
-                out += "/\(f.ppLeft)/\(f.imprisoning)|"
+                out += "/\(f.ppLeft)/\(f.imprisoning)"
+                // And what the simulator itself has ruled out: a Choice-locked
+                // Pokemon and a free one are not the same position.
+                out += "/\(f.unusable.sorted())/\(f.trapped)|"
             }
         }
         out += "\(b.field.weather)\(b.field.terrain)\(b.myTailwind)\(b.theirTailwind)\(b.trickRoom)"

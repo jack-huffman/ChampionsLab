@@ -32,6 +32,8 @@ enum MoveLegality {
         case disabled
         /// A status move under a Taunt.
         case taunted
+        /// The simulator says no: a Choice lock, an Assault Vest, an Encore.
+        case unavailable
 
         var stops: Bool { self != .none }
     }
@@ -44,6 +46,8 @@ enum MoveLegality {
         }
         let fighter = team[slot]
         let move = fighter.moves[index]
+        // The simulator's word first: when it has spoken, it is right.
+        if fighter.unusable.contains(index) { return .unavailable }
         if fighter.disabled == index { return .disabled }
         if fighter.pp(at: index) <= 0 { return .spent }
         if sealed(move, byMine: byMine, board: board) { return .sealed }
@@ -75,6 +79,7 @@ enum MoveLegality {
         case .sealed: return "\(who) cannot use the sealed \(move)."
         case .disabled: return "\(who)'s \(move) is disabled."
         case .taunted: return "\(who) cannot use \(move) — it is still taunted."
+        case .unavailable: return "\(who) cannot use \(move) this turn."
         }
     }
 

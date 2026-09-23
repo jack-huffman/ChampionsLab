@@ -406,6 +406,20 @@ struct CommandDeckView: View {
         }
     }
 
+    /// The likeliest reason the simulator has turned a move down, in the few
+    /// words that fit on a tile. The simulator says *that* a move is off and
+    /// not why, so this reads the why off the Pokemon; where nothing on it
+    /// explains the refusal, it says only that the game will not allow it,
+    /// which is true and is more than a button that silently does nothing.
+    static func shortReason(unavailable move: Move, fighter: Fighter) -> String {
+        let item = fighter.build.item
+        if item.hasPrefix("Choice ") { return "· locked in by the \(item)" }
+        if item == "Assault Vest", !move.isDamaging { return "· the Assault Vest allows only attacks" }
+        if fighter.encoredFor > 0 { return "· under an Encore" }
+        if fighter.tauntedFor > 0, !move.isDamaging { return "· still taunted" }
+        return "· the game will not allow it this turn"
+    }
+
     /// Why a move cannot be clicked, in the few words that fit under it.
     private func whyNot(_ refusal: MoveLegality.Refusal, move: Move,
                         fighter: Fighter, fallen: [Int]) -> String? {
@@ -414,6 +428,7 @@ struct CommandDeckView: View {
         case .sealed: return "· sealed away by an Imprison"
         case .disabled: return "· disabled"
         case .taunted: return "· still taunted"
+        case .unavailable: return Self.shortReason(unavailable: move, fighter: fighter)
         case .none: break
         }
         if move.aim == .party, fallen.isEmpty { return "· nobody has fainted yet" }
@@ -802,13 +817,21 @@ struct CommandDeckView: View {
 
     /// The bench, to switch to.
     private func partyList(_ board: Board, slot: Int) -> some View {
-        let options = switchOptions(board)
+        // Trapped: the simulator will not take a switch from this one, and a
+        // list of Pokemon to switch to would be a list of refused turns.
+        let stuck = board.mine.indices.contains(slot)
+            && (board.mine[slot].trapped || board.mine[slot].cannotEscape)
+        let options = (stuck ? [] : switchOptions(board))
             .map { (index: $0, reading: BattleSession.sendInReading(board, bench: $0)) }
             .sorted { $0.reading.score > $1.reading.score }
         return VStack(alignment: .leading, spacing: 8) {
             Text("SWITCH TO")
                 .font(.system(size: 9, weight: .bold)).kerning(0.6)
                 .foregroundStyle(.tertiary)
+            if stuck {
+                Text("\(board.mine[slot].build.form.formLabel) cannot switch out -- it is trapped.")
+                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+            }
             Text("Switching happens before anything else, and whoever comes in takes whatever was aimed at this slot.")
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 270), spacing: 8)],

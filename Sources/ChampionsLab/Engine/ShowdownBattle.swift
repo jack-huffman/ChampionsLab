@@ -117,6 +117,7 @@ final class ShowdownBattle {
         // played has nothing to come back to -- and the first turn it is
         // asked for would be played on whatever position the engine had
         // wandered to instead.
+        battle.refreshLegality()
         battle.keepPosition()
         return battle
     }
@@ -304,6 +305,7 @@ final class ShowdownBattle {
         // have actually been asked -- choosing for a side with no question is
         // refused, and looks exactly like an illegal move.
         try settle(ours: ours, theirs: theirsWhenForced)
+        refreshLegality()
         return board
     }
 
@@ -320,7 +322,9 @@ final class ShowdownBattle {
     func sendIn(bench: Int) throws -> Board {
         try takeTheEngine()
         defer { keepPosition() }
-        return try sendIn(mine: bench, theirs: nil, autoTheirs: true)
+        _ = try sendIn(mine: bench, theirs: nil, autoTheirs: true)
+        refreshLegality()
+        return board
     }
 
     /// Both sides' replacements, for a game where both are chosen. Nil for a
@@ -682,6 +686,20 @@ final class ShowdownBattle {
                     if let id = move?.id {
                         withFighter(arg(1)) { $0.revealedMoves.insert(id) }
                     }
+                    // What it last did, and whether that worked. Encore reads
+                    // the first to know what it is locking in; Stomping
+                    // Tantrum and Lash Out read the second to double. Both
+                    // were kept by the old engine and by nothing here, so the
+                    // preview priced a Stomping Tantrum after a miss at half
+                    // what the simulator was about to deal.
+                    let aimedAt = seat(arg(3)).map { $0.mine == at.mine ? Choice.allyTarget : $0.slot } ?? 0
+                    withFighter(arg(1)) { f in
+                        if let index = f.moves.firstIndex(where: { $0.name == arg(2) }) {
+                            f.lastMove = index
+                        }
+                        f.lastTarget = aimedAt
+                        f.lastMoveFailed = false
+                    }
                 }
                 board.note("\(name(of: arg(1))) used \(arg(2)).")
             case "-damage", "-heal", "-sethp":
@@ -903,6 +921,10 @@ final class ShowdownBattle {
                 }
                 board.note("\(name(of: arg(1))) is immune.")
             case "-miss":
+                if let acting = board.acting {
+                    if acting.byMine { board.mine[acting.slot].lastMoveFailed = true }
+                    else { board.theirs[acting.slot].lastMoveFailed = true }
+                }
                 // The target, which is the second field when there is one and
                 // the only field when the move was thrown at nothing.
                 let dodged = arg(2).isEmpty ? arg(1) : arg(2)
@@ -911,6 +933,10 @@ final class ShowdownBattle {
                 }
                 board.note("\(name(of: dodged)) avoided the attack.")
             case "-fail":
+                if let acting = board.acting {
+                    if acting.byMine { board.mine[acting.slot].lastMoveFailed = true }
+                    else { board.theirs[acting.slot].lastMoveFailed = true }
+                }
                 board.note("But it failed.")
             case "cant":
                 // The reason is the whole of what is worth saying, and the
@@ -1081,6 +1107,59 @@ final class ShowdownBattle {
     ///
     /// Perish is not counted here: the client sends the number itself, once a
     /// turn, and counting it as well would halve the song.
+    /// What each Pokemon standing on the field may do next turn, in the
+    /// simulator's own words.
+    ///
+    /// Its request lists every active's moves with `pp` and `disabled`, and
+    /// says `trapped` when it may not switch. That is the whole of what
+    /// Showdown's client needs to grey out a button, and it is right by
+    /// construction, because it is the thing that will be refusing the order.
+    /// The app's own legality stays for the positions the simulator is not
+    /// asked about -- the search's imagined ones -- and this overrides it for
+    /// the position actually on the board.
+    func refreshLegality() {
+        for (side, mine) in [("p1", true), ("p2", false)] {
+            guard let text = try? engine.request(side), let data = text.data(using: .utf8),
+                  let request = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let active = request["active"] as? [[String: Any]] else { continue }
+            for (slot, entry) in active.enumerated() {
+                let moves = entry["moves"] as? [[String: Any]] ?? []
+                var unusable: Set<Int> = []
+                var pp: [Int] = []
+                for (index, move) in moves.enumerated() {
+                    if (move["disabled"] as? Bool) == true { unusable.insert(index) }
+                    pp.append((move["pp"] as? Int) ?? 0)
+                }
+                // A request for a Pokemon locked into one move lists that
+                // move alone, and the rest are exactly as unusable as if they
+                // had been marked. Matched by id rather than by position.
+                let team = mine ? board.mine : board.theirs
+                guard team.indices.contains(slot) else { continue }
+                if moves.count < team[slot].moves.count {
+                    let offered = Set(moves.compactMap { $0["id"] as? String })
+                    unusable = []
+                    pp = []
+                    for (index, move) in team[slot].moves.enumerated() {
+                        let id = ShowdownText.id(move.name)
+                        if !offered.contains(id) { unusable.insert(index) }
+                        let found = moves.first { ($0["id"] as? String) == id }
+                        pp.append((found?["pp"] as? Int) ?? 0)
+                    }
+                }
+                let trapped = (entry["trapped"] as? Bool) == true
+                if mine {
+                    board.mine[slot].unusable = unusable
+                    board.mine[slot].ppLeft = pp
+                    board.mine[slot].trapped = trapped
+                } else {
+                    board.theirs[slot].unusable = unusable
+                    board.theirs[slot].ppLeft = pp
+                    board.theirs[slot].trapped = trapped
+                }
+            }
+        }
+    }
+
     /// Who has just come in, rolled forward a turn.
     ///
     /// `justArrived` gates everything that only works on the turn a Pokemon
@@ -1278,10 +1357,20 @@ final class ShowdownBattle {
         let who = name(of: ident)
         let species = details.split(separator: ",").first.map(String.init) ?? who
         var team = at.mine ? board.mine : board.theirs
-        guard let found = team.firstIndex(where: {
+        let named: (Fighter) -> Bool = {
             $0.build.form.showdown == species || $0.build.form.formLabel == species
                 || $0.build.form.name == species
-        }) else { return }
+        }
+        // Whoever is walking on comes off the bench, so a match on the bench
+        // is the one meant. Taking the first match anywhere picked the copy
+        // already standing in the other slot whenever a side carried two of a
+        // species -- which a custom game allows even if Species Clause does
+        // not -- and the board went on showing a fainted Pokemon in a slot the
+        // simulator had already refilled.
+        let benchFirst = team.indices.filter { $0 == at.slot }
+            + team.indices.filter { $0 >= board.activeCount }
+            + team.indices.filter { $0 < board.activeCount && $0 != at.slot }
+        guard let found = benchFirst.first(where: { named(team[$0]) }) else { return }
         if found != at.slot, team.indices.contains(at.slot) {
             team.swapAt(found, at.slot)
             // Whoever was standing here is on the bench now, and everything
