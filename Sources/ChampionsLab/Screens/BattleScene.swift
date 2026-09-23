@@ -297,7 +297,13 @@ extension BattleFieldView {
                 ProtectShield(width: side * 1.05, height: side * 0.74,
                               flares: playback.blocked.contains(seat) ? playback.hitNumber : 0)
                     .offset(y: -side * 0.06)
-                    .transition(.opacity)
+                    // It has to be seen coming down. A Protect lasts the turn
+                    // and no longer, and the panel simply stopped existing on
+                    // the next board -- which on screen is not a shield
+                    // dropping, it is a shield that was never there. Out the
+                    // way it came in: fading as it shrinks.
+                    .transition(.asymmetric(insertion: .opacity,
+                                            removal: .scale(scale: 0.85).combined(with: .opacity)))
             } else if fighter.substitute > 0, !fighter.fainted {
                 Circle()
                     .strokeBorder(Palette.dim.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
@@ -326,6 +332,11 @@ extension BattleFieldView {
         .offset(y: out ? 0 : side * 0.16)
         .animation(reduceMotion ? .easeOut(duration: 0.12)
                                 : .spring(response: 0.42, dampingFraction: 0.58), value: out)
+        // The shield's own coming and going. A transition only plays when the
+        // change that causes it is animated, and a new board simply arriving
+        // is not an animation -- so the panel popped out of existence at the
+        // end of the turn instead of dropping.
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.28), value: guarding(fighter))
         .frame(width: side, height: side)
         // The game is over and this one is on the side that won: a crown,
         // hovering, riding the same bob the Pokemon does.

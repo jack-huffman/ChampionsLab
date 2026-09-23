@@ -531,6 +531,13 @@ final class ShowdownBattle {
         return (side, slot)
     }
 
+    /// Whoever that identifier names, to read rather than to change.
+    private func fighter(_ ident: String) -> Fighter? {
+        guard let at = seat(ident) else { return nil }
+        let side = at.mine ? board.mine : board.theirs
+        return side.indices.contains(at.slot) ? side[at.slot] : nil
+    }
+
     private func name(of ident: String) -> String {
         ident.contains(": ") ? String(ident.split(separator: ":", maxSplits: 1)[1]).trimmingCharacters(in: .whitespaces) : ident
     }
@@ -630,9 +637,26 @@ final class ShowdownBattle {
                 board.note("\(name(of: arg(1))) used \(arg(2)).")
             case "-damage", "-heal", "-sethp":
                 let reading = health(arg(2))
+                let was = fighter(arg(1))?.hp
                 withFighter(arg(1)) { f in
                     if let hp = reading.hp { f.hp = max(0, min(f.maxHP, hp)) }
                     if let status = reading.status { f.status = status }
+                }
+                // Each blow of a flurry, recorded as one. The simulator sends
+                // a `-damage` per hit and a `-hitcount` after them, so the
+                // health was always right -- but the field plays a move blow
+                // by blow off `action.hits`, and nothing was filling it, so a
+                // Rock Blast that hit five times landed once on screen.
+                //
+                // Only a blow: damage with a `[from]` on it is a Life Orb, a
+                // recoil, a residual, and damage to the Pokemon that is
+                // acting is not something it hit.
+                if tag == "-damage", let was, let hit = seat(arg(1)),
+                   !parts.contains(where: { $0.hasPrefix("[from]") }),
+                   let acting = board.acting,
+                   !(acting.byMine == hit.mine && acting.slot == hit.slot),
+                   let now = fighter(arg(1))?.hp, was > now {
+                    board.acting?.hits.append(was - now)
                 }
                 // Health that moved for a reason of its own rather than
                 // because somebody hit it. Said out loud, because a step with
@@ -685,6 +709,14 @@ final class ShowdownBattle {
                 }
                 arrive(arg(1), details: arg(2), health: arg(3))
             case "-ability":
+                // An ability announcing itself on the way in is its own beat.
+                // Two Intimidates landing together were one step carrying both
+                // names, so the field drew a single pair of arrows for two
+                // separate drops and the log read them off in a heap. The
+                // simulator marks this form with a third field -- `boost` for
+                // Intimidate, and its siblings -- which is exactly the line
+                // that opens a group of its own.
+                if arg(3) == "boost" || arg(3) == "unboost" { board.beginStep() }
                 board.note("\(name(of: arg(1)))'s \(arg(2)).")
             case "-item":
                 board.note("\(name(of: arg(1)))'s \(arg(2)).")
@@ -1188,7 +1220,15 @@ final class ShowdownBattle {
             team[at.slot].hp = max(0, min(team[at.slot].maxHP, hp))
         }
         if at.mine { board.mine = team } else { board.theirs = team }
-        board.note("\(who) came in.")
+        // The client's own wording, which tells the two sides apart: yours is
+        // called out, theirs is sent out against you. Four Pokemon walking on
+        // is four lines whatever they say, but "Staraptor went in" four times
+        // over reads as one thing happening four times rather than two teams
+        // arriving.
+        //
+        // Still one step each, because the `switch` line opens one: that is
+        // what both screens play the opening from, a ball at a time.
+        board.note(at.mine ? "Go! \(who)!" : "\(who) was sent out!")
     }
 
     // MARK: - The protocol's words for things

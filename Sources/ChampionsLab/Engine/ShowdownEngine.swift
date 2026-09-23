@@ -189,9 +189,31 @@ final class ShowdownEngine: @unchecked Sendable {
     }
 
     /// Why the last choice was refused, in the simulator's own words.
+    ///
+    /// What the bundle records is the last thing the simulator *said*, which
+    /// is not the same as the last thing that went wrong: a refused choice is
+    /// answered with an `|error|` and then a fresh `|request|`, and the
+    /// request is what arrives last. Printing that put the whole of a side's
+    /// team -- every Pokemon, every move, every stat, a couple of thousand
+    /// characters of JSON -- into the battle log where a sentence belonged.
+    ///
+    /// So only the error, and only the part of it a person can read.
     var lastRefusal: String? {
         guard let out = try? call("lastError"), !out.isNull, !out.isUndefined else { return nil }
-        return out.toString()
+        return Self.readable(out.toString())
+    }
+
+    /// The `|error|` out of whatever the simulator last said, trimmed of the
+    /// protocol's own furniture and capped: nothing in the log is worth two
+    /// hundred characters of machinery.
+    static func readable(_ said: String?) -> String? {
+        guard let said, let at = said.range(of: "|error|") else { return nil }
+        var text = String(said[at.upperBound...])
+        if let end = text.range(of: "|request|") { text = String(text[..<end.lowerBound]) }
+        text = text.replacingOccurrences(of: "[Invalid choice] ", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        return text.count > 200 ? String(text.prefix(200)) + "..." : text
     }
 
     var turn: Int { (try? call("turn").toInt32()).map(Int.init) ?? 0 }

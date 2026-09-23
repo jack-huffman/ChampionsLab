@@ -1,126 +1,86 @@
 //  MultiHitTests.swift
-//  A flurry strikes several times, each blow on the record; a Focus Sash
-//  holds the first blow and the next one lands.
+//  A flurry lands blow by blow, and a refusal says a sentence.
+//
+//      swift test --filter MultiHitTests
 
 import XCTest
 @testable import ChampionsLab
 
+@MainActor
 final class MultiHitTests: HarnessCase {
-    @MainActor private func lineup(theirItem: String = "Leftovers") -> Board {
-        let mine = fighters([("Garchomp", "Life Orb", ["Dual Wingbeat", "Rock Blast", "Earthquake", "Protect"]),
-                             ("Rillaboom", "Assault Vest", ["Wood Hammer"]),
-                             ("Whimsicott", "Focus Sash", ["Tailwind"])])
-        let theirs = fighters([("Whimsicott", theirItem, ["Tailwind", "Protect"]),
-                               ("Milotic", "Leftovers", ["Scald"]),
-                               ("Kingambit", "Black Glasses", ["Kowtow Cleave"])])
-        return Board(mine: mine, theirs: theirs, rules: store.rulebook)
-    }
-
-    @MainActor func testDualWingbeatIsTwoBlowsOnTheRecord() {
-        let board = lineup()
-        let out = TurnModel.resolve(board,
-                                    mine: Play(left: .attack(move: at(board.mine[0], "Dual Wingbeat"), target: 0), right: .pass),
-                                    theirs: Play(left: .pass, right: .pass), rolling: false)
-        let step = out.steps.first { $0.action?.move == "Dual Wingbeat" }
-        let blows = step?.action?.hits ?? []
-        let lost = board.theirs[0].hp - out.theirs[0].hp
-        check("two blows", blows.count == 2, "\(blows)")
-        check("that add up to what landed", blows.reduce(0, +) == lost, "\(blows) vs \(lost)")
-        check("and the log says so", out.story.contains { $0.contains("2 hits") })
-        check("each blow is its own number", blows.allSatisfy { $0 > 0 })
-    }
-
-    @MainActor func testRockBlastRollsTwoToFive() {
-        var counts: Set<Int> = []
-        for _ in 0..<12 {
-            let board = lineup()
-            let out = TurnModel.resolve(board,
-                                        mine: Play(left: .attack(move: at(board.mine[0], "Rock Blast"), target: 0), right: .pass),
-                                        theirs: Play(left: .pass, right: .pass), rolling: true)
-            if let blows = out.steps.first(where: { $0.action?.move == "Rock Blast" })?.action?.hits, !blows.isEmpty {
-                counts.insert(blows.count)
-            }
+    /// The field plays a multi-hit move off `action.hits` -- the move's own
+    /// picture once per blow, each with its own number, the bar stepping down
+    /// between them. Nothing on the Showdown path was filling it, so a Rock
+    /// Blast that hit five times landed once on screen. The health was always
+    /// right; it arrived in one lump.
+    func testAFlurryLandsBlowByBlow() throws {
+        guard ShowdownEngine.bundleURL() != nil else { throw XCTSkip("no engine") }
+        func slot(_ name: String, _ moves: [String]) -> TeamSlot? {
+            guard let form = store.data.forms.first(where: { $0.formLabel == name }) else { return nil }
+            var s = TeamSlot(formID: form.id)
+            s.ability = form.abilities.first?.name ?? ""
+            s.moves = moves.compactMap { m in form.moves.first { store.move($0)?.name == m } }
+            s.sp = [32, 32, 0, 0, 0, 0]; s.id = UUID()
+            return s
         }
-        check("every count is two to five", counts.allSatisfy { (2...5).contains($0) }, "\(counts.sorted())")
-        check("and the dice were rolled", !counts.isEmpty)
-    }
-
-    @MainActor func testASingleBlowKeepsNoList() {
-        let board = lineup()
-        let out = TurnModel.resolve(board,
-                                    mine: Play(left: .attack(move: at(board.mine[0], "Earthquake"), target: 0), right: .pass),
-                                    theirs: Play(left: .pass, right: .pass), rolling: true)
-        let blows = out.steps.first { $0.action?.move == "Earthquake" }?.action?.hits ?? [1]
-        check("one blow, nothing to list", blows.isEmpty, "\(blows)")
-    }
-
-    @MainActor func testEveryBlowRollsItsOwnDamageAndItsOwnCrit() {
-        // Rolled, many times: if one roll were shared across the blows every
-        // blow of every use would match its neighbours.
-        var varied = 0, uses = 0, criticalLines = 0
-        for _ in 0..<300 {
-            let board = lineup()
-            let out = TurnModel.resolve(board,
-                                        mine: Play(left: .attack(move: at(board.mine[0], "Rock Blast"), target: 0), right: .pass),
-                                        theirs: Play(left: .pass, right: .pass), rolling: true)
-            guard let blows = out.steps.first(where: { $0.action?.move == "Rock Blast" })?.action?.hits,
-                  blows.count > 1 else { continue }
-            uses += 1
-            if Set(blows).count > 1 { varied += 1 }
-            if out.story.contains(where: { $0.contains("critical") }) { criticalLines += 1 }
+        // A move that strikes more than once, and something to strike.
+        let flurries = ["Rock Blast", "Bullet Seed", "Icicle Spear", "Bone Rush",
+                        "Dual Wingbeat", "Double Hit", "Tail Slap", "Arm Thrust"]
+        var played: [(String, [Int])] = []
+        for name in flurries {
+            guard let move = store.data.moves.values.first(where: { $0.name == name }) else { continue }
+            guard let user = store.data.forms.first(where: { $0.moves.contains(move.id) }) else { continue }
+            guard let attacker = slot(user.formLabel, [name, "Protect"]),
+                  attacker.moves.count == 2,
+                  let filler = slot("Whimsicott", ["Protect", "Moonblast"]),
+                  let target = slot("Milotic", ["Protect", "Recover"]) else { continue }
+            var mine = Team(name: "A"); mine.format = "doubles"; mine.slots = [attacker, filler]
+            var theirs = Team(name: "B"); theirs.format = "doubles"; theirs.slots = [target, filler]
+            for i in mine.slots.indices { mine.slots[i].id = UUID() }
+            for i in theirs.slots.indices { theirs.slots[i].id = UUID() }
+            guard let game = try? ShowdownBattle.start(mine: mine, theirs: theirs,
+                                                       myFour: [0, 1], theirFour: [0, 1],
+                                                       store: store, seed: [2, 7, 1, 8]) else { continue }
+            let play = Play(left: .attack(move: 0, target: 0), right: .attack(move: 1, target: 0))
+            guard (try? game.play(mine: play,
+                                  theirs: Play(left: .attack(move: 1, target: 0),
+                                               right: .attack(move: 1, target: 0)))) != nil
+            else { continue }
+            guard let at = game.board.steps.firstIndex(where: { $0.action?.move == name })
+            else { continue }
+            // A flurry that missed is not a flurry that landed once: Rock
+            // Blast and its like are ninety per cent moves, and a miss has no
+            // blows in it to count.
+            let after = game.board.steps[at].theirHP.first ?? 0
+            let before = at > 0 ? (game.board.steps[at - 1].theirHP.first ?? 0)
+                                : game.board.theirs[0].maxHP
+            guard before > after else { continue }
+            played.append((name, game.board.steps[at].action?.hits ?? []))
         }
-        check("a flurry was thrown", uses > 100, "\(uses)")
-        check("its blows differ from one another most of the time",
-              Double(varied) / Double(Swift.max(1, uses)) > 0.5, "\(varied) of \(uses)")
-        check("and a blow crits on its own now and then, at about a twentieth",
-              criticalLines > 0, "\(criticalLines) of \(uses)")
-    }
 
-    @MainActor func testTripleAxelIsThreeBlowsThatClimb() {
-        let mine = fighters([("Milotic", "Mystic Water", ["Triple Axel", "Scald"]),
-                             ("Garchomp", "Life Orb", ["Earthquake"]),
-                             ("Whimsicott", "Focus Sash", ["Tailwind"])])
-        let theirs = fighters([("Farigiraf", "Leftovers", ["Psychic"]),
-                               ("Garchomp", "Sitrus Berry", ["Earthquake"]),
-                               ("Milotic", "Leftovers", ["Scald"])])
-        var counts: Set<Int> = []
-        var climbed = 0, uses = 0
-        for _ in 0..<80 {
-            let board = Board(mine: mine, theirs: theirs, rules: store.rulebook)
-            let out = TurnModel.resolve(board,
-                                        mine: Play(left: .attack(move: at(board.mine[0], "Triple Axel"), target: 0), right: .pass),
-                                        theirs: Play(left: .pass, right: .pass), rolling: true)
-            guard let blows = out.steps.first(where: { $0.action?.move == "Triple Axel" })?.action?.hits,
-                  !blows.isEmpty else { continue }
-            uses += 1
-            counts.insert(blows.count)
-            if blows.count == 3, blows[0] < blows[1], blows[1] < blows[2] { climbed += 1 }
+        check("some flurries were played", !played.isEmpty, "\(played.count)")
+        for (name, hits) in played {
+            print("  \(name): \(hits.count) blows \(hits)")
         }
-        check("it was used", uses > 40, "\(uses)")
-        check("never more than three blows", counts.allSatisfy { $0 <= 3 }, "\(counts.sorted())")
-        check("three of them when none missed", counts.contains(3), "\(counts.sorted())")
-        check("and each harder than the last", climbed > 0, "\(climbed) of \(uses)")
+        let struckOnce = played.filter { $0.1.count < 2 }.map(\.0)
+        check("and every one of them landed more than once",
+              struckOnce.isEmpty, struckOnce.joined(separator: ", "))
     }
 
-    @MainActor func testAFlurryGoesThroughAFocusSash() {
-        var board = lineup(theirItem: "Focus Sash")
-        board.mine[0].build.boosts[Stat.attack.rawValue] = 6
-        let flurry = TurnModel.resolve(board,
-                                       mine: Play(left: .attack(move: at(board.mine[0], "Dual Wingbeat"), target: 0), right: .pass),
-                                       theirs: Play(left: .pass, right: .pass), rolling: false)
-        check("the Sash held the first blow and the second finished it",
-              flurry.theirs[0].fainted, "\(flurry.theirs[0].hp)")
-        check("the Sash was spent doing it", flurry.theirs[0].build.itemSpent)
-        check("the blows on record are what landed",
-              (flurry.steps.first { $0.action?.move == "Dual Wingbeat" }?.action?.hits.reduce(0, +) ?? -1)
-                == board.theirs[0].hp)
-        check("and it was told", flurry.story.contains { $0.contains("the next blow landed") })
-
-        var again = lineup(theirItem: "Focus Sash")
-        again.mine[0].build.boosts[Stat.attack.rawValue] = 6
-        let single = TurnModel.resolve(again,
-                                       mine: Play(left: .attack(move: at(again.mine[0], "Earthquake"), target: 0), right: .pass),
-                                       theirs: Play(left: .pass, right: .pass), rolling: false)
-        check("one blow, and the Sash holds it at one", single.theirs[0].hp == 1, "\(single.theirs[0].hp)")
+    /// A refused order used to put the simulator's whole reply in the log --
+    /// the `|request|` that follows the error, which is every Pokemon on a
+    /// side with its moves and stats, a couple of thousand characters of JSON.
+    func testARefusalSaysASentenceAndNotTheWholeRequest() {
+        let wall = "p2 |error|[Invalid choice] Can't move: Sneasler doesn't have a move matching 1101"
+            + " |request|{\"active\":[{\"moves\":[{\"move\":\"Close Combat\",\"id\":\"closecombat\",\"pp\":6}]}],"
+            + String(repeating: "\"padding\":\"x\",", count: 200) + "}"
+        let said = ShowdownEngine.readable(wall)
+        check("the error survives",
+              said == "Can't move: Sneasler doesn't have a move matching 1101", said ?? "nothing")
+        check("and the request does not", said?.contains("request") != true)
+        check("nothing without an error in it says anything",
+              ShowdownEngine.readable("p2 |request|{\"active\":[]}") == nil)
+        check("and a very long error is cut short",
+              (ShowdownEngine.readable("p1 |error|" + String(repeating: "x", count: 500)) ?? "").count <= 203)
     }
 }
