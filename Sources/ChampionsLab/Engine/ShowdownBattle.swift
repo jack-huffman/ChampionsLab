@@ -713,7 +713,12 @@ final class ShowdownBattle {
                 } else if what == "Wide Guard" || what == "Quick Guard" {
                     guarding(arg(1), wide: what == "Wide Guard")
                 }
-                board.note("\(name(of: arg(1))) used \(what).")
+                // Showdown's own line. This used to repeat the move's name --
+                // "Milotic used Protect." twice over, once from |move| and
+                // once from here -- where the client says what the move did.
+                board.note(ShowdownText.say("start", of: arg(2),
+                                            values: ["POKEMON": name(of: arg(1))])
+                           ?? "\(name(of: arg(1))) used \(what).")
             case "-singlemove":
                 if bare(arg(2)) == "Destiny Bond" { withFighter(arg(1)) { $0.destinyBound = true } }
             case "-clearnegativeboost":
@@ -762,7 +767,16 @@ final class ShowdownBattle {
                 // Sash holding, a Sturdy, an Ability Shield. Said rather than
                 // modelled: whatever it did shows up as its own line.
                 if !arg(2).isEmpty {
-                    board.note(ShowdownText.say("activate", of: arg(2),
+                    // `block` first: an attack stopped by a Protect is the
+                    // commonest -activate there is, and the table keeps the
+                    // sentence for it under that key. Without it the log read
+                    // "Milotic's Protect." where the client reads "Milotic
+                    // protected itself!"
+                    board.note(ShowdownText.say("block", of: arg(2),
+                                                values: ["POKEMON": name(of: arg(1)),
+                                                         "TARGET": name(of: arg(3)),
+                                                         "SOURCE": name(of: arg(1))])
+                               ?? ShowdownText.say("activate", of: arg(2),
                                                 values: ["POKEMON": name(of: arg(1)),
                                                          "TARGET": name(of: arg(3)),
                                                          "SOURCE": name(of: arg(1))])
@@ -971,13 +985,26 @@ final class ShowdownBattle {
         board.trickRoom = Swift.max(0, board.trickRoom - 1)
         board.weatherTurns = Swift.max(0, board.weatherTurns - 1)
         board.terrainTurns = Swift.max(0, board.terrainTurns - 1)
+        // The Protect counter falls back the moment a Pokemon does something
+        // else. Only the increment was running on this path -- the reset
+        // lives in `Residuals`, which is the old engine's end of turn and is
+        // never reached when Showdown is resolving the game -- so a streak
+        // only ever climbed. One Protect and the tile said "33% chance after
+        // last turn's" for the rest of the game; two and `TurnGame` stopped
+        // offering Protect at all, because it will not consider one under
+        // three tenths. The move worked; everything that talked about it was
+        // wrong.
         for index in board.mine.indices {
+            board.mine[index].protectedLast = board.mine[index].isProtected
+            if !board.mine[index].isProtected { board.mine[index].protectStreak = 0 }
             board.mine[index].isProtected = false
             board.mine[index].tauntedFor = Swift.max(0, board.mine[index].tauntedFor - 1)
             board.mine[index].encoredFor = Swift.max(0, board.mine[index].encoredFor - 1)
             board.mine[index].disabledFor = Swift.max(0, board.mine[index].disabledFor - 1)
         }
         for index in board.theirs.indices {
+            board.theirs[index].protectedLast = board.theirs[index].isProtected
+            if !board.theirs[index].isProtected { board.theirs[index].protectStreak = 0 }
             board.theirs[index].isProtected = false
             board.theirs[index].tauntedFor = Swift.max(0, board.theirs[index].tauntedFor - 1)
             board.theirs[index].encoredFor = Swift.max(0, board.theirs[index].encoredFor - 1)

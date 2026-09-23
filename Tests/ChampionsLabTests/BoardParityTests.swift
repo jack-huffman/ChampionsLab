@@ -255,6 +255,12 @@ final class BoardParityTests: HarnessCase {
                     ("torment", "torment", fighter.tormented),
                     ("destiny bond", "destinybond", fighter.destinyBound),
                     ("perish song", "perishsong", fighter.perishIn > 0),
+                    // Showdown counts consecutive Protects as `stall`, and
+                    // the app counts them as `protectStreak` -- which is what
+                    // the move tile's "33% chance after last turn's" is read
+                    // off, and what the search uses to decide whether Protect
+                    // is even worth offering. Only the increment was running.
+                    ("protect streak", "stall", fighter.protectStreak > 0),
                 ]
                 for (label, id, ourView) in held {
                     same("\(tag) \(label)", "\(ourView)", "\(mon.volatiles.contains(id))")
