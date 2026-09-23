@@ -11,18 +11,19 @@
 //  there at all, the card shows the illustration.
 //
 //  Showdown keeps several sets and they are not equally complete. The Gen 6
-//  one -- `ani` -- has 340 of this dex's 345 forms; the Gen 5 one the app
-//  used to ask for first has 219. That gap is a hundred and twenty-one
-//  Pokemon, most of Gen 8 and Gen 9 among them, quietly falling back to a
-//  still or to the illustration on a screen set to pixel sprites. It asks the
-//  bigger set first now and keeps the smaller one behind it, which costs
-//  nothing: measured against the whole dex, `ani` has everything `gen5ani`
-//  has and a hundred and twenty-one more.
+//  one -- `ani` -- has 340 of this dex's 345 forms; the Gen 5 animated one --
+//  `gen5ani` -- has 219, because nothing drawn after Black and White was ever
+//  drawn in that style. That gap is not a rounding error in this format: it
+//  is every Mega and most of the dex.
 //
-//  What is left is five Megas this game invented -- Absol Z, Baxcalibur,
-//  Garchomp Z, Golisopod, Lucario Z -- which exist in no client because they
-//  exist in no other game. Showdown has drawn a still for each, and the still
-//  is what comes back for those.
+//  Which is why the two looks each keep to their own set. `ani` is the model
+//  look and `gen5ani` is the pixel look, and a pixel look that quietly serves
+//  models where the animation is missing is a pixel look that serves models,
+//  full stop. Showdown answers this with a hand-made Gen 5 still -- it has
+//  one for Ceruledge, for Rillaboom, and for the five Megas this game
+//  invented that exist in no other client at all -- and a still in the right
+//  art is the right answer. The app's own illustration is the last resort,
+//  for the handful of backs Showdown has nothing for.
 //
 //  Shiny is the same set under another name -- gen5ani-shiny and its three
 //  siblings -- and is fetched and kept the same way, under its own key so the
@@ -62,23 +63,24 @@ final class PixelSprites: ObservableObject {
         /// index at all -- the Gen 5 animation, or the still, and nothing
         /// else.
         ///
-        /// One deliberate departure from that. Under `bwgfx` the client goes
-        /// straight from a missing Gen 5 animation to a Gen 5 still, and a
-        /// still is what a hundred and thirty of this game's three hundred
-        /// and fifty forms would be: every Pokemon that postdates Black and
-        /// White never had a sprite drawn in that style, so it has a
-        /// hand-made static one and nothing else. Ceruledge and Rillaboom
-        /// stand there not moving while everything around them breathes.
+        /// Neither ladder crosses into the other, and that is the whole
+        /// point of there being two. Pixel once fell through to the Gen 6
+        /// animation when Showdown had no Gen 5 one, on the reasoning that a
+        /// moving sprite beats a still -- which is true of a sprite and false
+        /// of a setting. Nothing in this format has a Gen 5 animation: every
+        /// Mega postdates Black and White by a generation and most of the
+        /// dex postdates it by three, so on a real board the fallback was not
+        /// a fallback, it was the whole field. Pixel drew the Models set and
+        /// the toggle did nothing.
         ///
-        /// A moving sprite from the other set is a better answer than a still
-        /// one from this set. So the Gen 6 animation comes first and the
-        /// still is the last resort rather than the second. It does mean
-        /// those hundred and thirty are drawn in the other set's art -- that
-        /// is the price, and it is paid knowingly.
+        /// Showdown has a hand-made Gen 5 still for all of them, which is
+        /// what its own `bwgfx` shows and is pixel art. So Pixel is pixel
+        /// art: animated where somebody drew an animation, still where
+        /// nobody did, and never the other set.
         var chain: [Source] {
             switch self {
             case .models: return [.gen6, .gen5, .still]
-            case .pixel: return [.gen5, .gen6, .still]
+            case .pixel: return [.gen5, .still]
             case .illustrated: return []
             }
         }

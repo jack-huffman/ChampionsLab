@@ -62,21 +62,30 @@ final class PixelSpritesTests: HarnessCase {
             check("\(style.label) ends on a still", style.chain.last == .still,
                   "\(style.chain.map(\.rawValue))")
         }
-        // Each reaches for the other's animation before it settles for a
-        // still. The client does not -- under `bwgfx` it never reads the Gen
-        // 6 index at all -- and this is the one place the app knowingly
-        // differs: a hundred and thirty forms have no Gen 5 animation, and a
-        // moving sprite from the other set beats a still one from this set.
+        // And Pixel never reaches into the model set, which is the thing that
+        // actually broke the toggle. Leading with different sets is not
+        // enough on its own: Pixel once fell through to the Gen 6 animation
+        // when Showdown had no Gen 5 one, and *nothing in this format has a
+        // Gen 5 one* -- every Mega postdates Black and White and so does most
+        // of the dex -- so the second rung was not a fallback, it was the
+        // whole field. The toggle led with different sets and drew the same
+        // picture either way.
+        check("Pixel never serves a model",
+              !PixelSprites.Style.pixel.chain.contains(.gen6),
+              "\(PixelSprites.Style.pixel.chain.map(\.rawValue))")
+        check("it is pixel art all the way down",
+              Set(PixelSprites.Style.pixel.chain).isSubset(of: [.gen5, .still]),
+              "\(PixelSprites.Style.pixel.chain.map(\.rawValue))")
+        // Models may fall back to the pixel animation, because it is the only
+        // other animation there is and five forms have no model at all.
         check("Models falls back to the pixel animation",
               PixelSprites.Style.models.chain.contains(.gen5))
-        check("and Pixel to the animated model",
-              PixelSprites.Style.pixel.chain.contains(.gen6),
-              "\(PixelSprites.Style.pixel.chain.map(\.rawValue))")
-        for style in PixelSprites.Style.offered {
-            check("\(style.label) settles for a still only last",
-                  style.chain.last == .still && style.chain.count == 3,
-                  "\(style.chain.map(\.rawValue))")
-        }
+        // Which leaves the two looks drawing from different shelves, which is
+        // the whole of what a toggle is.
+        check("so the two looks do not draw from the same shelves",
+              Set(PixelSprites.Style.pixel.chain) != Set(PixelSprites.Style.models.chain),
+              "pixel \(PixelSprites.Style.pixel.chain.map(\.rawValue)) "
+                + "vs models \(PixelSprites.Style.models.chain.map(\.rawValue))")
     }
 
     /// A cached sprite has to say which set it came out of, in the filename
