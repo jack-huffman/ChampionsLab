@@ -112,6 +112,12 @@ final class ShowdownBattle {
         battle.origin = Origin(format: ShowdownEngine.regMC, mine: packed.mine,
                                theirs: packed.theirs, seed: rolled,
                                ordering: ordering, board: beginning)
+        // It has the engine at this moment, so it writes down where it
+        // stands. Without this a battle that has been started and not yet
+        // played has nothing to come back to -- and the first turn it is
+        // asked for would be played on whatever position the engine had
+        // wandered to instead.
+        battle.keepPosition()
         return battle
     }
 
@@ -248,6 +254,8 @@ final class ShowdownBattle {
     /// nearest-to-even first because those are the ones worth pricing. Two of
     /// them is four turns to resolve, three is eight.
     func outcomes(mine: Play, theirs: Play, branching: Int = 1) throws -> [Outcome] {
+        try takeTheEngine()
+        defer { keepPosition() }
         let rows = try engine.outcomes(request(mine, side: true),
                                        request(theirs, side: false), branching: branching)
         // Asking what might happen must leave no mark on what has. The
@@ -283,6 +291,8 @@ final class ShowdownBattle {
     @discardableResult
     func play(mine: String, theirs: String, oursWhenForced ours: String?,
               theirsWhenForced: String? = "default") throws -> Board {
+        try takeTheEngine()
+        defer { keepPosition() }
         board.steps = []
         board.story = []
         try answer("p1", mine)
@@ -308,7 +318,9 @@ final class ShowdownBattle {
     /// Send somebody in for the one that fell, by their place on the board.
     @discardableResult
     func sendIn(bench: Int) throws -> Board {
-        try sendIn(mine: bench, theirs: nil, autoTheirs: true)
+        try takeTheEngine()
+        defer { keepPosition() }
+        return try sendIn(mine: bench, theirs: nil, autoTheirs: true)
     }
 
     /// Both sides' replacements, for a game where both are chosen. Nil for a
@@ -407,6 +419,41 @@ final class ShowdownBattle {
     /// script records itself once rather than once per replay.
     private var replaying = false
 
+    // MARK: - Whose battle the engine is holding
+
+    /// There is one simulator and there can be more than one battle wanting
+    /// it. The engine keeps a single `battle`, so starting a second
+    /// `ShowdownBattle` takes the first one's position away from it -- and
+    /// `restore` resets the engine's read pointer to the end of the log, so
+    /// the dispossessed battle does not merely read a wrong position, it
+    /// loses the lines it had not read yet.
+    ///
+    /// That happens in the app: the search runs in the background, off the
+    /// same engine the live battle is being played on. It happened in the
+    /// tests too, which is where it was caught -- a search left over from one
+    /// test finishing inside the next one, and a turn that could not be
+    /// played for no reason anybody could see from the board.
+    ///
+    /// So each battle keeps its own position and takes the engine back before
+    /// it says anything to it. Whoever spoke last is remembered, and while
+    /// that is this battle nothing is copied at all.
+    /// This battle's position, as of the last time it had the engine.
+    private var position: String?
+
+    /// Put the engine back on this battle, if it has wandered off.
+    private func takeTheEngine() throws {
+        let me = ObjectIdentifier(self)
+        guard engine.holder != me else { return }
+        if let position { _ = try engine.restore(position) }
+        engine.holder = me
+    }
+
+    /// Remember where this battle stands, so it can be come back to.
+    fileprivate func keepPosition() {
+        engine.holder = ObjectIdentifier(self)
+        position = try? engine.save()
+    }
+
     // MARK: - Taking it back
 
     /// Whether the game can be put back to the start of a turn.
@@ -416,6 +463,8 @@ final class ShowdownBattle {
     /// turn, which is the only way to move an engine that only plays forwards.
     @discardableResult
     func rewind(to target: Int) throws -> Board {
+        try takeTheEngine()
+        defer { keepPosition() }
         guard let origin, let mark = turnMarks[target] else {
             throw ShowdownEngine.Trouble.refused("turn \(target) is not one this game passed through")
         }

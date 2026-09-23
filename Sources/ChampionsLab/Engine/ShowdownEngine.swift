@@ -172,6 +172,16 @@ final class ShowdownEngine: @unchecked Sendable {
         return out.isNull || out.isUndefined ? nil : out.toString()
     }
 
+    /// Whose battle the engine is holding right now.
+    ///
+    /// The engine keeps one `battle`, and more than one thing wants it: the
+    /// game being played and the search running behind it. `ShowdownBattle`
+    /// uses this to notice when the position under it is no longer its own.
+    /// Kept here rather than as a static beside the battles because this is
+    /// the object the state belongs to, and it is the one already promising
+    /// to be safe across threads.
+    var holder: ObjectIdentifier?
+
     /// A saved position, put back.
     ///
     /// The other half of `save`. A test that wants to ask "would the
