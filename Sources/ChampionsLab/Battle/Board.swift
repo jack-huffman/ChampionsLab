@@ -1205,7 +1205,19 @@ extension Board {
                     fighting.ability = named
                 }
                 var moves = slot.moves.compactMap { rules.move($0) }
-                if !moves.contains(where: \.isDamaging) {
+                // A slot with nothing chosen yet gets something to attack
+                // with, so the builder's analysis of a half-made team is not
+                // an analysis of six Pokemon standing still.
+                //
+                // Only a slot with *nothing* chosen. This used to fire for any
+                // set with no damaging move in it, which is not a half-made
+                // team, it is Whimsicott: Tailwind, Leech Seed, Taunt, Light
+                // Screen is a real set and a common one. The board handed it
+                // three attacks it does not have, the screen offered all seven,
+                // and picking one sent the simulator a move number that
+                // Pokemon had not got -- and a refused choice takes the whole
+                // side's turn down with it.
+                if moves.isEmpty {
                     let pool = rules.moves(for: form).filter { $0.isDamaging && $0.power > 0 }
                     moves += pool.sorted {
                         rules.moveValue($0, for: form, ability: combatant.ability, item: slot.item)

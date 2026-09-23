@@ -817,12 +817,25 @@ final class ShowdownBattle {
                     } else {
                         if let said = ShowdownText.say("start", of: arg(1)) { board.note(said) }
                         weatherNamed = arg(1)
+                        // Five turns, or eight if whoever set it is holding
+                        // the rock for it. The protocol does not carry the
+                        // duration, so it is read the way the sim decides it.
+                        board.weatherTurns = Self.rocks[board.field.weather]
+                            .map { setter(parts)?.build.item == $0 ? 8 : 5 } ?? 5
                     }
                 }
             case "-fieldstart", "-fieldend":
                 let starting = tag == "-fieldstart"
                 if let terrain = FieldSetters.terrain(named: arg(1)) {
                     board.field.terrain = starting ? terrain : .none
+                    board.terrainTurns = starting
+                        ? (setter(parts)?.build.item == "Terrain Extender" ? 8 : 5) : 0
+                } else if bare(arg(1)) == "Trick Room" {
+                    // Never set. The board decremented a clock that nothing
+                    // ever wound, so the one mechanic that turns the whole
+                    // speed order upside down was invisible to every screen
+                    // and every reader of the board.
+                    board.trickRoom = starting ? 5 : 0
                 }
                 if let said = ShowdownText.say(starting ? "start" : "end", of: arg(1)) {
                     board.note(said)
@@ -831,8 +844,17 @@ final class ShowdownBattle {
                 // Whatever was being gathered belongs to the turn that just
                 // finished, not the one starting.
                 board.closeStep()
-                ranDown()
-                turn = Int(arg(1)) ?? turn
+                // Nothing has elapsed before the first turn. An ability that
+                // sets a weather does it as its holder walks on, which is
+                // before |turn|1|, so winding the clocks down on that line
+                // charged a turn to a battle that had not started one -- and
+                // every weather and terrain set by a lead read one turn short
+                // for the rest of the game.
+                // |turn|1| winds nothing: it opens the first turn rather
+                // than closing one.
+                let starting = Int(arg(1)) ?? turn
+                if starting > 1 { ranDown() }
+                turn = starting
                 if turnMarks[turn] == nil { turnMarks[turn] = script.count }
             case "-prepare":
                 // A two-turn move winding up. The field draws the glow from
@@ -947,6 +969,8 @@ final class ShowdownBattle {
         board.myTailwind = Swift.max(0, board.myTailwind - 1)
         board.theirTailwind = Swift.max(0, board.theirTailwind - 1)
         board.trickRoom = Swift.max(0, board.trickRoom - 1)
+        board.weatherTurns = Swift.max(0, board.weatherTurns - 1)
+        board.terrainTurns = Swift.max(0, board.terrainTurns - 1)
         for index in board.mine.indices {
             board.mine[index].isProtected = false
             board.mine[index].tauntedFor = Swift.max(0, board.mine[index].tauntedFor - 1)
@@ -1002,6 +1026,28 @@ final class ShowdownBattle {
     /// What is on one Pokemon: a Substitute, a Leech Seed, a Taunt, the
     /// confusion it is under. The board carries each of these as its own
     /// field, and the scene draws several of them.
+    /// The rock that makes each weather last eight turns instead of five.
+    static let rocks: [Weather: String] = [
+        .sun: "Heat Rock", .rain: "Damp Rock", .sand: "Smooth Rock", .snow: "Icy Rock",
+    ]
+
+    /// Whoever set a weather or a terrain, so the rock they may be holding can
+    /// be read off them.
+    ///
+    /// An ability names its holder in `[of]`; a move does not, because the
+    /// Pokemon that used it is the one the step is already about.
+    private func setter(_ parts: [String]) -> Fighter? {
+        if let of = parts.first(where: { $0.hasPrefix("[of] ") }) {
+            if let at = seat(String(of.dropFirst(5))) {
+                let side = at.mine ? board.mine : board.theirs
+                return side.indices.contains(at.slot) ? side[at.slot] : nil
+            }
+        }
+        guard let acting = board.acting else { return nil }
+        let side = acting.byMine ? board.mine : board.theirs
+        return side.indices.contains(acting.slot) ? side[acting.slot] : nil
+    }
+
     /// What is blowing, by Showdown's name for it, so that the line when it
     /// stops can be the right one: `|-weather|none` does not say what ended.
     private var weatherNamed: String?

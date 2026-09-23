@@ -5,101 +5,397 @@
 //      swift test --filter BoardParityTests
 //
 //  Every number on the battle screen is read off `Board`, and `Board` is
-//  rebuilt from the protocol lines Showdown emits. Nothing was comparing the
-//  two. A Pokemon that set up, pivoted out and came back kept its stat stages
-//  on the board while the sim -- correctly -- cleared them, so a card read +2
-//  over a Pokemon the engine was resolving at nothing: every number on screen
-//  agreeing with itself and none of them agreeing with the damage.
+//  rebuilt from the protocol lines Showdown emits -- a tag at a time, by hand,
+//  in `ShowdownBattle.read`. Nothing was comparing the result to the thing it
+//  is a picture of. That is how a Pokemon that set up, pivoted out and came
+//  back kept its stat stages on the board while the sim -- correctly -- had
+//  cleared them: every number on the screen agreed with every other number on
+//  the screen, and none of them agreed with the damage.
 //
-//  `PS.save()` is the sim's own state, which is the only place its view of a
-//  Pokemon's stages and volatiles can be read from out here.
+//  `PS.save()` is the sim's own state, and the only place its view of a
+//  Pokemon's stages, volatiles, item, ability and types can be read from out
+//  here. So this plays games that actually make those things happen and
+//  compares all of it, every turn.
+//
+//  It reports every divergence rather than stopping at the first, because the
+//  question this answers is "what else is wrong", not "is anything wrong".
 
 import XCTest
 @testable import ChampionsLab
 
 @MainActor
 final class BoardParityTests: HarnessCase {
-    /// The sim's actives, by side, as (species, hp, stages).
-    private struct Seen {
+    // MARK: - The simulator's own view
+
+    private struct SimMon {
         var species: String
         var hp: Int
+        var maxHP: Int
+        var status: String
+        var fainted: Bool
+        var item: String
+        var ability: String
+        var types: [String]
         var boosts: [String: Int]
+        var volatiles: Set<String>
+        var substitute: Int
+        var moves: [String]
     }
 
-    private func simActives(_ side: Int) throws -> [Seen] {
+    private struct SimSide {
+        var conditions: [String: Int]      // id -> turns left
+        var actives: [SimMon]
+    }
+
+    private struct SimState {
+        var weather: String
+        var weatherTurns: Int
+        var terrain: String
+        var terrainTurns: Int
+        var pseudo: [String: Int]
+        var sides: [SimSide]
+    }
+
+    private func simState() throws -> SimState? {
         guard let json = try ShowdownEngine.shared.save(),
               let data = json.data(using: .utf8),
-              let top = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let sides = top["sides"] as? [[String: Any]], sides.indices.contains(side)
-        else { return [] }
-        let pokemon = sides[side]["pokemon"] as? [[String: Any]] ?? []
-        // `isActive` is the sim's own flag, and the order of `pokemon` is the
-        // side's own order, which is not the board's.
-        return pokemon.filter { ($0["isActive"] as? Bool) == true }.map {
-            // `species` serialises as a reference -- "[Species:ceruledge]" --
-            // so the name comes off `details`, which is the same string the
-            // protocol puts in a |switch| line: "Ceruledge, L50, M".
-            let details = ($0["details"] as? String) ?? ""
-            let named = details.split(separator: ",").first.map(String.init)?
-                .trimmingCharacters(in: .whitespaces) ?? "?"
-            return Seen(species: named,
-                        hp: ($0["hp"] as? Int) ?? -1,
-                        boosts: ($0["boosts"] as? [String: Int]) ?? [:])
+              let top = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        let field = top["field"] as? [String: Any] ?? [:]
+        func duration(_ any: Any?) -> Int {
+            ((any as? [String: Any])?["duration"] as? Int) ?? 0
+        }
+        var pseudo: [String: Int] = [:]
+        for (id, value) in (field["pseudoWeather"] as? [String: Any] ?? [:]) {
+            pseudo[id] = duration(value)
+        }
+        var sides: [SimSide] = []
+        for side in top["sides"] as? [[String: Any]] ?? [] {
+            var conditions: [String: Int] = [:]
+            for (id, value) in (side["sideConditions"] as? [String: Any] ?? [:]) {
+                conditions[id] = duration(value)
+            }
+            let actives = (side["pokemon"] as? [[String: Any]] ?? [])
+                .filter { ($0["isActive"] as? Bool) == true }
+                .map { mon -> SimMon in
+                    // `species` serialises as a reference -- "[Species:x]" --
+                    // so the name comes off `details`, the same string the
+                    // protocol puts in a |switch| line: "Ceruledge, L50, M".
+                    let details = (mon["details"] as? String) ?? ""
+                    let volatiles = mon["volatiles"] as? [String: Any] ?? [:]
+                    let sub = (volatiles["substitute"] as? [String: Any])?["hp"] as? Int ?? 0
+                    return SimMon(
+                        species: details.split(separator: ",").first.map(String.init)?
+                            .trimmingCharacters(in: .whitespaces) ?? "?",
+                        hp: (mon["hp"] as? Int) ?? -1,
+                        maxHP: (mon["maxhp"] as? Int) ?? -1,
+                        status: (mon["status"] as? String) ?? "",
+                        fainted: (mon["fainted"] as? Bool) ?? false,
+                        item: (mon["item"] as? String) ?? "",
+                        ability: (mon["ability"] as? String) ?? "",
+                        types: (mon["types"] as? [String]) ?? [],
+                        boosts: (mon["boosts"] as? [String: Int]) ?? [:],
+                        volatiles: Set(volatiles.keys),
+                        substitute: sub,
+                        // What the sim will accept `move N` for. The board
+                        // sends its own index straight through, so if the two
+                        // lists differ in length or order the app is naming a
+                        // different move than the one that was clicked.
+                        moves: (mon["moveSlots"] as? [[String: Any]] ?? [])
+                            .compactMap { $0["id"] as? String })
+                }
+            sides.append(SimSide(conditions: conditions, actives: actives))
+        }
+        return SimState(weather: (field["weather"] as? String) ?? "",
+                        weatherTurns: duration(field["weatherState"]),
+                        terrain: (field["terrain"] as? String) ?? "",
+                        terrainTurns: duration(field["terrainState"]),
+                        pseudo: pseudo, sides: sides)
+    }
+
+    // MARK: - What the two call the same thing
+
+    private static let statusNamed: [String: Ailment] = [
+        "": .none, "brn": .burn, "par": .paralysis, "psn": .poison,
+        "tox": .badPoison, "slp": .sleep, "frz": .freeze,
+    ]
+    private static let weatherNamed: [String: Weather] = [
+        "": .none, "sunnyday": .sun, "desolateland": .sun,
+        "raindance": .rain, "primordialsea": .rain,
+        "sandstorm": .sand, "snowscape": .snow, "hail": .snow,
+    ]
+    private static let terrainNamed: [String: Terrain] = [
+        "": .none, "electricterrain": .electric, "grassyterrain": .grassy,
+        "mistyterrain": .misty, "psychicterrain": .psychic,
+    ]
+    private static let stageNamed: [String: Stat] = [
+        "atk": .attack, "def": .defense, "spa": .spAttack,
+        "spd": .spDefense, "spe": .speed,
+    ]
+
+    // MARK: - The comparison
+
+    private var divergences: [String] = []
+    /// What the simulator was actually seen doing, so a green audit over a
+    /// game where nothing happened cannot pass for a green audit.
+    private var witnessed: Set<String> = []
+
+    private func same(_ what: String, _ ours: String, _ theirs: String) {
+        guard ours != theirs else { return }
+        divergences.append("\(what): board \(ours) vs sim \(theirs)")
+    }
+
+    /// Everything the board mirrors, against the thing it mirrors.
+    private func compare(_ game: ShowdownBattle, turn: Int) throws {
+        guard let sim = try simState(), sim.sides.count == 2 else { return }
+        let board = game.board
+        if !sim.weather.isEmpty { witnessed.insert("weather") }
+        if !sim.terrain.isEmpty { witnessed.insert("terrain") }
+        if sim.pseudo["trickroom"] != nil { witnessed.insert("trickroom") }
+        for side in sim.sides {
+            for id in side.conditions.keys { witnessed.insert(id) }
+            for mon in side.actives {
+                if !mon.status.isEmpty { witnessed.insert("a status") }
+                if mon.boosts.values.contains(where: { $0 != 0 }) { witnessed.insert("a stage moved") }
+                if mon.item.isEmpty { witnessed.insert("an item gone") }
+                if mon.fainted { witnessed.insert("a faint") }
+                for volatile in mon.volatiles where volatile != "stall" {
+                    witnessed.insert(volatile)
+                }
+            }
+        }
+
+        // --- the field -------------------------------------------------
+        let want = Self.weatherNamed[sim.weather] ?? .none
+        same("turn \(turn) weather", board.field.weather.rawValue, want.rawValue)
+        same("turn \(turn) weather turns", "\(board.weatherTurns)", "\(sim.weatherTurns)")
+        let wantTerrain = Self.terrainNamed[sim.terrain] ?? .none
+        same("turn \(turn) terrain", board.field.terrain.rawValue, wantTerrain.rawValue)
+        same("turn \(turn) terrain turns", "\(board.terrainTurns)", "\(sim.terrainTurns)")
+        same("turn \(turn) trick room", "\(board.trickRoom)", "\(sim.pseudo["trickroom"] ?? 0)")
+
+        // --- each side -------------------------------------------------
+        for (index, mine) in [(0, true), (1, false)] {
+            let side = sim.sides[index]
+            let who = mine ? "ours" : "theirs"
+            let screens = mine ? board.myScreens : board.theirScreens
+            same("turn \(turn) \(who) tailwind",
+                 "\(mine ? board.myTailwind : board.theirTailwind)",
+                 "\(side.conditions["tailwind"] ?? 0)")
+            same("turn \(turn) \(who) reflect", "\(screens.reflect)",
+                 "\(side.conditions["reflect"] ?? 0)")
+            same("turn \(turn) \(who) light screen", "\(screens.lightScreen)",
+                 "\(side.conditions["lightscreen"] ?? 0)")
+            same("turn \(turn) \(who) aurora veil", "\(screens.auroraVeil)",
+                 "\(side.conditions["auroraveil"] ?? 0)")
+            same("turn \(turn) \(who) safeguard", "\(screens.safeguard)",
+                 "\(side.conditions["safeguard"] ?? 0)")
+            // The hazards are layers rather than clocks, so presence is what
+            // is comparable without reading the sim's own counters.
+            same("turn \(turn) \(who) stealth rock", "\(screens.stealthRock)",
+                 "\(side.conditions["stealthrock"] != nil)")
+            same("turn \(turn) \(who) sticky web", "\(screens.stickyWeb)",
+                 "\(side.conditions["stickyweb"] != nil)")
+            same("turn \(turn) \(who) spikes down", "\(screens.spikes > 0)",
+                 "\(side.conditions["spikes"] != nil)")
+            same("turn \(turn) \(who) toxic spikes down", "\(screens.toxicSpikes > 0)",
+                 "\(side.conditions["toxicspikes"] != nil)")
+
+            let ours = Array((mine ? board.mine : board.theirs).prefix(board.activeCount))
+            for mon in side.actives {
+                guard let fighter = ours.first(where: {
+                    $0.build.form.showdown == mon.species
+                        || $0.build.form.formLabel == mon.species
+                }) else {
+                    divergences.append("turn \(turn) \(who): the sim has \(mon.species) out "
+                        + "and the board does not (\(ours.map(\.build.form.formLabel).joined(separator: ", ")))")
+                    continue
+                }
+                let tag = "turn \(turn) \(who) \(mon.species)"
+                same("\(tag) HP", "\(fighter.hp)", "\(mon.hp)")
+                same("\(tag) max HP", "\(fighter.maxHP)", "\(mon.maxHP)")
+                same("\(tag) fainted", "\(fighter.fainted)", "\(mon.fainted)")
+                same("\(tag) status", fighter.status.rawValue,
+                     (Self.statusNamed[mon.status] ?? .none).rawValue)
+                for (key, stat) in Self.stageNamed.sorted(by: { $0.key < $1.key }) {
+                    same("\(tag) \(key)", "\(fighter.build.boosts[stat.rawValue])",
+                         "\(mon.boosts[key] ?? 0)")
+                }
+                // Item and ability are ids on one side and names on the other.
+                same("\(tag) item", ShowdownText.id(fighter.build.item), mon.item)
+                same("\(tag) ability", ShowdownText.id(fighter.build.ability), mon.ability)
+                same("\(tag) types", fighter.types.map(\.rawValue).joined(separator: "/"),
+                     mon.types.joined(separator: "/"))
+                same("\(tag) move list", fighter.moves.map { ShowdownText.id($0.name) }
+                        .joined(separator: ","),
+                     mon.moves.joined(separator: ","))
+                same("\(tag) substitute", "\(fighter.substitute > 0)",
+                     "\(mon.volatiles.contains("substitute"))")
+                // Every volatile the board has somewhere to put.
+                let held: [(String, String, Bool)] = [
+                    ("confusion", "confusion", fighter.confusedFor > 0),
+                    ("taunt", "taunt", fighter.tauntedFor > 0),
+                    ("encore", "encore", fighter.encoredFor > 0),
+                    ("disable", "disable", fighter.disabledFor > 0),
+                    ("leech seed", "leechseed", fighter.seededFrom != nil),
+                    ("yawn", "yawn", fighter.drowsyFor > 0),
+                    ("attract", "attract", fighter.infatuatedWith != nil),
+                    ("aqua ring", "aquaring", fighter.aquaRing),
+                    ("octolock", "octolock", fighter.octolocked),
+                    ("torment", "torment", fighter.tormented),
+                    ("destiny bond", "destinybond", fighter.destinyBound),
+                    ("perish song", "perishsong", fighter.perishIn > 0),
+                ]
+                for (label, id, ourView) in held {
+                    same("\(tag) \(label)", "\(ourView)", "\(mon.volatiles.contains(id))")
+                }
+            }
         }
     }
 
-    private static let stageOf: [String: Stat] = [
-        "atk": .attack, "def": .defense, "spa": .spAttack, "spd": .spDefense, "spe": .speed,
-    ]
+    private func report(_ what: String) {
+        if divergences.isEmpty {
+            print("  ok   \(what): the board and the simulator agree throughout")
+        } else {
+            print("  FAIL \(what): \(divergences.count) divergences")
+            for line in divergences.prefix(60) { print("       \(line)") }
+            if divergences.count > 60 { print("       ... and \(divergences.count - 60) more") }
+        }
+        XCTAssertTrue(divergences.isEmpty, "\(what): \(divergences.count) divergences")
+    }
 
-    func testTheBoardAgreesWithTheSimulatorThroughAGameWithSwitches() throws {
+    // MARK: - A game where all of it happens
+
+    private func slot(_ name: String, item: String, ability: String,
+                      moves: [String], sp: [Int]) -> TeamSlot? {
+        guard let form = store.data.forms.first(where: { $0.formLabel == name }) else { return nil }
+        var s = TeamSlot(formID: form.id)
+        s.item = item
+        s.ability = form.abilities.first { $0.name == ability }?.name
+            ?? form.abilities.first?.name ?? ""
+        s.moves = moves.compactMap { move in form.moves.first { store.move($0)?.name == move } }
+        if !sp.isEmpty { s.sp = sp }
+        s.id = UUID()
+        return s
+    }
+
+    /// Statuses, screens, Tailwind, Trick Room, a Substitute, Leech Seed,
+    /// a Taunt, weather off an ability, an Intimidate, a Knock Off and a
+    /// switch -- in one game, on purpose, because a pair of ladder teams
+    /// pressing their first move does almost none of it.
+    func testEverythingAGameDoesAgreesWithTheSimulator() throws {
+        guard ShowdownEngine.bundleURL() != nil else { throw XCTSkip("no engine") }
+        guard let a = slot("Incineroar", item: "Sitrus Berry", ability: "Intimidate",
+                           moves: ["Will-O-Wisp", "Fake Out", "Flare Blitz", "Protect"],
+                           sp: [32, 32, 0, 0, 0, 0]),
+              let b = slot("Whimsicott", item: "Focus Sash", ability: "Prankster",
+                           moves: ["Tailwind", "Leech Seed", "Taunt", "Light Screen"],
+                           sp: [0, 0, 0, 0, 0, 32]),
+              let c = slot("Milotic", item: "Leftovers", ability: "Competitive",
+                           moves: ["Scald", "Substitute", "Protect", "Rain Dance"],
+                           sp: [32, 0, 0, 0, 0, 0]),
+              let d = slot("Slowbro", item: "Charcoal", ability: "Oblivious",
+                           moves: ["Trick Room", "Yawn", "Body Press", "Protect"],
+                           sp: [32, 0, 32, 0, 0, 0])
+        else { throw XCTSkip("the cast is not in this dex") }
+        // Every move has to be one the Pokemon really has, or the script runs
+        // a different game than it reads as and the audit passes over nothing.
+        for (who, wanted) in [(a, 4), (b, 4), (c, 4), (d, 4)] {
+            check("\(store.rulebook.form(who.formID)?.formLabel ?? "?") has all its moves",
+                  who.moves.count == wanted, "\(who.moves.count)")
+        }
+
+        var mine = Team(name: "Mine"); mine.format = "doubles"; mine.slots = [a, b, c, d]
+        var theirs = Team(name: "Theirs"); theirs.format = "doubles"; theirs.slots = [c, d, a, b]
+        for index in mine.slots.indices { mine.slots[index].id = UUID() }
+        for index in theirs.slots.indices { theirs.slots[index].id = UUID() }
+
+        let game = try ShowdownBattle.start(mine: mine, theirs: theirs,
+                                            myFour: [0, 1, 2, 3], theirFour: [0, 1, 2, 3],
+                                            store: store, seed: [7, 7, 7, 7])
+        divergences = []
+        witnessed = []
+        try compare(game, turn: game.turn)
+
+        /// A move by name, off whoever is actually standing in that slot.
+        /// Scripting by index meant the script drifted the moment anything
+        /// switched, and a game that quietly played something else is a green
+        /// audit over nothing.
+        func use(_ name: String, _ slot: Int, mine: Bool, at target: Int = 0) -> Choice {
+            let team = mine ? game.board.mine : game.board.theirs
+            guard slot < team.count,
+                  let index = team[slot].moves.firstIndex(where: { $0.name == name })
+            else { return .attack(move: 0, target: target) }
+            return .attack(move: index, target: target)
+        }
+        func turn(_ left: String, _ right: String,
+                  _ theirLeft: String, _ theirRight: String) -> (Play, Play) {
+            (Play(left: use(left, 0, mine: true), right: use(right, 1, mine: true)),
+             Play(left: use(theirLeft, 0, mine: false), right: use(theirRight, 1, mine: false)))
+        }
+
+        var played = 0
+        let script: [() -> (Play, Play)] = [
+            // Burn the Milotic; Tailwind up. They Substitute and set Trick Room.
+            { turn("Will-O-Wisp", "Tailwind", "Substitute", "Trick Room") },
+            // Seed it, Light Screen up. They Yawn and Protect.
+            { (Play(left: use("Flare Blitz", 0, mine: true),
+                     right: use("Leech Seed", 1, mine: true, at: 1)),
+               Play(left: use("Protect", 0, mine: false), right: use("Yawn", 1, mine: false))) },
+            // Taunt the Slowbro.
+            { turn("Protect", "Taunt", "Scald", "Protect") },
+            // Pivot the Incineroar out, which is where the stages went.
+            { (Play(left: .swap(to: 2), right: use("Light Screen", 1, mine: true)),
+               Play(left: use("Scald", 0, mine: false), right: use("Protect", 1, mine: false))) },
+            // And back.
+            { (Play(left: .swap(to: 2), right: use("Taunt", 1, mine: true)),
+               Play(left: use("Scald", 0, mine: false), right: use("Protect", 1, mine: false))) },
+            { turn("Protect", "Tailwind", "Rain Dance", "Protect") },
+        ]
+        for step in script where !ShowdownEngine.shared.ended {
+            let (mineDoes, theyDo) = step()
+            do { try game.play(mine: mineDoes, theirs: theyDo) } catch {
+                print("    turn \(game.turn) REFUSED: \(ShowdownEngine.shared.lastRefusal ?? "\(error)")")
+                let plain = Play(left: .attack(move: 0, target: 0),
+                                 right: .attack(move: 0, target: 0))
+                guard (try? game.play(mine: plain, theirs: plain)) != nil else { break }
+            }
+            played += 1
+            try compare(game, turn: game.turn)
+        }
+        print("  played \(played) turns; the simulator was seen doing: "
+              + witnessed.sorted().joined(separator: ", "))
+        // A green audit over a game where nothing happened is not a green
+        // audit. These are the mechanics this game exists to put on the board.
+        for wanted in ["a status", "a stage moved", "weather", "trickroom",
+                       "substitute", "leechseed", "taunt", "tailwind",
+                       "lightscreen", "yawn"] {
+            check("  the game actually did: \(wanted)", witnessed.contains(wanted),
+                  witnessed.sorted().joined(separator: ", "))
+        }
+        report("a game with statuses, screens, weather, a substitute and a pivot in it")
+    }
+
+    /// And the same over teams nobody chose for the occasion.
+    func testALadderGameWithSwitchesAgreesWithTheSimulator() throws {
         guard ShowdownEngine.bundleURL() != nil else { throw XCTSkip("no engine") }
         let ladder = store.ladderTeams(format: "doubles")
         guard ladder.count >= 2 else { throw XCTSkip("no ladder teams") }
         let game = try ShowdownBattle.start(mine: ladder[0].team, theirs: ladder[1].team,
                                             myFour: [0, 1, 2, 3], theirFour: [0, 1, 2, 3],
                                             store: store, seed: [9, 9, 9, 9])
-        var checked = 0, switches = 0
-        for turn in 0..<10 where !ShowdownEngine.shared.ended {
-            // Switch somebody every third turn, because the divergence this
-            // exists for only appears when a Pokemon leaves and comes back.
-            let pivot = turn % 3 == 2
-            if pivot { switches += 1 }
-            let play = Play(left: pivot ? .swap(to: 2) : .attack(move: 0, target: 0),
+        divergences = []
+        for turn in 0..<12 where !ShowdownEngine.shared.ended {
+            let pivot = turn % 4 == 3
+            let play = Play(left: pivot ? .swap(to: 2) : .attack(move: turn % 3, target: 0),
                             right: .attack(move: 0, target: 1))
-            guard (try? game.play(mine: play, theirs: play)) != nil else {
-                // An illegal choice is not what this test is about.
-                _ = try? game.play(mine: Play(left: .attack(move: 0, target: 0),
-                                              right: .attack(move: 0, target: 1)),
-                                   theirs: Play(left: .attack(move: 0, target: 0),
-                                                right: .attack(move: 0, target: 1)))
-                continue
+            if (try? game.play(mine: play, theirs: play)) == nil {
+                let plain = Play(left: .attack(move: 0, target: 0),
+                                 right: .attack(move: 0, target: 1))
+                guard (try? game.play(mine: plain, theirs: plain)) != nil else { break }
             }
-            for (side, mine) in [(0, true), (1, false)] {
-                let sim = try simActives(side)
-                let ours = (mine ? game.board.mine : game.board.theirs)
-                    .prefix(game.board.activeCount)
-                guard sim.count == ours.count else { continue }
-                for seen in sim {
-                    // Match by species: the board keeps its actives at the
-                    // front and the sim keeps the side's own order.
-                    guard let fighter = ours.first(where: {
-                        $0.build.form.showdown == seen.species
-                            || $0.build.form.formLabel == seen.species
-                    }) else { continue }
-                    checked += 1
-                    check("turn \(game.turn): \(seen.species) HP",
-                          fighter.hp == seen.hp, "board \(fighter.hp) vs sim \(seen.hp)")
-                    for (key, stat) in Self.stageOf {
-                        let simStage = seen.boosts[key] ?? 0
-                        let ourStage = fighter.build.boosts[stat.rawValue]
-                        check("turn \(game.turn): \(seen.species) \(key)",
-                              ourStage == simStage, "board \(ourStage) vs sim \(simStage)")
-                    }
-                }
-            }
+            try compare(game, turn: game.turn)
         }
-        check("the game ran with switches in it", switches > 0 && checked > 0,
-              "\(switches) switches, \(checked) Pokemon compared")
+        report("a ladder game with switches in it")
     }
 }
