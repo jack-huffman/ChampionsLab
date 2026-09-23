@@ -62,15 +62,23 @@ final class PixelSprites: ObservableObject {
         /// index at all -- the Gen 5 animation, or the still, and nothing
         /// else.
         ///
-        /// That asymmetry is the point rather than an oversight. A model is
-        /// not a worse pixel sprite, it is a different thing, and one
-        /// appearing among the pixel art is the single most obvious way for
-        /// the look to be wrong. A still is not: it is the same art standing
-        /// still, which is why it is where both ladders end.
+        /// One deliberate departure from that. Under `bwgfx` the client goes
+        /// straight from a missing Gen 5 animation to a Gen 5 still, and a
+        /// still is what a hundred and thirty of this game's three hundred
+        /// and fifty forms would be: every Pokemon that postdates Black and
+        /// White never had a sprite drawn in that style, so it has a
+        /// hand-made static one and nothing else. Ceruledge and Rillaboom
+        /// stand there not moving while everything around them breathes.
+        ///
+        /// A moving sprite from the other set is a better answer than a still
+        /// one from this set. So the Gen 6 animation comes first and the
+        /// still is the last resort rather than the second. It does mean
+        /// those hundred and thirty are drawn in the other set's art -- that
+        /// is the price, and it is paid knowingly.
         var chain: [Source] {
             switch self {
             case .models: return [.gen6, .gen5, .still]
-            case .pixel: return [.gen5, .still]
+            case .pixel: return [.gen5, .gen6, .still]
             case .illustrated: return []
             }
         }

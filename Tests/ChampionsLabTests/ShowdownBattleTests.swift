@@ -244,4 +244,45 @@ final class ShowdownBattleTests: HarnessCase {
         check("the game did not move while it was asked",
               game.turn == 1, "\(game.turn)")
     }
+
+    /// The Pokemon that comes in brings its own steps and not the turn
+    /// before it.
+    ///
+    /// The interrupted turn has already been shown by the time anybody is
+    /// asked who comes in. Leaving its steps on the board hands them to the
+    /// screen a second time, and what plays is the whole turn again rather
+    /// than the arrival.
+    func testAReplacementBringsOnlyItsOwnSteps() throws {
+        let (mine, theirs) = try ready()
+        let game = try ShowdownBattle.start(mine: mine, theirs: theirs,
+                                            myFour: [0, 1, 2, 3], theirFour: [0, 1, 2, 3],
+                                            store: store, seed: [3, 1, 4, 1])
+        var asked = false
+        for _ in 0..<25 {
+            guard !ShowdownEngine.shared.ended else { break }
+            if game.awaitingSendIn {
+                asked = true
+                let turnsMoves = Set(game.board.steps.compactMap { $0.action?.move }
+                                        .filter { !$0.isEmpty })
+                check("the turn that was interrupted had moves in it", !turnsMoves.isEmpty,
+                      turnsMoves.sorted().joined(separator: ", "))
+                guard let bench = game.board.mine.indices.first(where: {
+                    $0 >= game.board.activeCount && !game.board.mine[$0].fainted
+                }) else { break }
+                _ = try game.sendIn(bench: bench)
+                let after = Set(game.board.steps.compactMap { $0.action?.move }
+                                    .filter { !$0.isEmpty })
+                check("and the arrival does not play it again",
+                      after.intersection(turnsMoves).isEmpty,
+                      after.sorted().joined(separator: ", "))
+                check("what it does carry is the coming in",
+                      game.board.steps.contains { $0.action?.category == "Switch" }
+                        || !game.board.story.isEmpty,
+                      "\(game.board.steps.count) steps")
+                break
+            }
+            _ = try game.play(mine: "default", theirs: "default", oursWhenForced: nil)
+        }
+        check("somebody fell inside twenty-five turns", asked)
+    }
 }

@@ -315,6 +315,13 @@ final class ShowdownBattle {
     /// side means it is not being asked, or is not ready to say.
     @discardableResult
     func sendIn(mine: Int?, theirs: Int?, autoTheirs: Bool = false) throws -> Board {
+        // The turn that was interrupted has already been shown. What happens
+        // now is the arrival and whatever it walks into, and only that: left
+        // standing, the finished turn's steps are handed to the screen a
+        // second time and it plays the whole thing again instead of bringing
+        // the Pokemon in.
+        board.steps = []
+        board.story = []
         try settle(ours: mine.map { "switch \($0 + 1)" },
                    theirs: autoTheirs ? "default" : theirs.map { "switch \($0 + 1)" })
         return board
