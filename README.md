@@ -158,6 +158,15 @@ happens, and **Replay turn** plays it again a step at a time whenever you want
 it.
 
 <p align="center">
+  <img src="docs/turn.png" width="820" alt="A turn listed line by line beside the field">
+</p>
+
+The panel keeps the whole game, and it is the engine's own account of it: the
+spread penalty, the Grassy Terrain halving an Earthquake, the burn making a
+Sucker Punch hit softer, a Life Orb wearing its holder down and the terrain
+topping it back up — each as its own line, in the order they happened.
+
+<p align="center">
   <img src="docs/preview.png" width="820" alt="Team Preview, choosing the four to bring">
 </p>
 
