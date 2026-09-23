@@ -598,6 +598,20 @@ final class ShowdownBattle {
         return (side, slot)
     }
 
+    /// A stat as the client names it in a sentence.
+    static func statName(_ id: String) -> String {
+        switch id {
+        case "atk": return "Attack"
+        case "def": return "Defense"
+        case "spa": return "Sp. Atk"
+        case "spd": return "Sp. Def"
+        case "spe": return "Speed"
+        case "accuracy": return "accuracy"
+        case "evasion": return "evasiveness"
+        default: return id
+        }
+    }
+
     /// Whoever that identifier names, to read rather than to change.
     private func fighter(_ ident: String) -> Fighter? {
         guard let at = seat(ident) else { return nil }
@@ -787,6 +801,24 @@ final class ShowdownBattle {
                         let now = f.build.boosts[stage.rawValue] + by
                         f.build.boosts[stage.rawValue] = max(-6, min(6, now))
                     }
+                }
+                // Said, in the client's words. A stage moving was never
+                // written to the log on this path -- the field drew the arrows
+                // and the log was silent -- so a Swords Dance, an Intimidate's
+                // drop and the Special Attack an Electro Shot gains while it
+                // charges all happened without a word, and it was easy to read
+                // the turn as the boost never having landed.
+                let amount = abs(Int(arg(3)) ?? 1)
+                let up = tag == "-boost"
+                var key = (up ? "boost" : "unboost")
+                    + (amount == 0 ? "0" : amount >= 3 ? "3" : amount == 2 ? "2" : "")
+                var values = ["POKEMON": name(of: arg(1)), "STAT": Self.statName(arg(2))]
+                if let item = parts.first(where: { $0.hasPrefix("[from] item: ") }) {
+                    key += "FromItem"
+                    values["ITEM"] = String(item.dropFirst("[from] item: ".count))
+                }
+                if let said = ShowdownText.say(key, of: "default", values: values) {
+                    board.note(said)
                 }
             case "-setboost":
                 if let stage = Self.stage(arg(2)) {
@@ -1036,6 +1068,24 @@ final class ShowdownBattle {
                 freshness()
                 turn = starting
                 if turnMarks[turn] == nil { turnMarks[turn] = script.count }
+            case "-anim":
+                // A move going off from somewhere other than its own move line
+                // -- above all a two-turn move the weather or a Power Herb let
+                // fire on the turn it was begun. The move line for those comes
+                // with no target at all (`|move|X|Electro Shot||[still]`), and
+                // this is the one line that says what it was thrown at. Left
+                // unread, the step had no aim, and a move with no aim is played
+                // over its own user: an Electro Shot in the rain went off over
+                // the Archaludon instead of into the Protect that stopped it.
+                if let from = seat(arg(1)), let aim = seat(arg(3)),
+                   let acting = board.acting, acting.byMine == from.mine,
+                   acting.slot == from.slot, acting.move == arg(2) {
+                    if aim.mine != from.mine {
+                        board.acting?.target = aim.slot
+                    } else if aim.slot != from.slot {
+                        board.acting?.aimsAtAlly = true
+                    }
+                }
             case "-prepare":
                 // A two-turn move winding up. The field draws the glow from
                 // this; without it a Sky Attack looks like a turn where
@@ -1054,6 +1104,13 @@ final class ShowdownBattle {
                     f.charging = index
                     f.chargingTarget = aim
                     f.hidden = f.moves[index].charge?.hides ?? false
+                }
+                // "Archaludon absorbed electricity!", "Charizard absorbed
+                // light!", "Dragonite flew up high!" -- the charging turn said
+                // nothing before, so a wind-up read as a move that did nothing.
+                if let said = ShowdownText.say("prepare", of: "move: \(bare(arg(2)))",
+                                               values: ["POKEMON": name(of: arg(1))]) {
+                    board.note(said)
                 }
             case "win", "tie":
                 board.note(tag == "win" ? "\(arg(1)) won." : "It is a tie.")
@@ -1088,7 +1145,7 @@ final class ShowdownBattle {
         "chat", "c", "j", "l", "n", "raw", "html", "uhtml", "uhtmlchange", "bigerror",
         "error", "debug", "seed", "message", "-message", "-hint", "-hidelinebreak",
         // Presentation this app does its own way.
-        "-anim", "-center", "-combine", "-waiting", "-notarget", "-nothing",
+        "-center", "-combine", "-waiting", "-notarget", "-nothing",
         "-fieldactivate", "-candynamax", "-zpower", "-zbroken", "-swapsideconditions",
         // Split messages: read before the switch, never reaching it.
         "split",
