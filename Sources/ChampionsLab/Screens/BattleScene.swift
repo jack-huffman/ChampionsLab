@@ -435,7 +435,14 @@ extension BattleFieldView {
     /// on your side, and always in a still.
     @ViewBuilder func fighterSprite(_ form: Form, mine: Bool, side: CGFloat,
                                     shiny: Bool = false) -> some View {
-        if let frames = pixels.frames(for: form, back: mine, shiny: shiny, style: look) {
+        // The sprite for this side: ours seen from behind, theirs facing us.
+        // Where a back sprite has not arrived yet, Showdown's front is a far
+        // better stand-in than the app's own render -- and it is not
+        // mirrored, because mirroring a front view is exactly what makes a
+        // Pokemon of yours look like it is facing the wrong way.
+        let facing = pixels.frames(for: form, back: mine, shiny: shiny, style: look)
+            ?? (mine ? pixels.frames(for: form, back: false, shiny: shiny, style: look) : nil)
+        if let frames = facing {
             // At its own size, not squeezed into everybody's box. A Joltik is
             // small and a Staraptor has a wingspan, and the client draws them
             // that way.

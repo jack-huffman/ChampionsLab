@@ -54,12 +54,61 @@ func render<V: View>(_ view: V, named name: String, size: CGSize, dark: Bool) {
 /// The first run pays for the lot. They are cached on disk after that, so
 /// every later run is the poll finding everything already there.
 @MainActor
+func warmSprites(on board: Board, style: PixelSprites.Style = .models) {
+    // Each of them with its own shiny flag, the way the battle screen warms
+    // them. Warming the plain ones and rendering a shiny is what leaves a
+    // Pokemon drawn from the app's own art in a field of sprites.
+    let pixels = PixelSprites.shared
+    let rules = Store.shared.rulebook
+    // What each of them might be standing there as, which for a Pokemon
+    // holding a stone is two things. A shot renders once and keeps whatever
+    // was in memory at that instant -- there is no second pass when a fetch
+    // lands -- so a Mega whose sprite was not asked for is a Mega drawn from
+    // the app's own art, facing the wrong way, in a field of sprites.
+    func wanted(_ f: Fighter) -> [(ChampionsLab.Form, Bool)] {
+        var out = [(f.build.form, f.build.shiny)]
+        if let mega = rules.megaForm(for: f.build.form, holding: f.build.item) {
+            out.append((mega, f.build.shiny))
+        }
+        return out
+    }
+    func missing() -> Int {
+        var short = 0
+        for f in board.mine {
+            for (form, shiny) in wanted(f) {
+                if pixels.frames(for: form, back: true, shiny: shiny, style: style) == nil { short += 1 }
+                if pixels.frames(for: form, back: false, shiny: shiny, style: style) == nil { short += 1 }
+            }
+        }
+        for f in board.theirs {
+            for (form, shiny) in wanted(f) {
+                if pixels.frames(for: form, back: false, shiny: shiny, style: style) == nil { short += 1 }
+            }
+        }
+        return short
+    }
+    var short = missing()
+    guard short > 0 else { print("  sprites ready"); return }
+    let deadline = Date().addingTimeInterval(90)
+    var quiet = 0
+    while short > 0, Date() < deadline {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        let now = missing()
+        quiet = now == short ? quiet + 1 : 0
+        if quiet > 60 { break }
+        short = now
+    }
+    print(short == 0 ? "  sprites ready" : "  sprites: \(short) drawn as the app's own art")
+}
+
+@MainActor
 func warmSprites(_ forms: [ChampionsLab.Form], backs: [ChampionsLab.Form] = [],
-                 style: PixelSprites.Style = .models, seconds: TimeInterval = 180) {
+                 style: PixelSprites.Style = .models, shiny: Bool = false,
+                 seconds: TimeInterval = 180) {
     let pixels = PixelSprites.shared
     func missing() -> Int {
-        forms.filter { pixels.frames(for: $0, back: false, style: style) == nil }.count
-            + backs.filter { pixels.frames(for: $0, back: true, style: style) == nil }.count
+        forms.filter { pixels.frames(for: $0, back: false, shiny: shiny, style: style) == nil }.count
+            + backs.filter { pixels.frames(for: $0, back: true, shiny: shiny, style: style) == nil }.count
     }
     var short = missing()                       // asks for every one of them
     guard short > 0 else { print("  sprites ready"); return }
@@ -294,6 +343,11 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         // broken — a card with an empty stat column wore a black sheet. Leave
         // it bare so the shot keeps checking it.
         board.theirs[1].status = .burn
+        // Before anything on this board is drawn. A shot renders once and
+        // keeps whatever was in memory at that instant, so a sprite still
+        // being fetched is a Pokemon drawn from the app's own art -- and for
+        // one of ours that art faces the wrong way.
+        warmSprites(on: board)
         // A real turn played out, so the log shows its reasons nested under
         // the thing they explain rather than as a column of equal boxes.
         let exchanged = TurnModel.resolve(
@@ -356,6 +410,15 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         render(BattleView(playing: board, showing: .fight, thinking: (thought, game.solve())),
                named: "battle-fight-dark",
                size: CGSize(width: 1280, height: 860), dark: true)
+        // The same field with a shiny on our side, which is the case that
+        // reads wrong when it falls back: the app's own render is a front
+        // view, so a Pokemon of ours drawn from it faces the wrong way.
+        var sparkly = board
+        if !sparkly.mine.isEmpty { sparkly.mine[0].build.shiny = true }
+        warmSprites(on: sparkly)
+        render(BattleView(playing: sparkly, showing: .fight, thinking: (thought, game.solve())),
+               named: "battle-shiny-dark",
+               size: CGSize(width: 1280, height: 860), dark: true)
         // And choosing where a move goes.
         render(BattleView(playing: board, showing: .aiming(move: 1), thinking: (thought, game.solve())),
                named: "battle-aim-dark",
@@ -370,8 +433,7 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         // The Pokemon as the app draws them, which means fetching them first:
         // a shot taken before they arrive falls back to the illustrations and
         // shows an app nobody is running.
-        warmSprites((board.mine + board.theirs).map(\.build.form),
-                    backs: board.mine.map(\.build.form))
+        warmSprites(on: board)
         var solver = TurnGame(board: board, believingTheirs: true)
         solver.width = 8
         let solution = solver.solve()

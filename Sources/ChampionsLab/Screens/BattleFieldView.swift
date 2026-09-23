@@ -92,7 +92,20 @@ struct BattleFieldView: View {
         .task(id: warmingKey) {
             guard let board else { return }
             let all = board.mine + board.theirs
-            pixels.warm(all.map(\.build.form), shiny: all.map(\.build.shiny), style: look)
+            // What each of them might be standing there as, which for a
+            // Pokemon holding a stone is two things. Warming only the one it
+            // starts as means the moment it Mega Evolves it is drawn from the
+            // app's own art until the fetch lands -- and for one of ours that
+            // art is a front view, so it faces the wrong way while it waits.
+            var forms = all.map(\.build.form)
+            var sparkle = all.map(\.build.shiny)
+            for fighter in all {
+                guard let mega = session.rules.megaForm(for: fighter.build.form,
+                                                       holding: fighter.build.item) else { continue }
+                forms.append(mega)
+                sparkle.append(fighter.build.shiny)
+            }
+            pixels.warm(forms, shiny: sparkle, style: look)
         }
     }
 
