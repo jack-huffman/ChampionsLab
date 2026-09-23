@@ -24,12 +24,17 @@ extension BattleFieldView {
 
     /// Pixel sprites are the scene's own look; the illustrations stay for a
     /// still, which cannot fetch and cannot play an AppKit view anyway.
-    /// Which of Showdown's two sets the battle is drawn in. A snapshot is
-    /// always the illustrations: the sets are fetched, and a picture that
-    /// depends on the network is not one you can compare against last week's.
+    /// Which of Showdown's two sets the battle is drawn in.
+    ///
+    /// A snapshot draws them too. It used to be held to the illustrations on
+    /// the grounds that a fetched picture cannot be compared against last
+    /// week's -- but nothing compares these to anything: they are rendered
+    /// for a look at the screens, and a shot of a battle drawn in art nobody
+    /// sees any more is a shot of an app that does not exist. The renderer
+    /// falls back to the illustration on its own where a sprite has not
+    /// arrived, so a machine with no network still gets a picture.
     var look: PixelSprites.Style {
-        guard !snapshotMode else { return .illustrated }
-        return PixelSprites.Style.chosen(spriteStyle)
+        PixelSprites.Style.chosen(spriteStyle)
     }
     /// Kept for the geometry, which is laid out differently for a sprite than
     /// for an illustration whichever of Showdown's sets it came from.

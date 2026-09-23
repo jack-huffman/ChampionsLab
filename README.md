@@ -129,9 +129,6 @@ clean checkout builds without network access.
   <img src="docs/builder.png" width="820" alt="The builder, generating a six around one Pokemon">
 </p>
 
-<p align="center">
-  <img src="docs/calculator.png" width="820" alt="The damage calculator with battle stages">
-</p>
 
 ## Battling
 
@@ -167,11 +164,8 @@ it.
 Pokémon are drawn in Showdown's own two looks, switchable on the field: its
 animated Gen 6 set, or the Gen 5 one behind its `bwgfx` preference, each falling
 back to a Gen 5 still. The app's own illustration appears only where Showdown
-has nothing at all.
-
-<p align="center">
-  <img src="docs/weather.png" width="820" alt="Weather and terrain on the field">
-</p>
+has nothing at all — five of the three hundred and fifty forms, all of them
+Megas this game invented.
 
 **LAN Battles** finds other people running the app on your network. Ask one for
 a battle and they get it wherever they are in the app; both pick teams, both
@@ -180,10 +174,6 @@ screen seeing only what it is entitled to: a Pokémon's item, ability and moves
 stay hidden until the game itself reveals them. It is played in real time, with
 no stepping back, which is the one difference from a game against the app. The
 engine's advice is a switch, off by default.
-
-<p align="center">
-  <img src="docs/lan.png" width="820" alt="LAN battles, finding another player">
-</p>
 
 ## The battle engine
 

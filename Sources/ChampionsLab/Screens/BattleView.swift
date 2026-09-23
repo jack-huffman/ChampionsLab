@@ -397,11 +397,23 @@ struct BattleView: View {
                 EngineSwitch(link: link, session: session)
                 Divider().frame(height: 18)
             } else {
-                Picker("", selection: $singles) {
-                    Text("Doubles").tag(false)
-                    Text("Singles").tag(true)
-                }.pickerStyle(.segmented).labelsHidden().frame(width: 150)
-                .onChange(of: singles) { _ in reset() }
+                // A segmented control is an AppKit container, and the
+                // renderer draws one as a yellow placeholder -- a bright
+                // block in the corner of every battle shot. In a snapshot it
+                // is the word instead, which is all it was saying.
+                if snapshotMode {
+                    Text(singles ? "Singles" : "Doubles")
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.horizontal, 10).padding(.vertical, 3)
+                        .background(Palette.surface)
+                        .clipShape(Capsule())
+                } else {
+                    Picker("", selection: $singles) {
+                        Text("Doubles").tag(false)
+                        Text("Singles").tag(true)
+                    }.pickerStyle(.segmented).labelsHidden().frame(width: 150)
+                    .onChange(of: singles) { _ in reset() }
+                }
 
                 Divider().frame(height: 18)
 

@@ -42,6 +42,35 @@ func render<V: View>(_ view: V, named name: String, size: CGSize, dark: Bool) {
     print("  wrote \(out.path)")
 }
 
+/// The sprites a board needs, fetched and waited for.
+///
+/// `frames` answers nil while it is still fetching and hands the picture back
+/// once it has it, so the wait is a poll -- and a bounded one, because a form
+/// Showdown has nothing for never arrives and the renderer falls back to the
+/// app's own illustration for it anyway.
+@MainActor
+func warmSprites(on board: Board, style: PixelSprites.Style = .models) {
+    let pixels = PixelSprites.shared
+    let forms = (board.mine + board.theirs).map(\.build.form)
+    func missing() -> [ChampionsLab.Form] {
+        forms.filter { form in
+            pixels.frames(for: form, back: true, style: style) == nil
+                || pixels.frames(for: form, back: false, style: style) == nil
+        }
+    }
+    _ = missing()                       // asks for every one of them
+    let deadline = Date().addingTimeInterval(30)
+    var short = missing()
+    while !short.isEmpty, Date() < deadline {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+        let now = missing()
+        if now.count == short.count, Date() > deadline - 25 { }
+        short = now
+    }
+    if short.isEmpty { print("  sprites ready") }
+    else { print("  sprites: \(short.count) still missing, drawn as illustrations") }
+}
+
 /// A stand-in report, so the results layout can be checked without spending a
 /// minute running the real audit.
 func sampleParity() -> ParityAudit.Report {
@@ -326,6 +355,10 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         return Board(mine: mine, theirs: store.opponentTeam(meta), rules: store.rulebook,
                      field: Field(isDoubles: true), alreadyEvolved: false)
     }) {
+        // The Pokemon as the app draws them, which means fetching them first:
+        // a shot taken before they arrive falls back to the illustrations and
+        // shows an app nobody is running.
+        warmSprites(on: board)
         var solver = TurnGame(board: board, believingTheirs: true)
         solver.width = 8
         let solution = solver.solve()
