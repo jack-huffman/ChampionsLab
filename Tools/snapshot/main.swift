@@ -42,33 +42,40 @@ func render<V: View>(_ view: V, named name: String, size: CGSize, dark: Bool) {
     print("  wrote \(out.path)")
 }
 
-/// The sprites a board needs, fetched and waited for.
+/// Showdown's sprites, fetched and waited for.
 ///
-/// `frames` answers nil while it is still fetching and hands the picture back
-/// once it has it, so the wait is a poll -- and a bounded one, because a form
-/// Showdown has nothing for never arrives and the renderer falls back to the
-/// app's own illustration for it anyway.
+/// Every screen draws them now, not just the field, so a shot taken before
+/// they arrive shows the high-resolution renders the app falls back to -- an
+/// app nobody is running. `frames` answers nil while it is still fetching and
+/// hands the picture back once it has it, so the wait is a poll; and a bounded
+/// one, because a form Showdown has nothing for never arrives and the fallback
+/// is the right answer for it anyway.
+///
+/// The first run pays for the lot. They are cached on disk after that, so
+/// every later run is the poll finding everything already there.
 @MainActor
-func warmSprites(on board: Board, style: PixelSprites.Style = .models) {
+func warmSprites(_ forms: [ChampionsLab.Form], backs: [ChampionsLab.Form] = [],
+                 style: PixelSprites.Style = .models, seconds: TimeInterval = 180) {
     let pixels = PixelSprites.shared
-    let forms = (board.mine + board.theirs).map(\.build.form)
-    func missing() -> [ChampionsLab.Form] {
-        forms.filter { form in
-            pixels.frames(for: form, back: true, style: style) == nil
-                || pixels.frames(for: form, back: false, style: style) == nil
-        }
+    func missing() -> Int {
+        forms.filter { pixels.frames(for: $0, back: false, style: style) == nil }.count
+            + backs.filter { pixels.frames(for: $0, back: true, style: style) == nil }.count
     }
-    _ = missing()                       // asks for every one of them
-    let deadline = Date().addingTimeInterval(30)
-    var short = missing()
-    while !short.isEmpty, Date() < deadline {
-        RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+    var short = missing()                       // asks for every one of them
+    guard short > 0 else { print("  sprites ready"); return }
+    let deadline = Date().addingTimeInterval(seconds)
+    var quiet = 0
+    while short > 0, Date() < deadline {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
         let now = missing()
-        if now.count == short.count, Date() > deadline - 25 { }
+        // Nothing has moved for a while: what is left is what Showdown has
+        // not got, and waiting longer will not change that.
+        quiet = now == short ? quiet + 1 : 0
+        if quiet > 60 { break }
         short = now
     }
-    if short.isEmpty { print("  sprites ready") }
-    else { print("  sprites: \(short.count) still missing, drawn as illustrations") }
+    print(short == 0 ? "  sprites ready"
+                     : "  sprites: \(short) drawn as the app's own art")
 }
 
 /// A stand-in report, so the results layout can be checked without spending a
@@ -108,6 +115,11 @@ func renderAll() {
         exit(1)
     }
     print("dataset: \(store.data.forms.count) forms")
+
+    // Every screen draws Showdown's sprites now, so they are fetched before
+    // anything is rendered rather than per screen. Fronts for the lists and
+    // the banners; the field asks for its own backs when it gets there.
+    warmSprites(store.data.forms)
 
     // A representative anti-meta team so the analysis screens have real content.
     var team = Team(name: "Terrain Control", format: "doubles")
@@ -358,7 +370,8 @@ let builderSeed = store.form(named: "Mega Baxcalibur")
         // The Pokemon as the app draws them, which means fetching them first:
         // a shot taken before they arrive falls back to the illustrations and
         // shows an app nobody is running.
-        warmSprites(on: board)
+        warmSprites((board.mine + board.theirs).map(\.build.form),
+                    backs: board.mine.map(\.build.form))
         var solver = TurnGame(board: board, believingTheirs: true)
         solver.width = 8
         let solution = solver.solve()

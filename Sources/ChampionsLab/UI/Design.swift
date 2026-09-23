@@ -428,10 +428,27 @@ struct SpriteImage: View {
     /// Watched so that a render arriving from the network redraws whatever is
     /// showing a placeholder for it.
     @ObservedObject private var art = ShowdownArt.shared
+    /// The same, for Showdown's own sprites.
+    @ObservedObject private var pixels = PixelSprites.shared
 
     var body: some View {
         Group {
-            if let sprite = Store.shared.sprite(form, shiny: shiny) {
+            // Showdown's own art, in whichever of its two looks the battle
+            // screen is set to. A Pokemon should not be one picture on the
+            // field and a different one in the list beside it, and the
+            // high-resolution renders are nobody's idea of what this game
+            // looks like -- they are what the app had before it had these.
+            if let frames = pixels.frames(for: form, back: false, shiny: shiny,
+                                          style: PixelSprites.Style.chosen(
+                                              UserDefaults.standard.string(forKey: "battleSpriteStyle"))),
+               let first = frames.images.first {
+                Image(decorative: first, scale: 1)
+                    .resizable()
+                    .interpolation(.none)
+                    .aspectRatio(contentMode: .fit)
+            } else if let sprite = Store.shared.sprite(form, shiny: shiny) {
+                // Until it arrives, and for the five forms Showdown has
+                // nothing for at all.
                 Image(nsImage: sprite)
                     .resizable()
                     .interpolation(.medium)
