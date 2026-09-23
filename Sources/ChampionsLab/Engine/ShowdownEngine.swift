@@ -172,6 +172,16 @@ final class ShowdownEngine: @unchecked Sendable {
         return out.isNull || out.isUndefined ? nil : out.toString()
     }
 
+    /// A saved position, put back.
+    ///
+    /// The other half of `save`. A test that wants to ask "would the
+    /// simulator take this order?" has to actually offer it, and offering one
+    /// moves the game on; this is how it moves back.
+    @discardableResult
+    func restore(_ state: String) throws -> Bool {
+        try call("restore", [state]).toBool()
+    }
+
     /// Every way a turn could go, each with the odds of going that way, as
     /// the engine reports them: a chance and the protocol lines for it.
     func outcomes(_ mine: String, _ theirs: String, branching: Int) throws -> [[String: Any]] {

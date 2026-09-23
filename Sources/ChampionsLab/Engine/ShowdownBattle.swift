@@ -396,7 +396,9 @@ final class ShowdownBattle {
             // engine would not take is a turn you did not ask for, and
             // finding that out by watching the wrong move go off is worse
             // than being told.
-            board.note("That order could not be played; the first legal one was used instead.")
+            board.note("That order could not be played"
+                       + (engine.lastRefusal.map { ": \($0)" } ?? "")
+                       + ". The first legal one was used instead.")
         }
         if !replaying { script.append((side, played)) }
     }
@@ -444,7 +446,13 @@ final class ShowdownBattle {
     }
 
     /// One side's turn, in the sim's own words.
-    private func request(_ play: Play, side mine: Bool) -> String {
+    /// A turn's orders, in the simulator's own words.
+    ///
+    /// Not private: the echo test offers every order the deck can build to
+    /// the simulator and checks it comes back accepted, which is the only way
+    /// to know that what the screen lets you click is what the game will
+    /// play.
+    func request(_ play: Play, side mine: Bool) -> String {
         let team = mine ? board.mine : board.theirs
         let slots = [play.left, play.right]
         var parts: [String] = []
@@ -476,7 +484,19 @@ final class ShowdownBattle {
                 // positive and an ally negative, each a one-based place on
                 // that side. A move on the user or on everybody takes none.
                 if let named, !named.isSpread, !named.aimsAtUser {
-                    if named.aimsAtAlly {
+                    // Two ways a move ends up on your own partner, and only
+                    // one of them was handled. A move that is *always* on an
+                    // ally -- Helping Hand, Coaching -- says so on the move.
+                    // A move that merely *can* be, which is any ordinary
+                    // single-target move, says so on the choice: the deck
+                    // builds `Choice.attackingAlly`, which is a target of a
+                    // hundred, and every other reader of a choice in this app
+                    // tests for it. This one did not, so aiming a Charm at
+                    // your own Staraptor sent the simulator "move 3 101" --
+                    // a target that does not exist -- and the whole side's
+                    // order went down with it: no Mega, and whatever the
+                    // fallback picked instead of the move you chose.
+                    if named.aimsAtAlly || choice.aimsAtAlly {
                         // The partner, which in doubles is the other slot.
                         // Left off entirely before, so a Charm on your own
                         // Whimsicott was refused -- and a refused order takes
