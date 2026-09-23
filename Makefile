@@ -16,6 +16,7 @@
 #   make dmg        a disk image
 #   make release    a GitHub release the app updates itself from
 #   make data       regenerate data/champions.json and the sprite set
+#   make engine     rebuild Showdown's simulator from the pinned commit
 #   make check      everything a change should pass before it is committed
 #
 # Tools run one at a time, at low priority: several concurrent compiles made
@@ -25,7 +26,7 @@
 SHELL := /bin/bash
 NICE  := nice -n 15
 
-.PHONY: animations test warnings hitch coverage profile accuracy snapshot app app-fast dmg release data check clean delta full-sync duel replays reading
+.PHONY: engine animations test warnings hitch coverage profile accuracy snapshot app app-fast dmg release data check clean delta full-sync duel replays reading
 
 test:
 	$(NICE) swift test 2>&1 | tail -25
@@ -135,6 +136,12 @@ check: test warnings hitch snapshot app
 
 clean:
 	rm -rf .build build
+
+# Showdown's simulator, bundled to one file the app can run. Tracked against
+# master rather than a release: the tags lag, and the format this app plays
+# reached master long before any tag carried it.
+engine:
+	$(NICE) ./Scripts/mkengine.sh
 
 # The battle animations: the Showdown client's choreography, translated to
 # data. --fetch pulls the two client sources into .cache/psclient first.

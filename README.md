@@ -18,8 +18,16 @@ It bundles the whole legal roster, every move, item and ability, a damage
 calculator that uses Champions' own stat maths, and an analysis pass that grades
 a team against the format and tells you what it loses to.
 
-It links only against system frameworks and ships its dataset inside the bundle,
-so there is nothing to install alongside it and it never touches the network.
+Battles are not modelled here. **Pokémon Showdown's own simulator runs inside the
+app** — the same code that resolves every game on the site, with its Champions
+mod, playing the `[Gen 9 Champions] VGC 2026 Reg M-C` format. Turn order, damage,
+ability and item timing and every interaction between them are its answers, not
+this app's reading of them.
+
+It links only against system frameworks, and the dataset and the simulator both
+ship inside the bundle, so a battle needs nothing from the network. Sprites,
+cries and music are fetched from Showdown the first time they are wanted and
+cached after that, and the app checks once a day for a newer release.
 
 ## Layout
 
@@ -34,7 +42,8 @@ the layering and the invariants; `make` lists what to run.
 Download the latest **ChampionsLab-*.dmg* from
 [Releases](https://github.com/jack-huffman/ChampionsLab/releases/latest), open
 it, and drag the app to Applications. Universal (Apple silicon and Intel),
-macOS 13 or later, about 28 MB.
+macOS 13 or later, about 70 MB — most of which is the simulator and the
+artwork.
 
 The app is not signed by Apple, so the first launch needs one extra step:
 right-click it and choose **Open**, then **Open** again. After that it starts
@@ -111,45 +120,164 @@ clean checkout builds without network access.
   run against the whole weighted field with a standard build and the real damage
   calculator, then ranked. The written predictions sit below and each states
   whether it is arithmetic or judgement.
-- **Database** — every legal form, all 902 moves, 246 items and 199 abilities,
-  searchable and filterable.
+- **Database** — all 350 legal forms, 902 moves, 342 items and 214 abilities,
+  searchable and filterable. A further 897 forms the main series has and this
+  game does not are carried too, so a future regulation is a data refresh
+  rather than a rebuild.
+
+<p align="center">
+  <img src="docs/builder.png" width="820" alt="The builder, generating a six around one Pokemon">
+</p>
+
+<p align="center">
+  <img src="docs/calculator.png" width="820" alt="The damage calculator with battle stages">
+</p>
 
 ## Battling
 
 Play a matchup out against the app's own opponent, or against somebody else on
-your network. A game starts in the lobby: pick a six for each side -- one of
-yours against a meta archetype, a real tournament team, a team built from the
-ladder's usage, or another of your own -- and the engine reads the matchup
-before a move is made.
+your network. Either way **the rules are Showdown's**: the app decides what to
+play and the simulator decides what happens.
+
+A game starts in the lobby: pick a six for each side — one of yours against a
+meta archetype, a real tournament team, a team built from the ladder's usage, or
+another of your own — and the engine reads the matchup before a move is made.
+**Random opponent** draws one from all of those and keeps it back: the far side
+of the banner is six unknowns until Team Preview, and no reading of the matchup
+is shown while it is hidden, because what you would bring is worked out from
+what they have.
 
 <p align="center">
   <img src="docs/lobby.png" width="820" alt="The lobby, with two sixes facing each other">
 </p>
 
-Then Team Preview, then the turns. Each turn plays out a beat at a time rather
-than landing at once: the move's own animation from Pokemon Showdown's
-choreography, the damage, then each thing the move caused as its own beat --
-the stages it moved with arrows over the Pokemon, the ability that answered,
-the status it left. The panel beside the field lists the turn as it happens and
-any step can be played again.
+Then Team Preview, then the turns. A turn plays out a beat at a time rather than
+landing at once: the move's own animation from Showdown's choreography, the
+damage, then each thing the move caused as its own beat — the stages it moved
+with arrows over the Pokémon, the ability that answered, the item that fired,
+the status it left — and the end of the turn as its own beats after that, a burn
+and a Leftovers one at a time. The panel beside the field lists it as it
+happens, and **Replay turn** plays it again a step at a time whenever you want
+it.
 
 <p align="center">
-  <img src="docs/turn.png" width="820" alt="A turn listed step by step beside the field">
+  <img src="docs/preview.png" width="820" alt="Team Preview, choosing the four to bring">
+</p>
+
+Pokémon are drawn in Showdown's own two looks, switchable on the field: its
+animated Gen 6 set, or the Gen 5 one behind its `bwgfx` preference, each falling
+back to a Gen 5 still. The app's own illustration appears only where Showdown
+has nothing at all.
+
+<p align="center">
+  <img src="docs/weather.png" width="820" alt="Weather and terrain on the field">
 </p>
 
 **LAN Battles** finds other people running the app on your network. Ask one for
 a battle and they get it wherever they are in the app; both pick teams, both
-ready up, and the game runs on the host with each screen seeing only what it is
-entitled to -- a Pokemon's item, ability and moves stay hidden until the game
-itself reveals them. The engine's advice is a switch, off by default.
+ready up, and the game runs on the host — one simulator, one truth — with each
+screen seeing only what it is entitled to: a Pokémon's item, ability and moves
+stay hidden until the game itself reveals them. It is played in real time, with
+no stepping back, which is the one difference from a game against the app. The
+engine's advice is a switch, off by default.
+
+<p align="center">
+  <img src="docs/lan.png" width="820" alt="LAN battles, finding another player">
+</p>
+
+## The battle engine
+
+Showdown's simulator, bundled and run in JavaScriptCore — which every Mac
+already has, so nothing extra ships and nothing extra is signed.
+
+```sh
+./Scripts/mkengine.sh            # build at the pinned commit
+./Scripts/mkengine.sh --latest   # move the pin to master's head first
+```
+
+Tracked against **master, not releases**. The tags lag badly: the newest one has
+Reg M-A and M-B and no M-C at all, while master has carried it for months.
+`Scripts/engine/pinned.txt` holds the commit, and the build writes the bundle to
+`data/showdown-engine.js` (about 9 MB, minified) and the list of every protocol
+tag the simulator can emit to `data/showdown-protocol.txt`.
+
+Four things stand between Node's simulator and a Mac app, and the script handles
+each: the sim reads its data with `require(path)` built at runtime, so the data
+is gathered into a registry first and the lookup matches on the tail of a path;
+Node's own modules are written out by hand, including the one function of `util`
+the dex genuinely calls; `sim/index` is never imported, because it re-exports the
+whole of `lib` — an HTTP client, a MySQL driver, a process manager — and reaching
+for it pulls in seven hundred unresolvable imports; and the format list is
+filtered to this mod, because the dex validates every format on load.
+
+It is built with `--keep-names`. Showdown serialises a battle by writing down
+each object's class name and rebuilds it by looking that name up, so minifying
+the class names away leaves a restored battle as plain objects with no methods.
+
+**Nothing it says goes unread.** A test holds the reader to
+`data/showdown-protocol.txt`: every one of the eighty-three tags is either
+handled or named as chrome with the reason it says nothing about the board. That
+test exists because Mega Evolution was silently dropped for a fortnight — it sat
+in a hand-written list of things to step over, and a list like that is one nobody
+reads again.
+
+### What it costs, measured
+
+| | |
+|---|---|
+| load the bundle | 0.19 s |
+| stand a battle up | 2.4 ms |
+| play a turn | 3.9 ms |
+| save a position / restore one | 0.39 ms / 0.68 ms |
+
+### Why the search still uses this app's own model
+
+The search does not resolve turns. It asks a question by forcing the dice:
+`outcomes` hands back *every* way a turn could go, each weighted by its own odds
+— what happens if this Protect holds, and what happens if it fails, and the 0.3
+and the 0.7 to price them with.
+
+The simulator can answer that. `battle.prng` is a property the sim's own options
+document as an override, and every coin flip goes through `battle.randomChance`,
+so a run can be made to answer yes to the third flip and no to the fourth. But a
+position has to be written out and read back for every branch, because a `Battle`
+is a cyclic object graph and `toJSON` is the only way to copy one — which makes a
+branch about ten times what the Swift model costs for the same question.
+
+So the search runs in **two stages**. The model prices the whole matrix cheaply
+and finds where the answer lives; the three plays that equilibrium actually leans
+on are then priced again by the simulator, and the small matrix is solved once
+more. On a real lobby position that is nineteen plays against fifty-four, refined
+to three against three, in 159 ms. The move actually recommended is costed on
+Showdown's arithmetic; the tenth-best line at depth three, which nobody plays,
+stays on the model.
+
+What keeps that honest is a conformance harness: the same position and the same
+orders through both engines, compared on everything that is not the dice. Turn
+order agrees on 86% of sampled turns — and every disagreement so far has been two
+Pokémon of equal Speed swapping places, which is a coin flip in both. Damage
+lands within the sixteen-roll spread, and the two agree about who fell over.
+
+Self-play can be refereed by the simulator too, and the duel harness is: a duel
+exists to say which engine chooses better, and that answer is only as good as
+whoever decides what the choices did.
 
 ## Importing and exporting
 
 ⌘I, or the import button above the team list, takes Showdown / Pokepaste text.
-Because Champions has no EVs, the importer converts them on the way in at the
-game's own rate — the first Stat Point costs 4 EVs and each one after costs 8,
-so a 252 EV investment lands exactly on the 32 SP cap. Export (the share button
-in the team toolbar) converts back, so a team round-trips through other tools.
+
+A spread can be written two ways and the line alone cannot tell you which. A
+**main-series** paste spells a Stat Point as the EVs it would have cost — four
+for the first and eight apiece after, so a maxed stat reads 252. **Showdown's own
+Champions formats** spell the points themselves, because the mod's `statModify`
+reads that field as the points: a maxed stat reads 32. The importer decides once
+per paste, on the only tell that works — a Stat Point spread never passes 32 on a
+stat or 66 across a Pokémon, and a main-series spread that stayed under both
+would be a Pokémon with nothing invested.
+
+So a 252/252/4 VGC spread converts the way it always did, and a team copied out
+of Showdown arrives with the points it left with. Export writes the Champions
+dialect, so a team pasted back into Showdown keeps its stats.
 
 The importer resolves both spellings of a form — `Charizard-Mega-Y` and `Mega
 Charizard Y`, `Indeedee-F` and `Indeedee (Female)` — and refuses to invent data:
@@ -178,8 +306,10 @@ standard VGC one.
 
 There is also **no Terastallization** in Champions, whatever some secondary
 sources say — Mega Evolution is the only battle gimmick, and a Mega must hold its
-stone. Pastes written for Scarlet/Violet keep their `Tera Type:` lines; the
-importer drops them.
+stone. Showdown agrees, which is now something that can be checked rather than
+argued: ask its Reg M-C format to Terastallize and it answers `Can't move:
+Milotic can't Terastallize`. Pastes written for Scarlet/Violet keep their
+`Tera Type:` lines; the importer drops them.
 
 ## Where the data comes from
 
@@ -260,11 +390,23 @@ Champions Pokémon learns.
 ## Verifying it
 
 ```sh
-swift test --filter StatsAndDamageTests   # stat and damage maths against hand-computed values
-swift test --filter TurnHarnessTests      # importer, conversion, the versus engine, every rule of a turn
-./Tools/snapshot.sh                       # render the screens to build/shots/*.png
-make test / make hitch / make check       # the same, from the front door
+swift test                                  # 333 tests
+swift test --filter StatsAndDamageTests     # stat and damage maths against hand-computed values
+swift test --filter TurnHarnessTests        # importer, conversion, the versus engine, every rule of a turn
+swift test --filter ShowdownEngineTests     # the simulator loads, knows this format, and plays a turn
+swift test --filter ProtocolCoverageTests   # every tag it can say is read or accounted for
+swift test --filter EngineConformanceTests  # our model against the simulator, on everything but the dice
+./Tools/snapshot.sh                         # render the screens to build/shots/*.png
+make test / make hitch / make check         # the same, from the front door
 ```
+
+The engine tests skip rather than fail when `data/showdown-engine.js` is absent,
+so a clean checkout without `./Scripts/mkengine.sh` still runs green.
+
+`ShowdownEngineTests` is the one worth reading first: it checks that Incineroar
+with 32 Stat Points comes out of the simulator at 202 HP and 151 Attack, which
+nothing on this side computed. That is the same number `Stats.swift` was
+reverse-engineered to, confirmed from outside.
 
 Battle stages matter more than almost anything else the calculator exposes — a
 Swords Dance is 2.0x, and a Swords Dance plus a Thermal Exchange proc is 2.5x, or
